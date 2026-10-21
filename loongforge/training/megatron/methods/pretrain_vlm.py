@@ -33,6 +33,10 @@ from loongforge.engines.megatron.initialize import get_num_micro_batches_per_dec
 
 from loongforge.engines.megatron.train_step import dump_model_input_example_once
 from loongforge.training.megatron.runner import pretrain
+from loongforge.training.megatron.data_padding import (
+    llm_pad_to_multiple_of,
+    vlm_packed_padding,
+)
 from loongforge.data.llm_dataloader import (
     build_sft_data_collator,
     build_sft_cyclic_iterators,
@@ -215,10 +219,51 @@ def _reset_step_state():
     _vpp_counters.clear()
 
 
-hetero_dp.set_batch_fns(get_batch, _create_mock_batch, _reset_step_state)
+def build_multimodal_runtime(args):
+    """Engine bindings the multimodal model needs; call after Megatron parallel state exists."""
+    from loongforge.models.multimodal.runtime import MultimodalRuntime
+    from loongforge.engines.megatron.initialize import (
+        change_parallel_state,
+        get_encoder_dp_size,
+        get_model_size,
+    )
+
+    scheduler_factory = None
+    if args.overlap_moe_expert_parallel_comm:
+        from loongforge.engines.megatron.distributed.model_chunk_schedule_plan import (
+            TransformerModelChunkSchedulePlan,
+        )
+
+        scheduler_factory = TransformerModelChunkSchedulePlan
+
+    vit_balance = None
+    if args.use_vit_dp_balance:
+        from loongforge.engines.megatron.distributed.dp_balance.vit_balance import (
+            dp_balance_vit_encoder,
+        )
+
+        vit_balance = dp_balance_vit_encoder
+
+    return MultimodalRuntime(
+        encoder_dp_size=get_encoder_dp_size("image_encoder"),
+        model_size=get_model_size(),
+        parallel_state_switch=change_parallel_state,
+        vit_balance=vit_balance,
+        schedule_plan_factory=scheduler_factory,
+    )
 
 
-def forward_step(data_iterator, model, return_schedule_plan: bool = False):
+def build_hetero_step(args):
+    """Create the full-hetero-DP step context; it carries the per-step encoder state."""
+    return hetero_dp.HeteroStepContext(
+        get_batch=get_batch,
+        create_mock_batch=_create_mock_batch,
+        reset_step_state=_reset_step_state,
+        offload_enabled=args.full_hetero_dp_cpu_offload,
+    )
+
+
+def forward_step(data_iterator, model, return_schedule_plan: bool = False, hetero_step=None):
     """Forward training step.
 
     Args:
@@ -319,6 +364,7 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False):
                 forward_group_id=forward_group_id,
                 inner_group_id=inner_group_id,
                 enable_full_hetero_dp=args.enable_full_hetero_dp,
+                hetero_step=hetero_step,
             )
             return schedule_plan, partial(loss_func, loss_mask)
         else:
@@ -343,6 +389,7 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False):
                 forward_group_id=forward_group_id,
                 inner_group_id=inner_group_id,
                 enable_full_hetero_dp=args.enable_full_hetero_dp,
+                hetero_step=hetero_step,
             )
             if hasattr(output_tensor, "loss") and output_tensor.loss is not None:
                 output_tensor = output_tensor.loss
@@ -416,7 +463,7 @@ def build_full_hetero_encoder_energon_iterator(
     return hetero_dp.PrefetchIterator(strided_iter, prefetch_count=prefetch_count)
 
 
-def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None):
+def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None, hetero_step=None):
     """Provides the datasets used by the trainer"""
     import loongforge.engines.megatron.distributed.dp_balance.patches  # noqa: F401
     args = get_args()
@@ -427,7 +474,12 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None)
         save_path = os.path.join(args.data_path[0], "preprocess", str(rank))
         print(f"[rank{rank}] loading preprocessed dataset from {save_path}")
         train_ds = load_from_disk(save_path)
-        collator = build_sft_data_collator(DataCollatorForSeq2Seq, args, tokenizer)
+        collator = build_sft_data_collator(
+            DataCollatorForSeq2Seq,
+            args,
+            tokenizer,
+            pad_to_multiple_of=llm_pad_to_multiple_of(args),
+        )
         train_data_iterator, valid_data_iterator, test_data_iterator = (
             build_sft_cyclic_iterators(train_ds, None, None, collator, args)
         )
@@ -446,7 +498,9 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None)
                 pp_rank=pp_rank, tp_size=tp_size, model_size=model_size,
                 num_real_microbatch=num_real_microbatch,
             )
-            hetero_dp.set_encoder_data_iterator(encoder_iter)
+            if hetero_step is None:
+                raise RuntimeError("full hetero DP needs the step context from the training method")
+            hetero_step.encoder_data_iterator = encoder_iter
 
         return train_data_iterator, None, None
 
@@ -456,7 +510,15 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None)
         train_dataset = get_train_dataset(task_encoder, args)
 
         collator = build_sft_data_collator(
-            partial(VLMPretrainCollator, args=args, model_config=get_model_config()), args, tokenizer
+            partial(
+                VLMPretrainCollator,
+                packed_padding=vlm_packed_padding(args),
+                packing_sft_data=args.packing_sft_data,
+                model_config=get_model_config(),
+            ),
+            args,
+            tokenizer,
+            pad_to_multiple_of=llm_pad_to_multiple_of(args),
         )
         train_dataloader = get_train_loader(train_dataset, args, collator)
         valid_dataloader = None
@@ -481,7 +543,9 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None)
                 pp_rank=pp_rank, tp_size=tp_size,
                 model_size=model_size, num_real_microbatch=num_real_microbatch,
             )
-            hetero_dp.set_encoder_data_iterator(encoder_iter)
+            if hetero_step is None:
+                raise RuntimeError("full hetero DP needs the step context from the training method")
+            hetero_step.encoder_data_iterator = encoder_iter
 
         return train_dataloader, valid_dataloader, None
 
@@ -501,18 +565,34 @@ def get_embedding_ranks(pp_ranks: List[int]):
 
 def model_provider(pre_process=True, post_process=True, vp_stage=None):
     """Build the multimodal model with this run's args and model config."""
-    return omni_model_provider(pre_process, post_process, vp_stage=vp_stage,
-                               args=get_args(), model_config=get_model_config())
+    args = get_args()
+    return omni_model_provider(pre_process, post_process, vp_stage=vp_stage, args=args,
+                               model_config=get_model_config(), runtime=build_multimodal_runtime(args))
+
+
+def install_vlm_batch_layout(args):
+    """Give DP load balancing the VLM packed layout; the engine keeps no model-family default."""
+    if not args.use_vlm_dp_balance:
+        return
+    from loongforge.engines.megatron.distributed.dp_balance.rebalance.balance import VLM_BATCH_LAYOUT
+    from loongforge.engines.megatron.distributed.dp_balance.rebalance.layout import install_batch_layout
+
+    install_batch_layout(args.model_family, VLM_BATCH_LAYOUT)
 
 
 def train(args):
     """Run VLM pretraining."""
-    train_valid_test_dataset_provider.is_distributed = True
+    install_vlm_batch_layout(args)
+    hetero_step = build_hetero_step(args) if args.enable_full_hetero_dp else None
+    dataset_provider = partial(train_valid_test_dataset_provider, hetero_step=hetero_step)
+    # Upstream reads this flag off the provider object; a partial does not inherit it.
+    dataset_provider.is_distributed = True
     pretrain(
         args,
-        train_valid_test_dataset_provider,
+        dataset_provider,
         model_provider,
         ModelType.encoder_or_decoder,  # TODO: Heterogeneous TP/PP not supported yet
-        forward_step,
+        partial(forward_step, hetero_step=hetero_step),
         get_embedding_ranks=get_embedding_ranks,
+        hetero_step=hetero_step,
     )

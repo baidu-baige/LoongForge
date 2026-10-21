@@ -51,11 +51,11 @@ class MixQATaskBatchPackedSample(BaseTaskBatchPacked):
 class InternVLTaskEncoder(BaseTaskEncoder):
     """Task encoder for Intervl."""
 
-    def __init__(self, args, tokenizer, chat_template=None):
+    def __init__(self, args, tokenizer, chat_template=None, *, patch_size: int):
         super().__init__(args, tokenizer, chat_template)
         # Current limitation: SFT-only
         assert args.training_phase == "sft"
-        self.preproc = InternvlPreprocess(args, tokenizer)
+        self.preproc = InternvlPreprocess(args, tokenizer, patch_size=patch_size)
         self.tokenizer = tokenizer
         self.loss_reduction = args.loss_reduction
         self.seq_length = args.seq_length

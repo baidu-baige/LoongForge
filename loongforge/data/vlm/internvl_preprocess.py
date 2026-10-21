@@ -100,7 +100,8 @@ class Conversation:
 class InternvlPreprocess:
     """Internvl Preprocess"""
 
-    def __init__(self, args, tokenizer):
+    def __init__(self, args, tokenizer, *, patch_size: int):
+        """``patch_size`` comes from the image encoder config; the caller passes it explicitly."""
         self.args = args
         super().__init__()
         self.image_size = args.force_image_size
@@ -111,7 +112,7 @@ class InternvlPreprocess:
         self.min_dynamic_patch = args.min_dynamic_patch
         self.template_name = args.conv_style
         self.num_image_token = int(
-            (args.force_image_size // args.patch_size) ** 2
+            (args.force_image_size // patch_size) ** 2
             * (args.down_sample_ratio**2)
         )
         self.group_by_length = args.group_by_length and not args.packing_sft_data
@@ -831,7 +832,7 @@ class InternvlPreprocess:
             if sample == "rand":
                 try:
                     frame_indices = [random.choice(range(x[0], x[1])) for x in ranges]
-                except:
+                except Exception:
                     frame_indices = np.random.permutation(vlen)[:acc_samples]
                     frame_indices.sort()
                     frame_indices = list(frame_indices)

@@ -41,7 +41,6 @@ from megatron.core.transformer.multi_token_prediction import (
 from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.utils import WrappedTensor, deprecate_inference_params
-from megatron.core.num_microbatches_calculator import get_num_microbatches
 
 from loongforge.models.language.language_transformer_block import TransformerBlock
 from loongforge.models.base.base_model_mixins import BaseMegatronLanguageModule
@@ -613,7 +612,7 @@ class BaseGPTModel(BaseMegatronLanguageModule):
             mtp_position_ids = position_ids
             mtp_labels = labels
             mtp_group_total_tokens = None
-            mtp_step_num_groups = None
+            mtp_log_scale = None
 
             if getattr(self.config, 'enable_chunkpipe', False):
                 if getattr(self.config, 'sft_chunkpipe_mode', False):
@@ -624,7 +623,7 @@ class BaseGPTModel(BaseMegatronLanguageModule):
                         mtp_labels = mtp_batch.get('labels', labels)
                         loss_mask = mtp_batch.get('loss_mask', loss_mask)
                         mtp_group_total_tokens = mtp_batch.get('group_total_tokens', None)
-                        mtp_step_num_groups = mtp_batch.get('step_num_groups', None)
+                        mtp_log_scale = mtp_batch.get('log_scale', None)
                 else:
                     # Pretrain chunkpipe still uses next_batch from the iterator path.
                     next_batch = (extra_block_kwargs or {}).pop('next_batch', None)
@@ -768,16 +767,12 @@ class BaseGPTModel(BaseMegatronLanguageModule):
                         # after moving loss logging to loss_func in pretrain_gpt.py
                         
                         mtp_log_loss = torch.sum(mtp_loss) / num_tokens_safe
-                        if getattr(self.config, 'sft_chunkpipe_mode', False):
-                            step_num_groups = 1.0
-                            if mtp_step_num_groups is not None:
-                                step_num_groups = mtp_step_num_groups.to(
-                                    device=mtp_loss.device, dtype=mtp_loss.dtype
-                                ).reshape(-1)[0]
-                            dp_size = parallel_state.get_data_parallel_world_size()
-                            mtp_log_loss = mtp_log_loss * (
-                                dp_size * get_num_microbatches() / step_num_groups
-                            )
+                        # The method supplies the logging scale for chunkpipe SFT; the model
+                        # does not read parallelism or microbatch counts.
+                        if mtp_log_scale is not None:
+                            mtp_log_loss = mtp_log_loss * torch.as_tensor(
+                                mtp_log_scale, device=mtp_loss.device, dtype=mtp_loss.dtype
+                            ).reshape(-1)[0]
 
                         MTPLossLoggingHelper.save_loss_to_tracker(
                             mtp_log_loss,

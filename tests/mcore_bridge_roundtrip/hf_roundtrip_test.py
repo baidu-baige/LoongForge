@@ -195,7 +195,6 @@ def _compare_shard(orig_path_str: str, rt_path_str: str,
                     # Get some sample values with largest differences
                     flat_diff = diff.flatten()
                     top_vals, top_idx = torch.topk(flat_diff, min(5, flat_diff.numel()))
-                    max_pos = (diff == diff.max()).nonzero(as_tuple=True)
                     detail = {
                         'key': key,
                         'max_diff': max_diff,
@@ -407,7 +406,12 @@ def main():
             is_vlm = False
             break
     if is_vlm:
-        provider = partial(omni_model_provider, args=args, model_config=model_config)
+        from loongforge.training.megatron.methods.pretrain_vlm import build_multimodal_runtime
+
+        provider = partial(
+            omni_model_provider, args=args, model_config=model_config,
+            runtime=build_multimodal_runtime(args),
+        )
     else:
         provider = partial(llm_model_provider, args=args, config=model_config)
     model = get_model(provider, ModelType.encoder_or_decoder, wrap_with_ddp=False)

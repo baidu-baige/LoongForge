@@ -8,7 +8,6 @@ from collections import deque, defaultdict, namedtuple
 
 import torch
 
-from loongforge.engines.megatron import get_args
 
 logger = logging.getLogger(__name__)
 
@@ -121,13 +120,11 @@ class ChunkPipeGroupBatchSampler:
         # and also fixes a latent precision drift in the equal-DP case where
         # G_local could fluctuate across ranks.
         #
-        # Populated yield-time in __iter__, consumed by get_batch via TP rank-0
-        # popleft + broadcast. The deque object itself is created once and
-        # never cleared, so downstream references (saved in
-        # args.chunkpipe_step_g_queue) stay valid across epochs. FIFO alignment
-        # with the DataLoader's actual batch production is guaranteed because
-        # sampler yield and get_batch consumption both run in the main process
-        # in strict order.
+        # Populated yield-time in __iter__, consumed by attach_step_metadata,
+        # which pops one entry per batch and writes it onto the batch dict; get_batch
+        # then broadcasts it from TP rank 0. The deques are created once and never
+        # cleared, so FIFO alignment with the DataLoader's batch production holds:
+        # sampler yield and metadata pop both run in the main process in strict order.
         self._step_g_queue = deque()
 
         # Per-microbatch composite-group descriptor queue. Each entry is the
@@ -136,8 +133,8 @@ class ChunkPipeGroupBatchSampler:
         # size 5 made of a real group of size 3 followed by a real group of
         # size 2). For trivial composites (every real group is its own
         # composite, the equal-DP path), this is a single-element list
-        # [group_size]. Consumed by the SFT scheduler (via
-        # get_batch_on_this_tp_rank's TP rank-0 popleft + broadcast) to drive
+        # [group_size]. Consumed by the SFT scheduler (via get_batch's TP rank-0
+        # broadcast of the value attached to the batch) to drive
         # the outer composite loop and to attribute each chunk to its real
         # group within the composite.
         self._composite_queue = deque()
@@ -145,14 +142,16 @@ class ChunkPipeGroupBatchSampler:
     def __len__(self):
         return self.total_samples
 
-    def bind_queues(self, base_iter):
-        """Yield batches from ``base_iter``, binding this sampler's ChunkPipe queues before each batch."""
-        args = get_args()
+    def attach_step_metadata(self, base_iter):
+        """Yield batches from ``base_iter`` with this sampler's per-micro-batch metadata attached.
+
+        The sampler appends one entry right before yielding each micro-batch and the DataLoader
+        returns batches in sampler order, so the i-th pop matches the i-th batch. Carrying the
+        values on the batch keeps every iterator, VP chunk and split independent.
+        """
         for batch in base_iter:
-            # get_batch_on_this_tp_rank() calls next(data_iterator) first, then pops
-            # args.chunkpipe_step_g_queue / args.chunkpipe_composite_queue.
-            args.chunkpipe_step_g_queue = self._step_g_queue
-            args.chunkpipe_composite_queue = self._composite_queue
+            batch["chunkpipe_step_num_groups"] = self._step_g_queue.popleft()
+            batch["chunkpipe_component_sizes"] = list(self._composite_queue.popleft())
             yield batch
 
     def _lpt_partition(self, group_indices):
@@ -634,8 +633,8 @@ class ChunkPipeGroupBatchSampler:
         # shares the same G_total = total source groups in that step across
         # all DP ranks. We append G_total to _step_g_queue and per-microbatch
         # composite descriptor to _composite_queue immediately before yield
-        # (never clear them) so that get_batch's popleft order matches yield
-        # order strictly — robust to DataLoader prefetching and epoch
+        # (never clear them) so that attach_step_metadata's popleft order matches
+        # yield order strictly — robust to DataLoader prefetching and epoch
         # boundaries. Skipped micro-batches (via resume) do NOT enter the
         # queues, preserving FIFO alignment.
         #

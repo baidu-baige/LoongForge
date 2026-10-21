@@ -114,6 +114,9 @@ from loongforge.engines.megatron.train_step import train_step, stimer
 from loongforge.engines.megatron.distributed.dp_balance.train_hooks import train_log_decorator
 from loongforge.training.megatron.registry import resolve_method
 
+from loongforge.engines.megatron.global_vars import (
+    get_model_config as get_loongforge_model_config,
+)
 from loongforge.engines.megatron.hf_bridge import save_hf_checkpoint_online
 
 try:
@@ -193,6 +196,7 @@ def pretrain(
     non_loss_data_func=None,
     store=None,
     inprocess_call_wrapper: Optional[CallWrapper] = None,
+    hetero_step=None,
 ):
     """Main training program.
 
@@ -241,6 +245,12 @@ def pretrain(
 
     args = get_args()
     timers = get_timers()
+
+    if args.enable_full_hetero_dp and hetero_step is None:
+        raise ValueError(
+            "--enable-full-hetero-dp needs a HeteroStepContext from the training method; "
+            f"method for model_family '{args.model_family}' does not provide one"
+        )
 
     if args.log_progress:
         append_to_progress_log("Starting job")
@@ -389,6 +399,7 @@ def pretrain(
                 config=config,
                 checkpointing_context=checkpointing_context,
                 non_loss_data_func=non_loss_data_func,
+                hetero_step=hetero_step,
             )
 
         print_datetime("after training is done")
@@ -460,6 +471,12 @@ def pretrain(
             args.save_hf_path = os.path.join(args.save, "release_hf_weights/")
         if hasattr(config, 'pipeline_model_parallel_layout'):
             args.convert_pp_layout = config.pipeline_model_parallel_layout
+        # The adapter shape has a single source: the YAML peft_config. The bridge
+        # reads args.lora_alpha/lora_dim, so fill them from the training config.
+        peft_config = getattr(get_loongforge_model_config(), 'peft_config', None)
+        if peft_config is not None:
+            args.lora_alpha = peft_config.alpha
+            args.lora_dim = peft_config.dim
 
         # Save HF checkpoint
         save_hf_checkpoint_online(model, args)
@@ -1021,8 +1038,13 @@ def train(
     config,
     checkpointing_context,
     non_loss_data_func,
+    hetero_step=None,
 ):
-    """Train the model function."""
+    """Train the model function.
+
+    Differs from upstream ``megatron.training.training.train``: EMA modules are switched to eval mode before the
+    loop, and ``one_logger_utils.on_train_start`` is not called.
+    """
     args = get_args()
     timers = get_timers()
 
@@ -1318,6 +1340,7 @@ def train(
             opt_param_scheduler,
             config,
             forward_backward_func,
+            hetero_step,
         )
         ft_integration.on_training_step_end()
 

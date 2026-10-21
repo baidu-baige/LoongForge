@@ -57,7 +57,7 @@ class PreProcessNode(ScheduleNode):
     def __init__(self, gpt_model, chunk_state, event, stream,
                  enable_encoder_hetero_dp=False, batch_list=None,
                  forward_group_id=None, inner_group_id=None,
-                 enable_full_hetero_dp=False):
+                 enable_full_hetero_dp=False, hetero_step=None):
         """Initializes a preprocessing node.
 
         Args:
@@ -70,6 +70,7 @@ class PreProcessNode(ScheduleNode):
             forward_group_id: The forward group ID for hetero DP.
             inner_group_id: The inner group ID within one hetero DP group.
             enable_full_hetero_dp: Whether full heterogeneous DP is enabled.
+            hetero_step: The ``HeteroStepContext`` of a full-hetero-DP run, else None.
         """
         super().__init__(weak_method(self.forward_impl), stream, event, name="pre_process")
         self.gpt_model = gpt_model
@@ -79,6 +80,7 @@ class PreProcessNode(ScheduleNode):
         self.forward_group_id = forward_group_id
         self.inner_group_id = inner_group_id
         self.enable_full_hetero_dp = enable_full_hetero_dp
+        self.hetero_step = hetero_step
 
     def forward_impl(self):
         """forward pass for pre-processing.
@@ -269,35 +271,28 @@ class PreProcessNode(ScheduleNode):
                             deepstack_visual_embeds.append(tmp_deepstack_visual_embeds)
 
             elif model.add_encoder and mpu.is_pipeline_first_stage()  and self.enable_full_hetero_dp:
-                from loongforge.engines.megatron.initialize import get_model_size
                 if mpu.is_pipeline_first_stage():
-                    from loongforge.engines.megatron.distributed.hetero_dp import (
-                        get_grad_list, get_embedding_list,
-                        get_visual_pos_masks_list, get_deepstack_visual_embeds_list,
-                        get_deepstack_grad_list, get_cpu_offload_manager,
-                    )
+                    step = self.hetero_step
+                    if step is None:
+                        raise RuntimeError("full hetero DP needs the step context passed to the schedule plan")
 
                     group = mpu.get_tensor_model_parallel_group()
                     src_rank = torch.distributed.get_global_rank(group, 0)
                     local_rank = torch.distributed.get_rank()
 
-                    embedding_list = get_embedding_list()
-                    visual_pos_masks_list = get_visual_pos_masks_list()
-                    deepstack_visual_embeds_list = get_deepstack_visual_embeds_list()
-                    model_size = get_model_size()
+                    embedding_list = step.embedding_list
+                    visual_pos_masks_list = step.visual_pos_masks_list
+                    deepstack_visual_embeds_list = step.deepstack_visual_embeds_list
+                    model_size = model.runtime.model_size
                     forward_group_id = self.forward_group_id
                     round_num = forward_group_id // model_size
                     inner_num = forward_group_id % model_size
 
-                    _offload_mgr = get_cpu_offload_manager()
+                    _offload_mgr = step.offload
 
                     # Reload embedding from CPU if offloaded
                     if _offload_mgr.enabled and local_rank == src_rank:
-                        from loongforge.engines.megatron.distributed.hetero_dp import reload_list_item
-                        reload_list_item(
-                            _offload_mgr, embedding_list[round_num], inner_num,
-                            f"emb_r{round_num}"
-                        )
+                        step.reload(embedding_list[round_num], inner_num, f"emb_r{round_num}")
 
                     ref_tensor = model.vit_contexts[round_num]["local_embedding"]
                     local_tensor = embedding_list[round_num][inner_num] if local_rank == src_rank else ref_tensor
@@ -313,7 +308,7 @@ class PreProcessNode(ScheduleNode):
                         def hook(grad):
                             if torch.distributed.get_rank(group=group) == 0:
                                 grad = grad.clone()
-                                grad_list = get_grad_list()
+                                grad_list = step.grad_list
                                 grad_idx = len(grad_list)
                                 grad_list.append(grad)
                                 if offload_mgr.enabled:
@@ -335,11 +330,7 @@ class PreProcessNode(ScheduleNode):
                     if model.vit_contexts[round_num]["local_visual_pos_masks"] is not None:
                         # Reload visual_pos_masks from CPU if offloaded
                         if _offload_mgr.enabled and local_rank == src_rank:
-                            from loongforge.engines.megatron.distributed.hetero_dp import reload_list_item
-                            reload_list_item(
-                                _offload_mgr, visual_pos_masks_list[round_num], inner_num,
-                                f"vpm_r{round_num}"
-                            )
+                            step.reload(visual_pos_masks_list[round_num], inner_num, f"vpm_r{round_num}")
 
                         ref_masks = model.vit_contexts[round_num]["local_visual_pos_masks"]
                         local_masks = (
@@ -361,17 +352,16 @@ class PreProcessNode(ScheduleNode):
                         def full_hetero_dp_deepstack_grad_hook_factory(group, round_num, inner_num, i):
                             def hook(grad):
                                 if torch.distributed.get_rank(group=group) == 0:
-                                    get_deepstack_grad_list()[round_num][i][inner_num] = grad.clone()
+                                    step.deepstack_grad_list[round_num][i][inner_num] = grad.clone()
                             return hook
 
                         deepstack_visual_embeds = []
                         for i in range(len(ref_embeds)):
                             # Reload deepstack embed from CPU if offloaded
                             if _offload_mgr.enabled and local_rank == src_rank:
-                                from loongforge.engines.megatron.distributed.hetero_dp import reload_list_item
-                                reload_list_item(
-                                    _offload_mgr, deepstack_visual_embeds_list[round_num][i],
-                                    inner_num, f"ds_r{round_num}_l{i}"
+                                step.reload(
+                                    deepstack_visual_embeds_list[round_num][i], inner_num,
+                                    f"ds_r{round_num}_l{i}"
                                 )
 
                             local_embed = (

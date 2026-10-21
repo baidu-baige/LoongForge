@@ -339,6 +339,7 @@ class TransformerModelChunkSchedulePlan(AbstractSchedulePlan):
         forward_group_id: Optional[int] = None,
         inner_group_id: Optional[int] = None,
         enable_full_hetero_dp: bool = False,
+        hetero_step=None,
     ):
         """Initialize the schedule plan of all Transformer layers' sub-modules.
 
@@ -359,6 +360,7 @@ class TransformerModelChunkSchedulePlan(AbstractSchedulePlan):
             extra_block_kwargs: Additional keyword arguments for blocks.
             runtime_gather_output: Whether to gather output at runtime.
             loss_mask (torch.Tensor): Used to mask out some portions of the loss
+            hetero_step: The ``HeteroStepContext`` of a full-hetero-DP run, else None.
 
         Returns:
             The model chunk schedule plan.
@@ -402,6 +404,7 @@ class TransformerModelChunkSchedulePlan(AbstractSchedulePlan):
             forward_group_id=forward_group_id,
             inner_group_id=inner_group_id,
             enable_full_hetero_dp=enable_full_hetero_dp,
+            hetero_step=hetero_step,
         )
 
         # check if encoder model has deepstack

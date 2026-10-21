@@ -6,12 +6,9 @@
 
 """Input/output checkpointing.
 
-Modified copy of ``megatron/training/checkpointing.py`` (Loong-Megatron b10469fc8). Functions identical to
-upstream are imported from it. The copies here differ:
-
-- ``save_checkpoint``: ``peft_class`` argument; drops non-adapter weights before saving a PEFT model.
-- ``_load_base_checkpoint``: ``ignore_ckpt_step`` and ``peft_class`` arguments; ``torch.load(weights_only=False)``.
-- ``load_checkpoint``: ``peft_class`` argument; the body moved to ``_load_checkpoint_from_path``.
+Modified copy of ``megatron/training/checkpointing.py`` (Loong-Megatron). Functions identical to upstream are
+imported from it; every local copy documents its divergence in its own docstring. Upstream keeps these bodies
+inside ``load_checkpoint`` or exposes no hook where the local additions fit, so they cannot be imported.
 """
 
 import contextlib
@@ -93,7 +90,11 @@ _NON_PERSISTENT_CKPT_SUBDIR = 'non_persistent'
 
 
 def _load_model_state_dict(module, state_dict, strict: bool):
-    """Load state while retaining the TransformerEngine compatibility fallback."""
+    """Load state while retaining the TransformerEngine compatibility fallback.
+
+    Upstream defines this as the nested ``load_model_state_dict`` inside ``load_checkpoint``; the behavior is
+    the same and it is a module function here so it can be tested on its own.
+    """
     try:
         module.load_state_dict(state_dict, strict=strict)
     except Exception as e:
@@ -127,6 +128,9 @@ def save_checkpoint(
 
     Checkpointing context is used to persist some checkpointing state
     throughout a single job. Must be initialized externally (not used if None).
+
+    Differs from upstream: the ``peft_class`` argument drops non-adapter weights from the state dict before
+    writing, so a PEFT run stores only the adapter.
 
     If non_persistent_ckpt is True,
     the checkpoint will be saved with special functionality for removing old checkpoints.
@@ -545,11 +549,13 @@ def _load_base_checkpoint(
     sharded_state_dict=None,
     checkpointing_context=None,
     ignore_ckpt_step: bool = False,
-    peft_class=None,
 ):
     """Load the base state_dict from the given directory
 
     If rank0 is true, just loads rank 0 checkpoint, ignoring arguments.
+
+    Differs from upstream: ``ignore_ckpt_step`` disables the ``args.ckpt_step`` override, and the two legacy
+    ``torch.load`` calls pass ``weights_only=False`` to read older checkpoint payloads.
     """
     # Try to load non-persistent checkpoint first
     non_persistent_global_dir = (
@@ -712,6 +718,9 @@ def load_checkpoint(
     peft_class=None,
 ):
     """Load a model checkpoint and return the iteration.
+
+    Differs from upstream: the ``peft_class`` argument is forwarded to ``_load_checkpoint_from_path``, and the
+    body lives there instead of here.
     strict (bool): whether to strictly enforce that the keys in
         :attr:`state_dict` of the checkpoint match the names of
         parameters and buffers in model.
@@ -759,6 +768,10 @@ def _load_checkpoint_from_path(
     peft_class=None,
 ) -> tuple[int, int]:
     """Load a checkpoint from a given path.
+
+    Upstream has no separate function: this is the body of ``load_checkpoint`` with the ``get_args()`` call and
+    the pretrained-directory switch removed. It adds ``ignore_ckpt_step`` on both base loads, the PEFT resume
+    filter of the sharded state dict, and ``strict=False`` on the model load when resuming a PEFT run.
 
     Args:
         load_dir: The directory containing the checkpoint.

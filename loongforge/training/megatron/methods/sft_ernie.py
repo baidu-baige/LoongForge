@@ -7,6 +7,7 @@ import logging
 import torch
 import torch.nn.functional as F
 from functools import partial
+from loongforge.training.megatron.methods import pretrain_vlm
 from megatron.core.enums import ModelType
 from megatron.training import get_timers
 
@@ -239,8 +240,14 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
 
 def model_provider(pre_process=True, post_process=True, vp_stage=None):
     """Build the multimodal model with this run's args and model config."""
-    return omni_model_provider(pre_process, post_process, vp_stage=vp_stage,
-                               args=get_args(), model_config=get_model_config())
+    return omni_model_provider(
+        pre_process,
+        post_process,
+        vp_stage=vp_stage,
+        args=get_args(),
+        model_config=get_model_config(),
+        runtime=pretrain_vlm.build_multimodal_runtime(get_args()),
+    )
 
 
 def train(args):

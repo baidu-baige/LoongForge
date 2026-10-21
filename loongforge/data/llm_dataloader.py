@@ -25,30 +25,22 @@ logger = logging.getLogger(__name__)
 
 
 def build_sft_data_collator(
-    collator_cls: Type[DataCollatorForSupervisedDataset], args, tokenizer, **kwargs
+    collator_cls: Type[DataCollatorForSupervisedDataset],
+    args,
+    tokenizer,
+    pad_to_multiple_of: int,
+    **kwargs,
 ) -> DataCollatorForSupervisedDataset:
-    """build data collator for sft"""
+    """build data collator for sft
+
+    ``pad_to_multiple_of`` is computed by the training method from parallelism and
+    precision (``training/megatron/data_padding.py``); the data layer does not derive it.
+    """
     if not hasattr(tokenizer, "tokenizer"):
         raise TypeError(
             "Only support HFTokenizer for sft, but got "
             f"{type(tokenizer).__name__} (args.tokenizer_type={args.tokenizer_type})."
         )
-
-    pad_to_multiple_of = 1
-    # When using sequence parallel, sequence will further be split by TP size
-    # When using context parallel, sequence is split by CP size as well
-    pad_to_multiple_of *= (
-        args.tensor_model_parallel_size if args.sequence_parallel else 1
-    )
-    pad_to_multiple_of *= (
-        (2 * args.context_parallel_size) if args.context_parallel_size > 1 else 1
-    )
-
-    # https://github.com/NVIDIA/TransformerEngine/blob/v2.4/transformer_engine/pytorch/utils.py#L425
-    # https://github.com/NVIDIA/TransformerEngine/blob/main/transformer_engine/common/gemm/cublaslt_gemm.cu#L151
-    pad_to_multiple_of *= 128 if args.fp8 else 1
-    if args.enable_chunkpipe and getattr(args, "sft_chunkpipe_mode", False):
-        pad_to_multiple_of = args.chunksize
 
     padding = (
         PaddingStrategy.LONGEST
@@ -217,7 +209,7 @@ def _build_cyclic_iterator(
         base_iter = iter(cyclic_iter(dataloader))
 
     if args.enable_chunkpipe and not args.sft_data_streaming:
-        base_iter = _batch_sampler.bind_queues(base_iter)
+        base_iter = _batch_sampler.attach_step_metadata(base_iter)
 
     return base_iter
 

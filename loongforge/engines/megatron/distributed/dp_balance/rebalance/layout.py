@@ -10,9 +10,9 @@ batch layout that algorithm operates on.  A layout supplies two callbacks:
 * ``cumulative_lengths``: cumulative sequence offsets used by the warm-up
   statistics.
 
-The default layout for ``VisionLanguageModelFamilies`` lives in
-``balance.py``.  Families with a different packed format register their own
-layout before training starts.
+Every model family that enables DP load balancing registers its layout in its
+training method before the loop starts. The engine holds no default: a missing
+registration is an error, not a silent VLM assumption.
 """
 
 from __future__ import annotations
@@ -36,29 +36,28 @@ class BatchLayout:
 _BATCH_LAYOUTS: Dict[str, BatchLayout] = {}
 
 
-def set_batch_layout(model_family: str, layout: BatchLayout) -> None:
-    """Register the batch layout used by *model_family*."""
+def install_batch_layout(model_family: str, layout: BatchLayout) -> None:
+    """Register the batch layout used by *model_family*.
+
+    Called by the training method. Registering a second, different layout for the same
+    family is a programming error.
+    """
+    existing = _BATCH_LAYOUTS.get(model_family)
+    if existing is not None and existing is not layout:
+        raise ValueError(
+            f"Batch layout already installed for model_family '{model_family}' "
+            f"(caller '{existing.caller}', new caller '{layout.caller}')"
+        )
     _BATCH_LAYOUTS[model_family] = layout
 
 
 def get_batch_layout(model_family: str) -> BatchLayout:
-    """Return the registered layout, or the VLM default for VLM families."""
+    """Return the layout registered for *model_family*."""
     layout = _BATCH_LAYOUTS.get(model_family)
-    if layout is not None:
-        return layout
-
-    from loongforge import constants
-
-    if model_family in constants.VisionLanguageModelFamilies.names():
-        from loongforge.engines.megatron.distributed.dp_balance.rebalance.balance import (
-            VLM_BATCH_LAYOUT,
+    if layout is None:
+        raise ValueError(
+            f"No batch layout registered for model_family '{model_family}'. "
+            f"Registered: {sorted(_BATCH_LAYOUTS)}. The training method must call "
+            f"install_batch_layout before DP load balancing runs."
         )
-
-        return VLM_BATCH_LAYOUT
-
-    supported = sorted(
-        [*_BATCH_LAYOUTS, *constants.VisionLanguageModelFamilies.names()]
-    )
-    raise ValueError(
-        f"Unsupported model_family '{model_family}'. Expected one of: {supported}"
-    )
+    return layout

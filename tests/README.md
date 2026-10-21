@@ -3,10 +3,15 @@
 The `tests/` directory hosts three independent, self-contained test suites. Each owns its own
 scripts, configs, and baselines — they share nothing except being rooted under `tests/`.
 
-The top level of `tests/` also holds standalone unit tests (`tests/test_*.py`). They check layout
-and dependency rules, model configs, data builders, and dispatch, and need no staged data.
-`test_dp_balance_layout.py` includes a case that needs multiple GPUs. Run them with
-`python -m pytest tests/test_*.py`.
+The top level of `tests/` also holds standalone unit tests (`tests/test_*.py`), in two groups:
+
+| Group | Files | Under test | How it runs |
+|---|---|---|---|
+| Repository rules and component units | the other `tests/test_*.py` | layout and dependency rules, model configs, data builders, dispatch | `python -m pytest tests/test_*.py`; `test_dp_balance_layout.py` needs multiple GPUs |
+| CI and release contract tests | `test_ci_*.py`, `test_ci_helpers.js`, `test_release_*.py`, `test_sensitive_scan.py`, `test_doc_links.py`, `test_image_policy.py` | `ci/`, `.github/scripts/`, `docker/` | `.github/workflows/workflow-lint.yml` runs them on a CPU runner without torch; the JS file uses `node --test` |
+
+CI contract tests stay in `tests/` on purpose: `tests/` is the single pytest root, and the workflow
+lists the files it runs explicitly, so being next to the code they exercise adds nothing.
 
 | Suite | Directory | Entry | Model targets | Baselines |
 |---|---|---|---|---|

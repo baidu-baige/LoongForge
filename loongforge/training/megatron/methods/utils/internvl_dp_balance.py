@@ -10,10 +10,7 @@ from typing import Any, Dict, List
 import torch
 
 from loongforge.engines.megatron import get_args, get_tokenizer
-from loongforge.engines.megatron.distributed.dp_balance.rebalance.layout import (
-    BatchLayout,
-    set_batch_layout,
-)
+from loongforge.engines.megatron.distributed.dp_balance.rebalance.layout import BatchLayout
 from loongforge.models.vision.internvl.internvl_config import IMG_CONTEXT_TOKEN
 
 
@@ -329,8 +326,3 @@ INTERNVL_BATCH_LAYOUT = BatchLayout(
     cumulative_lengths=_internvl_cumulative_lengths,
     caller="InternVL",
 )
-
-
-def register() -> None:
-    """Register the InternVL layout before dp_balance starts."""
-    set_batch_layout("intern_vl", INTERNVL_BATCH_LAYOUT)

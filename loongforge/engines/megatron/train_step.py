@@ -220,8 +220,14 @@ def train_step(
     opt_param_scheduler,
     config,
     forward_backward_func,
+    hetero_step=None,
 ):
-    """Single training step."""
+    """Single training step.
+
+    ``hetero_step`` is the ``HeteroStepContext`` the training method created for
+    ``--enable-full-hetero-dp``; it carries the per-step encoder state. ``runner.pretrain``
+    rejects that mode without one. Every other mode passes ``None``.
+    """
     args = get_args()
     timers = get_timers()
 
@@ -232,19 +238,14 @@ def train_step(
             get_num_micro_batches_per_decoder_dp,
             get_num_real_micro_batches_per_decoder_dp,
         )
-        from loongforge.engines.megatron.distributed.hetero_dp import (
-            get_batch_fns, get_embedding_list,
-            get_visual_pos_masks_list, get_deepstack_visual_embeds_list,
-            get_deepstack_grad_list,
-            get_encoder_data_iterator,
-        )
-        get_batch, _create_mock_batch = get_batch_fns()
+        get_batch = hetero_step.get_batch
+        _create_mock_batch = hetero_step.create_mock_batch
 
         num_microbatch, encoder_rounds = get_num_micro_batches_per_decoder_dp()
         num_real_microbatch = get_num_real_micro_batches_per_decoder_dp()
         unwrapped_model = unwrap_model(model[0])
 
-        encoder_iter = get_encoder_data_iterator()
+        encoder_iter = hetero_step.encoder_data_iterator
         if encoder_iter is not None:
             if isinstance(data_iterator, list):
                 data_iterator = [RerunDataIterator(data_iterator[0])] + data_iterator[1:]
@@ -269,9 +270,9 @@ def train_step(
         batch_list = []
         last_real_batch = None
         has_any_real = (pp_layer * tp_size < num_real_microbatch)
-        embedding_list = get_embedding_list()
-        visual_pos_masks_list = get_visual_pos_masks_list()
-        deepstack_visual_embeds_list = get_deepstack_visual_embeds_list()
+        embedding_list = hetero_step.embedding_list
+        visual_pos_masks_list = hetero_step.visual_pos_masks_list
+        deepstack_visual_embeds_list = hetero_step.deepstack_visual_embeds_list
         for round in range(encoder_rounds):
             batch_list.clear()
             front = pp_layer * tp_size + round * model_size
@@ -375,18 +376,18 @@ def train_step(
                     gather_variable_shape_embeddings(embed, group=mpu.get_model_parallel_group())
                     for embed in deepstack_visual_embeds
                 ])
-                get_deepstack_grad_list().append(
+                hetero_step.deepstack_grad_list.append(
                     [[None] * model_size for _ in range(len(deepstack_visual_embeds))]
                 )
             else:
                 deepstack_visual_embeds_list.append(None)
-                get_deepstack_grad_list().append(None)
+                hetero_step.deepstack_grad_list.append(None)
         batch_list.clear()
 
         # Offload gathered embeddings to CPU (only rank 0 holds them)
         if args.full_hetero_dp_cpu_offload:
-            from loongforge.engines.megatron.distributed.hetero_dp import get_cpu_offload_manager, offload_list_items
-            _offload_mgr = get_cpu_offload_manager()
+            from loongforge.engines.megatron.distributed.hetero_dp import offload_list_items
+            _offload_mgr = hetero_step.offload
             _local_rank_for_offload = torch.distributed.get_rank(mpu.get_model_parallel_group())
             if _local_rank_for_offload == 0:
                 for _round_idx in range(encoder_rounds):
@@ -461,9 +462,6 @@ def train_step(
         )
 
     if args.enable_full_hetero_dp:
-        from loongforge.engines.megatron.distributed.hetero_dp import (
-            get_grad_list, get_deepstack_grad_list, clear_full_hetero_info
-        )
         from loongforge.engines.megatron.initialize import (
             get_num_micro_batches_per_decoder_dp,
             get_num_real_micro_batches_per_decoder_dp,
@@ -473,12 +471,11 @@ def train_step(
         num_microbatch, encoder_rounds = get_num_micro_batches_per_decoder_dp()
         num_real_microbatch = get_num_real_micro_batches_per_decoder_dp()
         model_size = get_model_size()
-        grad_list = get_grad_list()
+        grad_list = hetero_step.grad_list
 
         # Reload offloaded grads from CPU before reshaping
         if args.full_hetero_dp_cpu_offload:
-            from loongforge.engines.megatron.distributed.hetero_dp import get_cpu_offload_manager
-            _reload_mgr = get_cpu_offload_manager()
+            _reload_mgr = hetero_step.offload
             _reload_mgr.wait_all_offloads()
             for _gi in range(len(grad_list)):
                 if grad_list[_gi] is None:
@@ -534,7 +531,7 @@ def train_step(
                     group=mpu.get_model_parallel_group()
                 )
 
-                deepstack_grads_for_round = get_deepstack_grad_list()[round]
+                deepstack_grads_for_round = hetero_step.deepstack_grad_list[round]
                 if deepstack_grads_for_round is not None:
                     ctx["local_deepstack_visual_embeds_grads"] = []
                     for i in range(len(ctx["local_deepstack_visual_embeds"])):
@@ -581,7 +578,7 @@ def train_step(
         for _round_key in list(local_model.vit_contexts.keys()):
             del local_model.vit_contexts[_round_key]
         
-        clear_full_hetero_info()
+        hetero_step.end_step()
 
     should_checkpoint, should_exit, exit_code = (
         rerun_state_machine.should_checkpoint_and_exit()

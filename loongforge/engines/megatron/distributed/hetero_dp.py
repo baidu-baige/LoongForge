@@ -10,9 +10,10 @@ encoder path and the EP-overlap callables share the state kept here:
 - embedding / grad / visual-pos-mask / deepstack lists of the current step;
 - the CPU offload manager (``--full-hetero-dp-cpu-offload``);
 - the encoder data iterator, built by the method from its dataset;
-- the method's batch functions, registered with ``set_batch_fns``.
+- the method's batch functions.
 
-``clear_full_hetero_info`` resets all of it, plus the method's forward-step state, after each step.
+``HeteroStepContext`` owns all of it. The training method creates it, ``train_step``
+fills the per-step lists and calls ``end_step`` after the step.
 """
 
 import queue
@@ -23,100 +24,44 @@ import torch
 
 from megatron.legacy.data.data_samplers import MegatronPretrainingRandomSampler
 
-from loongforge.engines.megatron import get_args
 
-embedding_list = []
-grad_list = []
-visual_pos_masks_list = []
-deepstack_visual_embeds_list = []
-deepstack_grad_list = []
+class HeteroStepContext:
+    """State shared by the engine, the model and the EP-overlap callables for one full-hetero-DP run.
 
-_cpu_offload_manager = None
-_encoder_data_iterator = None
-_batch_fns = None
+    The lists live for one training step; the offload manager and the encoder data
+    iterator live for the whole run. ``train_step`` fills the lists, the model forward
+    and backward hooks read and write them, and ``end_step`` clears them.
+    """
 
+    def __init__(self, *, get_batch, create_mock_batch, reset_step_state, offload_enabled: bool):
+        self.embedding_list = []
+        self.grad_list = []
+        self.visual_pos_masks_list = []
+        self.deepstack_visual_embeds_list = []
+        self.deepstack_grad_list = []
+        self.offload = CpuOffloadManager(enabled=offload_enabled)
+        self.get_batch = get_batch
+        self.create_mock_batch = create_mock_batch
+        self.encoder_data_iterator = None
+        self._reset_step_state = reset_step_state
 
-def set_batch_fns(get_batch, create_mock_batch, reset_step_state):
-    """Register the method's batch builder, mock-batch builder and forward-step state reset."""
-    global _batch_fns
-    _batch_fns = (get_batch, create_mock_batch, reset_step_state)
+    def reload(self, items: list, index: int, prefix: str) -> Optional[torch.Tensor]:
+        """Reload ``items[index]`` from CPU when offloading is on."""
+        return reload_list_item(self.offload, items, index, prefix)
 
-
-def get_batch_fns():
-    """Return ``(get_batch, create_mock_batch)`` registered by the method."""
-    assert _batch_fns is not None, "full hetero DP: the training method did not call hetero_dp.set_batch_fns"
-    return _batch_fns[0], _batch_fns[1]
-
-
-def get_cpu_offload_manager():
-    """Return the global CpuOffloadManager singleton (lazy-initialized)."""
-    global _cpu_offload_manager
-    if _cpu_offload_manager is None:
-        args = get_args()
-        _cpu_offload_manager = CpuOffloadManager(
-            enabled=args.full_hetero_dp_cpu_offload
-        )
-    return _cpu_offload_manager
-
-def get_encoder_data_iterator():
-    """Return the encoder data iterator for full_hetero_dp mode."""
-    return _encoder_data_iterator
-
-def set_encoder_data_iterator(iterator):
-    """Set the encoder data iterator for full_hetero_dp mode."""
-    global _encoder_data_iterator
-    _encoder_data_iterator = iterator
-
-def get_embedding_list():
-    """Return the global embedding list."""
-    return embedding_list
-
-def clear_embedding_list():
-    """Clear the global embedding list."""
-    embedding_list.clear()
-
-def get_grad_list():
-    """Return the global gradient list."""
-    return grad_list
-
-def clear_grad_list():
-    """Clear the global gradient list."""
-    grad_list.clear()
-
-def get_visual_pos_masks_list():
-    """Return the global visual position masks list."""
-    return visual_pos_masks_list
-
-def clear_visual_pos_masks_list():
-    """Clear the global visual position masks list."""
-    visual_pos_masks_list.clear()
-
-def get_deepstack_visual_embeds_list():
-    """Return the global deepstack visual embeddings list."""
-    return deepstack_visual_embeds_list
-
-def clear_deepstack_visual_embeds_list():
-    """Clear the global deepstack visual embeddings list."""
-    deepstack_visual_embeds_list.clear()
-
-def get_deepstack_grad_list():
-    """Return the global deepstack gradient list."""
-    return deepstack_grad_list
-
-def clear_deepstack_grad_list():
-    """Clear the global deepstack gradient list."""
-    deepstack_grad_list.clear()
-
-def clear_full_hetero_info():
-    _batch_fns[2]()
-    clear_embedding_list()
-    clear_grad_list()
-    clear_visual_pos_masks_list()
-    clear_deepstack_visual_embeds_list()
-    clear_deepstack_grad_list()
-    manager = get_cpu_offload_manager()
-    if manager.enabled:
-        manager.clear()
+    def end_step(self) -> None:
+        """Reset everything scoped to one step; keeps the offload manager and the iterator."""
+        self._reset_step_state()
+        for items in (
+            self.embedding_list,
+            self.grad_list,
+            self.visual_pos_masks_list,
+            self.deepstack_visual_embeds_list,
+            self.deepstack_grad_list,
+        ):
+            items.clear()
+        if self.offload.enabled:
+            self.offload.clear()
 
 
 # ---------------------------------------------------------------------------

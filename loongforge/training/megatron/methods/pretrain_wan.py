@@ -41,10 +41,11 @@ from loongforge.models.diffusion.wan.gaussian_diffusion import (
     get_named_beta_schedule,
 )
 
-from loongforge.models.diffusion.wan.wan_utils import (
-    broadcast_on_cp_group,
-)
 from loongforge.models.diffusion.wan.wan_provider import wan_i2v_model_provider
+from loongforge.engines.megatron.distributed.batch_broadcast import (
+    broadcast_optional_tensor,
+    broadcast_tensor,
+)
 
 SUPPORTED_MODELS = [
     CustomModelFamilies.WAN2_1_I2V,
@@ -54,6 +55,35 @@ WAN_PATCH_SIZE = (1, 2, 2)
 
 
 stimer = StragglerDetector()
+
+
+def broadcast_on_cp_group(batch):
+    """Broadcast the batch from CP rank 0 to the other CP ranks.
+
+    CP rank 0 keeps its own batch. The other ranks get the six fields the step reads:
+    ``latents``, ``training_target``, ``timestep``, ``scale``, ``prompt_emb["context"]``
+    and the optional ``image_emb`` entries ``clip_feature`` and ``y``.
+    """
+    src = mpu.get_context_parallel_src_rank()
+    group = mpu.get_context_parallel_group()
+    is_src = mpu.get_context_parallel_rank() == 0
+
+    def tensor(value):
+        return broadcast_tensor(value if is_src else None, src, group)
+
+    def optional(key):
+        return broadcast_optional_tensor(batch["image_emb"].get(key) if is_src else None, src, group)
+
+    received = {key: tensor(batch[key] if is_src else None)
+                for key in ("latents", "training_target", "timestep", "scale")}
+    received["prompt_emb"] = {"context": tensor(batch["prompt_emb"]["context"] if is_src else None)}
+    image_emb = {}
+    for key in ("clip_feature", "y"):
+        value = optional(key)
+        if value is not None:
+            image_emb[key] = value
+    received["image_emb"] = image_emb
+    return batch if is_src else received
 
 
 def model_provider(pre_process=True, post_process=True, vp_stage: int = None):
@@ -307,7 +337,7 @@ def get_batch(data_iterator):
             batch["timestep"] = timestep
 
     if not use_packing and should_broadcast_batch:
-        batch = broadcast_on_cp_group(batch, args)
+        batch = broadcast_on_cp_group(batch)
 
     if batch is None:
         return None, None, None, None, None, None, None, None, None, None, None

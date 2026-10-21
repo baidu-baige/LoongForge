@@ -22,6 +22,7 @@ def omni_model_provider(
     *,
     args,
     model_config,
+    runtime,
 ) -> OmniCombinationModel:
     """
     Construct and return an Omni combination model instance.
@@ -35,6 +36,7 @@ def omni_model_provider(
         parallel_output: Whether to enable parallel output (default: True)
         args: Training args of the run.
         model_config: Model config of the run.
+        runtime: ``MultimodalRuntime`` with the engine bindings, built by the training method.
 
     Returns:
         OmniCombinationModel: Constructed combination model instance
@@ -85,6 +87,7 @@ def omni_model_provider(
         use_vit_dp_balance=args.use_vit_dp_balance,
         enable_encoder_hetero_dp=args.enable_encoder_hetero_dp,
         enable_full_hetero_dp=args.enable_full_hetero_dp,
+        runtime=runtime,
     )
 
     return model

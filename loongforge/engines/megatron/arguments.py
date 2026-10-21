@@ -99,20 +99,6 @@ def _add_extra_bridge_args(parser):
                        help="Treat the loaded checkpoint as fp8 for pretrain (bf16 saved ckpt + pretrain fp8). "
                             "Default: False")
 
-    # Read only by the HF bridge (tools/mcore_bridge) when it loads HF weights
-    # online or merges adapters for --save-hf.
-    group.add_argument(
-        "--lora-alpha",
-        type=int,
-        help="LoRA alpha used by the HF export bridge when --save-hf merges adapters. "
-             "Training LoRA shape comes from the YAML peft_config and must match."
-    )
-    group.add_argument(
-        "--lora-dim",
-        type=int,
-        help="LoRA rank used by the HF export bridge when --save-hf merges adapters. "
-             "Training LoRA shape comes from the YAML peft_config and must match."
-    )
     group.add_argument(
         "--encoder-tensor-model-parallel-size",
         type=int,
@@ -318,10 +304,12 @@ def _add_model_config_args(parser: argparse.ArgumentParser):
     )
     group.add_argument(
         "--latent-patch-size",
-        type=tuple,
+        nargs=3,
+        type=int,
         default=(1, 1, 1),
-        help="Patch size (time, height, width) for latent space tokenization. "
-             "Default: (1, 1, 1)"
+        metavar=("T", "H", "W"),
+        help="Patch size (time, height, width) for latent space tokenization, given as three "
+             "space-separated integers. Default: (1, 1, 1)"
     )
     group.add_argument(
         "--latent-space-scale",

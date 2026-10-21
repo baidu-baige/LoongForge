@@ -11,8 +11,9 @@ import torch
 from functools import partial
 
 
-from megatron.core import mpu
+from megatron.core import mpu, tensor_parallel
 from megatron.core.enums import ModelType
+from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.utils import StragglerDetector
 from megatron.core.datasets.utils import get_blend_from_list
 from megatron.core.rerun_state_machine import get_rerun_state_machine
@@ -37,8 +38,9 @@ from loongforge import constants
 
 from loongforge.training.megatron.runner import pretrain
 
-from loongforge.engines.megatron.distributed.batch_broadcast import get_batch_on_this_tp_rank
+from loongforge.engines.megatron.distributed.batch_broadcast import broadcast_from_tp_src
 from loongforge.engines.megatron.distributed.context_parallel import get_batch_on_this_cp_rank
+from loongforge.training.megatron.data_padding import llm_pad_to_multiple_of
 from loongforge.data.llm.blended_hf_dataset_config import get_dataset_blend_from_list
 from loongforge.data.llm_dataloader import (
     build_sft_cyclic_iterators,
@@ -50,16 +52,250 @@ from loongforge.training.megatron.methods.pretrain_llm import get_embedding_rank
 stimer = StragglerDetector()
 
 
+def _get_position_ids(data: torch.Tensor):
+    """Create position ids."""
+    current_device = data.device
+    _, seq_length = data.shape
+    position_ids = torch.arange(seq_length, dtype=torch.long, device=current_device)
+    position_ids = position_ids.unsqueeze(0).expand_as(data)
+    return position_ids
+
+
+def _get_attention_mask(attention_mask: torch.Tensor, args) -> torch.Tensor:
+    """Create attention mask for TE."""
+    current_device = attention_mask.device
+    batch_size, seq_length = attention_mask.shape
+
+    # Only used attn_mask when attn_mask_type in [padding, padding_causal, arbitrary] in TE
+    if args.context_parallel_size > 1:
+        # Context parallel only supports causal mask in TE now.
+        # When context-parallel is enabled, the input data is of a relatively long length,
+        # and micro-batch-size does not need to be increased, nor padding occurs.
+        # Create causal mask here, shape [B, 1, S, S].
+        attention_mask = torch.tril(
+            torch.ones(
+                (batch_size, seq_length, seq_length),
+                dtype=torch.long,
+                device=current_device,
+            )
+        )
+        attention_mask.unsqueeze_(1)
+        attention_mask = (attention_mask < 0.5).bool()
+    else:
+        # Create mask for TE, shape [B, 1, 1, S]. attn_mask_type is padding_causal or causal.
+        attention_mask.unsqueeze_(1).unsqueeze_(1)
+        attention_mask = (attention_mask < 0.5).bool()
+
+    return attention_mask
+
+
+def _get_packed_sequence_params(attention_mask: torch.Tensor) -> PackedSeqParams:
+    """Create packed sequence params."""
+    # assume micro_batch_size == 1
+    assert attention_mask.shape[0] == 1, "attention_mask should be of shape [1, S]"
+
+    packed_seq_params = PackedSeqParams()
+    packed_seq_params.qkv_format = "thd"
+
+    # calculate cu_seqlens_q
+    # example: mask = [[1, 1, 2, 2, 2, 3, 3, 4, 5, 5, 5, 0, 0]]
+    # expected cu_seqlens_q = [0, 2, 5, 7, 8, 11, 13]
+    max_num = attention_mask.max().item()
+    reduced_mask = torch.bincount(attention_mask.view(-1), minlength=max_num + 1)
+    reduced_mask = reduced_mask[1:].to(dtype=torch.int32, device=attention_mask.device)
+
+    cu_seqlens = reduced_mask.cumsum(dim=0).to(torch.int32)
+    zero = torch.zeros(1, dtype=torch.int32, device=attention_mask.device)
+    # The lengths of padding tokens must also be taken into account in cu_seqlens;
+    # otherwise, the attention calculation will be incorrect.
+    cu_seqlens[-1] = attention_mask.shape[1]
+    cu_seqlens = torch.cat((zero, cu_seqlens))
+
+    packed_seq_params.cu_seqlens_q = cu_seqlens
+    packed_seq_params.cu_seqlens_kv = cu_seqlens  # just for self-attention
+    packed_seq_params.max_seqlen_q = (cu_seqlens[1:] - cu_seqlens[:-1]).max().item()
+    packed_seq_params.max_seqlen_kv = packed_seq_params.max_seqlen_q
+
+    return packed_seq_params
+
+
+def _required_tp_keys(args):
+    """Keys read from the data iterator on the tensor-parallel source rank."""
+    keys = ["attention_mask"]
+    if args.enable_chunkpipe:
+        keys += ["chunk_group_size", "group_total_tokens"]
+    need_labels = args.pipeline_model_parallel_size == 1 or mpu.is_pipeline_last_stage()
+    if need_labels:
+        keys += ["input_ids", "labels"]
+        if not args.eod_mask_loss:
+            keys.append("loss_mask")
+    elif mpu.is_pipeline_first_stage():
+        keys.append("input_ids")
+    return keys
+
+
+def _broadcast_chunkpipe_metadata(step_num_groups, component_sizes):
+    """Broadcast the per-micro-batch (source-group count, composite descriptor) from TP rank 0."""
+    meta = torch.tensor(
+        [step_num_groups, len(component_sizes)],
+        dtype=torch.long,
+        device=torch.cuda.current_device(),
+    )
+    broadcast_from_tp_src(meta)
+    n_comp = int(meta[1].item())
+    if n_comp > 0:
+        if mpu.get_tensor_model_parallel_rank() == 0:
+            comp_tensor = torch.tensor(
+                component_sizes, dtype=torch.long, device=torch.cuda.current_device()
+            )
+        else:
+            comp_tensor = torch.zeros(
+                n_comp, dtype=torch.long, device=torch.cuda.current_device()
+            )
+        broadcast_from_tp_src(comp_tensor)
+        component_sizes = comp_tensor.tolist()
+    else:
+        component_sizes = []
+    return meta[:1], component_sizes
+
+
+def _build_sft_batch(args, tokenizer, data_b):
+    """Turn the broadcast data dict into model inputs, slicing MTP tokens and shifting SFT labels."""
+    sft_chunkpipe_mtp = (
+        args.enable_chunkpipe
+        and getattr(args, "sft_chunkpipe_mode", False)
+        and getattr(args, "mtp_num_layers", 0)
+        and args.mtp_num_layers > 0
+    )
+    base_length = args.chunksize if sft_chunkpipe_mtp else None
+
+    tokens_full = data_b["input_ids"].long() if "input_ids" in data_b else None
+    tokens = tokens_full
+    mtp_tokens = None
+    mtp_position_ids = None
+    if tokens_full is not None:
+        if sft_chunkpipe_mtp:
+            expected_length = base_length + args.mtp_num_layers
+            assert tokens_full.dim() == 2, (
+                f"SFT chunkpipe MTP expects 2D tokens, got shape {tuple(tokens_full.shape)}."
+            )
+            assert tokens_full.size(1) == expected_length, (
+                f"SFT chunkpipe MTP expects physical sequence length "
+                f"{expected_length}, got {tokens_full.size(1)}."
+            )
+            mtp_tokens = tokens_full
+            tokens = tokens_full[:, :base_length]
+            assert tokens.size(1) == base_length, (
+                f"SFT chunkpipe main tokens must have base length "
+                f"{base_length}, got {tokens.size(1)}."
+            )
+            mtp_position_ids = _get_position_ids(mtp_tokens)
+        position_ids = _get_position_ids(tokens)
+    else:
+        position_ids = None
+
+    labels_full = data_b["labels"].long() if "labels" in data_b else None
+    labels = labels_full
+    mtp_labels = None
+    if labels_full is not None:
+        if sft_chunkpipe_mtp:
+            mtp_labels = labels_full[:, :base_length + args.mtp_num_layers]
+            labels = labels_full[:, :base_length]
+        elif not args.enable_chunkpipe:
+            # Shift labels for next-token prediction; chunkpipe data is already pre-shifted
+            labels = torch.roll(labels, shifts=-1, dims=1)
+            labels[:, -1] = constants.IGNORE_INDEX
+
+    loss_mask_full = data_b["loss_mask"].long() if "loss_mask" in data_b else None
+    loss_mask = loss_mask_full
+    mtp_loss_mask = None
+    if loss_mask_full is not None:
+        if sft_chunkpipe_mtp:
+            mtp_loss_mask = loss_mask_full[:, :base_length + args.mtp_num_layers]
+            loss_mask = loss_mask_full[:, :base_length]
+        elif not args.enable_chunkpipe:
+            # pp last && not eod_mask_loss; chunkpipe data is already pre-shifted
+            loss_mask = torch.roll(loss_mask, shifts=-1, dims=1)
+            loss_mask[:, -1] = 0
+    elif labels is not None:
+        # pp last && eod_mask_loss
+        assert args.eod_mask_loss, "eod_mask_loss should be true here!"
+        loss_mask = torch.ones(labels.size(), dtype=torch.float, device=labels.device)
+        loss_mask[labels == constants.IGNORE_INDEX] = 0.0
+        loss_mask[labels == tokenizer.pad] = 0.0
+        loss_mask[labels == tokenizer.eos] = 0.0
+        if sft_chunkpipe_mtp and mtp_labels is not None:
+            mtp_loss_mask = torch.ones(mtp_labels.size(), dtype=torch.float, device=mtp_labels.device)
+            mtp_loss_mask[mtp_labels == constants.IGNORE_INDEX] = 0.0
+            mtp_loss_mask[mtp_labels == tokenizer.pad] = 0.0
+            mtp_loss_mask[mtp_labels == tokenizer.eos] = 0.0
+
+    attention_mask = None
+    packed_seq_params = None
+    attention_mask_data = data_b["attention_mask"].long()
+    if sft_chunkpipe_mtp:
+        attention_mask_data = attention_mask_data[:, :base_length]
+
+    if not args.packing_sft_data:
+        attention_mask = _get_attention_mask(attention_mask_data, args)
+    else:
+        # attention_mask will be ignored in te
+        packed_seq_params = _get_packed_sequence_params(attention_mask_data)
+
+    batch = {
+        "tokens": tokens,
+        "labels": labels,
+        "loss_mask": loss_mask,
+        "position_ids": position_ids,
+        "attention_mask": attention_mask,
+        "packed_seq_params": packed_seq_params,
+    }
+    if sft_chunkpipe_mtp:
+        if mtp_tokens is not None:
+            batch["mtp_tokens"] = mtp_tokens
+            batch["mtp_position_ids"] = mtp_position_ids
+        if mtp_labels is not None:
+            batch["mtp_labels"] = mtp_labels
+        if mtp_loss_mask is not None:
+            batch["mtp_loss_mask"] = mtp_loss_mask
+    if args.enable_chunkpipe and "chunk_group_size" in data_b:
+        batch["chunk_group_size"] = data_b["chunk_group_size"]
+        batch["group_total_tokens"] = data_b["group_total_tokens"]
+    return batch
+
+
 def get_batch(data_iterator):
     """Generate a batch"""
-    # get batches based on the TP rank you are on
-    batch = get_batch_on_this_tp_rank(data_iterator)
+    args = get_args()
+    tokenizer = get_tokenizer()
+
+    data = next(data_iterator) if data_iterator is not None else None
+
+    # The iterator wrapper attaches the sampler's per-micro-batch metadata to each batch.
+    # Only TP rank 0 of the VP last stage reads it (loss_func runs there); every other
+    # rank starts from 0 / [] and TP ranks receive rank 0's values by broadcast.
+    step_num_groups = 0
+    component_sizes = []
+    vp_size = mpu.get_virtual_pipeline_model_parallel_world_size()
+    is_vpp = vp_size is not None and vp_size > 1
+    reads_metadata = mpu.get_tensor_model_parallel_rank() == 0 and (
+        not is_vpp or mpu.get_virtual_pipeline_model_parallel_rank() == vp_size - 1
+    )
+    if args.enable_chunkpipe and reads_metadata and data is not None and "chunkpipe_step_num_groups" in data:
+        step_num_groups = data["chunkpipe_step_num_groups"]
+        component_sizes = data["chunkpipe_component_sizes"]
+
+    data_b = tensor_parallel.broadcast_data(_required_tp_keys(args), data, torch.int64)
+    batch = _build_sft_batch(args, tokenizer, data_b)
+    if args.enable_chunkpipe and "chunk_group_size" in data_b:
+        batch["step_num_groups"], batch["composite_component_sizes"] = (
+            _broadcast_chunkpipe_metadata(step_num_groups, component_sizes)
+        )
 
     # slice batch along sequence dimension for context parallelism
     batch = get_batch_on_this_cp_rank(batch)
 
     # Extract chunk_group_size into the model config for model-side code.
-    args = get_args()
     if args.enable_chunkpipe and "chunk_group_size" in batch:
         group_size = batch["chunk_group_size"][0].item()
         config = get_model_config()
@@ -129,13 +365,21 @@ def get_batch(data_iterator):
                 f"SFT chunkpipe MTP tokens must have physical length "
                 f"{expected_length}, got {batch['mtp_tokens'].size(1)}."
             )
+            step_num_groups = batch.get("step_num_groups")
             mtp_batch = {
                 "tokens": batch["mtp_tokens"],
                 "position_ids": batch["mtp_position_ids"],
                 "labels": batch.get("mtp_labels"),
                 "loss_mask": batch.get("mtp_loss_mask"),
                 "group_total_tokens": batch.get("group_total_tokens"),
-                "step_num_groups": batch.get("step_num_groups"),
+                "step_num_groups": step_num_groups,
+                # MTP loss logging scale dp * M / G, computed in fp32 like the MTP loss
+                # it multiplies. The model applies it without reading parallel state.
+                "log_scale": (
+                    mpu.get_data_parallel_world_size()
+                    * get_num_microbatches()
+                    / (step_num_groups.to(torch.float32) if step_num_groups is not None else 1.0)
+                ),
             }
 
     output = (
@@ -415,7 +659,10 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
 
     # will use external dataloader type for sft
     data_collator = build_sft_data_collator(
-        DataCollatorForSupervisedDataset, args, get_tokenizer()
+        DataCollatorForSupervisedDataset,
+        args,
+        get_tokenizer(),
+        pad_to_multiple_of=llm_pad_to_multiple_of(args),
     )
     train_iter, valid_iter, test_iter = build_sft_cyclic_iterators(
         train_ds, valid_ds, test_ds, data_collator, args

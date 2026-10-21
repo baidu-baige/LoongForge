@@ -14,10 +14,8 @@ from loongforge.models.base.context_parallel import get_inputs_on_this_cp_rank
 from transformers.models.auto.modeling_auto import AutoModel
 from loongforge.models.base import BaseMegatronModule, BaseModelConfig
 from megatron.core import InferenceParams, tensor_parallel
-from loongforge.engines.megatron.initialize import (
-    mpu,
-    get_encoder_dp_size,
-)
+from megatron.core import parallel_state as mpu
+from loongforge.models.multimodal.runtime import MultimodalRuntime
 from megatron.core.pipeline_parallel.fine_grained_activation_offload import (
     fine_grained_offloading_init_chunk_handler,
 )
@@ -50,8 +48,10 @@ class OmniCombinationModel(BaseMegatronModule):
         use_vit_dp_balance: bool,
         enable_encoder_hetero_dp: bool,
         enable_full_hetero_dp: bool,
+        runtime: MultimodalRuntime,
     ) -> None:
         super().__init__(config.foundation)
+        self.runtime = runtime
         self.pre_process = pre_process
         self.post_process = post_process
         self.add_encoder = add_encoder
@@ -70,6 +70,8 @@ class OmniCombinationModel(BaseMegatronModule):
                 use_vit_dp_balance=use_vit_dp_balance,
                 enable_encoder_hetero_dp=enable_encoder_hetero_dp,
                 enable_full_hetero_dp=enable_full_hetero_dp,
+                parallel_state_switch=runtime.parallel_state_switch,
+                vit_balance=runtime.vit_balance,
             )
             self.vit_contexts = {}
         else:
@@ -246,6 +248,7 @@ class OmniCombinationModel(BaseMegatronModule):
         forward_group_id: Optional[int] = None,
         inner_group_id: Optional[int] = None,
         enable_full_hetero_dp: bool = False,
+        hetero_step=None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Forward pass supporting multiple execution paths.
@@ -256,7 +259,7 @@ class OmniCombinationModel(BaseMegatronModule):
             3. Offline foundation model: use preprocessed output_embeddings
             4. Decoder only: freeze encoder and foundation
         """
-        _ImageEncoderDataParallelSize = get_encoder_dp_size('image_encoder')
+        _ImageEncoderDataParallelSize = self.runtime.encoder_dp_size
 
         if self.config.fine_grained_activation_offloading:
             self.preprocess_for_fine_grained_offloading()
@@ -442,32 +445,24 @@ class OmniCombinationModel(BaseMegatronModule):
                     deepstack_visual_embeds.append(tmp_deepstack_visual_embeds)
 
         if self.add_encoder and mpu.is_pipeline_first_stage() and enable_full_hetero_dp:
-            from loongforge.engines.megatron.distributed.hetero_dp import (
-                get_grad_list, get_embedding_list,
-                get_visual_pos_masks_list, get_deepstack_visual_embeds_list,
-                get_deepstack_grad_list, get_cpu_offload_manager,
-            )
-            from loongforge.engines.megatron.initialize import get_model_size
+            if hetero_step is None:
+                raise RuntimeError("full hetero DP needs the step context created by the training method")
             group = mpu.get_tensor_model_parallel_group()
             src_rank = torch.distributed.get_global_rank(group, 0)
             local_rank = torch.distributed.get_rank()
 
-            embedding_list = get_embedding_list()
-            visual_pos_masks_list = get_visual_pos_masks_list()
-            deepstack_visual_embeds_list = get_deepstack_visual_embeds_list()
-            model_size = get_model_size()
+            embedding_list = hetero_step.embedding_list
+            visual_pos_masks_list = hetero_step.visual_pos_masks_list
+            deepstack_visual_embeds_list = hetero_step.deepstack_visual_embeds_list
+            model_size = self.runtime.model_size
             round_num = forward_group_id // model_size
             inner_num = forward_group_id % model_size
 
-            _offload_mgr = get_cpu_offload_manager()
+            _offload_mgr = hetero_step.offload
 
             # Reload embedding from CPU if offloaded
             if _offload_mgr.enabled and local_rank == src_rank:
-                from loongforge.engines.megatron.distributed.hetero_dp import reload_list_item
-                reload_list_item(
-                    _offload_mgr, embedding_list[round_num], inner_num,
-                    f"emb_r{round_num}"
-                )
+                hetero_step.reload(embedding_list[round_num], inner_num, f"emb_r{round_num}")
 
             # src rank broadcasts its actual embedding; other ranks supply only a
             # dtype/ndim reference so the helpers can allocate the right buffer.
@@ -485,7 +480,7 @@ class OmniCombinationModel(BaseMegatronModule):
                 def hook(grad):
                     if torch.distributed.get_rank(group=group) == 0:
                         grad = grad.clone()
-                        grad_list = get_grad_list()
+                        grad_list = hetero_step.grad_list
                         grad_idx = len(grad_list)
                         grad_list.append(grad)
                         if offload_mgr.enabled:
@@ -510,11 +505,7 @@ class OmniCombinationModel(BaseMegatronModule):
             if self.vit_contexts[round_num]["local_visual_pos_masks"] is not None:
                 # Reload visual_pos_masks from CPU if offloaded
                 if _offload_mgr.enabled and local_rank == src_rank:
-                    from loongforge.engines.megatron.distributed.hetero_dp import reload_list_item
-                    reload_list_item(
-                        _offload_mgr, visual_pos_masks_list[round_num], inner_num,
-                        f"vpm_r{round_num}"
-                    )
+                    hetero_step.reload(visual_pos_masks_list[round_num], inner_num, f"vpm_r{round_num}")
 
                 ref_masks = self.vit_contexts[round_num]["local_visual_pos_masks"]
                 local_masks = visual_pos_masks_list[round_num][inner_num] if local_rank == src_rank else ref_masks
@@ -532,17 +523,16 @@ class OmniCombinationModel(BaseMegatronModule):
                 def full_hetero_dp_deepstack_grad_hook_factory(group, round_num, inner_num, i):
                     def hook(grad):
                         if torch.distributed.get_rank(group=group) == 0:
-                            get_deepstack_grad_list()[round_num][i][inner_num] = grad.clone()
+                            hetero_step.deepstack_grad_list[round_num][i][inner_num] = grad.clone()
                     return hook
 
                 deepstack_visual_embeds = []
                 for i in range(len(ref_embeds)):
                     # Reload deepstack embed from CPU if offloaded
                     if _offload_mgr.enabled and local_rank == src_rank:
-                        from loongforge.engines.megatron.distributed.hetero_dp import reload_list_item
-                        reload_list_item(
-                            _offload_mgr, deepstack_visual_embeds_list[round_num][i],
-                            inner_num, f"ds_r{round_num}_l{i}"
+                        hetero_step.reload(
+                            deepstack_visual_embeds_list[round_num][i], inner_num,
+                            f"ds_r{round_num}_l{i}"
                         )
 
                     local_embed = (
@@ -597,6 +587,7 @@ class OmniCombinationModel(BaseMegatronModule):
         forward_group_id: Optional[int] = None,
         inner_group_id: Optional[int] = None,
         enable_full_hetero_dp: bool = False,
+        hetero_step=None,
         **kwargs: Any,
     ):
 
@@ -604,11 +595,12 @@ class OmniCombinationModel(BaseMegatronModule):
             self.preprocess_for_fine_grained_offloading()
 
         """Build the schedule plan for the model."""
-        from loongforge.engines.megatron.distributed.model_chunk_schedule_plan import (
-            TransformerModelChunkSchedulePlan,
-        )
+        if self.runtime.schedule_plan_factory is None:
+            raise RuntimeError(
+                "build_schedule_plan needs the schedule_plan_factory passed by the training method"
+            )
 
-        return TransformerModelChunkSchedulePlan(
+        return self.runtime.schedule_plan_factory(
             self,
             image_inputs=image_inputs,
             video_inputs=video_inputs,
@@ -623,5 +615,6 @@ class OmniCombinationModel(BaseMegatronModule):
             forward_group_id=forward_group_id,
             inner_group_id=inner_group_id,
             enable_full_hetero_dp=enable_full_hetero_dp,
+            hetero_step=hetero_step,
             **kwargs,
         )

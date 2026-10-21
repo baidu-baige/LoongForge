@@ -345,12 +345,6 @@ def _add_vlm_data_args(parser: argparse.ArgumentParser) -> argparse.ArgumentPars
         help="Loss reduction method: 'square', 'mean', or 'sum'. Default: square",
     )
     group.add_argument(
-        "--patch-size",
-        type=int,
-        default=14,
-        help="Vision encoder patch size for image tokenization. Default: 14",
-    )
-    group.add_argument(
         "--group-by-length",
         action="store_true",
         help="Group samples by sequence length for more efficient batching. Default: False",
@@ -385,12 +379,16 @@ def _add_vlm_data_args(parser: argparse.ArgumentParser) -> argparse.ArgumentPars
         help="Maximum number of dynamic patches per image. Default: 12",
     )
     group.add_argument(
+        "--use-thumbnail",
         "--use_thumbnail",
+        dest="use_thumbnail",
         action="store_true",
         help="Add thumbnail image alongside dynamic patches. Default: False",
     )
     group.add_argument(
+        "--normalize-type",
         "--normalize_type",
+        dest="normalize_type",
         type=str,
         default="imagenet",
         help="Image normalization preset. Options: 'imagenet', 'clip', etc. Default: imagenet",
@@ -475,7 +473,7 @@ def _add_run_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
         default="false",
         choices=["true", "false"],
         help="Save an HF checkpoint at the end of training. "
-             "The adapter merge size comes from --lora-alpha/--lora-dim. Default: false",
+             "The adapter merge size comes from the YAML peft_config. Default: false",
     )
     group.add_argument(
         "--save-hf-path",

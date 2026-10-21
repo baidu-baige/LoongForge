@@ -122,7 +122,7 @@ def test_internvl_reorder_and_layout_registration(skip):
         for key in expected:
             torch.testing.assert_close(actual[key], expected[key])
         assert ctx.grouped_calls == 2
-    functions["register"]()
+    layout["install_batch_layout"]("intern_vl", functions["INTERNVL_BATCH_LAYOUT"])
     registered = layout["get_batch_layout"]("intern_vl")
     assert registered is functions["INTERNVL_BATCH_LAYOUT"]
     assert registered.caller == "InternVL"
@@ -131,19 +131,20 @@ def test_internvl_reorder_and_layout_registration(skip):
 
 def test_unsupported_family():
     layout = runpy.run_path(str(REPO_ROOT / REBALANCE / "layout.py"))
-    with pytest.raises(ValueError, match="Unsupported model_family"):
+    with pytest.raises(ValueError, match="No batch layout registered"):
         layout["get_batch_layout"]("missing")
 
 
 def _video_worker(rank, rendezvous):
     import torch.distributed as dist
-    from loongforge.engines.megatron.distributed.dp_balance.rebalance import balance, pack
+    from loongforge.engines.megatron.distributed.dp_balance.rebalance import balance, layout as layouts, pack
 
     dist.init_process_group(
         "gloo", init_method=rendezvous, rank=rank, world_size=2, timeout=timedelta(seconds=60),
     )
     try:
-        layout = balance.get_batch_layout("qwen3_vl")
+        layouts.install_batch_layout("qwen3_vl", balance.VLM_BATCH_LAYOUT)
+        layout = layouts.get_batch_layout("qwen3_vl")
         assert layout is balance.VLM_BATCH_LAYOUT
         assert layout.reorder is balance.reorder_data_for_vlm
         assert layout.caller == "VLM"

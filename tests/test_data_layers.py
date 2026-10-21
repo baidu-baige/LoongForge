@@ -16,7 +16,7 @@ Layering rules:
   * Only ``training/`` imports ``training``.
   * ``models/`` imports no ``data`` at run time (``TYPE_CHECKING`` type contracts are allowed),
     and no ``training``, ``evaluation``, ``extensions`` or ``chat_templates``.
-  * ``models/ -> engines/`` is technical debt, not a channel. Only ``MODELS_ENGINE_DEBT`` is allowed.
+  * ``models/`` imports no ``engines`` at run time; the training method injects engine callables.
   * ``engines/`` imports no ``data`` at run time.
   * ``engines/`` imports only ``models/base``, ``models/multimodal`` and ``models/catalog``,
     never a model family.
@@ -54,33 +54,6 @@ ENGINE_MODEL_ALLOWED = (
     ("loongforge", "models", "catalog"),
     ("loongforge", "models", "multimodal"),
 )
-# Remaining ``models/ -> engines/`` runtime imports. Each entry is debt with an owner:
-# - multimodal: hetero-DP getters, encoder DP size, parallel-state switch, schedule plan.
-# - removed when the orchestration moves to ``training/megatron/methods`` or a runtime port.
-MODELS_ENGINE_DEBT = {
-    ("multimodal/combination_model.py", "loongforge.engines.megatron.initialize.mpu"),
-    ("multimodal/combination_model.py", "loongforge.engines.megatron.initialize.get_encoder_dp_size"),
-    ("multimodal/combination_model.py", "loongforge.engines.megatron.distributed.hetero_dp.get_grad_list"),
-    ("multimodal/combination_model.py", "loongforge.engines.megatron.distributed.hetero_dp.get_embedding_list"),
-    ("multimodal/combination_model.py", "loongforge.engines.megatron.distributed.hetero_dp.get_visual_pos_masks_list"),
-    (
-        "multimodal/combination_model.py",
-        "loongforge.engines.megatron.distributed.hetero_dp.get_deepstack_visual_embeds_list",
-    ),
-    ("multimodal/combination_model.py", "loongforge.engines.megatron.distributed.hetero_dp.get_deepstack_grad_list"),
-    ("multimodal/combination_model.py", "loongforge.engines.megatron.distributed.hetero_dp.get_cpu_offload_manager"),
-    ("multimodal/combination_model.py", "loongforge.engines.megatron.initialize.get_model_size"),
-    ("multimodal/combination_model.py", "loongforge.engines.megatron.distributed.hetero_dp.reload_list_item"),
-    (
-        "multimodal/combination_model.py",
-        "loongforge.engines.megatron.distributed.model_chunk_schedule_plan.TransformerModelChunkSchedulePlan",
-    ),
-    ("multimodal/encoder_model.py", "loongforge.engines.megatron.initialize.change_parallel_state"),
-    (
-        "multimodal/encoder_model.py",
-        "loongforge.engines.megatron.distributed.dp_balance.vit_balance.dp_balance_vit_encoder",
-    ),
-}
 # ``models/embodied/dreamzero/modeling_dreamzero.py`` has one ``TYPE_CHECKING`` import of
 # ``engines.torch.distributed.context.DistributedContext``. It never runs, so it is not listed here.
 # ``MODEL_MODULES`` values that are plain modules, not model packages.
@@ -328,8 +301,7 @@ class LayeringTest(unittest.TestCase):
             for target in _runtime_imports(path):
                 if _starts_with(target, ("loongforge", "engines")):
                     found.add((rel, ".".join(target)))
-        self.assertEqual(found - MODELS_ENGINE_DEBT, set(), "new models -> engines import")
-        self.assertEqual(MODELS_ENGINE_DEBT - found, set(), "stale MODELS_ENGINE_DEBT entry")
+        self.assertEqual(found, set(), "models must not import engines")
 
     def test_type_checking_imports_stay_type_only(self):
         # The three files below carry model/data type contracts under TYPE_CHECKING.

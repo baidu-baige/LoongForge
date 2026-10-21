@@ -83,10 +83,6 @@ TRAINING_ARGS=(
     --save-interval 40 
     --save-hf true
     --save-hf-path /workspace/loongforge-ckpt/qwen3-1.7b-lora-hf
-    # LoRA shape comes from peft_config in the YAML; --lora-alpha/--lora-dim
-    # are used only by --save-hf to merge adapters and must match it.
-    --lora-alpha 32
-    --lora-dim 16
     --eval-interval 1000
     --eval-iters 10
     #--ckpt-step 0

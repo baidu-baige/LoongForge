@@ -16,10 +16,8 @@ from megatron.core.process_groups_config import ProcessGroupCollection
 
 from loongforge.models.language.base import BaseGPTModel
 from loongforge.models.base.spec_utils import import_module
-from loongforge.models.language.qwen2.qwen_model import (
-    Qwen2VLRotaryEmbedding,
-    DynamicRotaryEmbedding,
-)
+from loongforge.models.base.dynamic_rotary_embedding import DynamicRotaryEmbedding
+from loongforge.models.language.qwen2.qwen_model import Qwen2VLRotaryEmbedding
 from .qwen_config import Qwen3Config
 
 

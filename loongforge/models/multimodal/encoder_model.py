@@ -13,7 +13,7 @@ This model integrates various modality encoders (text, image, video, audio)
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Optional, Tuple, Literal
+from typing import Any, Callable, Dict, List, Optional, Tuple, Literal
 
 import torch
 from collections import namedtuple
@@ -23,8 +23,6 @@ from megatron.core.models.common.embeddings.language_model_embedding import (
     LanguageModelEmbedding,
 )
 from transformers.models.auto.modeling_auto import AutoModel
-from loongforge.engines.megatron.initialize import change_parallel_state
-from loongforge.engines.megatron.distributed.dp_balance.vit_balance import dp_balance_vit_encoder
 from loongforge.models.vision.qwen3_vl.qwen3_vl_config import Qwen3VisionModelConfig
 
 
@@ -60,7 +58,7 @@ class _DummyEncoderPassthrough(torch.autograd.Function):
         return grad_output, grad_encoder_output
 
 
-def make_encoder_forward_pre_hook(module_name):
+def make_encoder_forward_pre_hook(module_name, switch_parallel_state):
     """
     Create a forward pre-hook function that switches the tensor-parallel
     context to a specific encoder module before executing its forward pass.
@@ -72,18 +70,18 @@ def make_encoder_forward_pre_hook(module_name):
     Returns:
         Callable: A forward pre-hook function that accepts (module, input)
         and switches the tensor-parallel state by calling
-        `change_parallel_state(module_name)` before returning the input
+        ``switch_parallel_state(module_name)`` before returning the input
         unchanged.
     """
 
     def encoder_forward_pre_hook(module, input):
-        change_parallel_state(module_name)
+        switch_parallel_state(module_name)
         return input
 
     return encoder_forward_pre_hook
 
 
-def make_encoder_forward_hook(module_name):
+def make_encoder_forward_hook(module_name, switch_parallel_state):
     """
     Create a forward hook function that adjusts the tensor-parallel state
     before returning the module's output.
@@ -100,7 +98,7 @@ def make_encoder_forward_hook(module_name):
     """
 
     def encoder_forward_hook(module, input, output):
-        change_parallel_state(module_name)
+        switch_parallel_state(module_name)
         return output
 
     return encoder_forward_hook
@@ -120,9 +118,14 @@ class OmniEncoderModel(torch.nn.Module):
         use_vit_dp_balance: bool,
         enable_encoder_hetero_dp: bool,
         enable_full_hetero_dp: bool,
+        parallel_state_switch: Callable[[str], None],
+        vit_balance: Optional[Callable[..., Any]],
         **kwargs,
     ) -> None:
         super().__init__()
+        # Engine callables injected by the training method (see ``MultimodalRuntime``).
+        self.parallel_state_switch = parallel_state_switch
+        self.vit_balance = vit_balance
         self.config = config
         # Parallelism flags, not model structure: the provider passes them from the training args.
         self.use_vit_dp_balance = use_vit_dp_balance
@@ -144,7 +147,7 @@ class OmniEncoderModel(torch.nn.Module):
             hasattr(self.config, "image_encoder")
             and self.config.image_encoder is not None
         ):
-            change_parallel_state("image_encoder")
+            self.parallel_state_switch("image_encoder")
             image_encoder_kwargs = dict(kwargs)
             if isinstance(config.image_encoder, Qwen3VisionModelConfig):
                 # The DeepStack mergers need the projector config and the language hidden size.
@@ -154,26 +157,26 @@ class OmniEncoderModel(torch.nn.Module):
             )
             self.encoder_modality["image"] = True
             self.image_encoder.register_forward_pre_hook(
-                make_encoder_forward_pre_hook("image_encoder")
+                make_encoder_forward_pre_hook("image_encoder", self.parallel_state_switch)
             )
             self.image_encoder.register_forward_hook(
-                make_encoder_forward_hook("text_decoder")
+                make_encoder_forward_hook("text_decoder", self.parallel_state_switch)
             )
 
         if (
             hasattr(self.config, "video_encoder")
             and self.config.video_encoder is not None
         ):
-            change_parallel_state("video_encoder")
+            self.parallel_state_switch("video_encoder")
             self.video_encoder: BaseMegatronModule = AutoModel.from_config(
                 self.config.video_encoder, vp_stage=vp_stage, **kwargs
             )
             self.encoder_modality["video"] = True
             self.video_encoder.register_forward_pre_hook(
-                make_encoder_forward_pre_hook("video_encoder")
+                make_encoder_forward_pre_hook("video_encoder", self.parallel_state_switch)
             )
             self.video_encoder.register_forward_hook(
-                make_encoder_forward_hook("text_decoder")
+                make_encoder_forward_hook("text_decoder", self.parallel_state_switch)
             )
         elif self.mix_used_vision_encoder:
             self.encoder_modality["video"] = True
@@ -182,19 +185,19 @@ class OmniEncoderModel(torch.nn.Module):
             hasattr(self.config, "audio_encoder")
             and self.config.audio_encoder is not None
         ):
-            change_parallel_state("audio_encoder")
+            self.parallel_state_switch("audio_encoder")
             self.audio_encoder: BaseMegatronModule = AutoModel.from_config(
                 self.config.audio_encoder, vp_stage=vp_stage, **kwargs
             )
             self.encoder_modality["audio"] = True
             self.audio_encoder.register_forward_pre_hook(
-                make_encoder_forward_pre_hook("audio_encoder")
+                make_encoder_forward_pre_hook("audio_encoder", self.parallel_state_switch)
             )
             self.audio_encoder.register_forward_hook(
-                make_encoder_forward_hook("text_decoder")
+                make_encoder_forward_hook("text_decoder", self.parallel_state_switch)
             )
 
-        change_parallel_state("text_decoder")
+        self.parallel_state_switch("text_decoder")
 
         if (
             hasattr(self.config, "image_projector")
@@ -334,8 +337,10 @@ class OmniEncoderModel(torch.nn.Module):
         """Forward function for image encoding."""
         if self.use_vit_dp_balance:
             if self.enable_encoder_hetero_dp or self.enable_full_hetero_dp:
-                change_parallel_state("image_encoder")
-            image_embeddings, window_index, deepstack_image_embeds = dp_balance_vit_encoder(
+                self.parallel_state_switch("image_encoder")
+            if self.vit_balance is None:
+                raise RuntimeError("use_vit_dp_balance is set but the training method passed no vit_balance callable")
+            image_embeddings, window_index, deepstack_image_embeds = self.vit_balance(
                 self.image_encoder, images, image_grid_thw
             )
         else:

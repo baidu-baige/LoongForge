@@ -7,6 +7,7 @@
 import os
 import torch
 from functools import partial
+from loongforge.training.megatron.methods import pretrain_vlm
 from datasets import load_from_disk
 from transformers import DataCollatorForSeq2Seq
 from megatron.core.packed_seq_params import PackedSeqParams
@@ -20,6 +21,11 @@ from loongforge.engines.megatron import (get_args, get_tokenizer, get_model_conf
 from megatron.core.enums import ModelType
 from loongforge.training.megatron.runner import pretrain
 from loongforge.data.vlm.internvl_task_encoder import InternVLTaskEncoder
+from loongforge.engines.megatron.distributed.dp_balance.rebalance.layout import install_batch_layout
+from loongforge.training.megatron.methods.utils.internvl_dp_balance import INTERNVL_BATCH_LAYOUT
+from loongforge.training.megatron.data_padding import (
+    llm_pad_to_multiple_of,
+)
 from loongforge.data.llm_dataloader import (
     build_sft_data_collator,
     build_sft_cyclic_iterators,
@@ -160,7 +166,8 @@ def forward_step(data_iterator, model):
     if mpu.is_pipeline_last_stage():
         tokenizer = get_tokenizer().tokenizer
         image_token_id = tokenizer.convert_tokens_to_ids(IMG_CONTEXT_TOKEN)
-        num_image_token = int((args.force_image_size // args.patch_size) ** 2 * (args.down_sample_ratio ** 2))
+        patch_size = get_model_config().image_encoder.patch_size
+        num_image_token = int((args.force_image_size // patch_size) ** 2 * (args.down_sample_ratio ** 2))
         ignore_flag = filter_ignore_data(input_ids, image_flags, image_token_id,
                                             num_image_token)
         if ignore_flag:
@@ -174,9 +181,6 @@ def forward_step(data_iterator, model):
 
 def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None):
     import loongforge.engines.megatron.distributed.dp_balance.patches  # noqa: F401
-    from loongforge.training.megatron.methods.utils.internvl_dp_balance import register
-
-    register()
     args = get_args()
     if mpu.get_tensor_model_parallel_rank() != 0:
         return None, None, None
@@ -187,14 +191,21 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
         save_path = os.path.join(args.data_path[0], "preprocess", str(rank))
         print(f"[rank{rank}] loading preprocessed dataset from {save_path}")
         train_ds = load_from_disk(save_path)
-        collator = build_sft_data_collator(DataCollatorForSeq2Seq, args, get_tokenizer())
+        collator = build_sft_data_collator(
+            DataCollatorForSeq2Seq,
+            args,
+            get_tokenizer(),
+            pad_to_multiple_of=llm_pad_to_multiple_of(args),
+        )
         train_data_iterator, valid_data_iterator, test_data_iterator = (
             build_sft_cyclic_iterators(train_ds, None, None, collator, args)
         )
         return train_data_iterator, None, None
     else:
         tokenizer = get_tokenizer().tokenizer
-        task_encoder = InternVLTaskEncoder(args, tokenizer)
+        task_encoder = InternVLTaskEncoder(
+            args, tokenizer, patch_size=get_model_config().image_encoder.patch_size
+        )
         train_dataset = get_train_dataset(task_encoder, args)
         train_dataloader = get_train_loader(train_dataset, args)
         return train_dataloader, None, None
@@ -202,12 +213,19 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
 
 def model_provider(pre_process=True, post_process=True, vp_stage=None):
     """Build the multimodal model with this run's args and model config."""
-    return omni_model_provider(pre_process, post_process, vp_stage=vp_stage,
-                               args=get_args(), model_config=get_model_config())
+    return omni_model_provider(
+        pre_process,
+        post_process,
+        vp_stage=vp_stage,
+        args=get_args(),
+        model_config=get_model_config(),
+        runtime=pretrain_vlm.build_multimodal_runtime(get_args()),
+    )
 
 
 def train(args):
     """Run InternVL SFT."""
+    install_batch_layout(args.model_family, INTERNVL_BATCH_LAYOUT)
     train_valid_test_datasets_provider.is_distributed = True
     pretrain(
         args,
