@@ -1,1 +1,0 @@
-from .pipeline_transnetv2 import TransNetV2Pipeline

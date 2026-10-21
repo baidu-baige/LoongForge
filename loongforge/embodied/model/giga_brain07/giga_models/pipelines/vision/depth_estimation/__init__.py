@@ -1,2 +1,0 @@
-from .pipeline_depth_anything import DepthAnythingPipeline
-from .pipeline_dpt import DPTForDepthEstimationPipeline

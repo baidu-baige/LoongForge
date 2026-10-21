@@ -1,7 +1,6 @@
 __version__ = '1.1.0'
 
 from .configs import Config, load_config
-from .distributed import Launcher, launch_from_config, ssh_copy_id
 from .modules import ModuleDict
 from .optimizers import OPTIMIZERS, build_optimizer
 from .registry import Registry, build_module, merge_params
