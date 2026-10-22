@@ -12,8 +12,8 @@ CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"
 LOAD=${LOAD:-"/mnt/cluster/loongforge-ckpt/deepseek_v4/mcore_deepseek_v4_flash_base/release"}
 SAVE=${SAVE:-"/mnt/cluster/loongforge-ckpt/deepseek_v4/rebuilt_hf"}
 
-MODEL_CONFIG_FILE=$LOONGFORGE_PATH/configs/models/deepseek4/deepseek_v4_flash_base.yaml
-CONVERT_FILE=$LOONGFORGE_PATH/configs/models/deepseek4/ckpt_convert/deepseek_v4_convert.yaml
+MODEL_CONFIG_FILE=$LOONGFORGE_PATH/configs/models/deepseek_v4/deepseek_v4_flash_base.yaml
+CONVERT_FILE=$LOONGFORGE_PATH/configs/models/deepseek_v4/ckpt_convert/deepseek_v4_convert.yaml
 
 echo "=== Converting mcore -> HF ==="
 PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \

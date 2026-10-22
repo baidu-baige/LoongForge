@@ -10,26 +10,26 @@
 
 | 路径 | 说明 |
 | --- | --- |
-| `examples/embodied/` | 模型级启动脚本目录，可通过脚本末尾的透传参数覆盖默认配置 |
-| `configs/models/embodied/` | 模型默认 YAML 配置目录，包含 `model:` / `data:` 两个顶层配置段 |
-| `loongforge/embodied/train.py` | 训练入口，负责解析配置、构建 Trainer 并启动训练 |
-| `loongforge/embodied/train/training_args.py` | 通用训练参数定义文件，负责生成 shell CLI |
-| `loongforge/embodied/train/config_map.py` | 模型配置路由表，将 `--model-name` 绑定到 YAML、`ModelConfig` 与 `DataConfig` |
-| `loongforge/embodied/model/` | 模型组网、模型注册 |
-| `loongforge/embodied/data/datasets/` | 数据处理相关功能 |
+| `examples/` | 模型级启动脚本目录，可通过脚本末尾的透传参数覆盖默认配置 |
+| `configs/models/` | 模型默认 YAML 配置目录，包含 `model:` / `data:` 两个顶层配置段 |
+| `loongforge/train.py` | 训练入口，负责解析配置、构建 Trainer 并启动训练 |
+| `loongforge/training/torch/args.py` | 训练流程参数定义文件，负责生成 shell CLI |
+| `loongforge/models/catalog.py` | 统一模型路由表，将 `--model-name` 绑定到引擎、YAML，以及 Torch 所需的配置类型 |
+| `loongforge/models/embodied/` | Torch 具身模型组网与模型注册 |
+| `loongforge/data/embodied/` | 具身数据流水线：`dataloader.py`（DataLoader 入口）、`datasets/`（共用数据集类：`lerobot_dataset.py`、`dummy_dataset.py`、视频后端、统计）、`transforms/`（共用逐样本变换）、`sampler.py`（采样）、`collator.py`（拼批）、`registry.py`（注册表），以及每个模型一个目录（模型目录下带 `transforms/`） |
 
 训练链路如下：
 
 ```text
-examples/embodied/<model>/run_*.sh
+examples/<model>/finetune_*.sh
     ↓
-loongforge/embodied/train.py
+loongforge/train.py
     ↓
 parse_train_args()
     ↓
-build_model_trainer()
+resolve_torch_trainer()
     ↓
-trainer.train()
+TorchRunner(...).train()
 ```
 
 ### 1.2 启动脚本约定
@@ -39,7 +39,7 @@ trainer.train()
 ```bash
 PYTHONPATH=$LOONGFORGE_PATH:${PYTHONPATH:-} \
 torchrun "${DISTRIBUTED_ARGS[@]}" \
-    "$LOONGFORGE_PATH/loongforge/embodied/train.py" \
+    "$LOONGFORGE_PATH/loongforge/train.py" \
     "${MODEL_CONFIG_ARGS[@]}" \
     "${DATA_ARGS[@]}" \
     "${TRAINING_ARGS[@]}" \
@@ -51,7 +51,7 @@ torchrun "${DISTRIBUTED_ARGS[@]}" \
 示例：
 
 ```bash
-bash examples/embodied/pi05/run_pi05_ddp_finetune.sh \
+bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
     --train-iters 10000 \
     --per-device-batch-size 8 \
     model.action_horizon=64 \
@@ -102,18 +102,16 @@ model.forward(batch)
 | --- | --- | --- | --- | --- |
 | 数据格式 | `--dataset-format` | `lerobot_datasets` | `lerobot_datasets`, `hdf5_datasets`, `dummy_datasets` | 选择数据集格式 |
 | 数据路径 | `--dataset-path` | `None` | 本地路径或数据集 id | 训练数据路径 |
-| 数据 split | `--split` | `train` | 字符串 | 数据集切分 |
 | dummy 样本数 | `--num-samples` | `100` | 正整数 | `dummy_datasets` 下生成的样本数 |
 ### 2.2 LeRobot 数据策略
 
-使用 LeRobot 格式时，可通过以下参数进一步控制数据加载行为：指定数据集格式版本（v2.0 / v2.1 / v3.0）、选择针对不同机器人或任务的构建策略、配置视频解码后端，以及指定 Robot型号以匹配 embodiment 的 action-state 布局。
+使用 LeRobot 格式时，可通过以下参数进一步控制数据加载行为：指定数据集格式版本（v2.0 / v2.1 / v3.0）、选择针对不同机器人或任务的构建策略，以及配置视频解码后端。
 
 | 功能 | 配置项 | 默认值 | 取值 / 类型 | 说明 |
 | --- | --- | --- | --- | --- |
 | LeRobotdataset 版本 | `--lerobotdataset-version` | `v3.0` | `v2.0`, `v2.1`, `v3.0` | 解析不同 LeRobot 磁盘格式 |
-| 数据策略 | `--dataset-strategy` | `default` | `default`, `fastwam`, `groot_n1_7`, `cosmos3_droid`, `dreamzero` | 选择 LeRobot 构建策略 |
+| 数据策略 | `--dataset-strategy` | `default` | `default`, `fastwam`, `lingbot_va`, `groot_n1_7`, `cosmos3_droid`, `dreamzero`, `wall_oss_0_5` | 选择 LeRobot 构建策略 |
 | 视频后端 | `--video-backend` | `torchcodec` | `torchcodec`, `decord`, `opencv`, `pyav`, `torchvision_av` | 视频解码实现 |
-| robot 类型 | `--robot-type` | `None` | 字符串 | 选择 embodiment / action-state layout |
 
 > **注意：** `--video-backend` 用于指定 `--lerobotdataset-version` v2.x 系列及其变体的数据读取后端；v3.0 系列默认支持 `torchcodec`、`pyav` 两种后端。
 
@@ -143,7 +141,7 @@ model.forward(batch)
 
 | 功能 | 配置项 | 默认值 | 取值 / 类型 | 说明 |
 | --- | --- | --- | --- | --- |
-| 选择模型 | `--model-name` | `None` | `config_map.py` 中注册的模型名 | 选择模型 schema、默认 YAML、`ModelConfig` 与 `DataConfig` |
+| 选择模型 | `--model-name` | `None` | `loongforge/models/catalog.py` 中注册的模型名 | 选择训练引擎、模型 schema、默认 YAML，以及 Torch 的 `ModelConfig` 与 `DataConfig` |
 | 指定 YAML | `--config-file` | `None` | YAML 文件路径 | 覆盖 `--model-name` 对应的默认 YAML |
 | 指定 tokenizer | `--tokenizer-path` | `None` | 本地路径或 HF repo id | 设置 tokenizer 路径，并同步到 `TOKENIZER_PATH` 环境变量 |
 
@@ -235,7 +233,7 @@ Fused Adam 加速实现说明：
 示例：
 
 ```bash
-bash examples/embodied/pi05/run_pi05_ddp_finetune.sh \
+bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
     --lr-base 1.0e-4 \
     --lr-group "model.backbone=1.0e-5,model.action_head=1.0e-4"
 ```
@@ -266,7 +264,7 @@ Checkpoint 模块提供以下能力：
 续训示例：
 
 ```bash
-bash examples/embodied/pi05/run_pi05_ddp_finetune.sh \
+bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
     --output-dir /path/to/previous_run \
     --resume
 ```
@@ -304,7 +302,7 @@ Trainer 模块负责训练生命周期编排，包括分布式上下文初始化
 
 ### 4.1 Trainer 选择
 
-通过 `--trainer-type` 选择训练器，可选值为 `trainer_builder.py` 中注册的 Trainer 类名。默认的 `FinetuneTrainer` 适用于标准单数据流的监督微调；若涉及多数据流、特殊 loss 组合或非标准 step 调度，可在 `trainer_builder.py` 中注册自定义 Trainer 类。
+通过 `--trainer-type` 选择训练器，可选值为 `loongforge/training/torch/registry.py` 中 `TORCH_TRAINER_TYPES` 的键，每个键对应一个训练 method 模块和一个可选的单模型 optimization 包。默认的 `FinetuneTrainer` 适用于标准单数据流的监督微调；若涉及多数据流、特殊 loss 组合或非标准 step 调度，可在 `loongforge/training/torch/methods/` 下新增 method 模块，并登记到 `TORCH_TRAINER_TYPES`。
 
 ### 4.2 分布式策略
 
@@ -325,7 +323,7 @@ Trainer 模块负责训练生命周期编排，包括分布式上下文初始化
 DDP 示例：
 
 ```bash
-bash examples/embodied/pi05/run_pi05_ddp_finetune.sh \
+bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
     --distributed-strategy ddp \
     --dtype bfloat16
 ```
@@ -333,7 +331,7 @@ bash examples/embodied/pi05/run_pi05_ddp_finetune.sh \
 FSDP 示例：
 
 ```bash
-bash examples/embodied/pi05/run_pi05_fsdp_finetune.sh \
+bash examples/pi05/finetuning/finetune_pi05_fsdp.sh \
     --distributed-strategy fsdp \
     --dtype bfloat16
 ```
@@ -341,7 +339,7 @@ bash examples/embodied/pi05/run_pi05_fsdp_finetune.sh \
 DDP + ZeRO-1 示例：
 
 ```bash
-bash examples/embodied/pi05/run_pi05_ddp_finetune.sh \
+bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
     --distributed-strategy ddp \
     --zero-optimizer
 ```
@@ -375,7 +373,7 @@ bash examples/embodied/pi05/run_pi05_ddp_finetune.sh \
 示例：
 
 ```bash
-bash examples/embodied/pi05/run_pi05_ddp_finetune.sh \
+bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
     --distributed-strategy ddp \
     --no-ddp-find-unused-parameters \
     --ddp-static-graph

@@ -91,18 +91,18 @@
 - **[2026/10]** 🦾 开源 **[ego2robot](./tools/ego2robot/)** —— 实现第一人称人类操作视频到双臂机器人训练数据的转换管线，输出 **LeRobot v3.0** 格式，覆盖 **16 种机械臂本体**。
 - **[2026/09]** ✨ 新增 **[GLM-5.3-flash](./examples/glm5_next/)** 训练支持。
 - **[2026/09]** ✨ 新增 **[Kimi-K3](./examples/kimi_k3/)** 的 LLM 与 VLM BF16 训练支持。
-- **[2026/09]** ⚡ 新增经过优化的 **[DreamZero Wan2.2-5B FSDP recipe](./examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh)**，集成 cache-aware 数据加载、attention block 编译、冻结模块处理与 FSDP2 Delta-FP8 Param AllGather。
-- **[2026/08]** 🤖 新增 **[Wall-OSS-0.5](./examples/embodied/wall_oss_0_5/)** VLA 训练支持，并通过自定义融合算子提升训练吞吐。
+- **[2026/09]** ⚡ 新增经过优化的 **[DreamZero Wan2.2-5B FSDP recipe](./examples/dreamzero/finetuning/finetune_dreamzero_wan22_5b_full_fsdp.sh)**，集成 cache-aware 数据加载、attention block 编译、冻结模块处理与 FSDP2 Delta-FP8 Param AllGather。
+- **[2026/08]** 🤖 新增 **[Wall-OSS-0.5](./examples/wall_oss_0_5/)** VLA 训练支持，并通过自定义融合算子提升训练吞吐。
 - **[2026/08]** 📄 发布 **[TAOT 论文](https://arxiv.org/abs/2608.03676)** —— 通过拓扑感知的动态专家副本放置，优化 **MoE** 训练中的专家并行（**EP**）负载不均衡，相较业界方案开销最大可降低 **74%**，案例实测 **1.43× 加速**。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-08-taot-topology-aware-expert-placement.html)]
 - **[2026/08]** ✨ 新增 **GLM-5.2** 训练支持，并提供 **[GLM-5.2 + MoonViT](./configs/models/glm5.2_vit/)** 自定义组合[示例](./examples/glm5.2_vit/)，可用于为 GLM 扩展多模态能力。
 - **[2026/08]** ✨ 新增 **MiniCPM-V-4.6** 与 **Qwen3.8-27B** 训练支持。
-- **[2026/08]** 🧪 新增具身模型统一[**评测模块**](./loongforge/embodied/eval/)，当前已覆盖 **Pi0.5 / xVLA / GR00T**，持续扩展中。
+- **[2026/08]** 🧪 新增具身模型统一[**评测模块**](./loongforge/evaluation/embodied/)，当前已覆盖 **Pi0.5 / xVLA / GR00T**，持续扩展中。
 
 <details>
 <summary><b>📅 更多</b></summary>
 
 - **[2026/07]** 🐳 统一**预构建 Docker 镜像** —— LLM / VLM / 具身 / Diffusion 全部模型家族共用同一镜像。
-- **[2026/07]** 🤖 发布 **[LoongForge-Embodied](./loongforge/embodied)** —— 面向具身模型（Pi0.5、GR00T-N1.6/N1.7、xVLA、LingBot-VA、FastWAM、DreamZero、Cosmos3）的 torch-native DDP/FSDP 训练子系统，实测最高 **4.38× 加速**。
+- **[2026/07]** 🤖 发布 **[LoongForge-Embodied](./docs/source_zh/embodied_tutorial/quick_start_index.md)** —— 面向具身模型（Pi0.5、GR00T-N1.6/N1.7、xVLA、LingBot-VA、FastWAM、DreamZero、Cosmos3）的 torch-native DDP/FSDP 训练子系统，实测最高 **4.38× 加速**。
 - **[2026/07]** ✨ 新增 **DeepSeek-V4-Flash / DeepSeek-V4-Pro** 训练支持。
 - **[2026/07]** ✨ 新增 **Qwen-Image-Edit-2511** 训练支持。
 - **[2026/06]** 🤖 扩展 VLA 模型覆盖，新增 **GR00T N1.6**；GR00T 训练实现 **2.3× 加速**。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-06-loongforge-groot-n16-acceleration.html)]
@@ -132,7 +132,7 @@
 ### 数据
 
 * **统一数据加载** —— 提供统一的数据加载接口，支持 LeRobot（v2.0 / v2.1 / v3.0）等典型格式；各模型的数据处理流程与其开源实现对齐。
-* **特征缓存预计算（可选）** —— 支持为 DreamZero（VAE latent、文本 embedding）和 FastWAM（文本 embedding）预先计算冻结编码器的输出，训练时直接读取，避免每步重复编码。[[DreamZero](./tools/dreamzero_data_preprocess)] [[FastWAM](./examples/embodied/fastwam/precompute_text_embeds.sh)]
+* **特征缓存预计算（可选）** —— 支持为 DreamZero（VAE latent、文本 embedding）和 FastWAM（文本 embedding）预先计算冻结编码器的输出，训练时直接读取，避免每步重复编码。[[DreamZero](./tools/dreamzero_data_preprocess)] [[FastWAM](./examples/fastwam/preprocess/precompute_text_embeds.sh)]
 * **Ego2Robot** —— 将第一人称人类操作视频转换为 **LeRobot v3.0** 训练数据，覆盖 **16 种机械臂本体**，适配各自的关节布局与夹爪。[[README](./tools/ego2robot/README_ZH.md)]
 
 <table width="100%">
@@ -155,7 +155,7 @@
 
 ### 评测
 
-* **统一评测** —— 在 LIBERO / CALVIN / SimplerEnv / RoboTwin / ManiSkill 仿真环境中对训练出的策略做闭环评测；覆盖范围持续扩展中。[[README](./loongforge/embodied/eval)]
+* **统一评测** —— 在 LIBERO / CALVIN / SimplerEnv / RoboTwin / ManiSkill 仿真环境中对训练出的策略做闭环评测；覆盖范围持续扩展中。[[README](./loongforge/evaluation/embodied)]
 
 > [!NOTE]
 > 敬请期待：基于 LoongForge 训练的模型评测结果即将陆续公布。
@@ -252,7 +252,7 @@ export TOKENIZER_PATH=/workspace/data/paligemma-3b-pt-224
 export DATA_PATH=/workspace/data/libero_10
 export OUTPUT_DIR=/workspace/data/outputs/pi05
 
-bash examples/embodied/pi05/run_pi05_ddp_finetune.sh
+bash examples/pi05/finetuning/finetune_pi05_ddp.sh
 ```
 
 日志与 TensorBoard 数据保存在 `OUTPUT_DIR` 下。FSDP / ZeRO-1 启动方式与 LIBERO 评测见 [Pi0.5 教程](https://loongforge.readthedocs.io/zh-cn/latest/embodied_tutorial/quick_start_pi05.html)。
@@ -276,15 +276,15 @@ bash examples/embodied/pi05/run_pi05_ddp_finetune.sh
 <tr>
 <td valign="top">
 <ul>
-<li><a href="examples/embodied/pi05/">Pi0.5</a></li>
-<li><a href="examples/embodied/groot_n1_6/">GR00T-N1.6</a></li>
-<li><a href="examples/embodied/groot_n1_7/">GR00T-N1.7</a></li>
-<li><a href="examples/embodied/xvla/">xVLA</a></li>
-<li><a href="examples/embodied/wall_oss_0_5/">Wall-OSS-0.5</a></li>
-<li><a href="examples/embodied/fastwam/">FastWAM</a></li>
-<li><a href="examples/embodied/lingbot_va/">LingBot-VA</a></li>
-<li><a href="examples/embodied/cosmos3/">Cosmos3</a></li>
-<li><a href="examples/embodied/dreamzero/">DreamZero</a></li>
+<li><a href="examples/pi05/">Pi0.5</a></li>
+<li><a href="examples/groot_n1_6/">GR00T-N1.6</a></li>
+<li><a href="examples/groot_n1_7/">GR00T-N1.7</a></li>
+<li><a href="examples/xvla/">xVLA</a></li>
+<li><a href="examples/wall_oss_0_5/">Wall-OSS-0.5</a></li>
+<li><a href="examples/fastwam/">FastWAM</a></li>
+<li><a href="examples/lingbot_va/">LingBot-VA</a></li>
+<li><a href="examples/cosmos3/">Cosmos3</a></li>
+<li><a href="examples/dreamzero/">DreamZero</a></li>
 <li><a href="cookbook/loongforge-vlda/">LoongForge-VLDA</a></li>
 </ul>
 </td>
@@ -316,7 +316,8 @@ bash examples/embodied/pi05/run_pi05_ddp_finetune.sh
 <li><a href="examples/qwen3.5/">Qwen3.5</a></li>
 <li><a href="examples/qwen3.6/">Qwen3.6</a></li>
 <li><a href="examples/qwen3.8/">Qwen3.8</a></li>
-<li><a href="examples/kimi_k2.x/kimi_k2.5/">Kimi-K2.5/2.6</a></li>
+<li><a href="examples/kimi_k2.5/">Kimi-K2.5</a></li>
+<li><a href="examples/kimi_k2.6/">Kimi-K2.6</a></li>
 <li><a href="examples/kimi_k3/">Kimi-K3</a></li>
 <li><a href="examples/minicpm_v_4_6/">MiniCPM-V-4.6</a></li>
 <li><a href="examples/glm5.2_vit/">GLM-5.2 + MoonViT</a></li>
@@ -339,7 +340,7 @@ bash examples/embodied/pi05/run_pi05_ddp_finetune.sh
 </table>
 
 > [!TIP]
-> VLM 还可参考[自定义组合示例](./examples/custom/)，用配置将 ViT 与 LLM 自由组装为新模型。
+> VLM 还可参考[自定义组合示例](./examples/qwen_vit_llama3/pretrain/pretrain_qwen_vit_llama3.sh)，用配置将 ViT 与 LLM 自由组装为新模型。
 
 <a id="powered-by-loongforge"></a>
 ## 🌟 基于 LoongForge 的优秀项目案例
@@ -378,29 +379,32 @@ https://github.com/user-attachments/assets/8563afca-f79a-4a45-bb4f-36e06c0ccbcb
 ```
 LoongForge/
 ├── loongforge/                   # 核心训练框架
-│   ├── train/                    # 训练入口与训练器
-│   │   ├── pretrain/             #   预训练
-│   │   ├── sft/                  #   监督微调（SFT）
-│   │   └── diffusion/            #   Diffusion 训练
+│   ├── train.py                  # 统一训练分发入口
+│   ├── training/                 # 训练运行器与逐模型训练方法
+│   ├── engines/                  # train.py 选择的训练运行时
+│   │   ├── megatron/             #   LLM/VLM/Diffusion 运行时
+│   │   │   └── tokenizer/        #   Megatron Tokenizer 实现
+│   │   └── torch/                #   具身 Torch-native 运行时
+│   ├── extensions/               # 模型 × 后端的训练扩展
 │   ├── models/                   # 统一的模型抽象层
-│   │   ├── foundation/           #   LLM 主干
-│   │   ├── encoder/              #   视觉编码器
-│   │   ├── omni_models/          #   多模态组合（编码器 + 投影层 + 解码器）
-│   │   ├── diffusion/            #   Diffusion 模型
-│   │   └── common/               #   公共基类配置、Layer 与工具
-│   ├── embodied/                 # 具身（VLA + 世界-动作）训练：模型、数据、训练器、分布式与评测
-│   ├── data/                     # 数据加载与处理流水线
-│   ├── tokenizer/                # Tokenizer
-│   └── utils/                    # 配置映射、常量与公共工具
-├── third_party/                  # 第三方依赖与补丁
-│   ├── Loong-Megatron/            # Patched Megatron-LM（git submodule）
-│   └── patches/                  # TransformerEngine 补丁
+│   │   ├── catalog.py            # 模型名、引擎与默认 YAML
+│   │   ├── language/             #   LLM 主干（LLaMA、Qwen、DeepSeek、...）
+│   │   ├── vision/               #   视觉编码器（ViT、Qwen-VL、InternVL、...）
+│   │   ├── multimodal/           #   多模态组合
+│   │   ├── diffusion/            #   Diffusion 模型（WAN、Qwen-Image）
+│   │   ├── base/                 #   公共 Layer 与工具
+│   │   └── embodied/             #   具身模型实现
+│   ├── chat_templates/           # 对话模板与 jinja 文件
+│   ├── data/                     # 数据流水线，按模型家族分目录
+│   │   ├── llm/ vlm/ embodied/ diffusion/
+│   └── evaluation/embodied/      # 具身评测
+├── third_party/Loong-Megatron/   # Patched Megatron-LM（git submodule）
 ├── configs/                      # Hydra YAML 配置（模型、数据）
 ├── examples/                     # NVIDIA GPU 启动脚本
 ├── examples_xpu/                 # 昆仑芯 XPU 启动脚本
-├── cookbook/                     # 基于 LoongForge 的端到端项目复现方案
 ├── tools/                        # 独立开发工具：Checkpoint 转换、数据预处理等（详见 tools/README.md）
 ├── ops/                          # 自定义融合算子（含开源的 TileLang 版本）
+├── third_party/patches/                      # TransformerEngine 补丁
 ├── docker/                       # Dockerfile（GPU & XPU）
 ├── tests/                        # 测试套件（端到端、回归、单元）
 └── docs/                         # 文档

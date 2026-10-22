@@ -62,7 +62,7 @@ MoE 模型需要额外的 EP 覆盖：
 
 ```bash
 # TP=1, EP=4（需要 4 块 GPU）
-TE_LAYER_PERF_OMNI_CONFIG_PATH="configs/models/deepseek3/deepseek_v3.yaml" \
+TE_LAYER_PERF_OMNI_CONFIG_PATH="configs/models/deepseek_v3/deepseek_v3.yaml" \
 TE_LAYER_PERF_TP_SIZE=1 \
 TE_LAYER_PERF_EP_SIZE=4 \
 TE_LAYER_PERF_PRECISIONS="bf16,fp8" \
@@ -80,7 +80,7 @@ TE_LAYER_PERF_REPORT_PATH="outputs/report_tp2_ep4.json" \
 # 合并
 python tools/te_parallel_benchmark/benchmark_te_parallel_layers.py merge-policy \
     --reports outputs/report_tp1_ep4.json outputs/report_tp2_ep4.json \
-    --output configs/models/deepseek3/fp8_policy_deepseek_v3.json \
+    --output configs/models/deepseek_v3/fp8_policy_deepseek_v3.json \
     --speedup-threshold 1.0
 ```
 
@@ -160,8 +160,8 @@ Dense 模块类型（`layernorm_column` / `column` / `row` / `duplicated`）使�
 在模型 YAML 中添加自适应 FP8 参数：
 
 ```yaml
-# 示例：configs/models/deepseek3/deepseek_v3_fp8_sel.yaml
-_target_: loongforge.models.foundation.DeepseekConfig
+# 示例：configs/models/deepseek_v3/deepseek_v3_fp8_sel.yaml
+_target_: loongforge.models.language.DeepseekConfig
 defaults:
   - deepseek_v3
   - _self_
@@ -170,7 +170,7 @@ fp8: "e4m3"
 fp8_recipe: "blockwise"
 fp8_param: True
 selective_fp8: true
-fp8_dynamic_policy_path: "configs/models/deepseek3/fp8_policy_deepseek_v3.json"
+fp8_dynamic_policy_path: "configs/models/deepseek_v3/fp8_policy_deepseek_v3.json"
 ```
 
 关键参数：
@@ -217,7 +217,7 @@ export FP8_QUANT_BWD_GRAD_AMAX_EPS=1e-12
 
 torchrun --nproc_per_node 8 \
     loongforge/train.py \
-    --config-file configs/models/deepseek3/deepseek_v3_fp8_sel.yaml \
+    --config-file configs/models/deepseek_v3/deepseek_v3_fp8_sel.yaml \
     --fp8-format e4m3 \
     --fp8-recipe blockwise \
     --fp8-param-gather \

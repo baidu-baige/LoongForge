@@ -4,13 +4,19 @@
 
 This directory contains custom fused operators that power LoongForge's training acceleration, including Sparse MLA Attention, Lightning Indexer implementations, groot_n1_7_op, and wall_oss_05_op.
 
-### TileLang Operators
+### TileLang reference kernels
 
-The `tilelang_ops/` directory provides the following operators built on [TileLang](https://github.com/tile-ai/tilelang):
+The `tilelang_ops/` directory contains standalone TileLang reference
+implementations and benchmarks:
 
 - **Sparse MLA Forward** (`sparse_mla_fwd.py`)
 - **Sparse MLA Backward** (`sparse_mla_bwd.py`)
 - **Lightning Indexer** (`lightning_indexer.py`)
+
+They use flat imports (`from index import ...`, `from utils import ...`) and are
+run standalone, not imported by LoongForge. Training uses the vendored copy in
+`loongforge/models/base/experimental_attention_variant/sparse_mla_bwd.py`
+(imported by `dsa_kernel_backend.py`).
 
 ### Model operator packages
 

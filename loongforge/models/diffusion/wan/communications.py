@@ -61,7 +61,6 @@ class _GatherForwardSplitBackward(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, input_, process_group, dim, grad_scale):
-        """Forward"""
         ctx.mode = process_group
         ctx.dim = dim
         ctx.grad_scale = grad_scale
@@ -69,7 +68,6 @@ class _GatherForwardSplitBackward(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        """Backward"""
         if ctx.grad_scale == "up":
             grad_output = grad_output * dist.get_world_size(ctx.mode)
         elif ctx.grad_scale == "down":
@@ -89,7 +87,6 @@ class _SplitForwardGatherBackward(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, input_, process_group, dim, grad_scale):
-        """Forward"""
         ctx.mode = process_group
         ctx.dim = dim
         ctx.grad_scale = grad_scale
@@ -97,7 +94,6 @@ class _SplitForwardGatherBackward(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        """Backward"""
         if ctx.grad_scale == "up":
             grad_output = grad_output * dist.get_world_size(ctx.mode)
         elif ctx.grad_scale == "down":

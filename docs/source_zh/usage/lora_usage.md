@@ -16,7 +16,7 @@ LoongForge 框架支持 LoRA（Low-Rank Adaptation）训练，以减少 GPU 显�
 
 ```yaml
 # qwen3 model configuration
-_target_: loongforge.models.foundation.Qwen3Config
+_target_: loongforge.models.language.Qwen3Config
 
 defaults:
   - ../../models/lora@peft_config: lora
@@ -104,7 +104,7 @@ TRAINING_ARGS=(
 * **apply_to_image_projector**：在图像投影层上启用 LoRA 训练。
 * **apply_to_image_encoder**：在图像编码器上启用 LoRA 训练。
 
-要在模型中启用 LoRA，只需在模型配置文件中包含 LoRA 配置。例如，要在 Qwen2.5-vl-3b 模型中使用 LoRA，修改 `${LoongForge}/configs/models/qwen2.5/qwen2_5_vl_3b.yaml` 如下：
+要在模型中启用 LoRA，只需在模型配置文件中包含 LoRA 配置。例如，要在 Qwen2.5-vl-3b 模型中使用 LoRA，修改 `${LoongForge}/configs/models/qwen2.5_vl/qwen2_5_vl_3b.yaml` 如下：
 
 ```yaml
 defaults:
@@ -122,7 +122,7 @@ model:
   mix_used_vision_projector: true
   foundation:
     rotary_emb_func: "Qwen2VLRotaryEmbedding"
-    model_spec: ["loongforge.models.foundation.qwen2.qwen_layer_spec", "get_qwen2_vl_layer_with_te_spec"]
+    model_spec: ["loongforge.models.language.qwen2.qwen_layer_spec", "get_qwen2_vl_layer_with_te_spec"]
     rotary_base: 1000000
     group_query_attention: true
   image_projector:

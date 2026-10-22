@@ -49,16 +49,14 @@ import sys
 import json
 from pathlib import Path
 import logging
+from functools import partial
 logging.basicConfig(level=logging.WARNING)
 
-# Add project root and tools to Python path.
-# This file lives at tests/mcore_bridge_roundtrip/, so the repo root is two levels up;
-# the mcore_bridge package it drives lives under <repo_root>/tools.
+# Direct script execution needs the repository root; hf_bridge resolves tools lazily.
 _file_dir = os.path.dirname(os.path.abspath(__file__))
 _project_root = os.path.dirname(os.path.dirname(_file_dir))
-for _p in [_project_root, os.path.join(_project_root, 'tools')]:
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
 import torch
 import torch.distributed as dist
@@ -67,14 +65,16 @@ from megatron.core.enums import ModelType
 from megatron.training.training import get_model
 from megatron.training import print_rank_0
 
-from loongforge.train.parser import parse_train_args
-from loongforge.train.initialize import initialize_loongforge_megatron
-from loongforge.models.foundation.llm_model_provider import llm_model_provider
-from loongforge.models.omni_models.omni_model_provider import omni_model_provider
-from loongforge.utils import get_model_config
+from loongforge.training.megatron.args import parse_megatron_train_args
+from loongforge.engines.megatron.initialize import initialize_loongforge_megatron
+from loongforge.models.language.llm_model_provider import llm_model_provider
+from loongforge.models.multimodal.multimodal_model_provider import omni_model_provider
+from loongforge.engines.megatron import get_model_config
 
-from mcore_bridge.checkpoint.hf_checkpoint_loader import load_hf_checkpoint_online
-from mcore_bridge.checkpoint.hf_checkpoint_saver import save_hf_checkpoint_online
+from loongforge.engines.megatron.hf_bridge import (
+    load_hf_checkpoint_online,
+    save_hf_checkpoint_online,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -195,7 +195,6 @@ def _compare_shard(orig_path_str: str, rt_path_str: str,
                     # Get some sample values with largest differences
                     flat_diff = diff.flatten()
                     top_vals, top_idx = torch.topk(flat_diff, min(5, flat_diff.numel()))
-                    max_pos = (diff == diff.max()).nonzero(as_tuple=True)
                     detail = {
                         'key': key,
                         'max_diff': max_diff,
@@ -380,7 +379,7 @@ def compare_weights(original_path: str, roundtrip_path: str, output_dir: str,
 
 def main():
     # ── Step 1: Parse args (identical to training entry) ──────────────────
-    args = parse_train_args()
+    args = parse_megatron_train_args()
 
     # ── Step 2: Initialize Megatron (identical to training) ───────────────
     initialize_loongforge_megatron(args=args)
@@ -407,9 +406,15 @@ def main():
             is_vlm = False
             break
     if is_vlm:
-        model = get_model(omni_model_provider, ModelType.encoder_or_decoder, wrap_with_ddp=False)
+        from loongforge.training.megatron.methods.pretrain_vlm import build_multimodal_runtime
+
+        provider = partial(
+            omni_model_provider, args=args, model_config=model_config,
+            runtime=build_multimodal_runtime(args),
+        )
     else:
-        model = get_model(llm_model_provider, ModelType.encoder_or_decoder, wrap_with_ddp=False)
+        provider = partial(llm_model_provider, args=args, config=model_config)
+    model = get_model(provider, ModelType.encoder_or_decoder, wrap_with_ddp=False)
 
     # ── Step 4: Load HF checkpoint (identical to training) ────────────────
     print_rank_0("=" * 80)

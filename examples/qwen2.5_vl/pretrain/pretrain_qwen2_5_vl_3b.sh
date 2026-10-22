@@ -30,7 +30,7 @@ DISTRIBUTED_ARGS=(
 )
 
 # or you can setup qwen2_5-vl-3b by using the following command
-MODEL_CONFIG_PATH=${LOONGFORGE_PATH}/configs/models/qwen2.5vl/qwen2_5_vl_3b.yaml
+MODEL_CONFIG_PATH=${LOONGFORGE_PATH}/configs/models/qwen2.5_vl/qwen2_5_vl_3b.yaml
 
 DATA_ARGS=(
     --tokenizer-type HFTokenizer

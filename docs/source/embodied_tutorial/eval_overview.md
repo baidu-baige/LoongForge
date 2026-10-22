@@ -38,13 +38,13 @@ Every benchmark drives the same four-stage chain: `Adapter.obs_to_canonical` →
 The example below runs LIBERO with pi05:
 
 1. **Set up the LIBERO environment** — please refer to the official [LIBERO repository](https://github.com/Lifelong-Robot-Learning/LIBERO) for installation; for the eval client deps and common issues, check the [LIBERO guide](eval_docs/benchmarks/libero.md) Environment setup section; the verified environment version lists are in [benchmark_envs.md](eval_docs/benchmark_envs.md).
-2. **Get the weights and edit the config** — download [lerobot/pi05_libero_finetuned_v044](https://huggingface.co/lerobot/pi05_libero_finetuned_v044), then fill the `/path/to/...` placeholders in `examples/embodied/pi05/eval/configs/libero/object_smoke.yaml`. A field-by-field example: the [user guide](eval_docs/user_guide.md) §2 Quick start; the config layout: [user guide](eval_docs/user_guide.md) §3 Configuration reference.
+2. **Get the weights and edit the config** — download [lerobot/pi05_libero_finetuned_v044](https://huggingface.co/lerobot/pi05_libero_finetuned_v044), then fill the `/path/to/...` placeholders in `examples/pi05/eval/configs/libero/object_smoke.yaml`. A field-by-field example: the [user guide](eval_docs/user_guide.md) §2 Quick start; the config layout: [user guide](eval_docs/user_guide.md) §3 Configuration reference.
 
 3. **Run** — execute the script inside the **benchmark** environment:
 
     ```bash
     cd /path/to/LoongForge
-    examples/embodied/pi05/eval/run_libero_eval.sh
+    examples/pi05/eval/run_libero_eval.sh
     ```
 
 The LIBERO simulator runs in the benchmark environment; the policy server is launched from the YAML `server.python` field, pointing at the LoongForge environment. Other models/benchmarks: the [user guide](eval_docs/user_guide.md) and the [benchmark pages](eval_docs/benchmarks/index.md).

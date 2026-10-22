@@ -98,8 +98,6 @@ TRAINING_ARGS=(
   --save "$LORA_CHECKPOINT_PATH"
   --save-hf true
   --save-hf-path "$HF_CHECKPOINT_PATH"
-  --lora-alpha 32
-  --lora-dim 16
   --save-interval 1000
   --ckpt-format torch
   --dataloader-save "${LORA_CHECKPOINT_PATH}/dataloader"

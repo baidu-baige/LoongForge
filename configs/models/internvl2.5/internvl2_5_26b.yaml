@@ -17,5 +17,7 @@ model:
     ffn_hidden_size: 6144
   foundation: 
     rotary_emb_func: "DynamicRotaryEmbedding"
+    # HF llm_config.rope_scaling = {"type": "dynamic", "factor": 2.5}; applies above max_position_embeddings.
+    rope_scaling_factor: 2.5
     rotary_base: 50000000
-    model_spec: ["loongforge.models.foundation.internlm.internlm_layer_spec", "get_internlm_layer_with_te_spec"]
+    model_spec: ["loongforge.models.language.internlm.internlm_layer_spec", "get_internlm_layer_with_te_spec"]

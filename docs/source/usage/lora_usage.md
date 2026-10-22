@@ -16,7 +16,7 @@ To enable LoRA in the model, simply include the LoRA configuration in the model'
 
 ```yaml
 # qwen3 model configuration
-_target_: loongforge.models.foundation.Qwen3Config
+_target_: loongforge.models.language.Qwen3Config
 
 defaults:
   - ../../models/lora@peft_config: lora
@@ -104,7 +104,7 @@ Add LoRA-related configurations to the model configuration file you want to trai
 * **apply_to_image_projector**: Enable LoRA training on the image projector.
 * **apply_to_image_encoder**: Enable LoRA training on the image encoder.
 
-To enable LoRA in the model, simply include the LoRA configuration in the model's configuration file. For example, to use LoRA in the Qwen2.5-vl-3b model, modify `${LoongForge}/configs/models/qwen2.5/qwen2_5_vl_3b.yaml` as follows:
+To enable LoRA in the model, simply include the LoRA configuration in the model's configuration file. For example, to use LoRA in the Qwen2.5-vl-3b model, modify `${LoongForge}/configs/models/qwen2.5_vl/qwen2_5_vl_3b.yaml` as follows:
 
 ```yaml
 defaults:
@@ -122,7 +122,7 @@ model:
   mix_used_vision_projector: true
   foundation: 
     rotary_emb_func: "Qwen2VLRotaryEmbedding"
-    model_spec: ["loongforge.models.foundation.qwen2.qwen_layer_spec", "get_qwen2_vl_layer_with_te_spec"]
+    model_spec: ["loongforge.models.language.qwen2.qwen_layer_spec", "get_qwen2_vl_layer_with_te_spec"]
     rotary_base: 1000000
     group_query_attention: true
   image_projector:

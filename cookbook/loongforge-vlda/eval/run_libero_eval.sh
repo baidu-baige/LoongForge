@@ -19,4 +19,4 @@ export LIBERO_ROOT=${LIBERO_ROOT:-$REPO_ROOT/third_party/LIBERO}
 export PYTHONPATH="$REPO_ROOT:$LIBERO_ROOT${PYTHONPATH:+:$PYTHONPATH}"
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
 
-exec "$BENCHMARK_PYTHON" -u -m loongforge.embodied.eval.orchestrator.run --config "$CONFIG"
+exec "$BENCHMARK_PYTHON" -u -m loongforge.evaluation.embodied.orchestrator.run --config "$CONFIG"

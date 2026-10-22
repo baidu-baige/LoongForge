@@ -25,7 +25,7 @@ from megatron.core.parallel_state import (
     get_hierarchical_context_parallel_groups,
 )
 
-from loongforge.models.common import BaseModelStditConfig
+from loongforge.models.base import BaseModelStditConfig
 
 
 import transformer_engine.pytorch as te
@@ -76,12 +76,6 @@ class WanLayer(TransformerLayer):
             hidden_dropout=hidden_dropout,
             pg_collection=pg_collection,
             vp_stage=vp_stage,
-        )
-
-        self.d_t = ((config.num_latent_frames - 1) // config.vae_temporal_compress + 1) // config.latent_patch_size[0]
-        self.d_s = (
-            (config.max_latent_height // config.vae_spatial_compress // config.latent_patch_size[1])
-            * (config.max_latent_width // config.vae_spatial_compress // config.latent_patch_size[2])
         )
 
         dim = config.hidden_size

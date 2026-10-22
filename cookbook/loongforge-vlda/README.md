@@ -442,17 +442,17 @@ within ±0.5–0.8.
 | Component | Location |
 | --- | --- |
 | Training launchers | [Stage 1](run_vlda_8gpu_stage1.sh), [Stage 2](run_vlda_8gpu_stage2.sh) |
-| Model and loss definitions | [modeling_vlda.py](../../loongforge/embodied/model/vlda/modeling_vlda.py) |
-| Model configuration | [vlda.yaml](../../configs/models/embodied/vlda.yaml) |
-| Dataset and transforms | [vlda/](../../loongforge/embodied/data/datasets/vlda/) |
-| Teacher EMA and checkpoint integration | [vlda_finetune_trainer.py](../../loongforge/embodied/train/trainers/custom/vlda/vlda_finetune_trainer.py) |
+| Model and loss definitions | [modeling_vlda.py](../../loongforge/models/embodied/vlda/modeling_vlda.py) |
+| Model configuration | [vlda.yaml](../../configs/models/vlda/vlda.yaml) |
+| Dataset and transforms | [vlda/](../../loongforge/data/embodied/vlda/) |
+| Teacher EMA and checkpoint integration | [vlda_runner.py](../../loongforge/training/torch/vlda_runner.py) |
 | Evaluation entry | [run_libero_eval.sh](eval/run_libero_eval.sh) |
 
 ## V-JEPA 2
 
 VLDA uses part of [V-JEPA 2](https://github.com/facebookresearch/vjepa2)'s
 encoder code with minor integration changes. The original
-[MIT license](../../loongforge/embodied/model/vlda/vjepa2/LICENSE) is included.
+[MIT license](../../loongforge/models/embodied/vlda/vjepa2/LICENSE) is included.
 
 ## Citation
 

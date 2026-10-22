@@ -3,11 +3,11 @@
 
 from types import SimpleNamespace
 
-import loongforge.train  # noqa: F401 - initialize package imports in training order
+import loongforge.engines.megatron  # noqa: F401 - initialize package imports in training order
 import pytest
 import torch
 
-from loongforge.models.common.experimental_attention_variant import dsa_fused
+from loongforge.models.base.experimental_attention_variant import dsa_fused
 
 
 def test_fused_indexer_uses_configured_k_norm_epsilon(monkeypatch):

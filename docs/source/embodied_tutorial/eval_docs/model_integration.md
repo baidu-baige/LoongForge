@@ -1,6 +1,6 @@
 # Guide to Integrating a New Model into the Eval System
 
-This document summarizes the complete workflow, key configuration items, and the `predict_action` interface contract that the model side must implement in order to integrate a new VLA model into the `loongforge/embodied/eval` eval system.
+This document summarizes the complete workflow, key configuration items, and the `predict_action` interface contract that the model side must implement in order to integrate a new VLA model into the `loongforge/evaluation/embodied` eval system.
 Beyond implementing a Factory + PayloadBuilder (+ an optional ActionDecoder) and writing the YAML config, integration also involves a series of model-semantics-level configuration points that must be confirmed one by one.
 pi05 and xvla differ almost entirely on these configuration points, so this document uses the two as examples to walk through each item and provides a configuration comparison table.
 
@@ -42,8 +42,8 @@ Add new files, and **do not modify existing files**.
 **Steps** — integration flow:
 
 1. **Implement the model components** — ModelFactory + PayloadBuilder (+ optional ActionDecoder), per the responsibilities above and the details in §3 Component details.
-2. **Implement the `predict_action` interface** — the model must expose `predict_action(images, instructions, state=None, dataset_stats=None)`; model-specific preprocessing and normalization live inside it, and the eval server calls it over RPC (see §2 The `predict_action` contract).
-3. **Write the eval config and scripts** (`examples/embodied/<model>/eval/`) — model-specific YAML fields (`state_encoding` / `action_encoding` / `domain_id`, ...) go under `model:`; `model.model_type` is **required** (no default). Verify each config point in §4 State / action semantics and §5 Engineering parameters.
+2. **Implement the `predict_action` interface** — the model must expose `predict_action(images, instructions, state=None, dataset_stats=None)`; model-specific preprocessing and normalization live inside it, and the eval server calls it over RPC (see §2 The `predict_action` contract). Model code must not import `loongforge.data` (checked by `tests/test_data_layers.py`): when preprocessing needs data-side classes (tokenizer helpers, transforms, collators), import them in the factory and pass them to the model, or implement `predict_action` in the factory and bind it to the model instance (`factories/pi05_factory.py`).
+3. **Write the eval config and scripts** (`examples/<model>/eval/`) — model-specific YAML fields (`state_encoding` / `action_encoding` / `domain_id`, ...) go under `model:`; `model.model_type` is **required** (no default). Verify each config point in §4 State / action semantics and §5 Engineering parameters.
 4. **Run a smoke** (1 task × 1 episode, or a chain smoke) to validate the RPC / action semantics, then — with domain weights — task-success and full-scale eval.
 5. **Regression-test** already-succeeding combinations (at least pi05 × LIBERO) after changing **shared** code (runner / adapter / decoder / bridge / generic policy).
 
@@ -69,10 +69,10 @@ loongforge_server.py
 ## 2. The `predict_action` contract
 
 This section is the interface contract between the **model author** and the eval stack, aimed at the model owner who implements `predict_action()`.
-The **single source of truth** for the helper functions is `loongforge/embodied/eval/servers/predict_action_interface.py`:
+The **single source of truth** for the helper functions is `loongforge/evaluation/embodied/servers/predict_action_interface.py`:
 after refactoring, this file **only retains the model-author contract** — the `PredictActionModel` protocol, `validate_predict_action_model`,
 `_filter_supported_kwargs`, and `call_predict_action`; it **does not contain** any action-space decoding logic,
-which has been moved to `loongforge/embodied/eval/action_decoders/` (see §4 State / action semantics).
+which has been moved to `loongforge/evaluation/embodied/action_decoders/` (see §4 State / action semantics).
 
 ### 2.1 Required signature
 
@@ -128,7 +128,7 @@ canonical.state_raw  ->  PayloadBuilder(state_encoding)  ->  RPC payload.state  
 ### 2.4 Validation helpers
 
 ```text
-loongforge/embodied/eval/servers/predict_action_interface.py
+loongforge/evaluation/embodied/servers/predict_action_interface.py
 ```
 
 | API | Purpose |
@@ -182,8 +182,8 @@ The return value should be in the **model action space** (i.e. the encoding decl
 Action decoding on the eval side does **not** belong to `predict_action`: after the server returns the chunk, the runner applies the decoders in `action_decoders/`:
 
 ```python
-from loongforge.embodied.eval.action_decoders import build_action_decoder
-from loongforge.embodied.eval.orchestrator.config import resolve_action_decoder_key
+from loongforge.evaluation.embodied.action_decoders import build_action_decoder
+from loongforge.evaluation.embodied.orchestrator.config import resolve_action_decoder_key
 
 key = resolve_action_decoder_key(payload_builder, adapter)  # {action_encoding}_to_{action_space}
 decoder = build_action_decoder(key)                         # empty key -> IdentityDecoder
@@ -198,7 +198,7 @@ No GPU / weights needed; use this to validate the eval helpers before fully load
 cd /workspace/LoongForge-VLA
 PYTHONPATH=/workspace/LoongForge-VLA python - <<'PY'
 import numpy as np
-from loongforge.embodied.eval.servers.predict_action_interface import (
+from loongforge.evaluation.embodied.servers.predict_action_interface import (
     call_predict_action,
     validate_predict_action_model,
 )
@@ -307,7 +307,6 @@ Registered keys (`ACTION_DECODER_REGISTRY`) auto-assembled as `{action_encoding}
 | `ee6d_to_axis_angle` | xvla × LIBERO / ManiSkill: 20D EE6D → 7D (pos + axis-angle + grip) |
 | `ee6d_to_simpler_abs_euler` | xvla × SimplerEnv WidowX: rot6d→euler + offset + grip mapping |
 | `ee6d_to_calvin_abs` | xvla × CALVIN official absolute-pose protocol |
-| `ee6d_to_euler` / `ee6d_to_quat` | Other EE variants |
 | `pi05_aloha_robotwin` | pi05 × RoboTwin joint decoder (stateful; via bridge) |
 | `ee6d_robotwin_ee_dual` | xvla × RoboTwin dual-arm ee decoder (via bridge) |
 
@@ -342,7 +341,7 @@ values are not duplicated here — they live with the model itself: the
 PayloadBuilder class attributes and comments in `payload_builders/<model>.py`
 (`state_encoding` / `action_encoding` / `action_dim` / `action_horizon`, and the
 supported encoding values), the factory, and that model's eval YAMLs under
-`examples/embodied/<model>/eval/configs/`.
+`examples/<model>/eval/configs/`.
 
 ### 4.1 Action space and dimensions
 

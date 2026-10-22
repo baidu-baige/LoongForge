@@ -26,7 +26,7 @@ model:
   mix_used_vision_projector: true
   foundation:
     rotary_emb_func: "Qwen2VLRotaryEmbedding"
-    model_spec: ["loongforge.models.foundation.qwen2.qwen_layer_spec", "get_qwen2_vl_layer_with_te_spec"]
+    model_spec: ["loongforge.models.language.qwen2.qwen_layer_spec", "get_qwen2_vl_layer_with_te_spec"]
     rotary_base: 1000000
     group_query_attention: true
     tensor_model_parallel_size: 2
@@ -99,7 +99,7 @@ SAVE_VISION_MODEL=/mnt/cluster/LoongForge/tmp/vision-model-mcore # 视觉模型�
 SAVE_ADAPTER=/mnt/cluster/LoongForge/tmp/adapter-mcore # adapter 临时保存路径，转换完成后将删除
 SAVE_PATCH=/mnt/cluster/LoongForge/tmp/patch-mcore # 视觉 patch 临时保存路径，转换完成后将删除
 
-MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/qwen2.5vl/qwen2_5_vl_7b.yaml # 指定模型构建后的配置文件路径
+MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/qwen2.5_vl/qwen2_5_vl_7b.yaml # 指定模型构建后的配置文件路径
 
 # 指定各模块的权重转换配置文件路径
 FOUNDATION_CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/qwen2.5/ckpt_convert/qwen2_5_convert.yaml # 指定语言模型基座权重转换配置文件路径
@@ -206,7 +206,7 @@ SAVE_VISION_MODEL=/mnt/cluster/LoongForge/tmp/vision-model-hf
 SAVE_ADAPTER=/mnt/cluster/LoongForge/tmp/adapter-hf
 SAVE_PATCH=/mnt/cluster/LoongForge/tmp/patch-hf
 
-MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/qwen2.5vl/qwen2_5_vl_7b.yaml
+MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/qwen2.5_vl/qwen2_5_vl_7b.yaml
 
 FOUNDATION_CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/qwen2.5/ckpt_convert/qwen2_5_convert.yaml
 IMAGE_ENCODER_CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/image_encoder/ckpt_convert/qwen2_5_vit_convert.yaml

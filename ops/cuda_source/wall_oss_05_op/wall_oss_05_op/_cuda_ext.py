@@ -7,8 +7,7 @@
 """Install-time compiled CUDA kernels for wall_oss_0_5 ops.
 
 The extension modules are installed via ``pip install --no-build-isolation -e .``
-and accessed as ``wall_oss_05_op._cuda_ext_bin``.  Falls back to the loongforge
-package path when the standalone package is not installed.
+and accessed as ``wall_oss_05_op._cuda_ext_bin``.
 """
 
 _module = None
@@ -20,24 +19,15 @@ def load():
     if _module is not None:
         return _module
 
-    # Primary: installed as part of the wall_oss_05_op package.
     try:
         from wall_oss_05_op import _cuda_ext_bin  # noqa: PLC0415
-        _module = _cuda_ext_bin
-        return _module
-    except ImportError:
-        pass
-
-    # Fallback: installed inside the loongforge package.
-    try:
-        from loongforge.embodied.model.wall_oss_0_5.core.ops import _cuda_ext_bin  # noqa: PLC0415
         _module = _cuda_ext_bin
         return _module
     except ImportError as exc:
         raise ImportError(
             "wall_oss_0_5 CUDA operators were not found. Install the package:\n"
             "  pip install --no-build-isolation -e .\n"
-            "from the cuda_source/wall_oss_05_op directory."
+            "from the ops/cuda_source/wall_oss_05_op directory."
         ) from exc
 
 
@@ -57,31 +47,23 @@ def load_exact():
     """Load the bitwise-exact CUDA extension.
 
     The exact kernels (fused SwiGLU / RMSNorm) live in their own module because
-    they must be compiled without ``--use_fast_math``.  Falls back gracefully
-    so callers can choose the PyTorch path when unavailable.
+    they must be compiled without ``--use_fast_math``. Raises ImportError when
+    the module is not installed; callers check :func:`is_exact_available` to
+    choose the PyTorch path instead.
     """
     global _exact_module
     if _exact_module is not None:
         return _exact_module
 
-    # Primary: installed as part of the wall_oss_05_op package.
     try:
         from wall_oss_05_op import _cuda_ext_exact_bin  # noqa: PLC0415
-        _exact_module = _cuda_ext_exact_bin
-        return _exact_module
-    except ImportError:
-        pass
-
-    # Fallback: installed inside the loongforge package.
-    try:
-        from loongforge.embodied.model.wall_oss_0_5.core.ops import _cuda_ext_exact_bin  # noqa: PLC0415
         _exact_module = _cuda_ext_exact_bin
         return _exact_module
     except ImportError as exc:
         raise ImportError(
             "wall_oss_0_5 bitwise-exact CUDA operators were not found. Install the package:\n"
             "  pip install --no-build-isolation -e .\n"
-            "from the cuda_source/wall_oss_05_op directory."
+            "from the ops/cuda_source/wall_oss_05_op directory."
         ) from exc
 
 

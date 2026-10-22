@@ -152,10 +152,7 @@ TRAINING_ARGS=(
     --num-images-expected 48
     --loss-reduction square
     #--use-cpu-initialization
-    --use-packed-ds
-    # --save-dataset-state
     --use_thumbnail
-    --replacement
     --dynamic-image-size
     --loss-reduction-all-gather
     --num-workers 8
@@ -167,7 +164,6 @@ TRAINING_ARGS=(
     --strict-mode
     --manual-gc
     --manual-gc-interval 0
-    --dataloader-prefetch-factor 4
     --exit-interval 500
     --no-bias-dropout-fusion
     --no-bias-gelu-fusion

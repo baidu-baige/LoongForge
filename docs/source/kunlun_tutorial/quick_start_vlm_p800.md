@@ -154,7 +154,6 @@ TRAINING_ARGS=(
     --seed 42
     --norm-epsilon 1e-6
     --training-phase sft
-    --trainable-modules language_model adapter vision_model
     --seq-length 4096
     --max-position-embeddings 262144
     --init-method-std 0.02

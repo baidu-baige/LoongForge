@@ -1,5 +1,5 @@
 
-_target_: loongforge.models.encoder.InternMLPAdapterConfig
+_target_: loongforge.models.vision.InternMLPAdapterConfig
 
 normalization: LayerNorm
 model_type: "intern_adapter"

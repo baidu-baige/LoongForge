@@ -17,7 +17,7 @@ re-run the frozen encoders every step.
 `tqdm`; nothing from LoongForge has to be on the path.
 
 `precompute_features.py` and `validate_precomputed_feature_artifact.py` import
-`loongforge.embodied`, so the LoongForge repo root must be importable:
+`loongforge.models.embodied`, so the LoongForge repo root must be importable:
 
 ```bash
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-/workspace/LoongForge}
@@ -29,8 +29,8 @@ encoder) named by the model config, so the corresponding checkpoints and
 tokenizer must be available (e.g. Wan2.2-TI2V-5B or Wan2.1-I2V-14B + UMT5).
 
 Ready-to-run wrappers live at
-`examples/embodied/dreamzero/prepare_dreamzero_dataset.sh` and
-`examples/embodied/dreamzero/precompute_dreamzero_cache.sh` — prefer them as the
+`examples/dreamzero/preprocess/prepare_dreamzero_dataset.sh` and
+`examples/dreamzero/preprocess/precompute_dreamzero_cache.sh` — prefer them as the
 entry points; they wire up paths, distributed launch, and post-run validation.
 
 ## 1. Prepare the dataset (required)
@@ -71,7 +71,7 @@ distributed under `torchrun`. On completion it prints the
 PYTHONPATH=$LOONGFORGE_PATH:$PYTHONPATH \
     torchrun --nproc_per_node 8 \
         ${LOONGFORGE_PATH}/tools/dreamzero_data_preprocess/precompute_features.py \
-            --config-file    configs/models/embodied/dreamzero_wan22_5b.yaml \
+            --config-file    configs/models/dreamzero/dreamzero_wan22_5b.yaml \
             --data-path      /path/to/droid_lerobot \
             --output-dir     /path/to/dreamzero_cache \
             --tokenizer-path /path/to/umt5-xxl \

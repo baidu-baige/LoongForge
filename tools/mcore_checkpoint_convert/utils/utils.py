@@ -7,11 +7,10 @@ import os
 import re
 import json
 import torch
-from typing import List
 from bisect import bisect_left
 from math import floor, ceil
 
-from typing import Tuple, Literal
+from typing import List, Tuple, Literal
 
 
 import logging
@@ -79,7 +78,6 @@ def vocab_size_with_padding(orig_vocab_size, make_vocab_size_divisible_by, tp):
 
 
 def add_embedding_padding(weight, divisible_by, orig_vocab_size, tp, padded_vocab_size=None):
-    """ add embedding padding """
     if weight is None:
         return None
     if padded_vocab_size is None:
@@ -98,7 +96,6 @@ def add_embedding_padding(weight, divisible_by, orig_vocab_size, tp, padded_voca
 
 
 def cut_embedding_padding(weight, orig_vocab_size):
-    """ cut embedding padding """
     if weight is None:
         return None
     return weight[0:orig_vocab_size, :]
@@ -172,9 +169,6 @@ def custom_partition_imbalanced(num_layers, num_parts, custom_layers):
 
 
 def partition_balanced(num_layers, num_parts, eps=1e-3):
-    """
-    partition balanced.
-    """
     # First check for the trivial edge case
     if num_layers <= num_parts:
         parts = partition_uniform(num_layers, num_parts)
@@ -198,9 +192,6 @@ def partition_balanced(num_layers, num_parts, eps=1e-3):
 
 
 def partition_uniform(num_items, num_parts):
-    """
-    partition uniform.
-    """
     parts = [0] * (num_parts + 1)
     # First check for the trivial edge case
     if num_items <= num_parts:
@@ -366,9 +357,7 @@ def make_hf_sub_checkpoints(base_path):
                         if len(parts) == 2:
                             file_base, file_count = parts
                             i_str = file_base.split('-')[-1]
-                            sub_count_str = file_count.split('.')[0]
                             i = int(i_str)
-                            sub_count = int(sub_count_str)
 
                             # Update global counter
                             local_file_count += 1
@@ -481,8 +470,8 @@ def get_layer_ids(c_config, args, p):
     # Get model layer count related parameters
     num_layers = cargs["num_layers"]  # Total number of model layers
     mtp_num_layers = args.mtp_num_layers if args.mtp_num_layers is not None else cargs.get("mtp_num_layers", 0)  # MTP additional layers, default 0
-    num_layers_per_stage = args.num_layers_per_virtual_pipeline_stage
     pp = args.pipeline_model_parallel_size  # Pipeline parallel size
+    num_layers_per_stage = args.num_layers_per_virtual_pipeline_stage
     # Calculate number of virtual pipeline stages
     if num_layers_per_stage:
         stage = num_layers // pp // num_layers_per_stage

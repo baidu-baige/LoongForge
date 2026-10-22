@@ -125,7 +125,7 @@ def test_qwen3_family_configs_explicitly_use_qwen3_projector_mapping():
 
 def test_llava_onevision_config_explicitly_uses_layernorm_projector_mapping():
     projector = _load_effective_projector(
-        MODEL_CONFIG_DIR / "llava_onevision" / "llava_onevision_1_5_4b.yaml"
+        MODEL_CONFIG_DIR / "llava_onevision_1.5" / "llava_onevision_1_5_4b.yaml"
     )
     llava_convert = _load_yaml(
         PROJECTOR_CONFIG_DIR / "ckpt_convert" / "llava_mlp_adapter_convert.yaml"

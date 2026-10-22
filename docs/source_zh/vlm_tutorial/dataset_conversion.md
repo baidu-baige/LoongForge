@@ -41,9 +41,9 @@
 ```bash
 python tools/vlm_data_preprocess/convert_to_webdataset.py \
   --output_dir /workspace/wds_data/ \
-  --json_file tests/datasets/vlm/mllm_demo.json \
-  --image_dir tests/datasets/vlm/ \
-  --video_dir tests/datasets/vlm/ \
+  --json_file tests/llm_vlm/datasets/vlm/mllm_demo.json \
+  --image_dir tests/llm_vlm/datasets/vlm/ \
+  --video_dir tests/llm_vlm/datasets/vlm/ \
   --media mix \
   --columns_messages messages \
   --maxcount 10000 \

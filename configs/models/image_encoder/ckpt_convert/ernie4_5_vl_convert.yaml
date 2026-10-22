@@ -1,6 +1,6 @@
 hydra:
   searchpath:
-    - file:///workspace/LoongForge/configs/models/
+    - file://${oc.env:LOONGFORGE_PATH}/configs/models/
 
 defaults:
   - image_encoder@module: ???

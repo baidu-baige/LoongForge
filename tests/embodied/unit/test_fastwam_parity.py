@@ -15,11 +15,11 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-from loongforge.embodied.data.datasets.fastwam.transforms.fastwam_transform import (
+from loongforge.data.embodied.fastwam.transforms.fastwam_transform import (
     FastWAMLinearNormalizeTransform,
     _fastwam_linear_params,
 )
-from loongforge.embodied.model.fastwam.modeling_configuration_fastwam import FastWAMModelConfig
+from loongforge.models.embodied.fastwam.configuration_fastwam import FastWAMModelConfig
 
 
 def _stats(lo, hi, extra=None):
@@ -83,7 +83,7 @@ def test_action_scheduler_defaults_match_fastwam():
 
 
 def _lr_trace(warmup, total, lr=1e-4, min_lr=1e-6):
-    from loongforge.embodied.optimizer.lr_scheduler import build_scheduler
+    from loongforge.training.torch.lr_scheduler import build_scheduler
 
     opt = torch.optim.AdamW([torch.nn.Parameter(torch.zeros(1))], lr=lr)
     args = SimpleNamespace(lr_decay_style="linear_warmup_cosine_annealing", lr_decay_iters=None,
