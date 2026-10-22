@@ -105,6 +105,34 @@ def _load_model_state_dict(module, state_dict, strict: bool):
         print(f"[load_state_dict strict=False] return: {load_return}")
 
 
+def load_dataloader_state(args):
+    """Read the per-DP-rank dataloader state saved by ``maybe_save_dataloader_state``.
+
+    Returns the state dict, or ``None`` when no state is configured, loading is off,
+    or the file does not exist. Kept next to the save hook so the file layout has a
+    single owner.
+    """
+    if args.load is None or not getattr(args, "dataloader_save", None):
+        return None
+    dp_rank = mpu.get_data_parallel_rank()
+    data_save_name = get_checkpoint_name(
+        args.dataloader_save,
+        args.iteration,
+        pipeline_rank=0,  # Only the first pipeline parallel rank stores the dataloader checkpoint.
+        basename=f"train_dataloader_dprank{dp_rank:03d}.pt",
+    )
+    if not os.path.exists(data_save_name):
+        print(f"dataset state {data_save_name} does not exist")
+        return None
+    try:
+        dataset_state_dict = torch.load(data_save_name, map_location="cpu")
+        print(f"loading dataset state from {data_save_name}")
+        return dataset_state_dict["dataloader_state_dict"]
+    except Exception as e:
+        print("loading dataset state failed. Skipping. " + str(e))
+        return None
+
+
 def save_checkpoint(
     iteration,
     model,

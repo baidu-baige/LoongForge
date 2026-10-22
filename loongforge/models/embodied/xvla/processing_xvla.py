@@ -21,7 +21,7 @@ Two lightweight classes are provided:
   ``image_input`` / ``image_mask`` tensors.
 
 The corresponding training-time transforms in
-``loongforge.data.embodied.xvla.xvla_transform`` subclass these
+``loongforge.data.embodied.xvla.transforms.xvla_transform`` subclass these
 cores to add the :class:`BaseTransform` ``apply()`` hook, so the two paths
 share one implementation.
 """

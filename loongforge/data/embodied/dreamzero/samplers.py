@@ -37,10 +37,9 @@ Notes:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Iterator, Optional
+from typing import TYPE_CHECKING, Any, Iterator
 
 import numpy as np
-import torch.distributed as dist
 from torch.utils.data import Sampler
 from torchdata.stateful_dataloader.sampler import StatefulDistributedSampler
 
@@ -169,8 +168,8 @@ class DreamZeroShardedSampler(Sampler[int]):
         dataset: A ``DreamZeroLeRobotDataset`` instance exposing ``trajectory_ids``,
             ``trajectory_lengths``, ``step_filter``, ``max_delta_index``,
             ``all_steps``, ``discard_bad_trajectories``, and ``lerobot_info_meta``.
-        num_replicas: World size for DDP. If None, inferred from ``torch.distributed``.
-        rank: This rank. If None, inferred.
+        num_replicas: World size for DDP, supplied by the caller.
+        rank: This rank, supplied by the caller.
         seed: Seed for numpy RNG.
         shard_sampling_rate: Fraction of steps per shard to keep.
         num_steps_per_shard: Target steps per shard.
@@ -184,8 +183,8 @@ class DreamZeroShardedSampler(Sampler[int]):
     def __init__(
         self,
         dataset: "DreamZeroLeRobotDataset",
-        num_replicas: Optional[int] = None,
-        rank: Optional[int] = None,
+        num_replicas: int,
+        rank: int,
         seed: int = 42,
         shard_sampling_rate: float = 0.1,
         num_steps_per_shard: int = 10_000,
@@ -197,10 +196,6 @@ class DreamZeroShardedSampler(Sampler[int]):
         dataloader_num_workers: int = 0,
         micro_batch_size: int = 1,
     ) -> None:
-        if num_replicas is None:
-            num_replicas = dist.get_world_size() if dist.is_available() and dist.is_initialized() else 1
-        if rank is None:
-            rank = dist.get_rank() if dist.is_available() and dist.is_initialized() else 0
         if not 0.0 <= shard_sampling_rate <= 1.0:
             raise ValueError(f"shard_sampling_rate must be in [0,1], got {shard_sampling_rate}")
         if rank < 0 or rank >= num_replicas:

@@ -77,7 +77,7 @@ class GrootN1d6ModelFactory:
         """
         import torch
 
-        from loongforge.data.embodied.groot_n1_6.processing_groot_n1_6 import (
+        from loongforge.data.embodied.groot_n1_6.transforms.groot_n1_6_processor import (
             Gr00tN1d6DataCollator,
             StateActionProcessor,
         )

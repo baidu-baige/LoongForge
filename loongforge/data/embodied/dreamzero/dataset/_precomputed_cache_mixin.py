@@ -24,7 +24,7 @@ from loongforge.models.embodied.dreamzero.precomputed_cache.artifact import (
     load_cache_payload,
 )
 
-from .transforms.video import VideoColorJitter, VideoCrop, VideoResize
+from ..transforms.video import VideoColorJitter, VideoCrop, VideoResize
 
 logger = logging.getLogger(__name__)
 

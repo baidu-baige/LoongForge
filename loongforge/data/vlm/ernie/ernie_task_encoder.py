@@ -30,7 +30,7 @@ from loongforge.data.vlm.base_task_encoder import (
     BaseTaskSamplePacked,
     BaseTaskBatchPacked,
 )
-from loongforge.data.vlm.cookers import _parse_messages, bind_args
+from loongforge.data.vlm.cookers import _parse_messages, bind_config
 
 logger = logging.getLogger(__name__)
 
@@ -93,9 +93,9 @@ class ErnieTaskBatchPacked(BaseTaskBatchPacked):
 
 
 @stateless
-def cooker_ernie_mix_qa(sample: dict, args) -> MultiMixQASample:
+def cooker_ernie_mix_qa(sample: dict, config) -> MultiMixQASample:
     """Parse a WebDataset sample into a MultiMixQASample for ERNIE-VL."""
-    messages, system_prompt = _parse_messages(sample["json"]["texts"], args)
+    messages, system_prompt = _parse_messages(sample["json"]["texts"], config)
 
     video: list = []
     image: list = []
@@ -134,55 +134,55 @@ class ErnieTaskEncoder(BaseTaskEncoder):
     them in the Energon encode_sample / batch / encode_batch interface.
     """
 
-    def __init__(self, args, tokenizer, chat_template=None):
-        super().__init__(args, tokenizer, chat_template)
+    def __init__(self, config, tokenizer, chat_template=None):
+        super().__init__(config, tokenizer, chat_template)
         # Fall through to base cookers for other sample types.
         self.cookers = [
-            Cooker(bind_args(cooker_ernie_mix_qa, args), has_subflavors={"sample_type": "ernie_mix_qa"}),
+            Cooker(bind_config(cooker_ernie_mix_qa, config), has_subflavors={"sample_type": "ernie_mix_qa"}),
         ] + self.cookers
 
         # ---- Tokenizer ----
         self.ernie_tokenizer = Ernie45VLTokenizer.from_pretrained(
-            args.hf_tokenizer_path, trust_remote_code=True,
+            config.hf_tokenizer_path, trust_remote_code=True,
         )
         # Wrap tokenizer.encode for paddleformers-style API compatibility.
         self._wrap_tokenizer_encode()
 
         # ---- Image processor ----
-        min_pixels = getattr(args, "min_pixels", None) or (56 * 56)
-        max_pixels = getattr(args, "max_pixels", None) or (28 * 28 * 1280)
+        min_pixels = getattr(config, "min_pixels", None) or (56 * 56)
+        max_pixels = getattr(config, "max_pixels", None) or (28 * 28 * 1280)
         self.image_processor = AdaptiveImageProcessor(
             min_pixels=min_pixels,
             max_pixels=max_pixels,
         )
 
         # ---- ExampleToFeature ----
-        self.chat_template = args.ernie_chat_template
+        self.chat_template = config.ernie_chat_template
         self.example_to_feature = ExampleToFeature(
             tokenizer=self.ernie_tokenizer,
-            max_seq_length=args.seq_length,
+            max_seq_length=config.seq_length,
             special_tokens_info=ERNIE_SPECIAL_TOKENS_INFO,
             variable_resolution=True,
-            spatial_conv_size=getattr(args, "spatial_conv_size", 2),
+            spatial_conv_size=getattr(config, "spatial_conv_size", 2),
             image_processor=self.image_processor,
             rope_3d=True,
-            video_min_pixels=getattr(args, "video_min_pixels", None),
-            video_max_pixels=getattr(args, "video_max_pixels", None),
+            video_min_pixels=getattr(config, "video_min_pixels", None),
+            video_max_pixels=getattr(config, "video_max_pixels", None),
             chat_template=self.chat_template,
         )
 
         # ---- ImageModificationProcessor (for position_ids_for_rope_3d) ----
-        # We create a lightweight args-like object for ImageModificationProcessor.
+        # We create a lightweight config-like object for ImageModificationProcessor.
         self._imp = _build_image_modification_processor(
-            args, self.ernie_tokenizer, self.image_processor,
+            config, self.ernie_tokenizer, self.image_processor,
         )
 
         # ---- Video parameters ----
-        self.video_fps = getattr(args, "video_fps", 2)
-        self.video_min_frames = getattr(args, "video_min_frames", 4)
-        self.video_max_frames = getattr(args, "video_max_frames", 768)
-        self.video_target_frames = getattr(args, "video_target_frames", -1)
-        self.video_frames_sample = getattr(args, "video_frames_sample", "middle")
+        self.video_fps = getattr(config, "video_fps", 2)
+        self.video_min_frames = getattr(config, "video_min_frames", 4)
+        self.video_max_frames = getattr(config, "video_max_frames", 768)
+        self.video_target_frames = getattr(config, "video_target_frames", -1)
+        self.video_frames_sample = getattr(config, "video_frames_sample", "middle")
 
         # Image patch ID for detecting vision tokens.
         vocab = self.ernie_tokenizer.get_vocab()
@@ -399,7 +399,7 @@ class ErnieTaskEncoder(BaseTaskEncoder):
         #    done globally in pack_selected_samples() after concatenation, to
         #    match the ERNIE reference _concat_samples logic:
         #      concat raw [BOS,...,SEP] → remove last token → labels[1:]
-        if not getattr(self.args, "packing_sft_data", False):
+        if not getattr(self.config, "packing_sft_data", False):
             input_ids = input_ids[:-1]
             labels = labels[1:]
             token_type_ids = token_type_ids[:-1]
@@ -461,7 +461,7 @@ class ErnieTaskEncoder(BaseTaskEncoder):
         }
         feature_dict = self._imp.position_ids_for_rope_3d(feature_dict)
         # When packing, keep full position_ids (truncation done in pack_selected_samples).
-        if getattr(self.args, "packing_sft_data", False):
+        if getattr(self.config, "packing_sft_data", False):
             position_ids = feature_dict["position_ids"]
         else:
             position_ids = feature_dict["position_ids"][:-1]  # truncate to match input_ids
@@ -586,7 +586,7 @@ class ErnieTaskEncoder(BaseTaskEncoder):
         # cu_lengths marks document boundaries in the packed sequence for
         # attention masking.  After the global shift (input_ids[:-1]) the
         # final SEP is removed, so the last sample loses 1 token.
-        packing_seq_len = self.args.seq_length
+        packing_seq_len = self.config.seq_length
         packed_imgs = []
         cu_lengths = [0]
         current_length = 0
@@ -772,7 +772,7 @@ class ErnieTaskEncoder(BaseTaskEncoder):
 
 @dataclass
 class _ImageArgs:
-    """Minimal args-like object for ImageModificationProcessor."""
+    """Minimal config-like object for ImageModificationProcessor."""
     image_token_len: int = 64
     image_dtype: str = "float32"
     sft_shift_by_one: bool = False
@@ -783,15 +783,15 @@ class _ImageArgs:
     is_pretraining: bool = False
 
 
-def _build_image_modification_processor(args, tokenizer, image_processor):
+def _build_image_modification_processor(config, tokenizer, image_processor):
     """Create an ImageModificationProcessor for position_ids_for_rope_3d only."""
     img_args = _ImageArgs(
-        image_token_len=getattr(args, "image_token_len", 64),
-        image_dtype=getattr(args, "image_dtype", "float32"),
-        sft_shift_by_one=getattr(args, "sft_shift_by_one", False),
-        sft_replace_ids=getattr(args, "sft_replace_ids", False),
-        sft_image_rescale=getattr(args, "sft_image_rescale", False),
-        sft_image_normalize=getattr(args, "sft_image_normalize", False),
+        image_token_len=getattr(config, "image_token_len", 64),
+        image_dtype=getattr(config, "image_dtype", "float32"),
+        sft_shift_by_one=getattr(config, "sft_shift_by_one", False),
+        sft_replace_ids=getattr(config, "sft_replace_ids", False),
+        sft_image_rescale=getattr(config, "sft_image_rescale", False),
+        sft_image_normalize=getattr(config, "sft_image_normalize", False),
     )
     imp = ImageModificationProcessor(img_args, tokenizer, image_processor)
     imp.is_pretraining = False

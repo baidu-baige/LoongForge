@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from pathlib import Path
 class LatentDataset(torch.utils.data.Dataset):
-    def __init__(self, data_path, steps_per_epoch=0, seed=0, keep_keys=None, data_parallel_size=1):
+    def __init__(self, data_path, steps_per_epoch=0, seed=0, keep_keys=None, data_parallel_size=1, start_index=0):
         self.data_paths = []
         self.load_data(data_path)
         self.steps_per_epoch = steps_per_epoch
@@ -22,6 +22,7 @@ class LatentDataset(torch.utils.data.Dataset):
                 f"num_samples={len(self.data_paths)}, data_path={data_path}"
             )
         self.samples_per_rank = len(self.data_paths) // self.data_parallel_size
+        self.start_index = int(start_index)
         self._shuffle_epoch = None
         self._shuffle_order = None
         # Optional whitelist of keys to keep from each loaded sample. Caller decides
@@ -35,6 +36,7 @@ class LatentDataset(torch.utils.data.Dataset):
         self.data_paths = sorted([str(p) for p in base_path.rglob("*") if p.is_file()])
 
     def __getitem__(self, index):
+        index = index + self.start_index
         seed = (self.manual_seed + index) % 2**32
         logical_rank = index % self.data_parallel_size
         shuffle_epoch, shard_offset = divmod(
@@ -59,4 +61,4 @@ class LatentDataset(torch.utils.data.Dataset):
         return data
 
     def __len__(self):
-        return self.steps_per_epoch
+        return max(0, self.steps_per_epoch - self.start_index)

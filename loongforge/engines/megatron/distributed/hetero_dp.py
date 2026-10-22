@@ -9,7 +9,7 @@ encoder path and the EP-overlap callables share the state kept here:
 
 - embedding / grad / visual-pos-mask / deepstack lists of the current step;
 - the CPU offload manager (``--full-hetero-dp-cpu-offload``);
-- the encoder data iterator, built by the method from its dataset;
+- the encoder data iterator, assembled here from the dataset or Energon loader the method builds;
 - the method's batch functions.
 
 ``HeteroStepContext`` owns all of it. The training method creates it, ``train_step``
@@ -21,7 +21,9 @@ import threading
 from typing import Dict, Optional, Tuple
 
 import torch
+from torch.utils.data import DataLoader
 
+from megatron.core import mpu
 from megatron.legacy.data.data_samplers import MegatronPretrainingRandomSampler
 
 
@@ -352,3 +354,81 @@ class EncoderStridedIterator:
                     if start <= (i % self._model_size) < end:
                         yield b
                 step_buffer = []
+
+
+def _encoder_parallel_facts():
+    """Return the PP/TP/model-size/microbatch facts the strided sampler needs."""
+    from ..initialize import (
+        get_model_size,
+        get_num_micro_batches_per_decoder_dp,
+        get_num_real_micro_batches_per_decoder_dp,
+    )
+
+    pp_rank = mpu.get_pipeline_model_parallel_rank()
+    tp_size = mpu.get_tensor_model_parallel_world_size()
+    _, encoder_rounds = get_num_micro_batches_per_decoder_dp()
+    return (
+        pp_rank,
+        tp_size,
+        get_model_size(),
+        get_num_real_micro_batches_per_decoder_dp(),
+        tp_size * encoder_rounds,
+    )
+
+
+def build_encoder_data_iterator(
+    dataset,
+    consumed_samples,
+    data_collator,
+    *,
+    micro_batch_size,
+    num_workers,
+    data_sharding,
+):
+    """Build the strided encoder DataLoader for full hetero DP.
+
+    Uses ``EncoderStridedSampler`` to yield only microbatches assigned to this PP
+    rank, avoiding unnecessary disk IO for microbatches handled by other ranks.
+    """
+    from megatron.training.training import cyclic_iter
+
+    pp_rank, tp_size, model_size, num_real_microbatch, prefetch_count = _encoder_parallel_facts()
+    batch_sampler = EncoderStridedSampler(
+        dataset,
+        total_samples=len(dataset),
+        consumed_samples=consumed_samples,
+        micro_batch_size=micro_batch_size,
+        data_parallel_rank=mpu.get_data_parallel_rank(),
+        data_parallel_size=mpu.get_data_parallel_world_size(),
+        data_sharding=data_sharding,
+        pp_rank=pp_rank,
+        tp_size=tp_size,
+        model_size=model_size,
+        num_real_microbatch=num_real_microbatch,
+    )
+    dataloader = DataLoader(
+        dataset,
+        batch_sampler=batch_sampler,
+        collate_fn=data_collator,
+        num_workers=num_workers,
+        pin_memory=True,
+        persistent_workers=True if num_workers > 0 else False,
+    )
+    return PrefetchIterator(iter(cyclic_iter(dataloader)), prefetch_count=prefetch_count)
+
+
+def build_encoder_energon_iterator(energon_dataloader):
+    """Wrap an Energon encoder loader with the strided/prefetch iterator for full hetero DP.
+
+    The loader itself is built by the training method from its data config; this
+    function only owns the parallelism-specific wrapping.
+    """
+    pp_rank, tp_size, model_size, num_real_microbatch, prefetch_count = _encoder_parallel_facts()
+    strided_iter = EncoderStridedIterator(
+        energon_dataloader=energon_dataloader,
+        pp_rank=pp_rank,
+        tp_size=tp_size,
+        model_size=model_size,
+        num_real_microbatch=num_real_microbatch,
+    )
+    return PrefetchIterator(strided_iter, prefetch_count=prefetch_count)

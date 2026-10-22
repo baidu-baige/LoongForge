@@ -6,7 +6,7 @@
 # path required to produce ``libero_norm_stats.json`` is kept: read
 # ``observation.state`` and ``action`` columns from a local LeRobot v2.1/v3
 # parquet dataset and write per-dim mean/std/q01/q99 in the layout expected by
-# ``loongforge/data/embodied/wall_oss_0_5/wall_oss_0_5_utils.py::load_norm_stats``.
+# ``loongforge/data/embodied/wall_oss_0_5/transforms/wall_oss_0_5_utils.py::load_norm_stats``.
 """Compute LeRobot normalization stats (mean, std, q01, q99).
 
 Output JSON layout::

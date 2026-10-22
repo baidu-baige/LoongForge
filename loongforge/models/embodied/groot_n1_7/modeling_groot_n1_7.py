@@ -38,8 +38,8 @@ from .embodiment_mlp import CategorySpecificMLP, MultiEmbodimentActionEncoder
 from .qwen3_backbone import Qwen3Backbone
 
 if TYPE_CHECKING:
-    from loongforge.data.embodied.groot_n1_6.processing_groot_n1_6 import StateActionProcessor
-    from loongforge.data.embodied.groot_n1_7.groot_n1_7_collator import Gr00tN1d7DataCollator
+    from loongforge.data.embodied.groot_n1_6.transforms.groot_n1_6_processor import StateActionProcessor
+    from loongforge.data.embodied.groot_n1_7.transforms.groot_n1_7_collator import Gr00tN1d7DataCollator
 
 logger = logging.getLogger(__name__)
 

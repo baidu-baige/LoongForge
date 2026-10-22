@@ -33,10 +33,10 @@ import torch
 from transformers import AutoTokenizer, ProcessorMixin
 from transformers.feature_extraction_utils import BatchFeature
 
-from loongforge.data.embodied.groot_n1_6.image_processing_eagle3_vl_fast import (
+from loongforge.models.embodied.groot_n1_6.eagle3_model.image_processing_eagle3_vl_fast import (
     Eagle3VLImageProcessorFast,
 )
-from loongforge.data.embodied.groot_n1_6.processing_eagle3_vl import (
+from loongforge.models.embodied.groot_n1_6.eagle3_model.processing_eagle3_vl import (
     Eagle3VLProcessor,
 )
 from loongforge.models.embodied.groot_n1_6.embodiment_configs import (

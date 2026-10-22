@@ -51,8 +51,12 @@ class SFTDataset:
         dataset_path: str,
         config: SFTDatasetConfig,
         print_example: bool = True,
+        rank: int = 0,
+        distributed: bool = False,
     ):
         self.config = config
+        self.rank = rank
+        self.distributed = distributed
         self.dataset_path = dataset_path
         self.dataset_name = dataset_name
 
@@ -85,17 +89,16 @@ class SFTDataset:
         self.dataset_format = self._get_format_config()
 
         path_to_cache = self.config.path_to_cache
-        if path_to_cache is None or not torch.distributed.is_initialized():
+        if path_to_cache is None or not self.distributed:
             return self._build_low_level_dataset(path_to_cache=path_to_cache)
 
-        rank = torch.distributed.get_rank()
         # First, build on rank 0
-        if rank == 0:
+        if self.rank == 0:
             self._build_low_level_dataset(path_to_cache=path_to_cache)
 
         torch.distributed.barrier()
 
-        if rank != 0:
+        if self.rank != 0:
             self._build_low_level_dataset(path_to_cache=path_to_cache)
 
     def _build_from_tokenized_data(self):

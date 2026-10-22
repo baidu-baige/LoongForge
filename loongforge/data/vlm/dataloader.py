@@ -1,29 +1,33 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Dataset and DataLoader related utilities"""
+"""VLM dataset and DataLoader utilities (Megatron-Energon)."""
 
 import logging
 import os
 import tempfile
 
-import torch
 import torch.nn.functional as F
 import yaml
 
 from megatron import energon
-from megatron.core import parallel_state
 from megatron.core.datasets.utils import get_blend_from_list
 from megatron.core.utils import log_single_rank
-from megatron.training.checkpointing import get_checkpoint_name
-from megatron.training.training import cyclic_iter
-from .vlm.base_task_encoder import print_error_handler
-from .vlm.flavors import ENERGON_LT_7
+from .base_task_encoder import print_error_handler
+from .flavors import ENERGON_LT_7
+
+from .dataset_config import VLMDataConfig
 
 logger = logging.getLogger(__name__)
 
 
-def _energon_read_order_kwargs(args):
+def _cyclic_iter(iterable):
+    """Yield from ``iterable`` forever."""
+    while True:
+        yield from iterable
+
+
+def _energon_read_order_kwargs(config):
     """Resolve optional Energon sample-order controls from CLI flags.
 
     ``shuffle_buffer_size`` adds sample-level shuffling before cooking and
@@ -33,8 +37,8 @@ def _energon_read_order_kwargs(args):
     giving Energon more sequences to mix through its parallel shard iterators.
     Disabled values are passed as ``None`` to preserve Energon's defaults.
     """
-    shuffle_buffer_size = getattr(args, "data_shuffle_buffer_size", 0) or 0
-    max_samples_per_sequence = getattr(args, "data_max_samples_per_sequence", 0) or 0
+    shuffle_buffer_size = config.data_shuffle_buffer_size or 0
+    max_samples_per_sequence = config.data_max_samples_per_sequence or 0
     return {
         "shuffle_buffer_size": shuffle_buffer_size if shuffle_buffer_size > 1 else None,
         "max_samples_per_sequence": (
@@ -53,17 +57,17 @@ def _validate_energon_data_paths(paths):
             )
 
 
-def get_train_dataset(task_encoder, args):
+def get_train_dataset(task_encoder, config: "VLMDataConfig", dp_rank, dp_size, dp_group):
     """Get the training dataset"""
     worker_config = energon.WorkerConfig(
-        rank=parallel_state.get_data_parallel_rank(),
-        world_size=parallel_state.get_data_parallel_world_size(),
-        num_workers=args.num_workers,
-        data_parallel_group=parallel_state.get_data_parallel_group(),
+        rank=dp_rank,
+        world_size=dp_size,
+        num_workers=config.num_workers,
+        data_parallel_group=dp_group,
         worker_debug_path=None,
         worker_log_level=0,
     )
-    shuffle_kwargs = _energon_read_order_kwargs(args)
+    shuffle_kwargs = _energon_read_order_kwargs(config)
     log_single_rank(
         logger,
         logging.INFO,
@@ -72,28 +76,28 @@ def get_train_dataset(task_encoder, args):
         f"{shuffle_kwargs['max_samples_per_sequence']}",
     )
 
-    if len(args.data_path) == 1:
-        _validate_energon_data_paths(args.data_path)
+    if len(config.data_path) == 1:
+        _validate_energon_data_paths(config.data_path)
         train_ds = energon.get_train_dataset(
-            args.data_path[0],
-            batch_size=args.micro_batch_size,
+            config.data_path[0],
+            batch_size=config.micro_batch_size,
             task_encoder=task_encoder,
             worker_config=worker_config,
-            packing_buffer_size=args.packing_buffer_size,
+            packing_buffer_size=config.packing_buffer_size,
             handler=print_error_handler,
             image_decode="pil",
             **shuffle_kwargs,
         )
     else:
-        data_paths, data_weights = get_blend_from_list(args.data_path)
+        data_paths, data_weights = get_blend_from_list(config.data_path)
         _validate_energon_data_paths(data_paths)
         yaml_path = create_metadataset_yaml(data_paths, data_weights, split="train")
         train_ds = energon.get_train_dataset(
             yaml_path,
-            batch_size=args.micro_batch_size,
+            batch_size=config.micro_batch_size,
             task_encoder=task_encoder,
             worker_config=worker_config,
-            packing_buffer_size=args.packing_buffer_size,
+            packing_buffer_size=config.packing_buffer_size,
             handler=print_error_handler,
             image_decode="pil",
             **shuffle_kwargs,
@@ -101,9 +105,9 @@ def get_train_dataset(task_encoder, args):
     return train_ds
 
 
-def get_val_dataset(task_encoder, args):
+def get_val_dataset(task_encoder, config: "VLMDataConfig", dp_rank, dp_size, dp_group):
     """Build the validation split from the configured Energon dataset."""
-    paths = getattr(args, "valid_data_path", None) or args.data_path
+    paths = config.valid_data_path or config.data_path
     if not isinstance(paths, (list, tuple)):
         paths = [paths]
 
@@ -116,20 +120,20 @@ def get_val_dataset(task_encoder, args):
         path = create_metadataset_yaml(data_paths, data_weights, split="val")
 
     worker_config = energon.WorkerConfig(
-        rank=parallel_state.get_data_parallel_rank(),
-        world_size=parallel_state.get_data_parallel_world_size(),
-        num_workers=args.num_workers,
-        data_parallel_group=parallel_state.get_data_parallel_group(),
+        rank=dp_rank,
+        world_size=dp_size,
+        num_workers=config.num_workers,
+        data_parallel_group=dp_group,
         worker_debug_path=None,
         worker_log_level=0,
     )
     return energon.get_val_dataset(
         path,
         split_part="val",
-        batch_size=args.micro_batch_size,
+        batch_size=config.micro_batch_size,
         task_encoder=task_encoder,
         worker_config=worker_config,
-        packing_buffer_size=args.packing_buffer_size,
+        packing_buffer_size=config.packing_buffer_size,
         handler=print_error_handler,
         image_decode="pil",
     )
@@ -173,33 +177,18 @@ def create_metadataset_yaml(data_paths, data_weights, split="train"):
     return yaml_path
 
 
-def get_train_loader(train_ds, args, collator=None, restore_state=True):
-    """Get the training loader"""
+def get_train_loader(train_ds, collator=None, state=None):
+    """Get the training loader, restoring the saved state when one is given."""
     if ENERGON_LT_7:
         train_dataloader = energon.get_savable_loader(train_ds)
     else:
         train_dataloader = energon.get_savable_loader(train_ds, watchdog_initial_timeout_seconds=600)
-    
-    if restore_state and args.load is not None:
-        if getattr(args, "dataloader_save", None):
-            dp_rank = parallel_state.get_data_parallel_rank()
-            data_save_name = get_checkpoint_name(
-                args.dataloader_save,
-                args.iteration,
-                pipeline_rank=0,  # Only the first pipeline parallel rank stores the dataloader checkpoint.
-                basename=f"train_dataloader_dprank{dp_rank:03d}.pt",
-            )
-            if os.path.exists(data_save_name):
-                try:
-                    dataset_state_dict = torch.load(data_save_name, map_location="cpu")
-                    train_dataloader.restore_state_rank(
-                        dataset_state_dict["dataloader_state_dict"]
-                    )
-                    print(f"restored dataset state from {data_save_name}")
-                except Exception as e:
-                    print("loading dataset state failed. Skipping. " + str(e))
-            else:
-                print(f"dataset state {data_save_name} does not exist")
+
+    if state is not None:
+        try:
+            train_dataloader.restore_state_rank(state)
+        except Exception as e:
+            print("loading dataset state failed. Skipping. " + str(e))
     return EnergonDataloader(train_dataloader, collator)
 
 
@@ -209,7 +198,7 @@ class EnergonDataloader:
     def __init__(self, dataloader, collator=None):
         self._dataloader = dataloader
         self._collator = collator
-        self._iter = iter(cyclic_iter(dataloader))
+        self._iter = iter(_cyclic_iter(dataloader))
 
     def __next__(self):
         features = self._iter.__next__()

@@ -9,6 +9,7 @@ Runtime imports stay inside this package so training does not depend on an
 external DreamZero source checkout.
 """
 
-from loongforge.data.embodied.dreamzero import dreamzero_collator, dreamzero_sampler, dreamzero_transform
+from loongforge.data.embodied.dreamzero import samplers
+from loongforge.data.embodied.dreamzero.transforms import dreamzero_collator, dreamzero_transform
 
-__all__ = ["dreamzero_collator", "dreamzero_sampler", "dreamzero_transform"]
+__all__ = ["dreamzero_collator", "dreamzero_transform", "samplers"]

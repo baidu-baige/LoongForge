@@ -4,11 +4,9 @@
 """ sft for internvl model """
 
 
-import os
 import torch
 from functools import partial
 from loongforge.training.megatron.methods import pretrain_vlm
-from datasets import load_from_disk
 from transformers import DataCollatorForSeq2Seq
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.training import get_timers
@@ -26,14 +24,17 @@ from loongforge.training.megatron.methods.utils.internvl_dp_balance import INTER
 from loongforge.training.megatron.data_padding import (
     llm_pad_to_multiple_of,
 )
-from loongforge.data.llm_dataloader import (
+from loongforge.data.llm.dataloader import (
     build_sft_data_collator,
     build_sft_cyclic_iterators,
+    load_pretokenized_dataset,
 )
-from loongforge.data.vlm_dataloader import (
+from loongforge.data.vlm.dataloader import (
     get_train_dataset,
     get_train_loader,
 )
+from loongforge.engines.megatron.checkpointing import load_dataloader_state
+from loongforge.training.megatron.methods.utils.data_configs import sft_loader_config, vlm_data_config
 from loongforge.models.multimodal.multimodal_model_provider import (
     omni_model_provider,
 )
@@ -182,32 +183,51 @@ def forward_step(data_iterator, model):
 def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None):
     import loongforge.engines.megatron.distributed.dp_balance.patches  # noqa: F401
     args = get_args()
+    loader_config = sft_loader_config(args)
+    data_config = vlm_data_config(args)
     if mpu.get_tensor_model_parallel_rank() != 0:
         return None, None, None
 
     # create dataloader
     if args.is_tokenized_data:
-        rank = parallel_state.get_data_parallel_rank()
-        save_path = os.path.join(args.data_path[0], "preprocess", str(rank))
-        print(f"[rank{rank}] loading preprocessed dataset from {save_path}")
-        train_ds = load_from_disk(save_path)
+        dpr = parallel_state.get_data_parallel_rank()
+        dpw = parallel_state.get_data_parallel_world_size()
+        train_ds = load_pretokenized_dataset(args.data_path, dpr)
         collator = build_sft_data_collator(
             DataCollatorForSeq2Seq,
-            args,
+            loader_config,
             get_tokenizer(),
             pad_to_multiple_of=llm_pad_to_multiple_of(args),
         )
         train_data_iterator, valid_data_iterator, test_data_iterator = (
-            build_sft_cyclic_iterators(train_ds, None, None, collator, args)
+            build_sft_cyclic_iterators(
+                train_ds,
+                None,
+                None,
+                collator,
+                loader_config,
+                dpr,
+                dpw,
+                args.consumed_train_samples,
+                args.consumed_valid_samples,
+                args.skip_train,
+                state=load_dataloader_state(args),
+            )
         )
         return train_data_iterator, None, None
     else:
         tokenizer = get_tokenizer().tokenizer
         task_encoder = InternVLTaskEncoder(
-            args, tokenizer, patch_size=get_model_config().image_encoder.patch_size
+            data_config, tokenizer, patch_size=get_model_config().image_encoder.patch_size
         )
-        train_dataset = get_train_dataset(task_encoder, args)
-        train_dataloader = get_train_loader(train_dataset, args)
+        train_dataset = get_train_dataset(
+            task_encoder,
+            data_config,
+            dp_rank=parallel_state.get_data_parallel_rank(),
+            dp_size=parallel_state.get_data_parallel_world_size(),
+            dp_group=parallel_state.get_data_parallel_group(),
+        )
+        train_dataloader = get_train_loader(train_dataset, state=load_dataloader_state(args))
         return train_dataloader, None, None
 
 

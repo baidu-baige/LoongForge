@@ -48,7 +48,7 @@ from loongforge.models.embodied.groot_n1_6.eagle3_model.image_augmentations impo
     build_image_transformations_albumentations,
 )
 
-from .eagle3_model import EagleBackbone
+from .eagle3_model.eagle_backbone import EagleBackbone
 from .configuration_groot_n1_6 import GrootN1d6ModelConfig
 from .dit import AlternateVLDiT, DiT
 from .embodiment_mlp import (
@@ -57,7 +57,7 @@ from .embodiment_mlp import (
 )
 
 if TYPE_CHECKING:
-    from loongforge.data.embodied.groot_n1_6.processing_groot_n1_6 import StateActionProcessor
+    from loongforge.data.embodied.groot_n1_6.transforms.groot_n1_6_processor import StateActionProcessor
 
 warnings.filterwarnings("ignore", message="torch.get_autocast_gpu_dtype", category=DeprecationWarning)
 

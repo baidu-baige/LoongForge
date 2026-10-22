@@ -16,7 +16,7 @@ This chapter describes the directory layout and launch script convention under e
 | `loongforge/training/torch/args.py` | Definition file for the training recipe arguments; generates the shell CLI |
 | `loongforge/models/catalog.py` | Shared model routing table; binds `--model-name` to an engine, YAML, and (for Torch) typed config classes |
 | `loongforge/models/embodied/` | Torch embodied model architecture and model registration |
-| `loongforge/data/embodied/` | Embodied data pipeline: `datasets/` (shared dataset classes: `lerobot_dataset.py`, `dummy_dataset.py`, video backends, stats), `transforms/` (shared per-sample transforms), `sampler.py`, `collator.py`, `registry.py`, and one directory per model |
+| `loongforge/data/embodied/` | Embodied data pipeline: `dataloader.py` (DataLoader entry), `datasets/` (shared dataset classes: `lerobot_dataset.py`, `dummy_dataset.py`, video backends, stats), `transforms/` (shared per-sample transforms), `sampler.py`, `collator.py`, `registry.py`, and one directory per model with its `transforms/` subdirectory |
 
 The training pipeline is:
 

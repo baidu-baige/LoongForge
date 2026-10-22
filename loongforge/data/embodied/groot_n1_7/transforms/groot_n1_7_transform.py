@@ -18,13 +18,13 @@ from PIL import Image
 import torch
 
 from loongforge.data.embodied.transforms.base import BaseTransform
-from loongforge.data.embodied.groot_n1_6.groot_n1_6_transform import (
+from loongforge.data.embodied.groot_n1_6.transforms.groot_n1_6_transform import (
     _as_size_list,
     _extract_frames,
     _normalize_text,
     _to_numpy,
 )
-from loongforge.data.embodied.groot_n1_6.processing_groot_n1_6 import (
+from loongforge.data.embodied.groot_n1_6.transforms.groot_n1_6_processor import (
     StateActionProcessor,
 )
 from loongforge.data.embodied.registry import (
@@ -43,7 +43,7 @@ from loongforge.models.embodied.groot_n1_7.embodiment_configs import (
     MODALITY_CONFIGS,
     convert_lerobot_stats_to_groot_n1d7_format,
 )
-from loongforge.data.embodied.groot_n1_7.image_augmentations import (
+from loongforge.data.embodied.groot_n1_7.transforms.image_augmentations import (
     apply_with_replay,
     build_image_transformations,
     build_image_transformations_albumentations,

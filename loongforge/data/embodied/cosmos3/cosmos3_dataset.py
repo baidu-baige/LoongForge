@@ -33,7 +33,7 @@ Each ``__getitem__`` returns a raw sample dict::
         "idle_frames":       Tensor[long] scalar,
     }
 
-:mod:`loongforge.data.embodied.cosmos3.cosmos3_transform` pads ``action`` to
+:mod:`loongforge.data.embodied.cosmos3.transforms.cosmos3_transform` pads ``action`` to
 ``max_action_dim``, builds the ``sequence_plan``, and tokenizes the caption.
 """
 

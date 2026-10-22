@@ -42,7 +42,9 @@ from loongforge.engines.megatron.distributed.batch_broadcast import broadcast_fr
 from loongforge.engines.megatron.distributed.context_parallel import get_batch_on_this_cp_rank
 from loongforge.training.megatron.data_padding import llm_pad_to_multiple_of
 from loongforge.data.llm.blended_hf_dataset_config import get_dataset_blend_from_list
-from loongforge.data.llm_dataloader import (
+from loongforge.engines.megatron.checkpointing import load_dataloader_state
+from loongforge.training.megatron.methods.utils.data_configs import sft_loader_config
+from loongforge.data.llm.dataloader import (
     build_sft_cyclic_iterators,
     build_sft_data_collator,
 )
@@ -655,17 +657,31 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
         is_built_on_rank=lambda: mpu.get_tensor_model_parallel_rank() == 0,
         config=config,
         vp_rank=mpu.get_virtual_pipeline_model_parallel_rank(),
+        distributed=mpu.get_world_size() > 1,
+        is_global_rank_0=mpu.get_rank() == 0,
+        global_rank=mpu.get_rank(),
     ).build()
 
     # will use external dataloader type for sft
+    loader_config = sft_loader_config(args)
     data_collator = build_sft_data_collator(
         DataCollatorForSupervisedDataset,
-        args,
+        loader_config,
         get_tokenizer(),
         pad_to_multiple_of=llm_pad_to_multiple_of(args),
     )
     train_iter, valid_iter, test_iter = build_sft_cyclic_iterators(
-        train_ds, valid_ds, test_ds, data_collator, args
+        train_ds,
+        valid_ds,
+        test_ds,
+        data_collator,
+        loader_config,
+        mpu.get_data_parallel_rank(),
+        mpu.get_data_parallel_world_size(),
+        args.consumed_train_samples,
+        args.consumed_valid_samples,
+        args.skip_train,
+        state=load_dataloader_state(args),
     )
     print_rank_0(f"> finished creating {args.model_name} sft datasets ...")
 

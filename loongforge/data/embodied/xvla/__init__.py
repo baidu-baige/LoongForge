@@ -3,6 +3,6 @@
 
 """XVLA model-specific data transforms and collator."""
 
-from loongforge.data.embodied.xvla import xvla_collator, xvla_transform
+from loongforge.data.embodied.xvla.transforms import xvla_collator, xvla_transform
 
 __all__ = ["xvla_collator", "xvla_transform"]

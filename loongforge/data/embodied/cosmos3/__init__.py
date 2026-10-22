@@ -3,6 +3,6 @@
 
 """Cosmos3 model-specific data transforms and collator."""
 
-from loongforge.data.embodied.cosmos3 import cosmos3_collator, cosmos3_transform
+from loongforge.data.embodied.cosmos3.transforms import cosmos3_collator, cosmos3_transform
 
 __all__ = ["cosmos3_collator", "cosmos3_transform"]

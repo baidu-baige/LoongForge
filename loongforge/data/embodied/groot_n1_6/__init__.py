@@ -3,6 +3,6 @@
 
 """GR00T-N1.6 transforms and collator for the embodied trainer."""
 
-from loongforge.data.embodied.groot_n1_6 import groot_n1_6_collator, groot_n1_6_transform
+from loongforge.data.embodied.groot_n1_6.transforms import groot_n1_6_collator, groot_n1_6_transform
 
 __all__ = ["groot_n1_6_collator", "groot_n1_6_transform"]

@@ -37,13 +37,13 @@ from .schema import (
     DatasetStatisticalValues,
     EmbodimentTag,
 )
-from .constants import METADATA_DIR
-from .dreamzero_transform import _build_dreamzero_transforms
+from .dataset.constants import METADATA_DIR
+from .transforms.dreamzero_transform import _build_dreamzero_transforms
 from .transforms.base import ComposedModalityTransform
-from ._io_mixin import _DreamZeroIOMixin, _TrajectoryCache
-from ._language_action_mixin import _DreamZeroLanguageActionMixin
-from ._meta_mixin import _DreamZeroMetaMixin
-from ._precomputed_cache_mixin import _DreamZeroPrecomputedCacheMixin
+from .dataset._io_mixin import _DreamZeroIOMixin, _TrajectoryCache
+from .dataset._language_action_mixin import _DreamZeroLanguageActionMixin
+from .dataset._meta_mixin import _DreamZeroMetaMixin
+from .dataset._precomputed_cache_mixin import _DreamZeroPrecomputedCacheMixin
 from .modality_configs import EMBODIMENT_BUILDERS, ModalityConfig
 
 logger = logging.getLogger(__name__)

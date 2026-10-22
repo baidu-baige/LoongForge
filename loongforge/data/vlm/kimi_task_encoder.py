@@ -49,8 +49,8 @@ class KimiTaskEncoder(VLMTaskEncoder):
     image_token_with_tags = IMAGE_TOKEN_WITH_TAGS
     _grid_key = "grid_thws"  # The Kimi processor names the image grid 'grid_thws'.
 
-    def __init__(self, args, tokenizer, chat_template=None):
-        super().__init__(args, tokenizer, chat_template)
+    def __init__(self, config, tokenizer, chat_template=None):
+        super().__init__(config, tokenizer, chat_template)
 
         # Get merge_kernel_size from processor config, default to [2, 2]
         merge_kernel_size = 2  # default
@@ -99,9 +99,9 @@ class KimiTaskEncoder(VLMTaskEncoder):
         raising, so upstream pipelines do not need ``except AssertionError``
         to recover.
         """
-        if self.args.enable_discard_sample:
-            sequence_limit = self.args.seq_length
-            packed_limit = getattr(self.args, "max_packed_tokens", None)
+        if self.config.enable_discard_sample:
+            sequence_limit = self.config.seq_length
+            packed_limit = getattr(self.config, "max_packed_tokens", None)
             if self.is_packing_enabled and packed_limit is not None:
                 sequence_limit = min(sequence_limit, packed_limit)
             if len(input_ids) > sequence_limit:
@@ -120,13 +120,13 @@ class KimiTaskEncoder(VLMTaskEncoder):
             if image_grid_thw is not None:
                 for thw in image_grid_thw:
                     visual_tokens += self._compute_image_tokens_from_grid_thw(thw)
-            if visual_tokens > self.args.seq_length:
+            if visual_tokens > self.config.seq_length:
                 logging.warning(
                     "discard sample %s: visual tokens %s > seq_length %s "
                     "(video_grid_thw=%s, image_grid_thw=%s)",
                     sample.__key__,
                     visual_tokens,
-                    self.args.seq_length,
+                    self.config.seq_length,
                     video_grid_thw,
                     image_grid_thw,
                 )

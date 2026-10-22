@@ -106,9 +106,9 @@ class GrootN1d7ModelFactory:
 
         import torch
 
-        from loongforge.data.embodied.groot_n1_6.processing_groot_n1_6 import StateActionProcessor
-        from loongforge.data.embodied.groot_n1_7.groot_n1_7_collator import Gr00tN1d7DataCollator
-        from loongforge.data.embodied.groot_n1_7.image_augmentations import (
+        from loongforge.data.embodied.groot_n1_6.transforms.groot_n1_6_processor import StateActionProcessor
+        from loongforge.data.embodied.groot_n1_7.transforms.groot_n1_7_collator import Gr00tN1d7DataCollator
+        from loongforge.data.embodied.groot_n1_7.transforms.image_augmentations import (
             build_image_transformations_albumentations,
         )
 

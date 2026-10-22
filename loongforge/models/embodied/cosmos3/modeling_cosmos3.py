@@ -46,7 +46,7 @@ from loongforge.models.embodied.cosmos3.unified_mot import Qwen3VLMoTConfig, Qwe
 from loongforge.models.embodied.cosmos3.wan2pt2_vae_4x16x16 import Wan2pt2VAEInterface
 
 if TYPE_CHECKING:
-    from loongforge.data.embodied.cosmos3.cosmos3_collator import Cosmos3Batch
+    from loongforge.data.embodied.cosmos3.transforms.cosmos3_collator import Cosmos3Batch
 
 logger = logging.getLogger(__name__)
 

@@ -19,7 +19,7 @@ from transformers.processing_utils import ProcessorMixin
 
 from loongforge.chat_templates.registry import MAPPING_NAME_TO_TEMPLATE
 from loongforge.chat_templates.plugins.kimi import KimiPlugin
-import loongforge.data.vlm_dataloader as dataloader_provider
+import loongforge.data.vlm.dataloader as dataloader_provider
 from loongforge.data.vlm.base_task_encoder import BaseTaskEncoder
 from loongforge.data.vlm.kimi_task_encoder import KimiTaskEncoder
 from loongforge.data.vlm.vlm_task_encoder import VLMTaskEncoder
@@ -264,23 +264,13 @@ class VLMValidationDatasetTest(unittest.TestCase):
     def _get_val_dataset(self, args):
         dataset = object()
         with patch.object(
-            dataloader_provider.parallel_state,
-            "get_data_parallel_rank",
-            return_value=0,
-        ), patch.object(
-            dataloader_provider.parallel_state,
-            "get_data_parallel_world_size",
-            return_value=1,
-        ), patch.object(
-            dataloader_provider.parallel_state,
-            "get_data_parallel_group",
-            return_value=None,
-        ), patch.object(
             dataloader_provider.energon, "WorkerConfig", return_value=object()
         ), patch.object(
             dataloader_provider.energon, "get_val_dataset", return_value=dataset
         ) as get_val_dataset:
-            result = dataloader_provider.get_val_dataset(Mock(), args)
+            result = dataloader_provider.get_val_dataset(
+                Mock(), args, dp_rank=0, dp_size=1, dp_group=None
+            )
         return result, dataset, get_val_dataset
 
     def test_explicit_validation_path_is_used(self):

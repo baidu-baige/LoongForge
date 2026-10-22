@@ -15,7 +15,7 @@ from loongforge.data.embodied.collator import (
     BaseCollator,
     PreparedBatch,
 )
-from loongforge.data.embodied.groot_n1_6.processing_groot_n1_6 import (
+from loongforge.data.embodied.groot_n1_6.transforms.groot_n1_6_processor import (
     Gr00tN1d6DataCollator,
 )
 from loongforge.data.embodied.registry import register_collator

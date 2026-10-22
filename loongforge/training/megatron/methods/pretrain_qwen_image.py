@@ -12,7 +12,7 @@ from megatron.core.enums import ModelType
 from megatron.core.utils import StragglerDetector
 from megatron.training import get_timers
 
-from loongforge.data.diffusion_dataloader import build_latent_dataloader
+from loongforge.data.diffusion.dataloader import build_latent_dataloader
 from megatron.training.utils import print_rank_0
 from loongforge.engines.megatron import get_args, get_model_config
 from loongforge.engines.megatron.distributed.batch_broadcast import (
@@ -293,6 +293,9 @@ def train_valid_test_datasets_provider(diffusion, train_val_test_num_samples, vp
         args.seed,
         keep_keys,
         args.num_workers,
+        dp_rank=parallel_state.get_data_parallel_rank(),
+        dp_size=parallel_state.get_data_parallel_world_size(),
+        consumed_samples=args.consumed_train_samples,
     )
     print_rank_0(f"> finished creating {args.model_name} datasets ...")
     return iter(dataloader), None, None

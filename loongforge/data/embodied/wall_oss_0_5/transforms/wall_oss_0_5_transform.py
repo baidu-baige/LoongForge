@@ -82,7 +82,7 @@ class WallOss05LeRobotTransform(BaseTransform):
         frame_index = data.get("frame_index", torch.tensor(0))
         instruction_info = {"instruction": data.get("task", "")}
 
-        from loongforge.data.embodied.wall_oss_0_5.wall_oss_0_5_utils import (
+        from loongforge.data.embodied.wall_oss_0_5.transforms.wall_oss_0_5_utils import (
             get_wallx_normal_text,
             process_grounding_points,
         )

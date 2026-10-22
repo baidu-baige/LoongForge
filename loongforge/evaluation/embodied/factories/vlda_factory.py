@@ -23,8 +23,8 @@ from loongforge.models.embodied.vlda.configuration_vlda import VLDAModelConfig
 def _predict_action(self, images, instructions, state=None, dataset_stats=None):
     """Return unnormalized environment actions with shape [B,H,action_dim]."""
     from loongforge.data.embodied.vlda.data_configuration_vlda import VLDADataConfig
-    from loongforge.data.embodied.vlda.vlda_collator import VLDACollator
-    from loongforge.data.embodied.vlda.vlda_transform import (
+    from loongforge.data.embodied.vlda.transforms.vlda_collator import VLDACollator
+    from loongforge.data.embodied.vlda.transforms.vlda_transform import (
         VLDATransform,
         decode_actions,
         encode_state,

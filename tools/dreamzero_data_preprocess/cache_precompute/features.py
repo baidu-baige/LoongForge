@@ -40,9 +40,9 @@ from loongforge.data.embodied.dreamzero.transforms.video import (
     VideoToNumpy,
     VideoToTensor,
 )
-from loongforge.data.embodied.dreamzero.dreamzero_collator import HuggingfaceTokenizer
-from loongforge.data.embodied.dreamzero.dreamzero_transform import DreamTransform
-from loongforge.data.embodied.dreamzero.dreamzero_collator import (
+from loongforge.data.embodied.dreamzero.transforms.dreamzero_collator import HuggingfaceTokenizer
+from loongforge.data.embodied.dreamzero.transforms.dreamzero_transform import DreamTransform
+from loongforge.data.embodied.dreamzero.transforms.dreamzero_collator import (
     collate as dreamzero_collate,
 )
 from loongforge.models.embodied.dreamzero.dreamzero_provider import _build_text_encoder

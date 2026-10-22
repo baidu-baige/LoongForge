@@ -16,7 +16,7 @@
 | `loongforge/training/torch/args.py` | 训练流程参数定义文件，负责生成 shell CLI |
 | `loongforge/models/catalog.py` | 统一模型路由表，将 `--model-name` 绑定到引擎、YAML，以及 Torch 所需的配置类型 |
 | `loongforge/models/embodied/` | Torch 具身模型组网与模型注册 |
-| `loongforge/data/embodied/` | 具身数据流水线：`datasets/`（共用数据集类：`lerobot_dataset.py`、`dummy_dataset.py`、视频后端、统计）、`transforms/`（共用逐样本变换）、`sampler.py`（采样）、`collator.py`（拼批）、`registry.py`（注册表），以及每个模型一个目录 |
+| `loongforge/data/embodied/` | 具身数据流水线：`dataloader.py`（DataLoader 入口）、`datasets/`（共用数据集类：`lerobot_dataset.py`、`dummy_dataset.py`、视频后端、统计）、`transforms/`（共用逐样本变换）、`sampler.py`（采样）、`collator.py`（拼批）、`registry.py`（注册表），以及每个模型一个目录（模型目录下带 `transforms/`） |
 
 训练链路如下：
 

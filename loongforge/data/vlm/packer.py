@@ -52,9 +52,9 @@ class Buffer:
 class Packer:
     """Pack samples into buffers according to the configured packing algorithm"""
 
-    def __init__(self, args):
+    def __init__(self, config):
         """Packer Init function"""
-        self.args = args
+        self.config = config
 
     def pack(
         self,
@@ -75,17 +75,17 @@ class Packer:
         Returns:
             List of packed buffers, each containing a group of samples
         """
-        if self.args.energon_pack_algo == "balanced":
+        if self.config.energon_pack_algo == "balanced":
             return self.balanced_greedy_knapsack(samples, buffer_capacity, img_limit)
-        elif self.args.energon_pack_algo == "sequential":
+        elif self.config.energon_pack_algo == "sequential":
             return self.sequential_greedy_knapsack(
                 samples, buffer_capacity, img_limit, buffers_num)
-        elif self.args.energon_pack_algo == "sequential_max_images":
+        elif self.config.energon_pack_algo == "sequential_max_images":
             return self.sequential_greedy_knapsack(
                 samples, buffer_capacity, img_limit, buffers_num,
                 prioritize_image_count=True)
         else:
-            raise ValueError(f"Invalid energon_pack_algo: {self.args.energon_pack_algo}, \
+            raise ValueError(f"Invalid energon_pack_algo: {self.config.energon_pack_algo}, \
                     only supports balanced/sequential/sequential_max_images")
 
     # Based on https://github.com/hiyouga/LLaMA-Factory/

@@ -15,7 +15,7 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-from loongforge.data.embodied.fastwam.fastwam_transform import (
+from loongforge.data.embodied.fastwam.transforms.fastwam_transform import (
     FastWAMLinearNormalizeTransform,
     _fastwam_linear_params,
 )

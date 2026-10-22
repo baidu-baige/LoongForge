@@ -21,7 +21,7 @@ from loongforge.data.embodied.transforms import (
     convert_stats,
 )
 from loongforge.data.embodied.transforms.normalizer import Normalizer
-from loongforge.data.embodied.pi05.pi05_collator import tokenize_prompts
+from loongforge.data.embodied.pi05.transforms.pi05_collator import tokenize_prompts
 
 
 class StateDiscretizationTransform(BaseTransform):

@@ -51,16 +51,16 @@ class MixQATaskBatchPackedSample(BaseTaskBatchPacked):
 class InternVLTaskEncoder(BaseTaskEncoder):
     """Task encoder for Intervl."""
 
-    def __init__(self, args, tokenizer, chat_template=None, *, patch_size: int):
-        super().__init__(args, tokenizer, chat_template)
+    def __init__(self, config, tokenizer, chat_template=None, *, patch_size: int):
+        super().__init__(config, tokenizer, chat_template)
         # Current limitation: SFT-only
-        assert args.training_phase == "sft"
-        self.preproc = InternvlPreprocess(args, tokenizer, patch_size=patch_size)
+        assert config.training_phase == "sft"
+        self.preproc = InternvlPreprocess(config, tokenizer, patch_size=patch_size)
         self.tokenizer = tokenizer
-        self.loss_reduction = args.loss_reduction
-        self.seq_length = args.seq_length
-        self.strict_mode = args.strict_mode
-        self.max_item_length = args.max_packed_tokens if self.strict_mode else 0
+        self.loss_reduction = config.loss_reduction
+        self.seq_length = config.seq_length
+        self.strict_mode = config.strict_mode
+        self.max_item_length = config.max_packed_tokens if self.strict_mode else 0
 
 
     def encode_multi_mix_qa(self, sample: MultiMixQASample) -> MixQATaskSample:

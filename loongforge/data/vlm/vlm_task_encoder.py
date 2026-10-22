@@ -122,10 +122,10 @@ class VLMTaskEncoder(BaseTaskEncoder):
     image_token_with_tags = IMAGE_TOKEN_WITH_TAGS
     _grid_key = "image_grid_thw"  # Image grid key in the processor output.
 
-    def __init__(self, args, tokenizer, chat_template=None):
-        super().__init__(args, tokenizer)
+    def __init__(self, config, tokenizer, chat_template=None):
+        super().__init__(config, tokenizer)
         self.chat_template = chat_template
-        processor_path = getattr(self.args, "hf_processor_path", None)
+        processor_path = getattr(self.config, "hf_processor_path", None)
         if processor_path:
             # Transformers 5.3 logs this processor via repr; Kimi's repr is not pickle-safe.
             original_repr = ProcessorMixin.__repr__
@@ -138,20 +138,20 @@ class VLMTaskEncoder(BaseTaskEncoder):
                 ProcessorMixin.__repr__ = original_repr
         else:
             self.processor = AutoProcessor.from_pretrained(
-                self.args.hf_tokenizer_path, trust_remote_code=True
+                self.config.hf_tokenizer_path, trust_remote_code=True
             )
-        if args.image_resolution:
-            setattr(self.processor, "image_resolution", args.image_resolution)
+        if config.image_resolution:
+            setattr(self.processor, "image_resolution", config.image_resolution)
         # video
-        self.frame_min_pixels = args.frame_min_pixels
-        self.frame_max_pixels = args.frame_max_pixels
-        self.video_max_pixels = args.video_max_pixels
-        self.fps = args.fps
-        self.fps_min_frames = args.fps_min_frames
-        self.fps_max_frames = args.fps_max_frames
+        self.frame_min_pixels = config.frame_min_pixels
+        self.frame_max_pixels = config.frame_max_pixels
+        self.video_max_pixels = config.video_max_pixels
+        self.fps = config.fps
+        self.fps_min_frames = config.fps_min_frames
+        self.fps_max_frames = config.fps_max_frames
         # image
-        self.min_pixels = args.min_pixels
-        self.max_pixels = args.max_pixels
+        self.min_pixels = config.min_pixels
+        self.max_pixels = config.max_pixels
 
     def _resize_video(self, vision: AVData, image_factor=28, frame_factor=2):
         """Resize video: frame number, height, width"""
@@ -268,15 +268,15 @@ class VLMTaskEncoder(BaseTaskEncoder):
 
     def _gate_overlong(self, sample, input_ids, *, image_grid_thw=None, video_grid_thw=None) -> bool:
         """Assert the sample fits seq_length. Return True to drop it (subclass hook)."""
-        if self.args.enable_discard_sample:
+        if self.config.enable_discard_sample:
             assert (
-                len(input_ids) <= self.args.seq_length
+                len(input_ids) <= self.config.seq_length
             ), f"{sample.__key__} input length {len(input_ids)}"
         else:
             grid = video_grid_thw if video_grid_thw is not None else image_grid_thw
             if grid is not None:
                 assert (
-                    grid.prod(dim=-1).sum() / 4 <= self.args.seq_length
+                    grid.prod(dim=-1).sum() / 4 <= self.config.seq_length
                 ), f"{sample.__key__} grid_thw: {grid}"
         return False
 
@@ -390,8 +390,8 @@ class VLMTaskEncoder(BaseTaskEncoder):
                 tokenizer=self.tokenizer,
                 messages=hf_messages,
                 tools=tools,
-                train_on_prompt=getattr(self.args, "train_on_prompt", False),
-                history_mask_loss=getattr(self.args, "history_mask_loss", False),
+                train_on_prompt=getattr(self.config, "train_on_prompt", False),
+                history_mask_loss=getattr(self.config, "history_mask_loss", False),
                 ignore_index=constants.IGNORE_INDEX,
             )
         else:
@@ -435,7 +435,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
         https://github.com/NVIDIA/Megatron-Energon/blob/develop/src/megatron/energon/flavors/captioning.py
         """
 
-        assert self.args.training_phase == constants.TrainingPhase.PRETRAIN, "Only support PRETRAIN phase"
+        assert self.config.training_phase == constants.TrainingPhase.PRETRAIN, "Only support PRETRAIN phase"
 
         text = (
             self.image_token_with_tags + sample.caption + self.tokenizer.tokenizer.eos_token
@@ -461,8 +461,8 @@ class VLMTaskEncoder(BaseTaskEncoder):
 
     def encode_vqa(self, sample: VQASample) -> BaseTaskSample:
         """Encode pretrain sample in Qwen2VL style."""
-        if self.args.training_phase == constants.TrainingPhase.PRETRAIN:
-            if self.args.add_question_in_pretrain:
+        if self.config.training_phase == constants.TrainingPhase.PRETRAIN:
+            if self.config.add_question_in_pretrain:
                 text = (sample.context + sample.answers).replace(
                     "<image>", self.image_token_with_tags
                 )
@@ -470,11 +470,11 @@ class VLMTaskEncoder(BaseTaskEncoder):
                 text = self.image_token_with_tags + sample.answers
             text = text + self.tokenizer.tokenizer.eos_token
             input_ids, target, imgs, image_grid_thw, attn_mask = self._process(sample.image, text)
-        elif self.args.training_phase == constants.TrainingPhase.SFT:
+        elif self.config.training_phase == constants.TrainingPhase.SFT:
             input_ids, target, attn_mask, imgs, image_grid_thw = self.process_sft_vqa(sample.context, \
                                         sample.answers, sample.image)
         else:
-            raise NotImplementedError(f"Unknown training phase {self.args.training_phase}")
+            raise NotImplementedError(f"Unknown training phase {self.config.training_phase}")
 
         if self._gate_overlong(sample, input_ids, image_grid_thw=image_grid_thw):
             return None
@@ -492,7 +492,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
 
     def encode_multi_vid_qa(self, sample: VQASample) -> BaseTaskSample:
         """Encode sample in Qwen2VL style."""
-        if self.args.training_phase == constants.TrainingPhase.SFT:
+        if self.config.training_phase == constants.TrainingPhase.SFT:
             (
                 input_ids,
                 target,
@@ -510,7 +510,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
             )
         else:
             raise NotImplementedError(
-                f"Unknown training phase {self.args.training_phase}"
+                f"Unknown training phase {self.config.training_phase}"
             )
 
         if self._gate_overlong(sample, input_ids, video_grid_thw=video_grid_thw):
@@ -532,7 +532,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
 
     def encode_multi_mix_qa(self, sample: MultiMixQASample) -> BaseTaskSample:
         """Encode sample in Qwen2VL style."""
-        if self.args.training_phase == constants.TrainingPhase.SFT:
+        if self.config.training_phase == constants.TrainingPhase.SFT:
             (
                 input_ids,
                 target,
@@ -550,7 +550,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
             )
         else:
             raise NotImplementedError(
-                f"Unknown training phase {self.args.training_phase}"
+                f"Unknown training phase {self.config.training_phase}"
             )
 
         if self._gate_overlong(
@@ -576,9 +576,9 @@ class VLMTaskEncoder(BaseTaskEncoder):
 
     def encode_chat_mix(self, sample: ChatMixSample) -> Optional[BaseTaskSample]:
         """Encode chat-format multimodal sample (with optional tool calling)."""
-        if self.args.training_phase != constants.TrainingPhase.SFT:
+        if self.config.training_phase != constants.TrainingPhase.SFT:
             raise NotImplementedError(
-                f"encode_chat_mix only supports SFT, got {self.args.training_phase}"
+                f"encode_chat_mix only supports SFT, got {self.config.training_phase}"
             )
 
         (
@@ -828,7 +828,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
                     "has neither `messages` nor `texts`."
                 )
 
-            messages, system = _parse_messages(raw_messages, self.args)
+            messages, system = _parse_messages(raw_messages, self.config)
             tools = raw_sample.get("tools")
             if tools and not isinstance(self.chat_template, HFChatTemplate):
                 raise ValueError(

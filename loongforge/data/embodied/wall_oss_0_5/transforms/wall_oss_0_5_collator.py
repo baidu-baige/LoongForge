@@ -15,7 +15,7 @@ from transformers import AutoProcessor
 
 from loongforge.data.embodied.collator import BaseCollator
 from loongforge.data.embodied.registry import register_collator
-from loongforge.data.embodied.wall_oss_0_5.wall_oss_0_5_utils import (
+from loongforge.data.embodied.wall_oss_0_5.transforms.wall_oss_0_5_utils import (
     load_norm_stats,
     preprocesser_call,
     replace_action_token,

@@ -66,11 +66,13 @@ loongforge/
 │       ├── registry.py
 │       └── <model>/
 ├── data/
-│   ├── embodied_dataloader.py
 │   └── embodied/
+│       ├── dataloader.py
 │       ├── registry.py
 │       ├── datasets/
 │       └── <model>/
+│           ├── <model>_dataset.py
+│           └── transforms/
 ├── training/
 │   └── torch/
 │       ├── runner.py

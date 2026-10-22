@@ -36,7 +36,7 @@ import torch
 
 from loongforge.data.embodied.collator import BaseCollator
 from loongforge.data.embodied.registry import register_collator
-from loongforge.data.embodied.xvla.xvla_transform import (
+from loongforge.data.embodied.xvla.transforms.xvla_transform import (
     XVLAEncodeImageTransform,
     XVLATokenizeTransform,
 )

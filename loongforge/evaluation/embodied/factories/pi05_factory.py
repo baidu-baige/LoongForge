@@ -47,8 +47,8 @@ def _predict_action(self, images, instructions, state=None, dataset_stats=None):
     """
     import torch
 
-    from loongforge.data.embodied.pi05.pi05_collator import tokenize_prompts
-    from loongforge.data.embodied.pi05.pi05_transform import StateDiscretizationTransform
+    from loongforge.data.embodied.pi05.transforms.pi05_collator import tokenize_prompts
+    from loongforge.data.embodied.pi05.transforms.pi05_transform import StateDiscretizationTransform
     from loongforge.data.embodied.transforms.builders import convert_stats
     from loongforge.data.embodied.transforms.image_transform import ImageTransform
 

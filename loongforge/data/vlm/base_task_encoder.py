@@ -34,7 +34,7 @@ from megatron.energon import (
 from megatron.energon.task_encoder.base import stateless
 from .packer import Packer
 from .cookers import (
-    bind_args,
+    bind_config,
     cooker_chat_mix,
     cooker_default,
     cooker_feature_qa,
@@ -192,33 +192,33 @@ def _format_packed_sample_overflow_error(
 class BaseTaskEncoder(DefaultTaskEncoder[BaseTaskSample, BaseTaskSamplePacked, BaseTaskBatchPacked, dict]):
     """A simple task encoder for VLMs."""
 
-    def __init__(self, args, tokenizer, chat_template=None):
+    def __init__(self, config, tokenizer, chat_template=None):
         super().__init__()
         self.cookers = [
-            Cooker(bind_args(cooker_multi_mix_qa, args), has_subflavors={"sample_type": "multi_mix_qa"}),
-            Cooker(bind_args(cooker_chat_mix, args), has_subflavors={"sample_type": "chat_mix"}),
-            Cooker(bind_args(cooker_multi_vid_vqa, args), has_subflavors={"sample_type": "multi_vid_vqa"}),
+            Cooker(bind_config(cooker_multi_mix_qa, config), has_subflavors={"sample_type": "multi_mix_qa"}),
+            Cooker(bind_config(cooker_chat_mix, config), has_subflavors={"sample_type": "chat_mix"}),
+            Cooker(bind_config(cooker_multi_vid_vqa, config), has_subflavors={"sample_type": "multi_vid_vqa"}),
             Cooker(cooker_feature_qa, has_subflavors={"sample_type": "feature_vqa"}),
             Cooker(cooker_packed_caption, has_subflavors={"sample_type": "packed_captioning"}),
             Cooker(cooker_packed_vqa, has_subflavors={"sample_type": "packed_vqa"}),
             Cooker(cooker_packed_multi_mix_qa, has_subflavors={"sample_type": "packed_multi_mix_qa"}),
             Cooker(cooker_packed_chat_mix, has_subflavors={"sample_type": "packed_chat_mix"}),
-            Cooker(bind_args(cooker_default, args)),
+            Cooker(bind_config(cooker_default, config)),
         ]
-        self.args = args
+        self.config = config
 
-        self.packer = Packer(self.args)
+        self.packer = Packer(self.config)
         self.tokenizer = tokenizer
-        self.is_packing_enabled = self.args.packing_pretrain_data or self.args.packing_sft_data
-        self.max_packed_tokens = self.args.max_packed_tokens
-        self.num_images_expected = self.args.num_images_expected
-        self.max_buffer_size = self.args.max_buffer_size
+        self.is_packing_enabled = self.config.packing_pretrain_data or self.config.packing_sft_data
+        self.max_packed_tokens = self.config.max_packed_tokens
+        self.num_images_expected = self.config.num_images_expected
+        self.max_buffer_size = self.config.max_buffer_size
 
     @stateless(restore_seeds=True)
     def encode_sample(self, sample: Union[CaptioningSample, VQASample, MultiVidQASample, MultiMixQASample]):
         """Generates an encoded sample from a raw sample."""
         assert not (
-            self.args.packing_sft_data
+            self.config.packing_sft_data
             and isinstance(sample, (
                 PackedCaptioningSample,
                 PackedVQASample,
@@ -321,7 +321,7 @@ class BaseTaskEncoder(DefaultTaskEncoder[BaseTaskSample, BaseTaskSamplePacked, B
         pixel_values_videos = self.process_videos(samples)
 
         max_seq_len = max(len(s.tokens) for s in samples)
-        max_seq_len = min(max_seq_len, self.args.seq_length)
+        max_seq_len = min(max_seq_len, self.config.seq_length)
 
         tokens = np.full((len(samples), max_seq_len), self.tokenizer.pad, dtype=np.int64)
         labels = np.full((len(samples), max_seq_len), constants.IGNORE_INDEX, dtype=np.int64)
@@ -396,7 +396,7 @@ class BaseTaskEncoder(DefaultTaskEncoder[BaseTaskSample, BaseTaskSamplePacked, B
             BaseTaskSamplePacked instance.
         """
 
-        packing_seq_len = self.args.seq_length
+        packing_seq_len = self.config.seq_length
 
         packed_tokens = []
         packed_labels = []

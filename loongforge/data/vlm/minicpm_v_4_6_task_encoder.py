@@ -18,8 +18,8 @@ from loongforge.chat_templates.plugins.base import Placeholder
 class MiniCPMV46TaskEncoder(VLMTaskEncoder):
     """Use MiniCPM-native image sizing and placeholders in the Energon path."""
 
-    def __init__(self, args, tokenizer, chat_template=None):
-        super().__init__(args, tokenizer, chat_template)
+    def __init__(self, config, tokenizer, chat_template=None):
+        super().__init__(config, tokenizer, chat_template)
         self.minicpm_plugin = MiniCPMV46Plugin()
 
     def _resize_image(self, image, size_factor=28):

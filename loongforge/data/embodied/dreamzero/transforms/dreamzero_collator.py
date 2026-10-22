@@ -26,7 +26,7 @@ from transformers.data.data_collator import DataCollatorMixin
 from loongforge.data.embodied.collator import _move_to_device, _pin_memory
 from loongforge.data.embodied.registry import register_collator
 
-from .schema import EmbodimentTag
+from ..schema import EmbodimentTag
 
 
 def basic_clean(text):

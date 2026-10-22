@@ -63,14 +63,14 @@ class ImageModificationProcessor:
     ImageModificationProcessor
     """
 
-    def __init__(self, args, tokenizer, image_preprocess):
-        self.args = args
+    def __init__(self, config, tokenizer, image_preprocess):
+        self.config = config
         self.is_training = True
         self.is_pretraining = True
         self.tokenizer = tokenizer
-        self.image_token_len = args.image_token_len
+        self.image_token_len = config.image_token_len
         self.image_preprocess = image_preprocess
-        self.image_dtype = args.image_dtype
+        self.image_dtype = config.image_dtype
         self.variable_resolution = True
         self.rope_3d = True
 
@@ -84,14 +84,14 @@ class ImageModificationProcessor:
         self.eos_token_id = vocab[self.eos_token]
         self.cls_token_id = vocab[self.cls_token]
         self.sep_token_id = vocab[self.sep_token]
-        self.sft_shift_by_one = args.sft_shift_by_one
+        self.sft_shift_by_one = config.sft_shift_by_one
         self.chat_template = "ernie_vl"
         self.should_shift_by_one = self.is_training and (
             self.is_pretraining or self.sft_shift_by_one
         )
-        self.sft_replace_ids = args.sft_replace_ids
-        self.sft_image_rescale = args.sft_image_rescale
-        self.sft_image_normalize = args.sft_image_normalize
+        self.sft_replace_ids = config.sft_replace_ids
+        self.sft_image_rescale = config.sft_image_rescale
+        self.sft_image_normalize = config.sft_image_normalize
 
     def get_rope_index(
         self,

@@ -31,7 +31,7 @@ def build_model(model_cfg, training_args) -> "nn.Module":
 def build_dataloaders(model_cfg, data_cfg, training_args, ctx) -> Dict[str, "DataLoader"]:
     """Build dataloaders. Returns {"vla": dl}."""
     from loongforge.data.embodied.registry import DataRuntime
-    from loongforge.data.embodied_dataloader import build_dataloader
+    from loongforge.data.embodied.dataloader import build_dataloader
 
     runtime = DataRuntime(
         rank=ctx.rank,

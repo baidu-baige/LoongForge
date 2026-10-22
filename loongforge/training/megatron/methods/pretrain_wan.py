@@ -17,7 +17,7 @@ from megatron.training.utils import print_rank_0
 from loongforge.engines.megatron import get_args
 from loongforge.constants import DiffusionModelFamilies
 
-from loongforge.data.diffusion_dataloader import (
+from loongforge.data.diffusion.dataloader import (
     build_latent_dataloader,
     build_packed_dataloader,
 )
@@ -497,10 +497,19 @@ def train_valid_test_datasets_provider(diffusion, train_val_test_num_samples, vp
         dataloader = build_packed_dataloader(
             args.data_path[0],
             steps_per_epoch,
-            args,
             scheduler,
             packing_buffer_size,
             seq_length,
+            dp_rank=parallel_state.get_data_parallel_rank(),
+            dp_size=parallel_state.get_data_parallel_world_size(),
+            cp_size=parallel_state.get_context_parallel_world_size(),
+            context_max_len=getattr(args, "context_max_len", 512),
+            model_name=getattr(args, "model_name", None),
+            seed=args.seed,
+            max_timestep_boundary=args.max_timestep_boundary,
+            min_timestep_boundary=args.min_timestep_boundary,
+            global_batch_size=args.global_batch_size,
+            consumed_samples=args.consumed_train_samples,
         )
     else:
         keep_keys = None
@@ -516,6 +525,9 @@ def train_valid_test_datasets_provider(diffusion, train_val_test_num_samples, vp
             args.seed,
             keep_keys,
             args.num_workers,
+            dp_rank=parallel_state.get_data_parallel_rank(),
+            dp_size=parallel_state.get_data_parallel_world_size(),
+            consumed_samples=args.consumed_train_samples,
         )
 
     print_rank_0(f"> finished creating {args.model_name} datasets ...")

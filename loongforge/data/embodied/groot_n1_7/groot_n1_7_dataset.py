@@ -14,7 +14,6 @@ import threading
 from typing import Any
 
 import numpy as np
-import torch.distributed as dist
 from torch.utils.data import IterableDataset, get_worker_info
 
 from loongforge.data.embodied.datasets.lerobot_dataset import build_default_lerobot_dataset
@@ -32,6 +31,8 @@ def build_groot_n1_7_lerobot_dataset(model_cfg, data_cfg, training_args, runtime
         model_cfg,
         data_cfg=data_cfg,
         training_args=training_args,
+        rank=runtime.rank,
+        world_size=runtime.world_size,
     )
 
 
@@ -40,6 +41,8 @@ def prepare_groot_n1d7_lerobot_dataset(
     model_cfg: Any,
     data_cfg: Any = None,
     training_args: Any = None,
+    rank: int = 0,
+    world_size: int = 1,
 ) -> Any:
     """Adapt a generic LeRobot dataset to GR00T-N1.7 sample semantics."""
     root = _dataset_root(dataset)
@@ -83,6 +86,8 @@ def prepare_groot_n1d7_lerobot_dataset(
             num_shards_per_epoch=int(data_cfg.num_shards_per_epoch),
             prefetch_shards=dataset._groot_n1d7_prefetch_shards,
             prefetch_depth=dataset._groot_n1d7_shard_prefetch_depth,
+            rank=rank,
+            world_size=world_size,
         )
 
     dataset._step_index = _build_effective_step_index(dataset, action_horizon)
@@ -229,6 +234,8 @@ class _GrootN1d7IsaacIterableDataset(IterableDataset):
         num_shards_per_epoch: int,
         prefetch_shards: bool = False,
         prefetch_depth: int = 1,
+        rank: int = 0,
+        world_size: int = 1,
     ) -> None:
         self._dataset = dataset
         self._transform = None
@@ -238,6 +245,8 @@ class _GrootN1d7IsaacIterableDataset(IterableDataset):
         self._num_shards_per_epoch = int(num_shards_per_epoch)
         self._prefetch_shards = bool(prefetch_shards)
         self._shard_prefetch_depth = max(1, int(prefetch_depth))
+        self._rank = int(rank)
+        self._world_size = int(world_size)
         self._pair_to_dataset_index = dict(dataset._groot_n1d7_pair_to_dataset_index)
         self._thread_local = threading.local()
 
@@ -245,7 +254,7 @@ class _GrootN1d7IsaacIterableDataset(IterableDataset):
             self._dataset._transform = None
 
     def __iter__(self):
-        rank, world_size = _resolve_dist_rank_world()
+        rank, world_size = self._rank, self._world_size
         worker_info = get_worker_info()
         if worker_info is None:
             worker_id = 0
@@ -432,12 +441,6 @@ def _apply_transform_replay(
             f"Transform {type(replayable).__name__} does not support deterministic replay"
         )
     return apply_with_replay(datapoint, replay)
-
-
-def _resolve_dist_rank_world() -> tuple[int, int]:
-    if dist.is_available() and dist.is_initialized():
-        return dist.get_rank(), dist.get_world_size()
-    return 0, 1
 
 
 def _build_isaac_shard_schedule(

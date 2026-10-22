@@ -33,16 +33,16 @@ def resolve_task_encoder(name: str):
     return getattr(module, cls_name)
 
 
-def build_task_encoder(args, tokenizer, chat_template=None):
+def build_task_encoder(config, tokenizer, chat_template=None):
     """
-    Factory that builds a task encoder instance based on args.task_encoder.
+    Factory that builds a task encoder instance based on config.task_encoder.
 
     Defaults to VLMTaskEncoder when unspecified, while keeping registry-based
     extensibility for other encoder classes.
     """
-    encoder_name = getattr(args, "task_encoder", None) or "VLMTaskEncoder"
+    encoder_name = getattr(config, "task_encoder", None) or "VLMTaskEncoder"
     encoder_cls = resolve_task_encoder(encoder_name)
-    return encoder_cls(args, tokenizer, chat_template)
+    return encoder_cls(config, tokenizer, chat_template)
 
 
 __all__ = [

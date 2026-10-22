@@ -6,7 +6,6 @@
 
 """Pretrain traniner for omni models"""
 
-import os
 import torch
 from functools import partial
 import copy
@@ -21,15 +20,12 @@ from megatron.core.enums import ModelType
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.utils import StragglerDetector, get_attr_wrapped_model
 from megatron.core import parallel_state
-from megatron.training.training import cyclic_iter
-from torch.utils.data import DataLoader
 
 
 from transformers import DataCollatorForSeq2Seq
 
 from loongforge import constants
 from loongforge.engines.megatron import get_args, get_chat_template, get_model_config, get_tokenizer
-from loongforge.engines.megatron.initialize import get_num_micro_batches_per_decoder_dp
 
 from loongforge.engines.megatron.train_step import dump_model_input_example_once
 from loongforge.training.megatron.runner import pretrain
@@ -37,18 +33,20 @@ from loongforge.training.megatron.data_padding import (
     llm_pad_to_multiple_of,
     vlm_packed_padding,
 )
-from loongforge.data.llm_dataloader import (
+from loongforge.data.llm.dataloader import (
     build_sft_data_collator,
     build_sft_cyclic_iterators,
+    load_pretokenized_dataset,
 )
-from loongforge.data.vlm_dataloader import (
+from loongforge.data.vlm.dataloader import (
     get_train_dataset,
     get_val_dataset,
     get_train_loader,
 )
 from loongforge.data.vlm import build_task_encoder
 from loongforge.data.vlm.collator import VLMPretrainCollator
-from datasets import load_from_disk
+from loongforge.engines.megatron.checkpointing import load_dataloader_state
+from loongforge.training.megatron.methods.utils.data_configs import sft_loader_config, vlm_data_config
 
 
 from loongforge.models.multimodal.multimodal_model_provider import (
@@ -397,106 +395,49 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False, heter
     return output_tensor, partial(loss_func, loss_mask)  # TODO: add loss_weights data
 
 
-def build_full_hetero_encoder_data_iterator(
-    dataset,
-    consumed_samples: int,
-    data_collator,
-    pp_rank: int,
-    tp_size: int,
-    model_size: int,
-    num_real_microbatch: int,
-):
-    """Build a DataLoader iterator for the encoder in full_hetero_dp mode.
-
-    Uses EncoderStridedSampler to yield only microbatches assigned to this PP rank,
-    avoiding unnecessary disk IO for microbatches handled by other ranks.
-    """
-    args = get_args()
-    batch_sampler = hetero_dp.EncoderStridedSampler(
-        dataset,
-        total_samples=len(dataset),
-        consumed_samples=consumed_samples,
-        micro_batch_size=args.micro_batch_size,
-        data_parallel_rank=mpu.get_data_parallel_rank(),
-        data_parallel_size=mpu.get_data_parallel_world_size(),
-        data_sharding=args.data_sharding,
-        pp_rank=pp_rank,
-        tp_size=tp_size,
-        model_size=model_size,
-        num_real_microbatch=num_real_microbatch,
-    )
-    dataloader = DataLoader(
-        dataset,
-        batch_sampler=batch_sampler,
-        collate_fn=data_collator,
-        num_workers=args.num_workers,
-        pin_memory=True,
-        persistent_workers=True if args.num_workers > 0 else False,
-    )
-    _, encoder_rounds = get_num_micro_batches_per_decoder_dp()
-    prefetch_count = tp_size * encoder_rounds
-    return hetero_dp.PrefetchIterator(iter(cyclic_iter(dataloader)), prefetch_count=prefetch_count)
-
-
-def build_full_hetero_encoder_energon_iterator(
-    task_encoder, collator, pp_rank, tp_size, model_size, num_real_microbatch
-):
-    """Build encoder iterator for full_hetero_dp with Energon dataloader.
-
-    Creates a separate EnergonDataloader (same dataset config as decoder) and
-    wraps it with EncoderStridedIterator to yield only microbatches assigned
-    to this PP rank.
-    """
-    args = get_args()
-    encoder_dataset = get_train_dataset(task_encoder, args)
-    encoder_dataloader = get_train_loader(encoder_dataset, args, collator)
-
-    strided_iter = hetero_dp.EncoderStridedIterator(
-        energon_dataloader=encoder_dataloader,
-        pp_rank=pp_rank,
-        tp_size=tp_size,
-        model_size=model_size,
-        num_real_microbatch=num_real_microbatch,
-    )
-    _, encoder_rounds = get_num_micro_batches_per_decoder_dp()
-    prefetch_count = tp_size * encoder_rounds
-    return hetero_dp.PrefetchIterator(strided_iter, prefetch_count=prefetch_count)
-
-
 def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None, hetero_step=None):
     """Provides the datasets used by the trainer"""
     import loongforge.engines.megatron.distributed.dp_balance.patches  # noqa: F401
     args = get_args()
     tokenizer = get_tokenizer()
+    loader_config = sft_loader_config(args)
+    data_config = vlm_data_config(args)
 
     if args.is_tokenized_data:
-        rank = parallel_state.get_data_parallel_rank()
-        save_path = os.path.join(args.data_path[0], "preprocess", str(rank))
-        print(f"[rank{rank}] loading preprocessed dataset from {save_path}")
-        train_ds = load_from_disk(save_path)
+        dpr = parallel_state.get_data_parallel_rank()
+        dpw = parallel_state.get_data_parallel_world_size()
+        train_ds = load_pretokenized_dataset(args.data_path, dpr)
         collator = build_sft_data_collator(
             DataCollatorForSeq2Seq,
-            args,
+            loader_config,
             tokenizer,
             pad_to_multiple_of=llm_pad_to_multiple_of(args),
         )
         train_data_iterator, valid_data_iterator, test_data_iterator = (
-            build_sft_cyclic_iterators(train_ds, None, None, collator, args)
+            build_sft_cyclic_iterators(
+                train_ds,
+                None,
+                None,
+                collator,
+                loader_config,
+                dpr,
+                dpw,
+                args.consumed_train_samples,
+                args.consumed_valid_samples,
+                args.skip_train,
+                state=load_dataloader_state(args),
+            )
         )
 
         # Build encoder-specific iterator for full_hetero_dp
         if getattr(args, 'enable_full_hetero_dp', False):
-            from loongforge.engines.megatron.initialize import (
-                get_model_size, get_num_real_micro_batches_per_decoder_dp,
-            )
-            pp_rank = mpu.get_pipeline_model_parallel_rank()
-            tp_size = mpu.get_tensor_model_parallel_world_size()
-            model_size = get_model_size()
-            num_real_microbatch = get_num_real_micro_batches_per_decoder_dp()
-            encoder_iter = build_full_hetero_encoder_data_iterator(
-                train_ds, args.consumed_train_samples, collator,
-                pp_rank=pp_rank, tp_size=tp_size, model_size=model_size,
-                num_real_microbatch=num_real_microbatch,
+            encoder_iter = hetero_dp.build_encoder_data_iterator(
+                train_ds,
+                args.consumed_train_samples,
+                collator,
+                micro_batch_size=args.micro_batch_size,
+                num_workers=args.num_workers,
+                data_sharding=args.data_sharding,
             )
             if hetero_step is None:
                 raise RuntimeError("full hetero DP needs the step context from the training method")
@@ -505,9 +446,17 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None,
         return train_data_iterator, None, None
 
     else:
+        dpr = parallel_state.get_data_parallel_rank()
+        dpw = parallel_state.get_data_parallel_world_size()
         chat_template = get_chat_template() if args.training_phase == constants.TrainingPhase.SFT else None
-        task_encoder = build_task_encoder(args, tokenizer, chat_template)
-        train_dataset = get_train_dataset(task_encoder, args)
+        task_encoder = build_task_encoder(data_config, tokenizer, chat_template)
+        train_dataset = get_train_dataset(
+            task_encoder,
+            data_config,
+            dp_rank=dpr,
+            dp_size=dpw,
+            dp_group=parallel_state.get_data_parallel_group(),
+        )
 
         collator = build_sft_data_collator(
             partial(
@@ -516,33 +465,37 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None,
                 packing_sft_data=args.packing_sft_data,
                 model_config=get_model_config(),
             ),
-            args,
+            loader_config,
             tokenizer,
             pad_to_multiple_of=llm_pad_to_multiple_of(args),
         )
-        train_dataloader = get_train_loader(train_dataset, args, collator)
+        state = load_dataloader_state(args)
+        train_dataloader = get_train_loader(train_dataset, collator, state)
         valid_dataloader = None
         if args.eval_interval and args.eval_iters > 0:
-            valid_dataset = get_val_dataset(task_encoder, args)
+            valid_dataset = get_val_dataset(
+                task_encoder,
+                data_config,
+                dp_rank=dpr,
+                dp_size=dpw,
+                dp_group=parallel_state.get_data_parallel_group(),
+            )
             if valid_dataset is not None:
-                valid_dataloader = get_train_loader(
-                    valid_dataset, args, collator, restore_state=False
-                )
+                valid_dataloader = get_train_loader(valid_dataset, collator)
 
         # Build encoder-specific iterator for full_hetero_dp (Energon path)
         if getattr(args, 'enable_full_hetero_dp', False):
-            from loongforge.engines.megatron.initialize import (
-                get_model_size, get_num_real_micro_batches_per_decoder_dp,
+            encoder_dataset = get_train_dataset(
+                task_encoder,
+                data_config,
+                dp_rank=dpr,
+                dp_size=dpw,
+                dp_group=parallel_state.get_data_parallel_group(),
             )
-            pp_rank = mpu.get_pipeline_model_parallel_rank()
-            tp_size = mpu.get_tensor_model_parallel_world_size()
-            model_size = get_model_size()
-            num_real_microbatch = get_num_real_micro_batches_per_decoder_dp()
-            encoder_iter = build_full_hetero_encoder_energon_iterator(
-                task_encoder, collator,
-                pp_rank=pp_rank, tp_size=tp_size,
-                model_size=model_size, num_real_microbatch=num_real_microbatch,
+            encoder_dataloader = get_train_loader(
+                encoder_dataset, collator, load_dataloader_state(args)
             )
+            encoder_iter = hetero_dp.build_encoder_energon_iterator(encoder_dataloader)
             if hetero_step is None:
                 raise RuntimeError("full hetero DP needs the step context from the training method")
             hetero_step.encoder_data_iterator = encoder_iter

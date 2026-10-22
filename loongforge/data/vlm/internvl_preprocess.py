@@ -100,30 +100,30 @@ class Conversation:
 class InternvlPreprocess:
     """Internvl Preprocess"""
 
-    def __init__(self, args, tokenizer, *, patch_size: int):
+    def __init__(self, config, tokenizer, *, patch_size: int):
         """``patch_size`` comes from the image encoder config; the caller passes it explicitly."""
-        self.args = args
+        self.config = config
         super().__init__()
-        self.image_size = args.force_image_size
-        self.use_thumbnail = args.use_thumbnail
-        self.pad2square = args.pad2square
-        self.normalize_type = args.normalize_type
-        self.dynamic_image_size = args.dynamic_image_size
-        self.min_dynamic_patch = args.min_dynamic_patch
-        self.template_name = args.conv_style
+        self.image_size = config.force_image_size
+        self.use_thumbnail = config.use_thumbnail
+        self.pad2square = config.pad2square
+        self.normalize_type = config.normalize_type
+        self.dynamic_image_size = config.dynamic_image_size
+        self.min_dynamic_patch = config.min_dynamic_patch
+        self.template_name = config.conv_style
         self.num_image_token = int(
-            (args.force_image_size // patch_size) ** 2
-            * (args.down_sample_ratio**2)
+            (config.force_image_size // patch_size) ** 2
+            * (config.down_sample_ratio**2)
         )
-        self.group_by_length = args.group_by_length and not args.packing_sft_data
-        self.packing_sft_data = args.packing_sft_data
+        self.group_by_length = config.group_by_length and not config.packing_sft_data
+        self.packing_sft_data = config.packing_sft_data
         self.tokenizer = tokenizer
-        self.num_images_expected = args.num_images_expected
-        self.max_num_frame = args.max_num_frame
-        self.min_num_frame = args.min_num_frame
+        self.num_images_expected = config.num_images_expected
+        self.max_num_frame = config.max_num_frame
+        self.min_num_frame = config.min_num_frame
         self.bos_client = None
         self.sampling_method = "rand"
-        self.max_dynamic_patch = args.max_dynamic_patch
+        self.max_dynamic_patch = config.max_dynamic_patch
 
     def video_get_item(self, data_item):
         """Process videos + texts"""

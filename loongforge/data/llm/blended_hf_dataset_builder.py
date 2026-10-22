@@ -6,7 +6,6 @@
 import logging
 from typing import Callable, List, Optional, Union, Tuple
 
-import torch
 
 from datasets import concatenate_datasets, interleave_datasets, Dataset, IterableDataset
 
@@ -44,11 +43,16 @@ class BlendedHuggingFaceDatasetBuilder(object):
         is_built_on_rank: Callable,
         config: BlendedHuggingFaceDatasetConfig,
         vp_rank: Optional[int],
+        distributed: bool = False,
+        is_global_rank_0: bool = True,
+        global_rank: int = 0,
     ):
         self.cls = cls
         self.sizes = sizes  # Note: the sizes not use now
         self.is_built_on_rank = is_built_on_rank
         self.config = config
+        self.distributed = distributed
+        self.global_rank = global_rank
 
         log_single_rank(
             logger,
@@ -72,12 +76,10 @@ class BlendedHuggingFaceDatasetBuilder(object):
                         weights_are_none
                     ), f"size_is_none => weights_are_none fails for {split.name} split"
 
-        if torch.distributed.is_initialized():
-            gb_rank = torch.distributed.get_rank()
-            if gb_rank == 0 and (vp_rank == 0 or vp_rank is None):
-                assert (
-                    self.is_built_on_rank()
-                ), "is_built_on_rank must return True when global rank = 0 and vp rank = 0"
+        if self.distributed and is_global_rank_0 and (vp_rank == 0 or vp_rank is None):
+            assert (
+                self.is_built_on_rank()
+            ), "is_built_on_rank must return True when global rank = 0 and vp rank = 0"
 
     def build(self) -> List[Optional[Union[Dataset, IterableDataset]]]:
         """Build all dataset splits according to the provided blend(s)
@@ -205,12 +207,17 @@ class BlendedHuggingFaceDatasetBuilder(object):
         split_datasets = [None] * len(Split)
 
         # only build on the needed rank
-        if torch.distributed.is_initialized():
-            if not self.is_built_on_rank():
-                return split_datasets
+        if self.distributed and not self.is_built_on_rank():
+            return split_datasets
 
         # build low-level dataset
-        hf_dataset = self.cls(dataset_name, dataset_path, self.config)
+        hf_dataset = self.cls(
+            dataset_name,
+            dataset_path,
+            self.config,
+            rank=self.global_rank,
+            distributed=self.distributed,
+        )
         split_datasets = hf_dataset.split(split)
         return split_datasets
 
@@ -229,9 +236,8 @@ class BlendedHuggingFaceDatasetBuilder(object):
             Optional[Union[Dataset, IterableDataset]]: A mixed dataset instance (or None)
 
         """
-        if torch.distributed.is_initialized():
-            if not self.is_built_on_rank():
-                return None
+        if self.distributed and not self.is_built_on_rank():
+            return None
 
         if len(datasets) == 1:
             return datasets[0]

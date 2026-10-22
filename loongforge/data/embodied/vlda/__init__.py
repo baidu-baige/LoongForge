@@ -3,6 +3,7 @@
 
 """VLDA data transforms, collator, and epoch-aware sampler."""
 
-from . import samplers, vlda_collator, vlda_transform
+from . import samplers
+from .transforms import vlda_collator, vlda_transform
 
 __all__ = ["samplers", "vlda_collator", "vlda_transform"]

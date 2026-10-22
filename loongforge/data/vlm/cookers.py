@@ -28,12 +28,12 @@ _IMAGE_EXTS: Tuple[str, ...] = (".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"
 _VIDEO_EXTS: Tuple[str, ...] = (".mp4", ".avi", ".mov", ".webm")
 
 
-def bind_args(cooker, args):
-    """Bind *args* to a cooker, keeping the attributes Energon reads (``__stateless__`` etc.)."""
-    return functools.update_wrapper(functools.partial(cooker, args=args), cooker)
+def bind_config(cooker, config):
+    """Bind *config* to a cooker, keeping the attributes Energon reads (``__stateless__`` etc.)."""
+    return functools.update_wrapper(functools.partial(cooker, config=config), cooker)
 
 
-def _load_vlm_tags(args, section: Optional[str] = None) -> Dict[str, any]:
+def _load_vlm_tags(config, section: Optional[str] = None) -> Dict[str, any]:
     """Load and cache the VLM message tags from the dataset config file.
 
     Reads the ``tags`` block under the given *section* in ``--sft-dataset-config``.
@@ -62,14 +62,14 @@ def _load_vlm_tags(args, section: Optional[str] = None) -> Dict[str, any]:
     """
     global _vlm_tags_cache
     if section is None:
-        section = args.sft_dataset[0] if args.sft_dataset else "multimodal"
+        section = config.sft_dataset[0] if config.sft_dataset else "multimodal"
 
     if _vlm_tags_cache is not None and section in _vlm_tags_cache:
         return _vlm_tags_cache[section]
 
     tags: Dict[str, any] = {}
-    if args.sft_dataset_config:
-        p = Path(args.sft_dataset_config)
+    if config.sft_dataset_config:
+        p = Path(config.sft_dataset_config)
         if p.exists():
             with open(p) as f:
                 cfg = yaml.safe_load(f) or {}
@@ -81,7 +81,7 @@ def _load_vlm_tags(args, section: Optional[str] = None) -> Dict[str, any]:
     return tags
 
 
-def _parse_messages(raw_messages, args, section: Optional[str] = None) -> Tuple[List[Dict], Optional[str]]:
+def _parse_messages(raw_messages, config, section: Optional[str] = None) -> Tuple[List[Dict], Optional[str]]:
     """Parse a list of raw message dicts into (messages, system).
 
     Field names and role aliases are read directly from the ``tags`` block of
@@ -95,7 +95,7 @@ def _parse_messages(raw_messages, args, section: Optional[str] = None) -> Tuple[
         messages: list of dicts with keys ``role`` and ``content``
         system:   system prompt string, or None
     """
-    tags = _load_vlm_tags(args, section)
+    tags = _load_vlm_tags(config, section)
     role_tag = tags.get("role_tag", "role")
     content_tag = tags.get("content_tag", "content")
     role_map = {
@@ -133,9 +133,9 @@ def _attach_tools(sample_obj, json_data: dict):
 
 
 @stateless
-def cooker_multi_mix_qa(sample: dict, args):
+def cooker_multi_mix_qa(sample: dict, config):
     """Convert raw sample dict into a MultiMixQASample. """
-    messages, system = _parse_messages(sample["json"]["texts"], args)
+    messages, system = _parse_messages(sample["json"]["texts"], config)
     video = []
     image = []
     if sample["json"]["media"] == "video":
@@ -168,7 +168,7 @@ def cooker_multi_mix_qa(sample: dict, args):
         ), sample["json"])
 
 @stateless
-def cooker_chat_mix(sample: dict, args) -> ChatMixSample:
+def cooker_chat_mix(sample: dict, config) -> ChatMixSample:
     """Convert raw sample dict into a ChatMixSample.
 
     Expected json layout (one chat session per sample):
@@ -188,7 +188,7 @@ def cooker_chat_mix(sample: dict, args) -> ChatMixSample:
             "Completions-style `messages`."
         )
 
-    messages, system = _parse_messages(raw_messages, args)
+    messages, system = _parse_messages(raw_messages, config)
     tools = data.get("tools")
 
     video: List = []
@@ -225,9 +225,9 @@ def cooker_chat_mix(sample: dict, args) -> ChatMixSample:
 
 
 @stateless
-def cooker_multi_vid_vqa(sample: dict, args):
+def cooker_multi_vid_vqa(sample: dict, config):
     """Convert raw sample dict into a MultiVidQASample. """
-    messages, system = _parse_messages(sample["json"]["texts"], args)
+    messages, system = _parse_messages(sample["json"]["texts"], config)
 
     video = []
     image = []
@@ -548,21 +548,21 @@ def cooker_packed_caption(sample: dict):
         )
 
 
-def cooker_default(sample: dict, args):
+def cooker_default(sample: dict, config):
     """Fallback cooker when no subflavor matches, selected by user-defined sample_type."""
-    if args.sample_type == "multi_mix_qa":
-        return cooker_multi_mix_qa(sample, args)
-    elif args.sample_type == "chat_mix":
-        return cooker_chat_mix(sample, args)
-    elif args.sample_type == "feature_vqa":
+    if config.sample_type == "multi_mix_qa":
+        return cooker_multi_mix_qa(sample, config)
+    elif config.sample_type == "chat_mix":
+        return cooker_chat_mix(sample, config)
+    elif config.sample_type == "feature_vqa":
         return cooker_feature_qa(sample)
-    elif args.sample_type == "packed_captioning":
+    elif config.sample_type == "packed_captioning":
         return cooker_packed_caption(sample)
-    elif args.sample_type == "packed_vqa":
+    elif config.sample_type == "packed_vqa":
         return cooker_packed_vqa(sample)
-    elif args.sample_type == "packed_multi_mix_qa":
+    elif config.sample_type == "packed_multi_mix_qa":
         return cooker_packed_multi_mix_qa(sample)
-    elif args.sample_type == "packed_chat_mix":
+    elif config.sample_type == "packed_chat_mix":
         return cooker_packed_chat_mix(sample)
     else:
         raise NotImplementedError("Sample format not supported", sample)

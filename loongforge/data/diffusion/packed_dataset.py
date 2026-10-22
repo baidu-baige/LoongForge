@@ -7,7 +7,7 @@ Patchify variable-length latents, pad text to fixed
 max length, apply CP padding, then concatenate across samples in each bin.
 """
 
-from typing import List, Dict, Any
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import torch
@@ -96,25 +96,33 @@ class PackedDataset(IterableDataset):
         self,
         data_path: str,
         steps_per_epoch: int,
-        args,
         scheduler,
         cp_world_size: int,
         packing_buffer_size: int = 512,
         seq_length: int = 8192,
         dp_rank: int = 0,
         dp_world_size: int = 1,
+        context_max_len: int = 512,
+        model_name: Optional[str] = None,
+        seed: int = 0,
+        max_timestep_boundary: float = 1.0,
+        min_timestep_boundary: float = 0.0,
+        consumed_bins: int = 0,
     ):
         super().__init__()
         self.data_path = data_path
         self.steps_per_epoch = steps_per_epoch
-        self.args = args
+        self.seed = seed
+        self.max_timestep_boundary = max_timestep_boundary
+        self.min_timestep_boundary = min_timestep_boundary
+        self.consumed_bins = max(0, int(consumed_bins))
         self.scheduler = scheduler
         self.packing_buffer_size = packing_buffer_size
         self.seq_length = seq_length
         self.dp_rank = dp_rank
         self.dp_world_size = dp_world_size
 
-        self.context_max_len = getattr(args, "context_max_len", 512)
+        self.context_max_len = context_max_len
 
         self.cp_world_size = cp_world_size
         self.cp_chunk_factor = _get_cp_sample_alignment(cp_world_size)
@@ -122,20 +130,20 @@ class PackedDataset(IterableDataset):
 
         # Initialize the base dataset
         keep_keys = None
-        if getattr(args, "model_name", None) in ("wan2-1-i2v", "wan2-2-i2v"):
+        if model_name in ("wan2-1-i2v", "wan2-2-i2v"):
             keep_keys = {
                 "context", "input_latents", "y", "clip_feature",
                 "height", "width", "num_frames",
                 "max_timestep_boundary", "min_timestep_boundary",
             }
         self.base_dataset = LatentDataset(
-            data_path, steps_per_epoch, seed=args.seed, keep_keys=keep_keys,
+            data_path, steps_per_epoch, seed=seed, keep_keys=keep_keys,
             data_parallel_size=self.dp_world_size,
         )
 
         # Validate timestep boundaries
-        max_ts = args.max_timestep_boundary
-        min_ts = args.min_timestep_boundary
+        max_ts = max_timestep_boundary
+        min_ts = min_timestep_boundary
         assert 0 <= max_ts <= 1, "max_timestep should range from 0 to 1"
         assert 0 <= min_ts <= 1, "min_timestep should range from 0 to 1"
         assert min_ts <= max_ts, f"min_timestep: {min_ts} should <= max_timestep: {max_ts}"
@@ -201,6 +209,11 @@ class PackedDataset(IterableDataset):
             for bin_samples in bins:
                 if batch_count >= required_bins:
                     return
+                if batch_count < self.consumed_bins:
+                    # Replay skipped bins without running their transforms so the
+                    # sample stream stays identical to an uninterrupted run.
+                    batch_count += 1
+                    continue
                 processed = self._process_bin(bin_samples, self.scheduler)
                 merged = self._merge_samples(processed)
                 batch_count += 1
@@ -217,8 +230,8 @@ class PackedDataset(IterableDataset):
     def _process_bin(self, bin_samples, scheduler):
         """Process all samples in a bin: patchify, pad, gen noise."""
         processed = []
-        max_ts = self.args.max_timestep_boundary
-        min_ts = self.args.min_timestep_boundary
+        max_ts = self.max_timestep_boundary
+        min_ts = self.min_timestep_boundary
         max_ts_boundary = int(max_ts * scheduler.num_train_timesteps)
         min_ts_boundary = int(min_ts * scheduler.num_train_timesteps)
 

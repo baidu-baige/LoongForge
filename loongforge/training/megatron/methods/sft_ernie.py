@@ -192,17 +192,25 @@ def train_valid_test_datasets_provider_energon(train_val_test_num_samples):
     Activated when ``--task-encoder ErnieTaskEncoder`` is set.
     """
     from loongforge.data.vlm import build_task_encoder
-    from loongforge.data.vlm_dataloader import (
+    from loongforge.data.vlm.dataloader import (
         get_train_dataset,
         get_train_loader,
     )
+    from loongforge.engines.megatron.checkpointing import load_dataloader_state
+    from loongforge.training.megatron.methods.utils.data_configs import vlm_data_config
 
     args = get_args()
-    task_encoder = build_task_encoder(args, get_tokenizer())
-    train_ds = get_train_dataset(task_encoder, args)
+    task_encoder = build_task_encoder(vlm_data_config(args), get_tokenizer())
+    train_ds = get_train_dataset(
+        task_encoder,
+        vlm_data_config(args),
+        dp_rank=parallel_state.get_data_parallel_rank(),
+        dp_size=parallel_state.get_data_parallel_world_size(),
+        dp_group=parallel_state.get_data_parallel_group(),
+    )
     # No collator — encode_batch already produces the final dict format
     # that get_batch() expects (input_ids, token_type_ids, position_ids, etc.).
-    train_dataloader = get_train_loader(train_ds, args, collator=None)
+    train_dataloader = get_train_loader(train_ds, state=load_dataloader_state(args))
     print_rank_0(f"> finished creating {args.model_name} Energon datasets ...")
     return train_dataloader, None, None
 

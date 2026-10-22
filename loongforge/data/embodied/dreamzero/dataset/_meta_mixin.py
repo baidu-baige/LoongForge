@@ -38,7 +38,7 @@ from .constants import (
     METADATA_LANG_KEYS,
     STEP_FILTER_FILENAME,
 )
-from .schema import (
+from ..schema import (
     DatasetMetadata,
     DatasetStatisticalValues,
     LeRobotModalityMetadata,

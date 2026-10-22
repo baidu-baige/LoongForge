@@ -20,18 +20,18 @@ from loongforge.models.embodied.dreamzero.precomputed_cache import (
 )
 
 from .dreamzero_collator import HuggingfaceTokenizer, collate
-from .modality_configs import EMBODIMENT_TAG_TO_ID
-from .schema import (
+from ..modality_configs import EMBODIMENT_TAG_TO_ID
+from ..schema import (
     EmbodimentTag,
     DatasetMetadata,
 )
-from .transforms.base import ComposedModalityTransform, InvertibleModalityTransform
-from .transforms.concat import ConcatTransform
-from .transforms.state_action import (
+from .base import ComposedModalityTransform, InvertibleModalityTransform
+from .concat import ConcatTransform
+from .state_action import (
     StateActionToTensor,
     StateActionTransform,
 )
-from .transforms.video import (
+from .video import (
     VideoColorJitter,
     VideoCrop,
     VideoResize,

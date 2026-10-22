@@ -12,7 +12,14 @@ Layering rules:
   * ``data/`` imports no ``models`` implementation, ``training``, ``evaluation`` or ``extensions``.
     It may import model-package declarative modules (config / schema / pure helpers); the
     blacklist below rejects ``modeling_*``, ``*_model``, ``*_layer_spec`` and kernel modules.
-  * ``data/`` imports from ``engines`` only ``chunkpipe`` in ``llm_dataloader.py``.
+  * ``data/`` imports from ``engines`` only ``chunkpipe`` in ``data/llm/dataloader.py``.
+  * ``data/`` holds no backend distributed state: no ``parallel_state``, ``mpu``,
+    ``megatron.training.checkpointing``, or ``torch.distributed`` rank/world queries;
+    the training method passes those values down.
+  * ``data/<family>/dataloader.py`` takes explicit configs and values, never the whole
+    backend argument namespace.
+  * ``data/`` keeps every family entry point inside its family package; the root holds only
+    ``__init__.py``.
   * Only ``training/`` imports ``training``.
   * ``models/`` imports no ``data`` at run time (``TYPE_CHECKING`` type contracts are allowed),
     and no ``training``, ``evaluation``, ``extensions`` or ``chat_templates``.
@@ -47,8 +54,14 @@ FAMILIES = ("llm", "vlm", "embodied", "diffusion")
 GLOBAL_READERS = {"get_args", "get_tokenizer", "get_model_config", "get_chat_template"}
 # Allowed ``loongforge.engines`` imports from ``data/``: prefix -> files that may use it (None: any).
 DATA_ENGINE_ALLOWED = {
-    ("loongforge", "engines", "megatron", "distributed", "chunkpipe"): {"llm_dataloader.py"},
+    ("loongforge", "engines", "megatron", "distributed", "chunkpipe"): {"loongforge/data/llm/dataloader.py"},
 }
+# Backend state that ``data/`` must receive as arguments instead of reading it.
+DATA_BACKEND_STATE_BANNED = (
+    ("megatron", "core", "parallel_state"),
+    ("megatron", "core", "mpu"),
+    ("megatron", "training", "checkpointing"),
+)
 # ``engines/`` may import these generic model packages only.
 ENGINE_MODEL_ALLOWED = (
     ("loongforge", "models", "base"),
@@ -76,6 +89,15 @@ def _is_model_implementation(module_name):
         or module_name in {"model", "modeling"}
         or "kernel" in module_name
     )
+
+
+def _package_segments(target):
+    """Indices of ``target`` segments that name a package directory under ``loongforge/``."""
+    segments = []
+    for index in range(1, len(target)):
+        if (PKG.joinpath(*target[1:index + 1])).is_dir():
+            segments.append(index)
+    return segments
 
 
 def _rel(path):
@@ -252,7 +274,7 @@ class LayeringTest(unittest.TestCase):
                 if not _starts_with(target, ("loongforge", "engines")):
                     continue
                 allowed = any(
-                    _starts_with(target, prefix) and (files is None or path.name in files)
+                    _starts_with(target, prefix) and (files is None or _rel(path) in files)
                     for prefix, files in DATA_ENGINE_ALLOWED.items()
                 )
                 self.assertTrue(allowed, f"{_rel(path)} imports {'.'.join(target)}")
@@ -262,7 +284,11 @@ class LayeringTest(unittest.TestCase):
             for target in _runtime_imports(path):
                 if not _starts_with(target, ("loongforge", "models")):
                     continue
-                offenders = [part for part in target if _is_model_implementation(part)]
+                package = set(_package_segments(target))
+                offenders = [
+                    part for index, part in enumerate(target)
+                    if index not in package and _is_model_implementation(part)
+                ]
                 self.assertFalse(
                     offenders,
                     f"{_rel(path)} imports model implementation {'.'.join(target)}",
@@ -281,6 +307,54 @@ class LayeringTest(unittest.TestCase):
                 ):
                     found.add((_rel(path), node.lineno, node.attr))
         self.assertEqual(found, set(), f"data reads Torch engine arguments: {sorted(found)}")
+
+    def test_data_holds_no_backend_state(self):
+        found = set()
+        dist_queries = {"get_rank", "get_world_size", "is_initialized"}
+        for path in _py_files(DATA):
+            for target, _, _ in _imports(path):
+                if any(_starts_with(target, prefix) for prefix in DATA_BACKEND_STATE_BANNED):
+                    found.add((_rel(path), ".".join(target)))
+            for node in ast.walk(_parse(path)):
+                if (
+                    isinstance(node, ast.Attribute)
+                    and node.attr in dist_queries
+                    and (
+                        (isinstance(node.value, ast.Name) and node.value.id == "dist")
+                        or (
+                            isinstance(node.value, ast.Attribute)
+                            and node.value.attr == "distributed"
+                        )
+                    )
+                ):
+                    found.add((_rel(path), f"torch.distributed.{node.attr}"))
+        self.assertEqual(found, set(), f"data reads backend state: {sorted(found)}")
+
+    def test_data_dataloaders_take_explicit_configs(self):
+        offenders = set()
+        for family in FAMILIES:
+            path = DATA / family / "dataloader.py"
+            for node in ast.walk(_parse(path)):
+                if isinstance(node, ast.FunctionDef) and any(arg.arg == "args" for arg in node.args.args):
+                    offenders.add(f"{_rel(path)}:{node.lineno}:{node.name}")
+        self.assertEqual(offenders, set(), f"data dataloader takes the whole args namespace: {sorted(offenders)}")
+
+    def test_data_components_take_explicit_configs(self):
+        # ``image_enhance.py`` takes an augmentation-parameter dict named ``args``;
+        # it is not the backend argument namespace.
+        allowed = {"loongforge/data/vlm/ernie/utils/image_enhance.py"}
+        offenders = set()
+        for path in _py_files(DATA):
+            if _rel(path) in allowed:
+                continue
+            for node in ast.walk(_parse(path)):
+                if isinstance(node, ast.FunctionDef) and any(arg.arg == "args" for arg in node.args.args):
+                    offenders.add(f"{_rel(path)}:{node.lineno}:{node.name}")
+        self.assertEqual(offenders, set(), f"data components take the args namespace: {sorted(offenders)}")
+
+    def test_data_root_holds_no_family_files(self):
+        root_files = sorted(p.name for p in DATA.iterdir() if p.is_file() and p.name != "__init__.py")
+        self.assertEqual(root_files, [], "data root must hold only __init__.py; move entries into data/<family>/")
 
     def test_data_and_chat_templates_do_not_read_global_state(self):
         for path in _py_files(DATA) + _py_files(CHAT_TEMPLATES):
