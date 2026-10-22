@@ -12,24 +12,27 @@ Usage:
     model = build_model(model_cfg)   # model_cfg.model_type = "pi05"
 """
 
+from __future__ import annotations
+
 import importlib
-from typing import Dict, Type
+from typing import Dict, Type, TYPE_CHECKING
 
-import torch.nn as nn
+if TYPE_CHECKING:
+    import torch.nn as nn
 
-# model_type -> modeling module, relative to ``loongforge.models.embodied.``.
-# Only the module of the requested model_type is imported.
-MODEL_MODULES: Dict[str, str] = {
-    "vlda": "vlda.modeling_vlda",
-    "pi05": "pi05.modeling_pi05",
-    "Gr00tN1d6": "groot_n1_6.modeling_groot_n1_6",
-    "Gr00tN1d7": "groot_n1_7.modeling_groot_n1_7",
-    "xvla": "xvla.modeling_xvla",
-    "fastwam": "fastwam.modeling_fastwam",
-    "cosmos3": "cosmos3.modeling_cosmos3",
-    "dreamzero": "dreamzero.modeling_dreamzero",
-    "lingbot_va": "lingbot_va.modeling_lingbot_va",
-    "wall_oss_0_5": "wall_oss_0_5.modeling_wall_oss_0_5",
+# model_type -> package name. The same name is used under ``loongforge.models.embodied``
+# (``<package>/modeling_<package>.py``) and ``loongforge.data.embodied`` (``<package>/__init__.py``).
+MODEL_PACKAGES: Dict[str, str] = {
+    "vlda": "vlda",
+    "pi05": "pi05",
+    "Gr00tN1d6": "groot_n1_6",
+    "Gr00tN1d7": "groot_n1_7",
+    "xvla": "xvla",
+    "fastwam": "fastwam",
+    "cosmos3": "cosmos3",
+    "dreamzero": "dreamzero",
+    "lingbot_va": "lingbot_va",
+    "wall_oss_0_5": "wall_oss_0_5",
 }
 
 MODEL_REGISTRY: Dict[str, Type[nn.Module]] = {}
@@ -55,12 +58,13 @@ def build_model(model_cfg, training_args=None) -> nn.Module:
         Initialized nn.Module.
     """
     model_type = model_cfg.model_type
-    if model_type not in MODEL_MODULES:
+    if model_type not in MODEL_PACKAGES:
         raise KeyError(
             f"Unknown model_type: '{model_type}'. "
-            f"Registered: {sorted(MODEL_MODULES)}"
+            f"Registered: {sorted(MODEL_PACKAGES)}"
         )
-    importlib.import_module(f"loongforge.models.embodied.{MODEL_MODULES[model_type]}")
+    package = MODEL_PACKAGES[model_type]
+    importlib.import_module(f"loongforge.models.embodied.{package}.modeling_{package}")
 
     cls = MODEL_REGISTRY[model_type]
     if hasattr(cls, "from_training_args"):

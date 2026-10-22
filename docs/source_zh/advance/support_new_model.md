@@ -1,6 +1,6 @@
 # 支持新模型
 
-本文档介绍如何在 LoongForge 中支持新模型，涵盖 **LLM 模型**、**VLM 模型**和**自定义模型**（以 Wan 模型为例）。通常，你只需添加相应的配置文件并完成注册，无需修改核心代码。
+本文档介绍如何在 LoongForge 中支持新模型，涵盖 **LLM 模型**、**VLM 模型**和**扩散模型**（以 Wan 为例）。已有架构的新规格只需添加配置文件并在 catalog 中注册；新增架构还需要第 5 节列出的注册项。
 
 ## 1. 支持 LLM 模型
 ### 1.1 添加新 LLM 配置
@@ -12,6 +12,9 @@
 ```yaml
 # 继承该模型系列的通用配置类
 _target_: loongforge.models.language.LLaMAConfig
+
+# 必须是 LanguageModelFamilies 中的值，决定模型 family 和训练方法
+model_type: "llama"
 
 # 修改特定参数
 num_layers: 80
@@ -28,11 +31,11 @@ num_attention_heads: 64
 MODEL_CONFIG_REGISTRY = {
     # ... 已有模型
     "llama3-70b": {
-            "engine": "megatron",
-            "config_path": "configs/models/llama3",
-            "config_name": "llama3_70b",
-        },
-    }
+        "engine": "megatron",
+        "config_path": "configs/models/llama3",
+        "config_name": "llama3_70b",
+    },
+}
 ```
 
 ## 2. 支持 VLM 模型
@@ -98,6 +101,9 @@ defaults:
   - _self_
 
 model:
+  # 必须是 VisionLanguageModelFamilies 中的值，决定模型 family 和训练方法
+  model_type: qwen2_5_vl
+
   # 定义全局模型参数
   position_idx_func: ${position_func:mrope_ids}
   loss_func: ${loss_func:default}
@@ -130,7 +136,7 @@ MODEL_CONFIG_REGISTRY = {
 
 注册成功后，即可直接通过名称引用模型（如 `my-custom-vlm-8b`）。
 
-## 3. 支持自定义模型（以 Wan 为例）
+## 3. 支持扩散模型（以 Wan 为例）
 Wan 系列模型配置位于 `configs/models/wan/`，例如：
 
 * `configs/models/wan/wan2_2_i2v.yaml`
@@ -141,6 +147,8 @@ Wan 系列模型配置位于 `configs/models/wan/`，例如：
 ```
 configs/models/wan/<your_wan_variant>.yaml
 ```
+
+顶层 `model_type` 必须是 `DiffusionModelFamilies` 中的值，例如 `wan2_2_i2v`。
 
 ### 3.2 注册模型名称
 ```python
@@ -163,3 +171,12 @@ MODEL_CONFIG_REGISTRY = {
 - **辅助文件与调用方同级。** 被 `.sh` 调用的 `.py` 放在同一个阶段目录里。可独立运行的离线工具包放 `tools/`（如 `tools/dreamzero_data_preprocess/`），`examples/` 只保留模型侧的入口包装脚本。
 - **仓库根取上三级。** `examples/<model>/<phase>/` 下的脚本用 `SCRIPT_DIR/../../..` 计算仓库根；只上溯两级会落到 `examples/`。
 - **SFT 脚本前缀。** LLM/VLM 的 `finetuning/` 下用 `sft_<model>_<规格>.sh`，与 `pretrain/` 对应；embodied 模型用 `finetune_<model>_<策略>.sh`。
+
+## 5. 新增模型架构
+
+新增架构时，除上述步骤外还需要在代码中注册：
+
+- **模型包**：在 `loongforge/models/language/`、`loongforge/models/vision/` 或 `loongforge/models/diffusion/` 下实现配置类和模型类。
+- **AutoModel 注册**（LLM 和视觉组件）：在 `loongforge/models/language/__init__.py` 或 `loongforge/models/vision/__init__.py` 中添加 `AutoModel.register(<Config>, <Model>)`。YAML 的 `_target_` 选择配置类，配置类再选择模型。
+- **模型 family**：把新的 YAML `model_type` 登记到 `loongforge/constants.py` 的 `LanguageModelFamilies`、`VisionLanguageModelFamilies` 或 `DiffusionModelFamilies`。
+- **训练方法**（仅当该 family 有专用方法时）：在 `loongforge/training/megatron/registry.py` 中添加 `FAMILY_GROUP` 条目。

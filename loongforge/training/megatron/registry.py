@@ -17,7 +17,7 @@ from __future__ import annotations
 import importlib
 from typing import Dict, Tuple
 
-from loongforge.constants import LanguageModelFamilies, VisionLanguageModelFamilies
+from loongforge.constants import DiffusionModelFamilies, LanguageModelFamilies, VisionLanguageModelFamilies
 
 # ---------------------------------------------------------------------------
 # Family -> group mapping.
@@ -29,11 +29,11 @@ from loongforge.constants import LanguageModelFamilies, VisionLanguageModelFamil
 FAMILY_GROUP: Dict[str, str] = {f: "llm" for f in LanguageModelFamilies.names()}
 FAMILY_GROUP.update({f: "vlm" for f in VisionLanguageModelFamilies.names()})
 # Families with dedicated methods keep their own name as group key.
-FAMILY_GROUP["intern_vl"] = "intern_vl"
-FAMILY_GROUP["ernie4_5_vl"] = "ernie4_5_vl"
-FAMILY_GROUP["wan2_1_i2v"] = "wan"
-FAMILY_GROUP["wan2_2_i2v"] = "wan"
-FAMILY_GROUP["qwen_image"] = "qwen_image"
+FAMILY_GROUP[VisionLanguageModelFamilies.INTERN_VL] = "intern_vl"
+FAMILY_GROUP[VisionLanguageModelFamilies.ERNIE4_5_VL] = "ernie4_5_vl"
+FAMILY_GROUP[DiffusionModelFamilies.WAN2_1_I2V] = "wan"
+FAMILY_GROUP[DiffusionModelFamilies.WAN2_2_I2V] = "wan"
+FAMILY_GROUP[DiffusionModelFamilies.QWEN_IMAGE] = "qwen_image"
 
 # ---------------------------------------------------------------------------
 # (group, phase) -> method module path   (Megatron engine)

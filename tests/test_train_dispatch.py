@@ -39,9 +39,9 @@ def _previous_method(family, phase):
         return {"sft": "sft_ernie"}.get(phase)
     if family in constants.VisionLanguageModelFamilies.names():
         return {"pretrain": "pretrain_vlm", "sft": "sft_vlm"}[phase]
-    if family in (constants.CustomModelFamilies.WAN2_1_I2V, constants.CustomModelFamilies.WAN2_2_I2V):
+    if family in (constants.DiffusionModelFamilies.WAN2_1_I2V, constants.DiffusionModelFamilies.WAN2_2_I2V):
         return {"pretrain": "pretrain_wan"}.get(phase)
-    if family == constants.CustomModelFamilies.QWEN_IMAGE:
+    if family == constants.DiffusionModelFamilies.QWEN_IMAGE:
         return {"pretrain": "pretrain_qwen_image"}.get(phase)
     return None
 
@@ -101,7 +101,7 @@ class TrainDispatchTest(unittest.TestCase):
         families = [
             *constants.LanguageModelFamilies.names(),
             *constants.VisionLanguageModelFamilies.names(),
-            *constants.CustomModelFamilies.names(),
+            *constants.DiffusionModelFamilies.names(),
         ]
         for family in families:
             for phase in PHASES:
@@ -179,9 +179,8 @@ class TrainDispatchTest(unittest.TestCase):
                     tree = ast.parse((ROOT / (module.replace(".", "/") + ".py")).read_text())
                     self.assertIn(cls, {node.name for node in tree.body if isinstance(node, ast.ClassDef)})
 
-    def test_torch_catalog_model_types_exist_in_both_embodied_registries(self):
-        model_modules = _literal_assignment(ROOT / "loongforge/models/embodied/registry.py", "MODEL_MODULES")
-        data_modules = _literal_assignment(ROOT / "loongforge/data/embodied/registry.py", "MODEL_MODULES")
+    def test_torch_catalog_model_types_are_registered(self):
+        packages = _literal_assignment(ROOT / "loongforge/models/embodied/registry.py", "MODEL_PACKAGES")
         for name, entry in catalog.MODEL_CONFIG_REGISTRY.items():
             if entry["engine"] != "torch":
                 continue
@@ -189,8 +188,7 @@ class TrainDispatchTest(unittest.TestCase):
             match = re.search(r"^\s*model_type:\s*([^#\s]+)", config_text, re.MULTILINE)
             self.assertIsNotNone(match, name)
             model_type = match.group(1).strip("'\\\"")
-            self.assertIn(model_type, model_modules, name)
-            self.assertIn(model_type, data_modules, name)
+            self.assertIn(model_type, packages, name)
 
     def test_config_types_are_loaded_only_for_selected_model(self):
         model_cls, data_cls = type("ModelConfig", (), {}), type("DataConfig", (), {})

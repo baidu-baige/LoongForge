@@ -70,15 +70,16 @@ class VisionLanguageModelFamilies(_BaseFamilies):
     KIMI_K3 = "kimi_k3"
 
 
-class CustomModelFamilies(_BaseFamilies):
-    """User defined Custom Vision model families"""
+class DiffusionModelFamilies(_BaseFamilies):
+    """Diffusion model families (Megatron engine)"""
+
     WAN2_1_I2V = "wan2_1_i2v"
     WAN2_2_I2V = "wan2_2_i2v"
     QWEN_IMAGE = "qwen_image"
 
 
 # Families whose Hydra config puts model_type at the top level; VLM configs put it under ``model``.
-TOP_LEVEL_MODEL_FAMILIES = frozenset(LanguageModelFamilies.names() + CustomModelFamilies.names())
+TOP_LEVEL_MODEL_FAMILIES = frozenset(LanguageModelFamilies.names() + DiffusionModelFamilies.names())
 
 
 def split_model_config(config):

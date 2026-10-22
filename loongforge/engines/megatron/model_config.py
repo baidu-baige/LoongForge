@@ -102,7 +102,7 @@ def build_model_config(args, config):
     """Build model config from args and config"""
     model_type, model_config = constants.split_model_config(config)
 
-    if model_type in {*constants.VisionLanguageModelFamilies.names(), *constants.CustomModelFamilies.names()}:
+    if model_type in {*constants.VisionLanguageModelFamilies.names(), *constants.DiffusionModelFamilies.names()}:
         # get the global args dict which contains all model component args
         global_args_dict = get_args_dict()
         model_cfgs = {}

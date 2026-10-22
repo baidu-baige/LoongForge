@@ -6,13 +6,14 @@ dataset formats and build strategies, and the ``DataRuntime`` contract they rece
 
 Each model package ``loongforge.data.embodied.<package>`` registers its builders
 with the decorators below when imported. Lookups import only the package listed
-in ``MODEL_MODULES`` for the requested ``model_type``, so one broken or heavy
+in ``MODEL_PACKAGES`` for the requested ``model_type``, so one broken or heavy
 model package never affects the others.
 
-Adding a model: create ``data/embodied/<package>/`` whose ``__init__`` imports
-its transform / collator / (optional) sampler modules, add one entry to
-``MODEL_MODULES``, and (if the model needs a custom dataset build) one entry
-to ``DATASET_STRATEGIES``.
+Adding a model: create ``data/embodied/<package>/`` (same name as the model
+package) whose ``__init__`` imports its transform / collator / (optional)
+sampler modules, add one entry to ``MODEL_PACKAGES`` in
+``loongforge/models/embodied/registry.py``, and (if the model needs a custom
+dataset build) one entry to ``DATASET_STRATEGIES``.
 """
 
 from __future__ import annotations
@@ -21,25 +22,18 @@ import importlib
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterable, Optional, Type, TYPE_CHECKING
 
+from loongforge.models.embodied.registry import MODEL_PACKAGES
+
 if TYPE_CHECKING:
     from loongforge.data.embodied.transforms.base import ComposedTransform
 
-# model_type (from the model YAML) -> directory name under ``loongforge.data.embodied``.
-# Importing that package must register the model's builders. "dummy" points at
-# the plain module ``collator`` that defines ``DummyCollator``.
-MODEL_MODULES: Dict[str, str] = {
-    "vlda": "vlda",
-    "pi05": "pi05",
-    "Gr00tN1d6": "groot_n1_6",
-    "Gr00tN1d7": "groot_n1_7",
-    "xvla": "xvla",
-    "fastwam": "fastwam",
-    "cosmos3": "cosmos3",
-    "dreamzero": "dreamzero",
-    "lingbot_va": "lingbot_va",
-    "wall_oss_0_5": "wall_oss_0_5",
+# Data-only model types that map to a plain module under ``loongforge.data.embodied``.
+# Importing that module must register the model's builders.
+PLAIN_MODULES: Dict[str, str] = {
     "dummy": "collator",
 }
+
+_KNOWN_MODEL_TYPES = frozenset({*MODEL_PACKAGES, *PLAIN_MODULES})
 
 # dataset_strategy name -> "module:callable" string.  Resolved lazily so that
 # lerobot / model-specific deps only load when actually selected.  The
@@ -125,11 +119,17 @@ def register_sampler_builder(model_type: str):
     return _register(_SAMPLER_BUILDERS, model_type)
 
 
+def _data_module(model_type: str) -> Optional[str]:
+    """Return the ``loongforge.data.embodied`` module that registers ``model_type``."""
+    return PLAIN_MODULES.get(model_type) or MODEL_PACKAGES.get(model_type)
+
+
 def _ensure_imported(model_type: str) -> None:
     """Import the package that registers builders for ``model_type``."""
-    if model_type in _IMPORTED or model_type not in MODEL_MODULES:
+    module = _data_module(model_type)
+    if model_type in _IMPORTED or module is None:
         return
-    importlib.import_module(f"loongforge.data.embodied.{MODEL_MODULES[model_type]}")
+    importlib.import_module(f"loongforge.data.embodied.{module}")
     _IMPORTED.add(model_type)
 
 
@@ -139,7 +139,7 @@ def get_transform_builder(model_type: str) -> TransformBuilder:
     if model_type not in _TRANSFORM_BUILDERS:
         raise ValueError(
             f"Unknown transform builder for model_type '{model_type}'. "
-            f"Known model types: {sorted(MODEL_MODULES)}"
+            f"Known model types: {sorted(_KNOWN_MODEL_TYPES)}"
         )
     return _TRANSFORM_BUILDERS[model_type]
 
@@ -150,7 +150,7 @@ def get_collator(model_type: str) -> Type:
     if model_type not in _COLLATORS:
         raise ValueError(
             f"Unknown collator for model_type '{model_type}'. "
-            f"Known model types: {sorted(MODEL_MODULES)}"
+            f"Known model types: {sorted(_KNOWN_MODEL_TYPES)}"
         )
     return _COLLATORS[model_type]
 

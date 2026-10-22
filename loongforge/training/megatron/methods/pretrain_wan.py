@@ -15,7 +15,7 @@ from megatron.training import get_timers
 
 from megatron.training.utils import print_rank_0
 from loongforge.engines.megatron import get_args
-from loongforge.constants import CustomModelFamilies
+from loongforge.constants import DiffusionModelFamilies
 
 from loongforge.data.diffusion_dataloader import (
     build_latent_dataloader,
@@ -48,8 +48,8 @@ from loongforge.engines.megatron.distributed.batch_broadcast import (
 )
 
 SUPPORTED_MODELS = [
-    CustomModelFamilies.WAN2_1_I2V,
-    CustomModelFamilies.WAN2_2_I2V,
+    DiffusionModelFamilies.WAN2_1_I2V,
+    DiffusionModelFamilies.WAN2_2_I2V,
 ]
 WAN_PATCH_SIZE = (1, 2, 2)
 

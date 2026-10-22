@@ -25,7 +25,8 @@ Layering rules:
     ``models`` and ``engines`` do not import ``extensions``.
 
 Registry strings must point at real code:
-  * ``embodied/registry.py``: ``MODEL_MODULES`` (decorator names, package imports) and ``DATASET_STRATEGIES``
+  * ``models/embodied/registry.py``: ``MODEL_PACKAGES`` (one package per model type)
+  * ``embodied/registry.py``: ``PLAIN_MODULES`` (decorator names, module imports) and ``DATASET_STRATEGIES``
   * ``vlm/__init__.py``: ``TASK_ENCODER_REGISTRY``
   * ``chat_templates/registry.py``: every ``.jinja`` it reads
 """
@@ -54,9 +55,9 @@ ENGINE_MODEL_ALLOWED = (
     ("loongforge", "models", "catalog"),
     ("loongforge", "models", "multimodal"),
 )
-# ``MODEL_MODULES`` values that are plain modules, not model packages.
+# ``PLAIN_MODULES`` values that are plain modules, not model packages.
 PLAIN_MODULE_MODEL_TYPES = {"dummy"}
-# ``MODEL_MODULES`` keys that register a collator but no transform builder.
+# Model types that register a collator but no transform builder.
 NO_TRANSFORM_MODEL_TYPES = {"dummy"}
 EMBODIED_DECORATORS = ("register_collator", "register_transform_builder", "register_sampler_builder")
 
@@ -407,14 +408,10 @@ class LayeringTest(unittest.TestCase):
 
 
 class RegistryStringsTest(unittest.TestCase):
-    def test_embodied_model_type_keys_match_between_layers(self):
-        models = set(_literal_assignment(PKG / "models" / "embodied" / "registry.py", "MODEL_MODULES"))
-        data = set(_literal_assignment(EMBODIED / "registry.py", "MODEL_MODULES"))
-        self.assertEqual(models, data - PLAIN_MODULE_MODEL_TYPES)
-
     def test_embodied_model_modules_register_their_model_type(self):
-        modules = _literal_assignment(EMBODIED / "registry.py", "MODEL_MODULES")
-        for model_type, directory in modules.items():
+        packages = _literal_assignment(PKG / "models" / "embodied" / "registry.py", "MODEL_PACKAGES")
+        plain_modules = _literal_assignment(EMBODIED / "registry.py", "PLAIN_MODULES")
+        for model_type, directory in {**packages, **plain_modules}.items():
             plain = model_type in PLAIN_MODULE_MODEL_TYPES
             files = [EMBODIED / f"{directory}.py"] if plain else _py_files(EMBODIED / directory)
             registered = {p: {d: _decorator_args(p, d) for d in EMBODIED_DECORATORS} for p in files}
@@ -423,7 +420,7 @@ class RegistryStringsTest(unittest.TestCase):
                 required.append("register_transform_builder")
             for decorator in required:
                 names = set().union(*(r[decorator] for r in registered.values()))
-                self.assertIn(model_type, names, f"MODEL_MODULES[{model_type!r}]: no @{decorator}({model_type!r})")
+                self.assertIn(model_type, names, f"model_type {model_type!r}: no @{decorator}({model_type!r})")
             if plain:
                 continue
             imported = _module_level_imports(EMBODIED / directory / "__init__.py")
