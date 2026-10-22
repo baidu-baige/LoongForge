@@ -758,7 +758,13 @@ class GrootN1d7FeatureTransform(BaseTransform):
         if self.training and "action" not in data:
             raise KeyError("Missing required GR00T-N1.7 action key: action")
 
-        image_keys = sorted(key for key in data if key.startswith("observation.images."))
+        allowed_views = set(self._video_key_mapping)
+        image_keys = sorted(
+            key
+            for key in data
+            if key.startswith("observation.images.")
+            and (not allowed_views or key.split("observation.images.", 1)[-1] in allowed_views)
+        )
         if not image_keys:
             raise KeyError("Missing required observation image keys for GR00T-N1.7")
 
