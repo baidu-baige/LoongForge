@@ -4,7 +4,6 @@ import subprocess
 import sys
 from typing import Optional, Sequence
 
-import gdown
 from huggingface_hub import hf_hub_download, snapshot_download
 from huggingface_hub.file_download import repo_folder_name
 from torch.hub import download_url_to_file
@@ -248,5 +247,6 @@ def download_from_gdrive(file_id: str, local_path: str, force: bool = False, **k
             return local_path
     os.makedirs(os.path.dirname(local_path), exist_ok=True)
     print(f'download from {file_id} to {local_path}')
+    import gdown  # lazy: optional gdrive dep, not on training path
     wrap_call(gdown.download)(id=file_id, output=local_path, **kwargs)
     return local_path
