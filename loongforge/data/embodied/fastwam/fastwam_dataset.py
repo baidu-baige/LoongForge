@@ -67,7 +67,7 @@ def fastwam_delta_timestamps(dataset: LeRobotV3Dataset, info: Dict[str, Any], fp
     )
 
 
-def build_fastwam_lerobot_dataset(model_cfg, data_cfg, training_args):
+def build_fastwam_lerobot_dataset(model_cfg, data_cfg, training_args, runtime):
     """Build the FastWAM multi-frame-observation dataset via the behaviour hook.
 
     Calls :func:`build_default_lerobot_dataset` with
@@ -90,6 +90,7 @@ def build_fastwam_lerobot_dataset(model_cfg, data_cfg, training_args):
         model_cfg,
         data_cfg,
         training_args,
+        runtime,
         observation_delta_indices=data_cfg.observation_delta_indices,
         delta_timestamps_fn=fastwam_delta_timestamps,
     )

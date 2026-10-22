@@ -187,6 +187,7 @@ class Cosmos3Collator(BaseCollator):
         training_args=None,
         dataset_stats=None,
         dataset=None,
+        runtime=None,
     ):
         """from_config."""
         # The dataset always does decode + crop/resize. When ColorJitter is

@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from types import ModuleType
 from typing import Any, Callable, Dict, Optional, Tuple
 
+from loongforge.engines.torch.distributed.utils import is_dmuon_model
 from loongforge.engines.torch.initialize import cfg_bool, resolve_dtype
 
 logger = logging.getLogger(__name__)
@@ -163,6 +164,11 @@ def grad_sync_ctx(step_ctx: StepContext, sync_grads: bool):
     """
     if sync_grads or not step_ctx.ctx.is_distributed:
         yield
+    elif is_dmuon_model(step_ctx.model):
+        import dmuon
+
+        with dmuon.no_sync(step_ctx.model):
+            yield
     elif hasattr(step_ctx.model, "no_sync"):
         if getattr(step_ctx.model, "static_graph", False) and not step_ctx.static_graph_bootstrapped:
             yield

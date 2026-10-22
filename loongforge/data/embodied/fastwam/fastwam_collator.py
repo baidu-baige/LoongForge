@@ -71,6 +71,7 @@ class FastWAMCollator(BaseCollator):
         training_args=None,
         dataset_stats=None,
         dataset=None,
+        runtime=None,
     ) -> "FastWAMCollator":
         """Construct a ``FastWAMCollator`` from typed configs."""
         return cls(model_cfg, data_cfg)

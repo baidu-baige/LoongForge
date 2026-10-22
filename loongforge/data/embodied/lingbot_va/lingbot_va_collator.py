@@ -53,6 +53,7 @@ class LingBotVACollator(BaseCollator):
         training_args=None,
         dataset_stats=None,
         dataset=None,
+        runtime=None,
     ) -> "LingBotVACollator":
         return cls(pad_to_multiple=int(data_cfg.pad_to_multiple))
 

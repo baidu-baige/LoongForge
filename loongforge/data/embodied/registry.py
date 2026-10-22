@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """Model-type registry for embodied data: per-sample transforms, collators, samplers,
-and dataset build strategies.
+dataset formats and build strategies, and the ``DataRuntime`` contract they receive.
 
 Each model package ``loongforge.data.embodied.<package>`` registers its builders
 with the decorators below when imported. Lookups import only the package listed
@@ -56,6 +56,31 @@ DATASET_STRATEGIES: Dict[str, str] = {
     "wall_oss_0_5": "wall_oss_0_5.wall_oss_0_5_dataset:build_wall_oss_0_5_lerobot_dataset",
 }
 
+# --dataset-format -> "module:callable" (relative to ``loongforge.data.embodied``).
+# "lerobot_datasets" further dispatches on --dataset-strategy through DATASET_STRATEGIES.
+DATASET_FORMATS: Dict[str, str] = {
+    "lerobot_datasets": "registry:build_dataset_by_strategy",
+    "hdf5_datasets": "xvla.xvla_dataset:build_hdf5_dataset",
+    "dummy_datasets": "datasets.dummy_dataset:build_dummy_dataset",
+}
+
+
+@dataclass(frozen=True)
+class DataRuntime:
+    """Execution facts the training method resolves for embodied data components.
+
+    Data code reads these instead of backend arguments or the backend's
+    distributed context, so it stays independent of the engine schema.
+    """
+
+    rank: int = 0
+    world_size: int = 1
+    is_distributed: bool = False
+    grad_accum_steps: int = 1
+    deterministic: bool = False
+    graph_enabled: bool = False
+    graph_pad_length: int | None = None
+
 
 @dataclass(frozen=True)
 class TransformBuilderContext:
@@ -66,6 +91,7 @@ class TransformBuilderContext:
     training_args: Any
     dataset: Any
     dataset_stats: dict[str, Any] | None
+    runtime: DataRuntime
 
 
 TransformBuilder = Callable[["TransformBuilderContext"], Iterable[Any]]
@@ -142,6 +168,7 @@ def build_collator(
     training_args=None,
     dataset_stats=None,
     dataset=None,
+    runtime: Optional[DataRuntime] = None,
 ):
     """Instantiate the registered collator via its ``from_config`` classmethod."""
     return get_collator(model_type).from_config(
@@ -150,6 +177,7 @@ def build_collator(
         training_args=training_args,
         dataset_stats=dataset_stats,
         dataset=dataset,
+        runtime=runtime,
     )
 
 
@@ -159,6 +187,7 @@ def build_transforms_from_args(
     training_args,
     dataset,
     dataset_stats,
+    runtime: DataRuntime,
 ) -> Optional["ComposedTransform"]:
     """Build per-sample transforms for ``model_cfg.model_type``; None if there are none."""
     from loongforge.data.embodied.transforms.base import ComposedTransform
@@ -173,6 +202,7 @@ def build_transforms_from_args(
         training_args=training_args,
         dataset=dataset,
         dataset_stats=dataset_stats,
+        runtime=runtime,
     )
     transforms = list(get_transform_builder(model_type)(ctx))
     if not transforms:
@@ -180,7 +210,7 @@ def build_transforms_from_args(
     return ComposedTransform(transforms)
 
 
-def build_dataset_by_strategy(model_cfg, data_cfg, training_args):
+def build_dataset_by_strategy(model_cfg, data_cfg, training_args, runtime):
     """Build a lerobot dataset via the strategy named by ``training_args.dataset_strategy``.
 
     Uses ``"default"`` when the field is absent or empty; raises ``ValueError``
@@ -194,4 +224,20 @@ def build_dataset_by_strategy(model_cfg, data_cfg, training_args):
     entry = DATASET_STRATEGIES[name]
     module_rel, func_name = entry.split(":")
     mod = importlib.import_module(f"loongforge.data.embodied.{module_rel}")
-    return getattr(mod, func_name)(model_cfg, data_cfg, training_args)
+    return getattr(mod, func_name)(model_cfg, data_cfg, training_args, runtime)
+
+
+def build_dataset(model_cfg, data_cfg, training_args, runtime):
+    """Build the dataset named by ``training_args.dataset_format``.
+
+    Lerobot datasets dispatch further on ``training_args.dataset_strategy``
+    through ``DATASET_STRATEGIES``.
+    """
+    name = training_args.dataset_format
+    if name not in DATASET_FORMATS:
+        raise ValueError(
+            f"Unknown dataset_format: '{name}'. Supported: {sorted(DATASET_FORMATS)}"
+        )
+    module_rel, func_name = DATASET_FORMATS[name].split(":")
+    mod = importlib.import_module(f"loongforge.data.embodied.{module_rel}")
+    return getattr(mod, func_name)(model_cfg, data_cfg, training_args, runtime)

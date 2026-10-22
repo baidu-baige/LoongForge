@@ -7,7 +7,7 @@ Provides:
     - LeRobotV2Dataset(Dataset): v2.0/v2.1 format (no lerobot lib dependency)
     - _build_lerobot_dataset(): version-dispatch factory
     - build_default_lerobot_dataset(): the "default" dataset strategy builder
-      (fn(model_cfg, data_cfg, training_args) -> Dataset)
+      (fn(model_cfg, data_cfg, training_args, runtime) -> Dataset)
 
 Output format (all versions):
     {
@@ -720,7 +720,7 @@ def _build_lerobot_dataset(
     return dataset
 
 
-def build_default_lerobot_dataset(model_cfg, data_cfg, training_args, **overrides):
+def build_default_lerobot_dataset(model_cfg, data_cfg, training_args, runtime, **overrides):
     """Default lerobot dataset build strategy (stock loongforge behaviour).
 
     This is the strategy selected by ``training_args.dataset_strategy == "default"``

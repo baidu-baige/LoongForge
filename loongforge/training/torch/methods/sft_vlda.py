@@ -17,16 +17,12 @@ __all__ = [
 
 
 def build_model(model_cfg, training_args):
-    import torch
-
     if training_args.distributed_strategy != "ddp" or training_args.init_on_meta:
         raise ValueError("VLDA currently supports DDP and DDP + ZeRO1; FSDP teacher EMA is not implemented")
     if training_args.use_lora or training_args.save_format not in ("safetensors", "pt"):
         raise ValueError("VLDA uses full-model safetensors/pt checkpoints")
     if training_args.dataset_strategy != "vlda":
         raise ValueError("VLDA requires --dataset-strategy vlda for future frames and negative actions")
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
     model = sft_embodied.build_model(model_cfg, training_args)
     model.model.initialize_training_modules(training_args.seed)
     return model

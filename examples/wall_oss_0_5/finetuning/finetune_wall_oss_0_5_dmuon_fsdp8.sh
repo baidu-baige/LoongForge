@@ -87,7 +87,7 @@ DATA_ARGS=(
 )
 
 TRAINING_ARGS=(
-    --trainer-type FinetuneTrainer
+    --trainer-type WallOss05Trainer
     --train-iters "${TRAIN_ITERS:-40}"
     --per-device-batch-size "${PER_DEVICE_BATCH:-32}"
     --gradient-accumulation-steps 1

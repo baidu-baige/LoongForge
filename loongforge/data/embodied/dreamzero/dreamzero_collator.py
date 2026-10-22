@@ -298,7 +298,7 @@ class DreamZeroCollator(DataCollatorMixin):
     """Data collator registry entry for DreamZero batches."""
 
     @classmethod
-    def from_config(cls, model_cfg, data_cfg, training_args=None, dataset_stats=None, dataset=None):
+    def from_config(cls, model_cfg, data_cfg, training_args=None, dataset_stats=None, dataset=None, runtime=None):
         """Build the DreamZero collator from typed configs (collator registry entry).
 
         Produces a ``DreamZeroPreparedBatch`` (dict-backed, ``.to(device)``-capable);

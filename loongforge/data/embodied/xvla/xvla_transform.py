@@ -23,7 +23,7 @@ Thin :class:`BaseTransform` wrappers around the processing cores in
 tokenizer / image_processor loading + encode logic and have no dependency on
 the training-side ``loongforge.data.embodied`` package, so they can be reused
 from inference paths (e.g. :meth:`XVLAPolicy.predict_action`) without
-triggering the DataLoader / DistributedContext import chain.
+triggering the DataLoader import chain.
 
 Two transforms are provided here:
 

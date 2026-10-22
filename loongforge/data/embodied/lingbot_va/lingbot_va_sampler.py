@@ -152,8 +152,7 @@ class _LingBotBalancedDistributedSampler(Sampler[int]):
 def build_lingbot_va_distributed_sampler(context: SamplerBuilderContext):
     """Return the accepted rank-balanced sampler when enabled."""
     dataset = context.dataset
-    training_args = context.training_args
-    ctx = context.ctx
+    runtime = context.runtime
     if not feature_enabled("LINGBOT_BALANCED_SAMPLER"):
         # Preserve the public distributed sampler semantics when the LingBot
         # rank-balancing optimization is disabled.  Returning None would make
@@ -161,11 +160,11 @@ def build_lingbot_va_distributed_sampler(context: SamplerBuilderContext):
         # community baseline's DistributedSampler partitioning.
         return default_sampler_builder(context)
 
-    balance_group_size = max(1, int(training_args.gradient_accumulation_steps))
+    balance_group_size = max(1, int(runtime.grad_accum_steps))
     return _LingBotBalancedDistributedSampler(
         dataset,
-        num_replicas=ctx.world_size,
-        rank=ctx.rank,
+        num_replicas=runtime.world_size,
+        rank=runtime.rank,
         seed=context.seed,
         balance_group_size=balance_group_size,
         shuffle=context.shuffle,

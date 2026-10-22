@@ -144,14 +144,15 @@ class GrootN1d7Collator(BaseCollator):
         training_args=None,
         dataset_stats=None,
         dataset=None,
+        runtime=None,
     ) -> "GrootN1d7Collator":
         """Construct from LoongForge model config."""
         policy_cfg = GrootN1d7Config.from_config(model_cfg)
         data_cfg = GrootN1d7DataConfig() if data_cfg is None else data_cfg
         max_length = None
-        if training_args is not None:
-            graph_pad_length = training_args.cuda_graph_pad_length
-            graph_requested = training_args.cuda_graph_impl == "local"
+        if runtime is not None:
+            graph_pad_length = runtime.graph_pad_length
+            graph_requested = runtime.graph_enabled
             if graph_requested and graph_pad_length is not None and graph_pad_length > 0:
                 # Padding is opt-in because it changes the attention surface
                 # and can change training numerics. With zero/unset, preserve

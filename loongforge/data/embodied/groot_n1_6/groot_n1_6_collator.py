@@ -91,9 +91,10 @@ class GrootN1d6Collator(BaseCollator):
         training_args=None,
         dataset_stats: Optional[Dict[str, Any]] = None,
         dataset: Any = None,
+        runtime=None,
     ) -> "GrootN1d6Collator":
         """Construct GrootN1d6Collator from typed ModelConfig + DataConfig."""
-        max_length = training_args.cuda_graph_pad_length if training_args is not None else None
+        max_length = runtime.graph_pad_length if runtime is not None else None
         if max_length == 0:
             max_length = None
         if max_length is None:

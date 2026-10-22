@@ -970,7 +970,7 @@ class DreamZeroLeRobotMixtureDataset(Dataset):
         return initial_actions
 
 
-def build_dreamzero_dataset(model_cfg, data_cfg, training_args):
+def build_dreamzero_dataset(model_cfg, data_cfg, training_args, runtime):
     """Build the DreamZero LeRobot dataset (single or mixture).
 
     The framework selects this through ``--dataset-strategy dreamzero``. Sampler

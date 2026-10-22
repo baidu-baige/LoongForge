@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 from collections import deque
 from dataclasses import fields
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import torch
 from torch import Tensor
@@ -31,9 +31,6 @@ from loongforge.models.embodied.registry import register_model
 from .configuration_dreamzero import DreamZeroConfig
 from .modules.action_head_tf import WANPolicyHead, WANPolicyHeadConfig
 from .precomputed_cache import build_precomputed_cache_config
-
-if TYPE_CHECKING:
-    from loongforge.engines.torch.distributed.context import DistributedContext
 
 __all__ = ["DreamZeroPolicy", "DreamZeroConfig", "build_action_head_config"]
 
@@ -259,7 +256,6 @@ class DreamZeroPolicy(PreTrainedPolicy):
         args: Any,
         completed_steps: int,
         optimizer: torch.optim.Optimizer | None,
-        ctx: DistributedContext,
     ) -> None:
         """Apply one-time DreamZero FSDP initialization compatibility rounding."""
         del args
@@ -308,7 +304,8 @@ class DreamZeroPolicy(PreTrainedPolicy):
 
         self._initial_param_rounding_done = True
 
-        if ctx.is_main:
+        rank_zero = not torch.distributed.is_available() or not torch.distributed.is_initialized()
+        if rank_zero or torch.distributed.get_rank() == 0:
             logger.info(
                 "DreamZero initial FSDP param rounding: dtype=%s "
                 "local_params=%d local_numel=%d fallback_params=%d "

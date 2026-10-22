@@ -215,15 +215,15 @@ class WallOss05Model(nn.Module):
                 lambda _module, _inp, output: output.requires_grad_(True)
             )
         wrapper = cls(model)
-        # Remember paths/sizes and settings captured at build so ``load_pretrained`` and
-        # ``convert_to_fsdp`` need neither training args nor the model config later.
+        # Remember paths/sizes and settings captured at build so ``load_pretrained``
+        # needs neither training args nor the model config later.
         wrapper._qwen_pretrained_path = pretrained_path
         wrapper._tokenizer_len = len(processor.tokenizer)
         wrapper._ddp_mix_precision = (
             getattr(training_args, "distributed_strategy", None) == "ddp"
             and str(getattr(training_args, "dtype", "")).lower() in {"bfloat16", "bf16"}
         )
-        wrapper._norm_forward_prefetch_distance = getattr(model_cfg, "norm_forward_prefetch_distance", 0)
+        wrapper.norm_forward_prefetch_distance = getattr(model_cfg, "norm_forward_prefetch_distance", 0)
         return wrapper
 
     def load_pretrained(self, path: str, device=None):
@@ -258,28 +258,6 @@ class WallOss05Model(nn.Module):
         """Convert to mix precision."""
         self.model.convert_to_mix_precision()
 
-    def convert_to_fsdp(
-        self,
-        *,
-        mesh,
-        mp_policy,
-        offload_policy=None,
-        reshard_after_forward: bool = True,
-        use_dmuon: bool = False,
-    ):
-        """Convert to fsdp."""
-        wrapped = self.model.convert_to_fsdp(
-            mesh=mesh,
-            mp_policy=mp_policy,
-            offload_policy=offload_policy,
-            reshard_after_forward=reshard_after_forward,
-            use_dmuon=use_dmuon,
-            norm_forward_prefetch_distance=self._norm_forward_prefetch_distance,
-        )
-        if use_dmuon and hasattr(wrapped, "_dedicated_comm_ctx"):
-            self._dedicated_comm_ctx = wrapped._dedicated_comm_ctx
-        return self
-
     def set_requires_gradient_sync(self, enabled: bool) -> None:
         """Set requires gradient sync."""
         if hasattr(self.model, "set_requires_gradient_sync"):
@@ -288,13 +266,6 @@ class WallOss05Model(nn.Module):
     @contextmanager
     def no_sync(self):
         """No sync."""
-        if hasattr(self, "_dedicated_comm_ctx"):
-            import dmuon
-
-            with dmuon.no_sync(self):
-                yield
-            return
-
         if hasattr(self.model, "no_sync"):
             with self.model.no_sync():
                 yield

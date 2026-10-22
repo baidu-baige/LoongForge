@@ -98,6 +98,7 @@ class WallOss05Collator(BaseCollator):
         training_args=None,
         dataset_stats=None,
         dataset=None,
+        runtime=None,
     ) -> "WallOss05Collator":
         """From config."""
         del dataset_stats, dataset

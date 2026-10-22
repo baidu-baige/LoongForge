@@ -49,7 +49,7 @@ from loongforge.data.embodied.sampler import GlobalBatchShardSampler, _StatefulI
 
 if TYPE_CHECKING:
     from loongforge.data.embodied.sampler import SamplerBuilderContext
-    from loongforge.engines.torch.distributed import DistributedContext
+    from loongforge.data.embodied.registry import DataRuntime
 
     from .dreamzero_dataset import DreamZeroLeRobotDataset
 
@@ -470,7 +470,7 @@ def build_dreamzero_sampler(
     train_dataset,
     base_dataset,
     sampler_type: str,
-    ctx: DistributedContext,
+    runtime: DataRuntime,
     batch_size: int,
     num_workers: int,
     sampler_seed: int,
@@ -496,9 +496,9 @@ def build_dreamzero_sampler(
     ``global_batch_shard`` ~= ``block`` (near-equivalent; differs only at the
     tail/remainder and resume-state handling).
     """
-    ddp_active = ctx.is_distributed and ctx.world_size > 1
-    replicas = ctx.world_size if ddp_active else 1
-    rank = ctx.rank if ddp_active else 0
+    ddp_active = runtime.is_distributed and runtime.world_size > 1
+    replicas = runtime.world_size if ddp_active else 1
+    rank = runtime.rank if ddp_active else 0
     sampler_type = str(sampler_type or "distributed").strip().lower()
     require_full_language_chunks = bool(data_cfg.require_full_language_chunks)
     sampler_worker_batching = str(data_cfg.sampler_worker_batching or "none").strip().lower()
@@ -577,7 +577,7 @@ def build_dreamzero_registered_sampler(context: SamplerBuilderContext):
         train_dataset=context.dataset,
         base_dataset=base_dataset,
         sampler_type=data_cfg.sampler_type,
-        ctx=context.ctx,
+        runtime=context.runtime,
         batch_size=context.batch_size,
         num_workers=context.training_args.num_workers,
         sampler_seed=sampler_seed,

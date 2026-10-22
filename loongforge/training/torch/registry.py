@@ -26,6 +26,8 @@ TORCH_TRAINER_TYPES: Dict[str, Tuple[str, str | None]] = {
         "sft_embodied", "loongforge.extensions.torch.groot_n1_7.factory"),
     "LingBotFinetuneTrainer": (
         "sft_lingbot_va", "loongforge.extensions.torch.lingbot_va.factory"),
+    "WallOss05Trainer": (
+        "sft_embodied", "loongforge.extensions.torch.wall_oss_0_5.factory"),
 }
 
 

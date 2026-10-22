@@ -209,7 +209,7 @@ def build_cosmos3_transforms(ctx: TransformBuilderContext):
     # Deterministic mode disables CFG caption dropout (decided here in the main
     # process; torch.are_deterministic_algorithms_enabled() is unreliable inside
     # spawned DataLoader workers).
-    cfg_dropout_rate = 0.0 if training_args.deterministic_mode else data_cfg.cfg_dropout_rate
+    cfg_dropout_rate = 0.0 if ctx.runtime.deterministic else data_cfg.cfg_dropout_rate
     return [Cosmos3ActionTransform(
         tokenizer_path=training_args.tokenizer_path,
         max_text_tokens=data_cfg.max_text_tokens,

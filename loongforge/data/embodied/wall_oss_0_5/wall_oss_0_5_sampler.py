@@ -15,8 +15,8 @@ from loongforge.data.embodied.sampler import SamplerBuilderContext
 def wall_oss_0_5_sampler_builder(context: SamplerBuilderContext):
     return DistributedSampler(
         context.dataset,
-        num_replicas=context.ctx.world_size,
-        rank=context.ctx.rank,
+        num_replicas=context.runtime.world_size,
+        rank=context.runtime.rank,
         shuffle=context.shuffle,
         seed=context.seed,
         drop_last=True,

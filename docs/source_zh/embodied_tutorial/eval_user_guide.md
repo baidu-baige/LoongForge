@@ -1,6 +1,6 @@
 # 离线评测
 
-LoongForge 在 `loongforge.evaluation.embodied` 下提供了离线评测模块，通过 WebSocket / msgpack-numpy RPC 将基准测试客户端和模型策略服务器作为两个独立进程连接。目前支持 LoongForge **pi0.5** 和 **X-VLA** 作为策略后端，覆盖五个基准测试：**LIBERO**、**CALVIN**、**SimplerEnv**、**RoboTwin (2.0)** 和 **ManiSkill**。用户侧只需要一个 YAML 配置文件和一个启动脚本，无需修改 Python 入口代码。本指南涵盖支持范围、运行方法、各基准测试的配置方式，以及如何扩展新模型。
+LoongForge 在 `loongforge.evaluation.embodied` 下提供了离线评测模块，通过 WebSocket / msgpack-numpy RPC 将基准测试客户端和模型策略服务器作为两个独立进程连接。目前支持 LoongForge **pi0.5**、**X-VLA** 和 **GR00T-N1.6** 作为策略后端，覆盖五个基准测试：**LIBERO**、**CALVIN**、**SimplerEnv**、**RoboTwin (2.0)** 和 **ManiSkill**。用户侧只需要一个 YAML 配置文件和一个启动脚本，无需修改 Python 入口代码。本指南涵盖支持范围、运行方法、各基准测试的配置方式，以及如何扩展新模型。
 
 ---
 
@@ -12,6 +12,7 @@ LoongForge 在 `loongforge.evaluation.embodied` 下提供了离线评测模块�
 |---|---|---|---|---|---|
 | **pi0.5** | 任务成功（微调后） | 尚未评分 — 无匹配的开放权重 | 尚未评分 — 无匹配的开放权重 | 任务成功（`pi0.5_robotwin2` + `pi05_aloha_14d`） | 尚未评分 — 无匹配的开放权重 |
 | **X-VLA** | 任务成功（~94% object suite） | 尚未评分 — 无匹配的开放权重 | 任务成功（X-VLA-WidowX + SimplerEnv 补丁） | 任务成功（X-VLA-RoboTwin2 + `ee6d_dual`） | 尚未评分 — 无匹配的开放权重 |
+| **GR00T-N1.6** | 任务成功（GR00T-N1.6-LIBERO） | — | 任务成功（GR00T-N1.6-bridge） | — | — |
 
 "任务成功"表示至少有一个 episode 通过了官方或本地的成功判定标准。"尚未评分"的组合仍附带可运行的 YAML（设置了 `server.random_init: true`），无需加载任何模型权重即可验证 RPC 通路。
 
@@ -52,7 +53,7 @@ X-VLA + SimplerEnv 达成任务成功需要上游 SimplerEnv 的一次性补丁 
 
 GPU 要求：模型推理需要至少 1 张 NVIDIA GPU（显存 ≥16 GB，推荐 A100/A800）。基准测试侧渲染（SimplerEnv、RoboTwin、ManiSkill）同样要求 GPU 支持 Vulkan。
 
-各基准测试的依赖和已知兼容版本记录在 [benchmark_envs.md](https://github.com/baidu-baige/LoongForge/blob/master/loongforge/evaluation/embodied/benchmark_envs.md) 中。
+各基准测试的依赖和已知兼容版本记录在 [benchmark_envs.md](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/embodied_tutorial/eval_docs/benchmark_envs.md) 中。
 
 ### 2.2 运行 pi0.5 + LIBERO
 

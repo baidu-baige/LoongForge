@@ -88,6 +88,7 @@ class XVLACollator(BaseCollator):
     @classmethod
     def from_config(
         cls, model_cfg, data_cfg=None, training_args=None, dataset_stats=None, dataset=None,
+        runtime=None,
     ) -> "XVLACollator":
         """Construct an XVLACollator from typed ModelConfig + DataConfig."""
         num_views = (

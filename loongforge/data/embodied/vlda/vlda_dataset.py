@@ -146,5 +146,5 @@ class VLDADataset(Dataset):
         torch.set_rng_state(state["torch"])
 
 
-def build_vlda_dataset(model_cfg, data_cfg, training_args):
+def build_vlda_dataset(model_cfg, data_cfg, training_args, runtime):
     return VLDADataset(training_args.dataset_path, model_cfg, data_cfg, seed=training_args.seed)

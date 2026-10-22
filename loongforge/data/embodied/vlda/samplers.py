@@ -31,8 +31,8 @@ def build_vlda_sampler(context):
         raise ValueError("VLDA uses cyclic sampling to match the original training order")
     return VLDASampler(
         context.dataset,
-        num_replicas=context.ctx.world_size,
-        rank=context.ctx.rank,
+        num_replicas=context.runtime.world_size,
+        rank=context.runtime.rank,
         shuffle=context.shuffle,
         seed=context.seed,
         drop_last=context.training_args.batch_drop_last,

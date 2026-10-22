@@ -16,11 +16,14 @@ shuffling (map-style) or natural iteration (iterable-style).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Iterator, Optional
+from typing import Any, Iterator, Optional, TYPE_CHECKING
 
 import torch
 from torch.utils.data import Dataset, IterableDataset, Sampler
 from torchdata.stateful_dataloader.sampler import StatefulDistributedSampler
+
+if TYPE_CHECKING:
+    from loongforge.data.embodied.registry import DataRuntime
 
 
 @dataclass(frozen=True)
@@ -29,7 +32,7 @@ class SamplerBuilderContext:
 
     dataset: Any
     training_args: Any
-    ctx: Any  # DistributedContext
+    runtime: "DataRuntime"
     batch_size: int
     seed: int
     shuffle: bool
@@ -166,8 +169,8 @@ def default_sampler_builder(context: SamplerBuilderContext) -> Optional[Sampler]
     if isinstance(dataset, IterableDataset):
         return None
 
-    ctx = context.ctx
-    if not (ctx.is_distributed and ctx.world_size > 1):
+    runtime = context.runtime
+    if not (runtime.is_distributed and runtime.world_size > 1):
         return None
 
     drop_last = context.training_args.batch_drop_last
@@ -175,8 +178,8 @@ def default_sampler_builder(context: SamplerBuilderContext) -> Optional[Sampler]
         return GlobalBatchShardSampler(
             dataset,
             batch_size=context.batch_size,
-            num_replicas=ctx.world_size,
-            rank=ctx.rank,
+            num_replicas=runtime.world_size,
+            rank=runtime.rank,
             shuffle=context.shuffle,
             seed=context.seed,
             drop_last=drop_last,
@@ -184,8 +187,8 @@ def default_sampler_builder(context: SamplerBuilderContext) -> Optional[Sampler]
 
     return StatefulDistributedSampler(
         dataset,
-        num_replicas=ctx.world_size,
-        rank=ctx.rank,
+        num_replicas=runtime.world_size,
+        rank=runtime.rank,
         shuffle=context.shuffle,
         seed=context.seed,
         drop_last=drop_last,
@@ -197,7 +200,7 @@ def build_sampler(
     *,
     dataset,
     training_args,
-    ctx,
+    runtime,
     batch_size: int,
     seed: int,
     shuffle: bool = True,
@@ -209,7 +212,7 @@ def build_sampler(
     context = SamplerBuilderContext(
         dataset=dataset,
         training_args=training_args,
-        ctx=ctx,
+        runtime=runtime,
         batch_size=batch_size,
         seed=seed,
         shuffle=shuffle,

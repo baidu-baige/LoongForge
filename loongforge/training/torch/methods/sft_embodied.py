@@ -30,8 +30,19 @@ def build_model(model_cfg, training_args) -> "nn.Module":
 
 def build_dataloaders(model_cfg, data_cfg, training_args, ctx) -> Dict[str, "DataLoader"]:
     """Build dataloaders. Returns {"vla": dl}."""
+    from loongforge.data.embodied.registry import DataRuntime
     from loongforge.data.embodied_dataloader import build_dataloader
-    dl = build_dataloader(model_cfg, data_cfg, training_args, ctx)
+
+    runtime = DataRuntime(
+        rank=ctx.rank,
+        world_size=ctx.world_size,
+        is_distributed=ctx.is_distributed,
+        grad_accum_steps=training_args.gradient_accumulation_steps,
+        deterministic=training_args.deterministic_mode,
+        graph_enabled=training_args.cuda_graph_impl == "local",
+        graph_pad_length=training_args.cuda_graph_pad_length,
+    )
+    dl = build_dataloader(model_cfg, data_cfg, training_args, runtime)
     return {"vla": dl}
 
 
@@ -101,7 +112,6 @@ def on_after_data_iterators_initialized(model, *, training_args, completed_steps
             args=training_args,
             completed_steps=completed_steps,
             optimizer=optimizer,
-            ctx=ctx,
         )
 
 

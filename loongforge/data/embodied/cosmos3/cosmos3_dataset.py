@@ -307,7 +307,7 @@ class DROIDLeRobotDataset(Dataset):
         # crop/resize and ships the 3-view stack; ColorJitter and everything after it
         # run in the deferred pipeline, so the augmentation keeps its pipeline slot.
         self._defer_video_tail = bool(use_image_augmentation and colorjitter_on_gpu)
-        # Set from training_args.deterministic_mode in the main process and pickled
+        # Set from DataRuntime.deterministic in the main process and pickled
         # into workers; torch.are_deterministic_algorithms_enabled() is False inside
         # spawned DataLoader workers, so we cannot rely on it here.
         self._deterministic = bool(deterministic)
@@ -565,7 +565,7 @@ class DROIDLeRobotDataset(Dataset):
         return self._root / rel
 
 
-def build_droid_dataset(model_cfg, data_cfg, training_args) -> DROIDLeRobotDataset:
+def build_droid_dataset(model_cfg, data_cfg, training_args, runtime) -> DROIDLeRobotDataset:
     """Dataset strategy ``cosmos3_droid`` (see ``DATASET_STRATEGIES`` in ``registry.py``).
 
     Reads the chunk length, fps, video backend and augmentation flags from
@@ -578,5 +578,5 @@ def build_droid_dataset(model_cfg, data_cfg, training_args) -> DROIDLeRobotDatas
         video_backend=data_cfg.video_backend,
         use_image_augmentation=data_cfg.use_image_augmentation,
         colorjitter_on_gpu=data_cfg.colorjitter_on_gpu,
-        deterministic=training_args.deterministic_mode,
+        deterministic=runtime.deterministic,
     )

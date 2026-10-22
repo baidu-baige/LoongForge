@@ -54,8 +54,6 @@ ENGINE_MODEL_ALLOWED = (
     ("loongforge", "models", "catalog"),
     ("loongforge", "models", "multimodal"),
 )
-# ``models/embodied/dreamzero/modeling_dreamzero.py`` has one ``TYPE_CHECKING`` import of
-# ``engines.torch.distributed.context.DistributedContext``. It never runs, so it is not listed here.
 # ``MODEL_MODULES`` values that are plain modules, not model packages.
 PLAIN_MODULE_MODEL_TYPES = {"dummy"}
 # ``MODEL_MODULES`` keys that register a collator but no transform builder.
@@ -154,6 +152,26 @@ def _runtime_imports(path):
     return [target for target, type_checking, _ in _imports(path) if not type_checking]
 
 
+@lru_cache(maxsize=1)
+def _torch_engine_argument_names():
+    """Annotated field names of every class in ``engines/torch/arguments.py``."""
+    names = set()
+    for node in ast.walk(_parse(PKG / "engines" / "torch" / "arguments.py")):
+        if not isinstance(node, ast.ClassDef):
+            continue
+        for item in node.body:
+            if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
+                names.add(item.target.id)
+    return names
+
+
+def _is_training_args(node):
+    """True for ``training_args`` and ``<ctx>.training_args``."""
+    return (isinstance(node, ast.Name) and node.id == "training_args") or (
+        isinstance(node, ast.Attribute) and node.attr == "training_args"
+    )
+
+
 def _module_level_imports(path):
     return [target for target, type_checking, in_function in _imports(path) if not (type_checking or in_function)]
 
@@ -226,7 +244,8 @@ class LayeringTest(unittest.TestCase):
     def test_data_imports_no_training_and_limited_engines(self):
         banned = [("loongforge", layer) for layer in ("training", "evaluation", "extensions")]
         for path in _py_files(DATA):
-            for target in _runtime_imports(path):
+            # ``TYPE_CHECKING`` imports count too: data must not depend on the engine schema.
+            for target, _, _ in _imports(path):
                 for prefix in banned:
                     self.assertFalse(_starts_with(target, prefix), f"{_rel(path)}: {'.'.join(target)}")
                 if not _starts_with(target, ("loongforge", "engines")):
@@ -247,6 +266,20 @@ class LayeringTest(unittest.TestCase):
                     offenders,
                     f"{_rel(path)} imports model implementation {'.'.join(target)}",
                 )
+
+    def test_data_reads_no_engine_arguments(self):
+        """Data components get execution facts from ``DataRuntime``, not from backend args."""
+        engine_names = _torch_engine_argument_names()
+        found = set()
+        for path in _py_files(DATA):
+            for node in ast.walk(_parse(path)):
+                if (
+                    isinstance(node, ast.Attribute)
+                    and node.attr in engine_names
+                    and _is_training_args(node.value)
+                ):
+                    found.add((_rel(path), node.lineno, node.attr))
+        self.assertEqual(found, set(), f"data reads Torch engine arguments: {sorted(found)}")
 
     def test_data_and_chat_templates_do_not_read_global_state(self):
         for path in _py_files(DATA) + _py_files(CHAT_TEMPLATES):
@@ -298,7 +331,8 @@ class LayeringTest(unittest.TestCase):
         found = set()
         for path in _py_files(PKG / "models"):
             rel = str(path.relative_to(PKG / "models"))
-            for target in _runtime_imports(path):
+            # ``TYPE_CHECKING`` imports count too: models receive engine state as explicit arguments.
+            for target, _, _ in _imports(path):
                 if _starts_with(target, ("loongforge", "engines")):
                     found.add((rel, ".".join(target)))
         self.assertEqual(found, set(), "models must not import engines")
@@ -409,6 +443,14 @@ class RegistryStringsTest(unittest.TestCase):
             target = EMBODIED.joinpath(*module.split(".")).with_suffix(".py")
             self.assertTrue(target.is_file(), f"DATASET_STRATEGIES[{strategy!r}]: {module}")
             self.assertIn(func, _top_level_names(target), f"DATASET_STRATEGIES[{strategy!r}]: {func}")
+
+    def test_embodied_dataset_formats(self):
+        formats = _literal_assignment(EMBODIED / "registry.py", "DATASET_FORMATS")
+        for dataset_format, entry in formats.items():
+            module, func = entry.split(":")
+            target = EMBODIED.joinpath(*module.split(".")).with_suffix(".py")
+            self.assertTrue(target.is_file(), f"DATASET_FORMATS[{dataset_format!r}]: {module}")
+            self.assertIn(func, _top_level_names(target), f"DATASET_FORMATS[{dataset_format!r}]: {func}")
 
     def test_vlm_task_encoder_registry_strings(self):
         registry = _literal_assignment(DATA / "vlm" / "__init__.py", "TASK_ENCODER_REGISTRY")

@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import logging
 import random
-from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
@@ -16,10 +15,9 @@ from torchdata.stateful_dataloader import StatefulDataLoader
 
 from loongforge.data.embodied.sampler import build_sampler
 from loongforge.data.embodied.registry import build_collator
+from loongforge.data.embodied.registry import build_dataset
 from loongforge.data.embodied.registry import build_transforms_from_args
-
-if TYPE_CHECKING:
-    from loongforge.engines.torch.distributed import DistributedContext
+from loongforge.data.embodied.registry import DataRuntime
 
 logger = logging.getLogger(__name__)
 
@@ -78,25 +76,29 @@ class _TransformedIterableDataset(IterableDataset):
         return getattr(dataset, name)
 
 
-def build_dataloader(model_cfg, data_cfg, training_args, ctx: DistributedContext) -> StatefulDataLoader:
+def build_dataloader(model_cfg, data_cfg, training_args, runtime: DataRuntime) -> StatefulDataLoader:
     """Build DataLoader with model-specific collator as collate_fn.
+
+    ``runtime`` carries the execution facts the training method resolved; data
+    code must not read backend arguments or the backend's distributed context.
 
     The returned DataLoader yields PreparedBatch objects on CPU. Call
     ``batch.to(device)`` before passing a batch to ``model.forward``.
     """
-    dataset_format = training_args.dataset_format
     batch_size = training_args.per_device_batch_size
     num_workers = training_args.num_workers
     mp_context = training_args.dataloader_multiprocessing_context or ("spawn" if num_workers > 0 else None)
 
-    dataset = _build_dataset(model_cfg, data_cfg, training_args, dataset_format)
+    dataset = build_dataset(model_cfg, data_cfg, training_args, runtime)
     dataset_stats = _get_dataset_stats(dataset)
 
-    transform = build_transforms_from_args(model_cfg, data_cfg, training_args, dataset, dataset_stats)
+    transform = build_transforms_from_args(
+        model_cfg, data_cfg, training_args, dataset, dataset_stats, runtime
+    )
     if transform is not None:
         dataset = _apply_transform(dataset, transform)
 
-    collator = _build_collator(model_cfg, data_cfg, training_args, dataset_stats, dataset)
+    collator = _build_collator(model_cfg, data_cfg, training_args, dataset_stats, dataset, runtime)
 
     return _build_stateful_dataloader(
         dataset=dataset,
@@ -106,7 +108,7 @@ def build_dataloader(model_cfg, data_cfg, training_args, ctx: DistributedContext
         num_workers=num_workers,
         mp_context=mp_context,
         training_args=training_args,
-        ctx=ctx,
+        runtime=runtime,
     )
 
 
@@ -134,7 +136,7 @@ def _build_stateful_dataloader(
     num_workers: int,
     mp_context,
     training_args,
-    ctx: DistributedContext,
+    runtime: DataRuntime,
 ) -> StatefulDataLoader:
     seed = training_args.seed
     seed_workers = training_args.dataloader_seed_workers
@@ -160,7 +162,7 @@ def _build_stateful_dataloader(
         model_type,
         dataset=dataset,
         training_args=training_args,
-        ctx=ctx,
+        runtime=runtime,
         batch_size=batch_size,
         seed=seed,
         shuffle=training_args.sampler_shuffle,
@@ -185,7 +187,7 @@ def _build_stateful_dataloader(
     return dl
 
 
-def _build_collator(model_cfg, data_cfg, training_args, dataset_stats, dataset):
+def _build_collator(model_cfg, data_cfg, training_args, dataset_stats, dataset, runtime):
     """Build batch-level collator from the collator registry."""
     model_type = model_cfg.model_type or "dummy"
     collator = build_collator(
@@ -195,30 +197,8 @@ def _build_collator(model_cfg, data_cfg, training_args, dataset_stats, dataset):
         training_args=training_args,
         dataset_stats=dataset_stats,
         dataset=dataset,
+        runtime=runtime,
     )
 
     logger.info(f"Using collator: {model_type}")
     return collator
-
-
-def _build_dataset(model_cfg, data_cfg, training_args, dataset_format: str):
-    """Build dataset instance based on ``--dataset-format``."""
-    if dataset_format == "lerobot_datasets":
-        from .embodied.registry import build_dataset_by_strategy
-
-        return build_dataset_by_strategy(model_cfg, data_cfg, training_args)
-
-    if dataset_format == "hdf5_datasets":
-        from .embodied.xvla.xvla_dataset import build_hdf5_dataset
-
-        return build_hdf5_dataset(model_cfg, data_cfg, training_args)
-
-    if dataset_format == "dummy_datasets":
-        from .embodied.datasets.dummy_dataset import build_dummy_dataset
-
-        return build_dummy_dataset(model_cfg, data_cfg, training_args)
-
-    raise ValueError(
-        f"Unknown dataset_format: '{dataset_format}'. "
-        f"Supported: lerobot_datasets, hdf5_datasets, dummy_datasets"
-    )

@@ -82,6 +82,7 @@ class Pi05Collator(BaseCollator):
     @classmethod
     def from_config(
         cls, model_cfg, data_cfg, training_args=None, dataset_stats=None, dataset=None,
+        runtime=None,
     ) -> "Pi05Collator":
         """Construct from typed ModelConfig + DataConfig (+ TrainingArgs).
 

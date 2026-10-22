@@ -750,7 +750,7 @@ def _as_int_list(value: Any) -> List[int]:
     return [int(item) for item in _as_list(value)]
 
 
-def build_lingbot_dataset(model_cfg, data_cfg, training_args):
+def build_lingbot_dataset(model_cfg, data_cfg, training_args, runtime):
     """Build the LingBot-VA latent dataset for the embodied data engine."""
     config = LingBotVALatentDatasetConfig.from_configs(
         model_cfg, data_cfg, training_args

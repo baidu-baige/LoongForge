@@ -32,8 +32,14 @@ from .utils import filter_kwargs, is_mixed_param_dtype
 logger = logging.getLogger(__name__)
 
 
-def wrap_model(model: nn.Module, training_args, ctx: DistributedContext) -> nn.Module:
-    """Wrap model with DDP or FSDP based on CLI training_args; mixed precision included."""
+def wrap_model(model: nn.Module, training_args, ctx: DistributedContext, *, dmuon_shard=None) -> nn.Module:
+    """Wrap model with DDP or FSDP based on CLI training_args; mixed precision included.
+
+    ``dmuon_shard`` is supplied by a model extension for ``--optimizer=dmuon``:
+    DMuon must claim its parameters before any FSDP2 group exists, so the model
+    extension owns the group layout. The engine still prepares storage dtype,
+    mesh, and mixed precision policy.
+    """
     # Imported here, not at module scope: train/__init__ pulls in trainers, which
     # import this module, so a top-level import would be circular.
     from loongforge.engines.torch.arguments import parse_dtype_from_str
@@ -57,7 +63,7 @@ def wrap_model(model: nn.Module, training_args, ctx: DistributedContext) -> nn.M
 
     strategy = training_args.distributed_strategy
     if strategy == "fsdp":
-        return _wrap_fsdp(model, training_args, ctx, dtype)
+        return _wrap_fsdp(model, training_args, ctx, dtype, dmuon_shard=dmuon_shard)
     else:
         return _wrap_ddp(model, training_args, ctx, dtype)
 
@@ -67,6 +73,8 @@ def _wrap_fsdp(
     training_args,
     ctx: DistributedContext,
     dtype: torch.dtype,
+    *,
+    dmuon_shard=None,
 ) -> nn.Module:
     """Apply FSDP2 wrapping to the model.
 
@@ -89,11 +97,11 @@ def _wrap_fsdp(
     creation in ``sharding``, prefetch edges in ``prefetch``.
 
     ``--optimizer=dmuon`` bypasses all of the above: DMuon has to claim its
-    Muon-route parameters before any group exists, so the model owns the wrap
-    (see ``_wrap_dmuon_fsdp``).
+    Muon-route parameters before any group exists, so the model extension owns
+    the wrap (see ``_wrap_dmuon_fsdp``).
     """
     if training_args.optimizer.lower() == "dmuon":
-        model = _wrap_dmuon_fsdp(model, training_args, ctx, dtype)
+        model = _wrap_dmuon_fsdp(model, training_args, ctx, dtype, dmuon_shard=dmuon_shard)
         _register_delta_fp8_allgather(model, training_args)
         return model
 
@@ -147,24 +155,26 @@ def _wrap_dmuon_fsdp(
     training_args,
     ctx: DistributedContext,
     dtype: torch.dtype,
+    *,
+    dmuon_shard=None,
 ) -> nn.Module:
-    """Apply the model-owned FSDP2 + DMuon wrap path.
+    """Apply the extension-owned FSDP2 + DMuon wrap path.
 
-    DMuon requires the model to own its FSDP wrapping (``convert_to_fsdp``) so
-    ``dmuon.dedicate_params()`` can claim the Muon-route parameters before any
-    ``fully_shard`` group is created. The generic planner in ``_wrap_fsdp``
-    cannot express that ordering, so this path hands mesh and mixed precision
-    policy to the model and lets it build every group itself — wall-oss-0.5
-    (``modeling_qwen2_5_vl_act.convert_to_fsdp``) is the reference implementation.
+    DMuon requires the caller to wrap after ``dmuon.dedicate_params()`` claims
+    the Muon-route parameters, before any ``fully_shard`` group exists. The
+    generic planner in ``_wrap_fsdp`` cannot express that ordering, so a model
+    extension supplies ``dmuon_shard`` (``TorchOptimization.wrap_model``) and
+    builds every group itself. The engine keeps the backend-side preparation.
 
     Unlike ``_wrap_fsdp``, storage defaults to fp32 rather than ``--dtype``:
     DMuon keeps fp32 master weights for its dedicated params, so the whole model
     is cast to fp32 and bf16 compute comes from the mixed precision policy.
     """
-    if not hasattr(model, "convert_to_fsdp"):
+    if dmuon_shard is None:
         raise NotImplementedError(
-            f"Model {model.__class__.__name__} has no convert_to_fsdp method "
-            f"required by --optimizer=dmuon."
+            "--optimizer=dmuon needs an extension that supplies the FSDP wrap; "
+            f"model {model.__class__.__name__} was wrapped without one. "
+            "Register a factory in TORCH_TRAINER_TYPES (training/torch/registry.py)."
         )
 
     # Local import to break the train/__init__ -> trainers -> this module cycle.
@@ -190,12 +200,11 @@ def _wrap_dmuon_fsdp(
         storage_dtype, dtype, reshard_after_forward,
     )
 
-    wrapped = model.convert_to_fsdp(
+    wrapped = dmuon_shard(
+        model,
         mesh=build_fsdp_device_mesh(training_args, ctx),
         mp_policy=mp_policy,
-        offload_policy=None,
         reshard_after_forward=reshard_after_forward,
-        use_dmuon=True,
     )
     # The fp32 cast plus per-group sharding leaves the pre-shard full parameters
     # behind in the caching allocator; reclaim before the first forward.

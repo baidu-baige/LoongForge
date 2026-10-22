@@ -24,9 +24,9 @@ from loongforge.data.embodied.sampler import filter_schedule_for_worker
 _GROOT_N1D7_SHARD_PREFETCH_DEPTH = 3
 
 
-def build_groot_n1_7_lerobot_dataset(model_cfg, data_cfg, training_args):
+def build_groot_n1_7_lerobot_dataset(model_cfg, data_cfg, training_args, runtime):
     """Build and prepare a LeRobot dataset for GR00T-N1.7 sample semantics."""
-    dataset = build_default_lerobot_dataset(model_cfg, data_cfg, training_args)
+    dataset = build_default_lerobot_dataset(model_cfg, data_cfg, training_args, runtime)
     return prepare_groot_n1d7_lerobot_dataset(
         dataset,
         model_cfg,

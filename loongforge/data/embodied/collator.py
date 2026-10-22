@@ -92,6 +92,7 @@ class BaseCollator:
         training_args=None,
         dataset_stats=None,
         dataset=None,
+        runtime=None,
     ) -> "BaseCollator":
         """Construct collator from typed configs."""
         raise NotImplementedError(
@@ -115,6 +116,7 @@ class DummyCollator(BaseCollator):
         training_args=None,
         dataset_stats=None,
         dataset=None,
+        runtime=None,
     ) -> "DummyCollator":
         return cls()
 

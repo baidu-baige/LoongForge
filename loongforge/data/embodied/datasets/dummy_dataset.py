@@ -79,7 +79,7 @@ class DummyVLADataset(Dataset):
 # Builder
 # ═══════════════════════════════════════════════════════════════
 
-def build_dummy_dataset(model_cfg, data_cfg, training_args) -> Dataset:
+def build_dummy_dataset(model_cfg, data_cfg, training_args, runtime) -> Dataset:
     """Build dummy dataset from typed configs + CLI training_args."""
     num_samples = training_args.num_samples
     action_dim = model_cfg.action_dim

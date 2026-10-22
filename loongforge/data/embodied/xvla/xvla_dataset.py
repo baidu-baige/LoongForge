@@ -602,7 +602,7 @@ class HDF5VLADataset(Dataset):
 # Builder
 # ═══════════════════════════════════════════════════════════════
 
-def build_hdf5_dataset(model_cfg, data_cfg, training_args) -> Dataset:
+def build_hdf5_dataset(model_cfg, data_cfg, training_args, runtime) -> Dataset:
     """Build HDF5 dataset from typed configs + CLI training_args."""
     action_horizon = model_cfg.action_horizon
 

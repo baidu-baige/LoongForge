@@ -71,6 +71,9 @@ ARGS=(
     --output-dir "$OUTPUT_DIR"
     --seed "$SEED"
     --set-seed-by-rank
+    # Determinism (cuDNN flags, torch.use_deterministic_algorithms) is decided by
+    # the engine from this flag; the method no longer sets cuDNN state itself.
+    --deterministic-mode
     --optimizer AdamW
     --weight-decay 1e-10
     --weight-decay-grouping all
