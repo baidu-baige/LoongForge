@@ -328,6 +328,7 @@ def _apply_config(args: argparse.Namespace, config: Dict[str, object]) -> argpar
         (benchmark, "disable_expert_check", "disable_expert_check"),
         (benchmark, "domain_id", "domain_id"),
         (benchmark, "action_bridge", "action_bridge"),
+        (benchmark, "instruction_type", "instruction_type"),
         (server, "ckpt_path", "policy_ckpt_path"),
         (model, "unnorm_key", "unnorm_key"),
         (model, "action_mode", "action_mode"),

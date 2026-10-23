@@ -2,7 +2,7 @@
 
 LIBERO is a tabletop robot manipulation benchmark with 4 task suites (Spatial, Object, Goal, Long Horizon), totaling 40 tasks, evaluated on a Franka arm. This page is a step-by-step reproduction guide for running LIBERO evaluation through the LoongForge eval module.
 
-Three models are verified on LIBERO: **pi05**, **xvla**, and **GR00T-N1.6** (all public weights).
+Four models are verified on LIBERO: **pi05**, **xvla**, **GR00T-N1.6** (public weights), and **LingBot-VA** (weights trained with LoongForge from `lingbot-va-base`).
 
 ## Step 0: Download weights
 
@@ -11,6 +11,7 @@ Three models are verified on LIBERO: **pi05**, **xvla**, and **GR00T-N1.6** (all
 | pi05 | [lerobot/pi05_libero_finetuned_v044](https://huggingface.co/lerobot/pi05_libero_finetuned_v044) (`model.safetensors` + `dataset_statistics.json`) |
 | xvla | [2toINF/X-VLA-LIBERO](https://huggingface.co/2toINF/X-VLA-LIBERO) |
 | GR00T-N1.6 | [0xAnkitSingh/GR00T-N1.6-LIBERO](https://huggingface.co/0xAnkitSingh/GR00T-N1.6-LIBERO) (weight dir + Eagle3 processor + `libero_panda` stats) |
+| LingBot-VA | [robbyant/lingbot-va-posttrain-libero-long](https://huggingface.co/robbyant/lingbot-va-posttrain-libero-long) (one root with `transformer/` + `vae/` + `text_encoder/` + `tokenizer/`; libero_10 only) |
 
 ## Step 1: Environment setup
 
@@ -46,6 +47,9 @@ examples/embodied/xvla/eval/run_libero_eval.sh
 
 # GR00T-N1.6
 examples/embodied/groot_n1_6/eval/run_libero_eval.sh
+
+# LingBot-VA (default config: libero_10_full.yaml, 10 tasks x 50 episodes)
+examples/embodied/lingbot_va/eval/run_libero_eval.sh
 ```
 
 Environment variables:
@@ -67,6 +71,7 @@ Key config fields (see `examples/embodied/<model>/eval/configs/libero/*.yaml`):
 - `benchmark.control_mode` — LIBERO OSC: `auto` | `absolute` | `delta`; xvla uses `absolute`
 - pi05: `model.action_dim: 7`, `model.action_horizon: 50`, plus a matching `server.dataset_statistics_path`
 - xvla: `model.domain_id: 3` (or omit to auto-resolve), `server.chunk_execute_steps: 10`, recommended `benchmark.max_steps: 800`
+- LingBot-VA: use `libero_10_full.yaml` as shipped (official LIBERO client protocol: seed 7, `max_steps: 800`, `num_steps_wait: 5`, native 128 rendering); see [LingBot-VA quick start](../../quick_start_lingbot_va.md)
 - GR00T-N1.6: `model.model_type: Gr00tN1d6`, `benchmark.control_mode: delta`, `server.embodiment_tag: libero_panda`, plus `model.base_model_path` / `model.model_name` (Eagle3 processor)
 
 ## Verification
@@ -78,6 +83,7 @@ Task-success status:
 | pi05 | ✅ task success | no full-suite regression run; verified via single-episode smoke only |
 | xvla | ✅ task success | libero_object 94/100 (10 tasks × 10 eps); per-task spread 8/10 … 10/10 |
 | GR00T-N1.6 | ✅ task success | 10 tasks × 10 eps per suite: object 100/100, spatial 95/100, goal 95/100, libero_10 89/100 |
+| LingBot-VA | ✅ task success | libero_10, 10 tasks × 50 eps: 423/500 (84.6%) with LoongForge-trained 5000-step weights |
 
 Report rates as successes/episodes over a full suite; single-episode smoke runs are
 not success rates and are not listed here.

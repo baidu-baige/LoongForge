@@ -19,7 +19,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ── Environment ───────────────────────────────────────────────
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"$(cd "$SCRIPT_DIR/../../.." && pwd)"}
-export LOCAL_VLA_ARTIFACTS_ROOT=${LOCAL_VLA_ARTIFACTS_ROOT:-"/ssd2/loongforge_embodied_ci/vla_artifacts"}
+export LOCAL_VLA_ARTIFACTS_ROOT=${LOCAL_VLA_ARTIFACTS_ROOT:-"/path/to/vla_artifacts"}
 
 # ── Distributed ───────────────────────────────────────────────
 # Cluster schedulers commonly export WORLD_SIZE (node count) and RANK (node rank).
@@ -38,7 +38,7 @@ DISTRIBUTED_ARGS=(
 )
 
 # ── Paths ─────────────────────────────────────────────────────
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/lingbot_va/models/lingbot-va-posttrain-libero-long"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/lingbot_va/models/lingbot-va-base"}
 DATA_PATH=${DATA_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/lingbot_va/datasets/libero-long-lerobot"}
 EMPTY_EMB_PATH=${EMPTY_EMB_PATH:-"$DATA_PATH/empty_emb.pt"}
 OUTPUT_DIR=${OUTPUT_DIR:-"$LOONGFORGE_PATH/outputs/lingbot_va_libero"}
@@ -53,7 +53,8 @@ export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:Tr
 # User-selectable LingBot features.
 export LINGBOT_BALANCED_SAMPLER=${LINGBOT_BALANCED_SAMPLER:-1}           # Balance variable-shape samples across ranks.
 export LINGBOT_FSDP_RESHARD=${LINGBOT_FSDP_RESHARD:-0}                   # 1 restores the framework-default FSDP reshard.
-export LINGBOT_FSDP_BF16_REDUCE=${LINGBOT_FSDP_BF16_REDUCE:-1}           # 0 reduces gradients in FP32 instead of BF16.
+export LINGBOT_FSDP_BF16_REDUCE=${LINGBOT_FSDP_BF16_REDUCE:-0}           # 1 reduces gradients in BF16 instead of FP32.
+export LINGBOT_VA_FIXED_MICROBATCH_RNG=${LINGBOT_VA_FIXED_MICROBATCH_RNG:-0}  # 1 shares timesteps/noise across microbatches.
 # Export the per-rank sample loading order for reproducibility checks.
 export LINGBOT_SAMPLE_ORDER_EXPORT_DIR=${LINGBOT_SAMPLE_ORDER_EXPORT_DIR:-}
 
@@ -68,15 +69,16 @@ NUM_WORKERS=${NUM_WORKERS:-16}
 DATA_ARGS=(
     --dataset-format lerobot_datasets
     --dataset-strategy lingbot_va
+    --no-batch-drop-last
     --dataloader-seed-workers
     --dataloader-multiprocessing-context fork
     --num-workers "$NUM_WORKERS"
 )
 
 # ── Training params ───────────────────────────────────────────
-TRAIN_ITERS=${TRAIN_ITERS:-20}
+TRAIN_ITERS=${TRAIN_ITERS:-5000}
 PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-1}
-GRADIENT_ACCUMULATION_STEPS=${GRADIENT_ACCUMULATION_STEPS:-10}
+GRADIENT_ACCUMULATION_STEPS=${GRADIENT_ACCUMULATION_STEPS:-10}  # 8 GPUs x 1 x 10 = global batch 80
 SAVE_INTERVAL=${SAVE_INTERVAL:-0}
 SEED=${SEED:-42}
 
@@ -86,6 +88,8 @@ TRAINING_ARGS=(
     --per-device-batch-size "$PER_DEVICE_BATCH_SIZE"
     --gradient-accumulation-steps "$GRADIENT_ACCUMULATION_STEPS"
     --seed "$SEED"
+    # Per-rank seeds so each rank draws its own timesteps/noise (see LINGBOT_VA_FIXED_MICROBATCH_RNG).
+    --set-seed-by-rank
     --output-dir "$OUTPUT_DIR"
     # Learning rate
     --lr-base 1e-5
@@ -98,6 +102,9 @@ TRAINING_ARGS=(
     --adam-beta2 0.95
     --weight-decay 0.1
     --clip-grad 2.0
+    # Memory
+    --manual-gc
+    --manual-gc-interval 50
     # Checkpoint
     --save-interval "$SAVE_INTERVAL"
     --save-format dcp
@@ -109,12 +116,20 @@ DISTRIBUTED_TRAINING_ARGS=(
     --distributed-strategy fsdp
     --dtype bfloat16
     --fsdp-wrap-modules WanTransformerBlock
+    --fsdp-min-param-num 1000000000000000
     --fsdp-reshard-default none
+    --fsdp-reduce-dtype fp32
+    --fsdp-unshard-param-dtype bfloat16
+    # Keep FSDP unit inputs in their incoming dtype; the model casts what it needs itself.
+    --no-fsdp-cast-forward-inputs
 )
 
 # ── Logging params ────────────────────────────────────────────
 LOGGING_ARGS=(
     --log-interval 1
+    --detail-log-interval 20
+    # "=" form: the flag takes a list and would otherwise swallow the dotlist overrides.
+    --loss-log-rank=-1
 )
 
 # ── Model/data dotlist overrides ──────────────────────────────
