@@ -71,12 +71,12 @@ Key config fields (see `examples/embodied/<model>/eval/configs/libero/*.yaml`):
 
 ## Verification
 
-Task-success status (2026-07-21):
+Task-success status:
 
 | Model | LIBERO status | Notes |
 |---|---|---|
 | pi05 | ✅ task success | no full-suite regression run; verified via single-episode smoke only |
-| xvla | ✅ task success | libero_object 79/100 (10 tasks × 10 eps); per-task spread 3/10 … 10/10 |
+| xvla | ✅ task success | libero_object 94/100 (10 tasks × 10 eps); per-task spread 8/10 … 10/10 |
 | GR00T-N1.6 | ✅ task success | 10 tasks × 10 eps per suite: object 100/100, spatial 95/100, goal 95/100, libero_10 89/100 |
 
 Report rates as successes/episodes over a full suite; single-episode smoke runs are

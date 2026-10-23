@@ -56,6 +56,6 @@ repos:
     hooks:
       - id: sensitive-scan
         name: Sensitive information scan
-        entry: python3 ci/sensitive_scan.py --ci-summary --paths
+        entry: python3 .github/scripts/sensitive_scan.py --ci-summary --paths
         language: system
         pass_filenames: true

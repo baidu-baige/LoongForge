@@ -158,7 +158,7 @@ redact_artifact() {
   local input="$1"
   local output="$2"
   if [[ -f "$input" ]]; then
-    python3 "$script_dir/../../../ci/redact_ci_artifact.py" \
+    python3 "$script_dir/../redact_ci_artifact.py" \
       --input "$input" --output "$output" || true
   fi
 }
@@ -166,7 +166,7 @@ redact_artifact() {
 cleanup() {
   local exit_status="$status"
   set +e
-  if ! python3 "$script_dir/../../../ci/release_evidence.py" \
+  if ! python3 "$script_dir/../release_evidence.py" \
     --source "$source_dir" --llm-log "$llm_log" --llm-model "$llm_model" \
     --llm-chip "$request_baseline_chip" \
     --vla-results "$LOONGFORGE_HOST_OUTPUT_ROOT/embodied/run-$run_key/results.json" \

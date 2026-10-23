@@ -51,6 +51,16 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+      - name: Validate runner startup masking
+        shell: bash
+        env:
+          RUNNER_PRIVATE_LOG_MASKS: ${{ secrets.RUNNER_PRIVATE_LOG_MASKS }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${RUNNER_PRIVATE_LOG_MASKS//[[:space:]]/}" ]]; then
+            echo "RUNNER_PRIVATE_LOG_MASKS is required for self-hosted execution" >&2
+            exit 1
+          fi
       - id: validate
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         env:
@@ -109,6 +119,8 @@ jobs:
     if: ${{ needs.validate.result == 'success' && inputs.suite == 'llm_vlm' }}
     runs-on: ${{ fromJSON(vars.CI_RUNNER_A) }}
     timeout-minutes: 360
+    env:
+      RUNNER_PRIVATE_LOG_MASKS: ${{ secrets.RUNNER_PRIVATE_LOG_MASKS }}
     concurrency:
       group: gpu-regression-${{ inputs.pr_number }}-llm_vlm
       cancel-in-progress: true
@@ -225,6 +237,8 @@ jobs:
     if: ${{ needs.validate.result == 'success' && inputs.suite == 'embodied' }}
     runs-on: ${{ fromJSON(vars.CI_RUNNER_P) }}
     timeout-minutes: 360
+    env:
+      RUNNER_PRIVATE_LOG_MASKS: ${{ secrets.RUNNER_PRIVATE_LOG_MASKS }}
     outputs:
       regression_summary: ${{ steps.suite_summary.outputs.markdown }}
     concurrency:

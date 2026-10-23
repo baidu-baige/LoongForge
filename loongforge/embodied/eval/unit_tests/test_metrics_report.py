@@ -12,6 +12,7 @@ from loongforge.embodied.eval.metrics.repro_compare import compare_results
 from loongforge.embodied.eval.metrics.report import write_eval_report
 from loongforge.embodied.eval.metrics.resource_monitor import sample_resources
 from loongforge.embodied.eval.metrics.results import (
+    completed_episode_keys,
     load_jsonl,
     summarize_records,
     summarize_suites,
@@ -131,3 +132,71 @@ def test_compare_results_ignores_runtime_fields(tmp_path: Path) -> None:
 
     assert result["match"] is True
     assert result["changed_records"] == []
+
+
+def test_infra_failures_are_not_completed_and_not_in_denominator() -> None:
+    """Infra failures must be retried and must not dilute the success rate."""
+    failed = [
+        {
+            "benchmark": "libero",
+            "task_suite": "libero_object",
+            "task_id": 0,
+            "episode_idx": episode,
+            "success": 0,
+            "failure_reason": "server_unreachable",
+        }
+        for episode in range(3)
+    ]
+    succeeded = {
+        "benchmark": "libero",
+        "task_suite": "libero_object",
+        "task_id": 1,
+        "episode_idx": 0,
+        "success": 1,
+        "failure_reason": None,
+    }
+
+    assert completed_episode_keys(failed) == set()
+    assert completed_episode_keys(failed + [succeeded]) == {("libero", "libero_object", 1, 0)}
+
+    row = summarize_suites(failed + [succeeded], min_episodes=1, expected_counts={0: 3, 1: 1})[0]
+    assert row["n_records"] == 4
+    assert row["n_episodes"] == 1
+    assert row["infra_failed"] == 3
+    assert row["success_rate"] == 1.0
+    assert row["episode_floor_met"] is False
+    assert "task0:0" in row["episode_floor_violations"]
+
+    violations = validate_episode_floor(failed + [succeeded], 1, expected_counts={0: 3, 1: 1})
+    assert [(item["task_id"], item["n_episodes"]) for item in violations] == [(0, 0)]
+
+
+def test_expected_counts_report_a_fully_missing_task() -> None:
+    """A task absent from the records must be visible, not silently skipped."""
+    records = [
+        {"benchmark": "libero", "task_suite": "libero_object", "task_id": task, "episode_idx": episode, "success": 1}
+        for task in range(2)
+        for episode in range(3)
+    ]
+    row = summarize_suites(records, expected_counts={0: 3, 1: 3, 2: 3})[0]
+    assert row["n_tasks"] == 3
+    assert row["min_episodes_per_task"] == 0
+    assert row["episode_floor_met"] is False
+    assert "task2:0" in row["episode_floor_violations"]
+    assert [item["task_id"] for item in validate_episode_floor(records, 3, expected_counts={0: 3, 1: 3, 2: 3})] == [2]
+
+
+def test_compare_results_handles_calvin_sequences(tmp_path: Path) -> None:
+    """CALVIN has no task_id/episode_idx; sequence_idx is the record identity."""
+    left_path = tmp_path / "left.jsonl"
+    right_path = tmp_path / "right.jsonl"
+    left = {"benchmark": "calvin", "task_suite": "task_D_D", "sequence_idx": 0, "success_count": 5}
+    right = dict(left, success_count=4)
+    left_path.write_text(json.dumps(left) + "\n", encoding="utf-8")
+    right_path.write_text(json.dumps(right) + "\n", encoding="utf-8")
+
+    result = compare_results(left_path, right_path)
+
+    assert result["match"] is False
+    assert result["changed_records"][0]["key"] == ("calvin", "task_D_D", "sequence", 0)
+    assert result["left_suite_summary"][0]["n_episodes"] == 1

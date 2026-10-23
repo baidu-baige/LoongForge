@@ -127,6 +127,17 @@ jobs:
             --llm-model "$llm_model" \
             --vla-model "$vla_model" \
             --source .
+      - name: Validate runner startup masking
+        if: steps.stages.outputs.skip_regression_reason != '__dry_run__'
+        shell: bash
+        env:
+          RUNNER_PRIVATE_LOG_MASKS: ${{ secrets.RUNNER_PRIVATE_LOG_MASKS }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${RUNNER_PRIVATE_LOG_MASKS//[[:space:]]/}" ]]; then
+            echo "RUNNER_PRIVATE_LOG_MASKS is required for self-hosted execution" >&2
+            exit 1
+          fi
       - id: version
         shell: bash
         env:
@@ -200,6 +211,7 @@ jobs:
     timeout-minutes: 360
     environment: iregistry-release
     env:
+      RUNNER_PRIVATE_LOG_MASKS: ${{ secrets.RUNNER_PRIVATE_LOG_MASKS }}
       INTERNAL_IMAGE_REPOSITORY: ${{ secrets.INTERNAL_IMAGE_REPOSITORY }}
       VERSION: ${{ needs.validate.outputs.version }}
       BUILD_IMAGE: ${{ needs.validate.outputs.build_image }}
@@ -375,6 +387,7 @@ jobs:
     timeout-minutes: 90
     environment: dockerhub-release
     env:
+      RUNNER_PRIVATE_LOG_MASKS: ${{ secrets.RUNNER_PRIVATE_LOG_MASKS }}
       INTERNAL_IMAGE_REPOSITORY: ${{ secrets.INTERNAL_IMAGE_REPOSITORY }}
       DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_IMAGE || 'docker.io/loongforge/loongforge' }}
       VERSION: ${{ needs.validate.outputs.version }}
@@ -524,6 +537,7 @@ jobs:
     runs-on: ${{ fromJSON(vars.CI_RELEASE_RUNNER) }}
     timeout-minutes: 10
     env:
+      RUNNER_PRIVATE_LOG_MASKS: ${{ secrets.RUNNER_PRIVATE_LOG_MASKS }}
       DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_IMAGE || 'docker.io/loongforge/loongforge' }}
       VERSION: ${{ needs.validate.outputs.version }}
       DEBUG_TAG_SUFFIX: ${{ needs.validate.outputs.debug_tag_suffix }}

@@ -5,7 +5,7 @@
 
 Kept as a Python module (rather than JSON/TOML) so that patterns can use raw
 strings without double-escaping, and so that each rule can carry an inline
-rationale. Consumed by ``ci/sensitive_scan.py``.
+rationale. Consumed by ``.github/scripts/sensitive_scan.py``.
 
 Severity contract:
     error - blocks CI. Directly identifies internal infrastructure, a person,
@@ -157,6 +157,20 @@ RULES = [
         "hint": "Use localhost, a DNS name, or an env-var override.",
     },
     {
+        "id": "runner-proxy-disclosure",
+        "severity": "error",
+        "title": "Unmasked runner startup proxy",
+        "why": "The runner prints proxy metadata before workflow steps can "
+               "register log masks.",
+        "pattern": r"(?i)\bRunner is running behind proxy server ['\"]"
+                   r"https?://(?!(?:[^@/'\"]+@)?"
+                   r"(?:\*{3}|localhost|127\.0\.0\.1|\[::1\])(?=[:/'\"]))"
+                   r"[^'\"\r\n]+['\"] for all HTTPS? requests\.",
+        "hint": "Register the endpoint and hostname in the repository-level "
+                "RUNNER_PRIVATE_LOG_MASKS secret before starting the job.",
+        "redact": True,
+    },
+    {
         "id": "hardcoded-proxy",
         "severity": "error",
         "title": "Hardcoded proxy endpoint",
@@ -304,7 +318,7 @@ ALLOWLIST = [
     },
     {
         "rule": "*",
-        "path": "ci/sensitive_rules.py",
+        "path": ".github/scripts/sensitive_rules.py",
         "reason": "Rule patterns necessarily contain the strings they match.",
     },
     {

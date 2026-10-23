@@ -28,9 +28,37 @@ class ManagedServer:
         return f"http://{self.args.host}:{self.args.health_port}/healthz"
 
     def start(self) -> None:
-        """Run start."""
-        self.process = start_server(self.args)
-        wait_healthz(self.health_url, self.args.server_start_timeout_sec, self.process)
+        """Start the policy server, retrying transient port-bind failures.
+
+        Consecutive ``sweep`` entries stop one server and immediately start the
+        next one on the same port. The listening socket occasionally survives
+        the old process long enough to make the new bind fail with
+        ``EADDRINUSE``; retrying is safe because the server never became
+        healthy. Other startup failures are raised immediately.
+        """
+        attempts = 3
+        for attempt in range(attempts):
+            self.process = start_server(self.args)
+            try:
+                wait_healthz(self.health_url, self.args.server_start_timeout_sec, self.process)
+                return
+            except RuntimeError:
+                self.stop()
+                if attempt + 1 >= attempts or not self._bind_failed():
+                    raise
+                time.sleep(2.0 * (attempt + 1))
+
+    def _bind_failed(self) -> bool:
+        """Return True when the server log shows a transient port-bind error."""
+        log_path = Path(self.args.server_log)
+        try:
+            with log_path.open("rb") as file:
+                file.seek(0, os.SEEK_END)
+                file.seek(max(0, file.tell() - 8192))
+                tail = file.read().decode("utf-8", errors="replace").lower()
+        except OSError:
+            return False
+        return "address already in use" in tail or "eaddrinuse" in tail
 
     def ensure_running(self) -> None:
         """Run ensure_running."""
