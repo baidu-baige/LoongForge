@@ -613,8 +613,12 @@ class _OptimizerArgs:
         default="AdamW",
         metadata={
             "help": "Optimizer name. Supported: AdamW, TorchFusedAdamW, "
-                    "TEFusedAdamW, ApexFusedAdamW, Adam, SGD, Dmuon. TEFusedAdamW "
-                    "requires TransformerEngine; ApexFusedAdamW requires Apex."
+                    "TEFusedAdamW, ApexFusedAdamW, Adam, SGD, Dmuon, "
+                    "muon. TEFusedAdamW requires TransformerEngine; "
+                    "ApexFusedAdamW requires Apex. Dmuon is the third-party "
+                    "package's FSDP2 Muon; muon is LoongForge's own "
+                    "Muon, built by a tensor_wise trainer "
+                    "(--trainer-type LingbotVlaV2Trainer)."
         },
     )
     clip_grad: float = field(
@@ -726,6 +730,30 @@ class _OptimizerArgs:
                     "--dmuon-adamw-foreach."
         },
     )
+    muon_momentum: float = field(
+        default=0.95,
+        metadata={
+            "help": "Muon momentum. Used by --optimizer=muon, which "
+                    "is built by the tensor_wise trainer rather than by "
+                    "the optimizer registry."
+        },
+    )
+    muon_nesterov: bool = field(
+        default=True,
+        metadata={"help": "Enable Muon Nesterov momentum."},
+    )
+    muon_ns_steps: int = field(
+        default=5,
+        metadata={"help": "Number of Newton-Schulz iterations used by Muon."},
+    )
+    muon_adjust_lr_fn: str = field(
+        default="match_rms_adamw",
+        metadata={
+            "help": "Muon learning-rate adjustment function; see "
+                    "torch.optim.Muon for the accepted values."
+        },
+    )
+
 
 @dataclass(frozen=True)
 class _DataArgs:
