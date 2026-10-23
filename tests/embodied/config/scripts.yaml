@@ -8,9 +8,9 @@ pi05_ddp:                          pi05/run_pi05_ddp_finetune.sh
 pi05_fsdp:                         pi05/run_pi05_fsdp_finetune.sh
 pi05_ddp_zero1:                    pi05/run_pi05_ddp_zero1_finetune.sh
 
-# --- groot ---
-groot_n1_6_ddp:                    groot_n1_6/run_groot_n1_6_ddp_finetune.sh
-groot_n1_7_ddp:                    groot_n1_7/run_groot_n1_7_ddp_finetune.sh
+# --- gr00t ---
+gr00t_n1_6_ddp:                    gr00t_n1_6/run_gr00t_n1_6_ddp_finetune.sh
+gr00t_n1_7_ddp:                    gr00t_n1_7/run_gr00t_n1_7_ddp_finetune.sh
 
 # --- cosmos3 ---
 cosmos3_nano_fsdp:                 cosmos3/run_cosmos3_nano_droid_fsdp_finetune.sh

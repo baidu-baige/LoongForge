@@ -15,7 +15,7 @@ from loongforge.embodied.eval.adapters.libero import LiberoAdapter
 from loongforge.embodied.eval.orchestrator.config import apply_config
 from loongforge.embodied.eval.orchestrator.runners import libero_gr00t_runner as gr00t
 from loongforge.embodied.eval.orchestrator.runners import libero_runner as legacy
-from loongforge.embodied.eval.payload_builders.groot_n1_7 import GrootN1d7PayloadBuilder
+from loongforge.embodied.eval.payload_builders.gr00t_n1_7 import GrootN1d7PayloadBuilder
 
 
 def observation():
@@ -90,7 +90,7 @@ class FakeClient:
 
 def arguments(**kwargs):
     args = legacy.build_argparser().parse_args([])
-    args.libero_protocol = "groot_official"
+    args.libero_protocol = "gr00t_official"
     args.episodes_per_task = 11
     args.num_steps_wait = 0
     args.max_steps = 17
@@ -295,7 +295,7 @@ def test_all_failed_or_unparsed_has_no_rate():
 def test_explicit_config_routing_and_legacy_default(monkeypatch):
     args = legacy.build_argparser().parse_args([])
     assert args.libero_protocol == "legacy"
-    apply_config(args, {"benchmark": {"libero_protocol": "groot_official"}})
+    apply_config(args, {"benchmark": {"libero_protocol": "gr00t_official"}})
     run = Mock(return_value={"official": True})
     monkeypatch.setattr(legacy, "_run_batch_groot_official", run)
     assert legacy.run_batch(args) == {"official": True}

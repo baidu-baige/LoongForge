@@ -7,7 +7,7 @@
 The regression targets are defined by the config/scripts.yaml manifest (name -> script relative path); scripts are executed verbatim.
 
 Usage examples:
-    python3 tests/embodied/cli.py --models pi05 groot_n1_6
+    python3 tests/embodied/cli.py --models pi05 gr00t_n1_6
     python3 tests/embodied/cli.py --auto_collect_baseline   # collect baseline on first run
     python3 tests/embodied/cli.py --dry_run                 # only print commands, do not train
 """

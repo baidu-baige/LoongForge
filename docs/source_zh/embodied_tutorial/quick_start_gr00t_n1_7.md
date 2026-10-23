@@ -106,7 +106,7 @@ LOONGFORGE_PATH=/path/to/LoongForge \
 CHECKPOINT_PATH=/path/to/GR00T-N1.7-3B \
 COSMOS_LOCAL_PATH=/path/to/Cosmos-Reason2-2B \
 DATASET_ROOT=/path/to/IPEC-COMMUNITY \
-OUTPUT_ROOT=/path/to/outputs/groot_n1_7_libero \
+OUTPUT_ROOT=/path/to/outputs/gr00t_n1_7_libero \
 bash run_libero_sft.sh spatial
 
 # 依次微调全部 suite（spatial、object、goal、10）
@@ -136,7 +136,7 @@ TRAIN_ITERS=20 SAVE_INTERVAL=20 bash run_libero_sft.sh goal
 | `SAVE_INTERVAL` | 1000 | checkpoint 保存间隔（步） |
 | `LR_WARMUP_ITERS` | `TRAIN_ITERS / 20` | 学习率 warmup 步数（5%），之后按 cosine 衰减到 0，峰值学习率 1e-4 |
 
-**模型与数据配置**：模型和数据相关参数在 `configs/models/embodied/groot_n1_7.yaml` 中配置，常用字段如下：
+**模型与数据配置**：模型和数据相关参数在 `configs/models/embodied/gr00t_n1_7.yaml` 中配置，常用字段如下：
 
 | 字段 | 默认值 | 说明 |
 |---|:---:|---|
@@ -184,7 +184,7 @@ LIBERO 脚本默认开启 full-iteration CUDA Graph：前几步以 eager 模式 
 | `--dataloader-multiprocessing-context` | `fork` | DataLoader worker 的进程启动方式 |
 | `--distributed-sampler-mode` | `block` | 按连续分片（而非轮转）为各 rank 划分样本 |
 
-**融合算子**：GR00T-N1.7 依赖一组自定义 CUDA 融合算子 `groot_n1_7_op`（源码位于 `ops/cuda_source/groot_n1_7_op`），用于减少 kernel 数量和显存读写：
+**融合算子**：GR00T-N1.7 依赖一组自定义 CUDA 融合算子 `gr00t_n1_7_op`（源码位于 `ops/cuda_source/gr00t_n1_7_op`），用于减少 kernel 数量和显存读写：
 
 | 算子 | 说明 |
 |---|---|
@@ -192,10 +192,10 @@ LIBERO 脚本默认开启 full-iteration CUDA Graph：前几步以 eager 模式 
 | Fused AdamW | 基于 `MultiTensorApply` 的融合 AdamW，与 PyTorch AdamW 数值对齐；提供 capturable 版本，可被 CUDA Graph 捕获。仅在 `--optimizer TEFusedAdamW` 时使用，LIBERO 脚本默认的 `AdamW` 不会用到 |
 | DDP reducer bucket control | 控制 DDP `c10d::Reducer` 的梯度 bucket 初始化，配合 graph 内梯度同步使用 |
 
-训练脚本启动时会检查 `groot_n1_7_op` 是否可导入，未安装时自动从源码编译安装（仅首次需要，耗时数分钟）。也可以提前手动安装：
+训练脚本启动时会检查 `gr00t_n1_7_op` 是否可导入，未安装时自动从源码编译安装（仅首次需要，耗时数分钟）。也可以提前手动安装：
 
 ```bash
-cd ops/cuda_source/groot_n1_7_op
+cd ops/cuda_source/gr00t_n1_7_op
 pip install --no-build-isolation -e .
 ```
 
@@ -253,7 +253,7 @@ pip install websockets
 cd examples/embodied/gr00t_n1_7/eval
 
 COSMOS_PATH=/path/to/Cosmos-Reason2-2B \
-CKPT_PATH=/path/to/outputs/groot_n1_7_libero/libero_{suite}/checkpoints/steps_20000 \
+CKPT_PATH=/path/to/outputs/gr00t_n1_7_libero/libero_{suite}/checkpoints/steps_20000 \
 STATS_PATH=/path/to/IPEC-COMMUNITY/libero_{suite}_no_noops_1.0.0_lerobot/meta/stats.json \
 LOONGFORGE_PATH=/path/to/LoongForge \
 OUT_ROOT=/path/to/outputs \

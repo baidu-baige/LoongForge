@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This directory contains custom fused operators that power LoongForge's training acceleration, including Sparse MLA Attention, Lightning Indexer implementations, groot_n1_7_op, and wall_oss_05_op.
+This directory contains custom fused operators that power LoongForge's training acceleration, including Sparse MLA Attention, Lightning Indexer implementations, gr00t_n1_7_op, and wall_oss_05_op.
 
 ### TileLang Operators
 
@@ -18,7 +18,7 @@ Installable packages that expose their operators as a normal Python import.
 Each one has its own README with the full operator list, tensor layout
 requirements, and build options:
 
-- [`groot_n1_7_op`](cuda_source/groot_n1_7_op/README.md) — GR00T-N1.7 fused operators:
+- [`gr00t_n1_7_op`](cuda_source/gr00t_n1_7_op/README.md) — GR00T-N1.7 fused operators:
   Qwen3-VL vision/text RoPE, RMSNorm and SiLU-multiply; precision-compatible
   fused AdamW (eager / capturable / capturable with fused gradient scale);
   `c10d::Reducer` bucket initialization and inspection.

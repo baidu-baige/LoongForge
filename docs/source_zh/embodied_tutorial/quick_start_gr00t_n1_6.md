@@ -1,6 +1,6 @@
 # 快速入门：GR00TN1.6模型训练
 
-本文档介绍如何在 LoongForge 框架下快速启动 框架下 **GROOTN1.6** SFT（监督微调）训练
+本文档介绍如何在 LoongForge 框架下快速启动 框架下 **GR00T N1.6** SFT（监督微调）训练
 
 ## 0. 资源准备
 ### 0.1 模型权重
@@ -51,14 +51,14 @@ export LOONGFORGE_PATH=/workspace/LoongForge
 export CHECKPOINT_PATH=/workspace/huggingface.co/nvidia/GR00T-N1.6-3B
 export EAGLE_LOCAL_PATH=/workspace/huggingface.co/aravindhs-NV/eagle3-processor-groot-n1d6
 export DATA_PATH=/workspace/libero_10
-export OUTPUT_DIR=/workspace/outputs/groot_n1_6
-export TENSORBOARD_PATH=/workspace/tensorboard-log/groot_n1_6
+export OUTPUT_DIR=/workspace/outputs/gr00t_n1_6
+export TENSORBOARD_PATH=/workspace/tensorboard-log/gr00t_n1_6
 ```
 ### 2.1 无性能优化项的脚本
 用于先验证链路，关闭 CUDA Graph、DDP static graph，并使用普通 `AdamW`：
 
 ```bash
-bash /workspace/LoongForge/examples/embodied/gr00t_n1_6/run_groot_n1_6_ddp_finetune.sh \
+bash /workspace/LoongForge/examples/embodied/gr00t_n1_6/run_gr00t_n1_6_ddp_finetune.sh \
     --optimizer AdamW \
     --cuda-graph-impl none \
     --cuda-graph-pad-length 0 \
@@ -68,7 +68,7 @@ bash /workspace/LoongForge/examples/embodied/gr00t_n1_6/run_groot_n1_6_ddp_finet
 默认脚本已经打开主要性能优化：
 
 ```bash
-bash /workspace/LoongForge/examples/embodied/gr00t_n1_6/run_groot_n1_6_ddp_finetune.sh
+bash /workspace/LoongForge/examples/embodied/gr00t_n1_6/run_gr00t_n1_6_ddp_finetune.sh
 ```
 关键性能优化项开关：
 

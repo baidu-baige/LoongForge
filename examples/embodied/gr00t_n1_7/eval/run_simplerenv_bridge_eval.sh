@@ -19,7 +19,7 @@
 set -euo pipefail
 
 # ---- Paths injected into the task YAMLs at runtime ----
-COSMOS_PATH=${COSMOS_PATH:-"/path/to/groot/Cosmos-Reason2-2B"}
+COSMOS_PATH=${COSMOS_PATH:-"/path/to/gr00t/Cosmos-Reason2-2B"}
 CKPT_PATH=${CKPT_PATH:-"/path/to/bridge/checkpoints"}
 STATS_PATH=${STATS_PATH:-"/path/to/datasets/stats.json"}
 LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/path/to/LoongForge"}
@@ -39,7 +39,7 @@ TASKS=${TASKS:-"widowx_open_drawer widowx_close_drawer widowx_spoon_on_towel wid
 EPISODES=${EPISODES:-100}
 SEED=${SEED:-0}
 
-export PYTHONPATH="$LOONGFORGE_PATH:$LOONGFORGE_PATH/ops/cuda_source/groot_n1_7_op:${PYTHONPATH:-}"
+export PYTHONPATH="$LOONGFORGE_PATH:$LOONGFORGE_PATH/ops/cuda_source/gr00t_n1_7_op:${PYTHONPATH:-}"
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false
 # Required on the render side:
 #   LD_PRELOAD mesa libGLdispatch -> otherwise `import sapien` fails with _glapi_tls_Current

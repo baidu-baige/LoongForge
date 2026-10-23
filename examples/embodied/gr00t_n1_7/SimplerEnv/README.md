@@ -93,7 +93,7 @@ LOONGFORGE_PATH=/path/to/LoongForge \
 CHECKPOINT_PATH=/path/to/GR00T-N1.7-3B \
 COSMOS_LOCAL_PATH=/path/to/Cosmos-Reason2-2B \
 DATASET_PATH=/path/to/IPEC-COMMUNITY/bridge_orig_lerobot \
-OUTPUT_ROOT=/path/to/outputs/groot_n1_7_bridge \
+OUTPUT_ROOT=/path/to/outputs/gr00t_n1_7_bridge \
 bash run_bridge_sft.sh
 
 # Finetune Fractal (Google Robot)
@@ -103,7 +103,7 @@ LOONGFORGE_PATH=/path/to/LoongForge \
 CHECKPOINT_PATH=/path/to/GR00T-N1.7-3B \
 COSMOS_LOCAL_PATH=/path/to/Cosmos-Reason2-2B \
 DATASET_PATH=/path/to/IPEC-COMMUNITY/fractal20220817_data_lerobot \
-OUTPUT_ROOT=/path/to/outputs/groot_n1_7_fractal \
+OUTPUT_ROOT=/path/to/outputs/gr00t_n1_7_fractal \
 bash run_fractal_sft.sh
 ```
 

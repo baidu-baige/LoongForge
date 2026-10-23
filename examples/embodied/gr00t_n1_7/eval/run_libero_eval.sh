@@ -5,12 +5,12 @@
 # Public: GR00T-N1.7 LIBERO task-success, serial evaluation of one or more suites.
 #
 # - Each suite YAML (configs/libero/libero_<suite>.yaml) holds only the fixed eval
-#   protocol (benchmark.libero_protocol: groot_official, 720 steps, chunk 8, ...);
+#   protocol (benchmark.libero_protocol: gr00t_official, 720 steps, chunk 8, ...);
 #   the machine/artifact paths below are injected at runtime, so no YAML needs editing.
 # - One policy server per suite on a single GPU, one LIBERO env; suites, tasks and
 #   episodes all run serially. The orchestrator starts and stops the server itself.
-# - groot_official writes every invocation to a fresh
-#   <run>/<suite>/groot_official/<run-id>/ (resume/restart are ignored).
+# - gr00t_official writes every invocation to a fresh
+#   <run>/<suite>/gr00t_official/<run-id>/ (resume/restart are ignored).
 #
 # Usage:
 #   bash run_libero_eval.sh                                         # 4 suites x 10 tasks x 20 episodes
@@ -19,7 +19,7 @@
 set -euo pipefail
 
 # ---- Paths injected into the suite YAMLs at runtime ----
-COSMOS_PATH=${COSMOS_PATH:-"/path/to/groot/Cosmos-Reason2-2B"}
+COSMOS_PATH=${COSMOS_PATH:-"/path/to/gr00t/Cosmos-Reason2-2B"}
 # CKPT_PATH / STATS_PATH may contain {suite} (e.g. .../libero_{suite}/checkpoints/steps_20000);
 # it is replaced by the suite name without the libero_ prefix (10, goal, object, spatial).
 CKPT_PATH=${CKPT_PATH:-"/path/to/GR00T-N1.7-LIBERO/libero_{suite}"}
@@ -39,7 +39,7 @@ MAX_TASKS=${MAX_TASKS:-0}      # 0 = all 10 tasks of the suite
 SEED=${SEED:-42}
 MUJOCO_GL=${MUJOCO_GL:-egl}    # osmesa in the YAMLs; egl where osmesa is not installed
 
-export PYTHONPATH="$LOONGFORGE_PATH:$LOONGFORGE_PATH/ops/cuda_source/groot_n1_7_op:${PYTHONPATH:-}"
+export PYTHONPATH="$LOONGFORGE_PATH:$LOONGFORGE_PATH/ops/cuda_source/gr00t_n1_7_op:${PYTHONPATH:-}"
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false
 export CUDA_VISIBLE_DEVICES="$GPU"
 # The policy server is a child process and inherits these. COSMOS_LOCAL_PATH loads
@@ -103,7 +103,7 @@ for suite in "${SUITE_ARR[@]}"; do
     "$BENCHMARK_PYTHON" -m loongforge.embodied.eval.orchestrator.run --config "$cfg" \
         > "$sdir/eval.log" 2>&1 \
         || { echo "ERROR: $suite failed, see $sdir/eval.log" >&2; exit 1; }
-    echo "  done: $(find "$sdir/groot_official" -name suite_summary.csv | head -n1)"
+    echo "  done: $(find "$sdir/gr00t_official" -name suite_summary.csv | head -n1)"
 done
 
 echo "===== Summary ====="
@@ -113,9 +113,9 @@ run_dir, n, suites = pathlib.Path(sys.argv[1]), int(sys.argv[2]), sys.argv[3:]
 w = max(len(s) for s in suites)
 rates = []
 for s in suites:
-    runs = sorted((run_dir / s / "groot_official").glob("*/tasks.jsonl"))
+    runs = sorted((run_dir / s / "gr00t_official").glob("*/tasks.jsonl"))
     if len(runs) != 1:
-        raise SystemExit(f"INVALID: {s} has {len(runs)} groot_official runs (expected 1)")
+        raise SystemExit(f"INVALID: {s} has {len(runs)} gr00t_official runs (expected 1)")
     tasks = [json.loads(l) for l in runs[0].read_text().splitlines() if l.strip()]
     bad = [t["task_id"] for t in tasks if t["status"] != "OK" or t["n_episodes"] != n]
     if bad:

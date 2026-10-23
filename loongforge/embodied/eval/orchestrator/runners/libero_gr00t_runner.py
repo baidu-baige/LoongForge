@@ -3,7 +3,7 @@
 #
 # Modified from Isaac-GR00T under the Apache-2.0 License.
 
-"""Opt-in GR00T official LIBERO protocol (benchmark.libero_protocol: groot_official).
+"""Opt-in GR00T official LIBERO protocol (benchmark.libero_protocol: gr00t_official).
 
 Purely additive: reached only through the dispatch at the top of
 ``libero_runner.run_batch``; the legacy path never calls into this module.
@@ -33,7 +33,7 @@ from loongforge.embodied.eval.orchestrator.config import build_rpc_payload
 from loongforge.embodied.eval.orchestrator.runners import _common
 from loongforge.embodied.eval.transport import PolicyClient
 
-GROOT_OFFICIAL_PROTOCOL = "groot_official"
+GROOT_OFFICIAL_PROTOCOL = "gr00t_official"
 GROOT_OFFICIAL_MACRO_STEPS = 8
 
 
@@ -131,14 +131,14 @@ def collect_groot_official_task(
     args, task, task_id, run_id, env_factory=_make_groot_official_env, client_factory=PolicyClient,
 ):
     """Return exactly ``episodes_per_task`` completed episodes, or raise."""
-    from loongforge.embodied.eval.payload_builders.groot_n1_7 import GrootN1d7PayloadBuilder
+    from loongforge.embodied.eval.payload_builders.gr00t_n1_7 import GrootN1d7PayloadBuilder
 
     target = args.episodes_per_task
     adapter = GrootOfficialAdapter(suite_name=args.task_suite_name)
     builder, key, _ = _common.build_policy_stack(args, adapter)
     if (not isinstance(builder, GrootN1d7PayloadBuilder) or key
             or builder.state_encoding != "libero_ee_axis_angle"):
-        raise ValueError("groot_official requires GR00T N1.7 LIBERO axis-angle policy")
+        raise ValueError("gr00t_official requires GR00T N1.7 LIBERO axis-angle policy")
     seed = int(args.seed)
     episode_timeout = args.per_episode_timeout_sec
     step_timeout = args.per_step_timeout_sec
@@ -228,11 +228,11 @@ def _run_batch_groot_official(args):
     if args.episodes_per_task < 1:
         raise ValueError("episodes_per_task must be positive")
     if args.num_steps_wait != 0 or getattr(args, "chunk_execute_steps", 8) != 8:
-        raise ValueError("groot_official requires num_steps_wait=0 and chunk_execute_steps=8")
+        raise ValueError("gr00t_official requires num_steps_wait=0 and chunk_execute_steps=8")
     if (getattr(args, "control_mode", "auto") not in {"auto", "delta"}
             or getattr(args, "continuous_gripper", False)
             or getattr(args, "render_resolution", 256) not in {0, 256}):
-        raise ValueError("groot_official requires delta control, sign gripper and 256px rendering")
+        raise ValueError("gr00t_official requires delta control, sign gripper and 256px rendering")
     if args.max_steps <= 0:
         args.max_steps = 720
     os.environ.setdefault("MUJOCO_GL", "egl")

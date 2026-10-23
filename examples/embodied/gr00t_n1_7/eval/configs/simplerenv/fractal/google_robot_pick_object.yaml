@@ -43,7 +43,7 @@ server:
   port: 13833
   health_port: 13834
   python: /path/to/conda/envs/loongforge/bin/python
-  log: /path/to/reports/groot_n1_7/simplerenv/google_robot_pick_object/policy_server.log
+  log: /path/to/reports/gr00t_n1_7/simplerenv/google_robot_pick_object/policy_server.log
   start_timeout_sec: 2400
   random_init: false
   ckpt_path: /path/to/GR00T-N1.7-SimplerEnv-Fractal
@@ -63,7 +63,7 @@ env:
   nvidia_icd_json: /path/to/nvidia_lib/10_nvidia.json
 
 run:
-  output_dir: /path/to/reports/groot_n1_7/simplerenv/google_robot_pick_object
+  output_dir: /path/to/reports/gr00t_n1_7/simplerenv/google_robot_pick_object
   seed: 0
   episode_idx: 0
   obj_episode_id: 0

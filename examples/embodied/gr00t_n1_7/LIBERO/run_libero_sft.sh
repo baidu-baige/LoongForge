@@ -19,14 +19,14 @@ set -euo pipefail
 
 # ---- Paths ----
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/path/to/LoongForge"}
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/path/to/groot/GR00T-N1.7-3B"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/path/to/gr00t/GR00T-N1.7-3B"}
 # Holds libero_<suite>_no_noops_1.0.0_lerobot/ for each suite.
 DATASET_ROOT=${DATASET_ROOT:-"/path/to/datasets/IPEC-COMMUNITY"}
-OUTPUT_ROOT=${OUTPUT_ROOT:-"/path/to/outputs/groot_n1_7_libero"}
+OUTPUT_ROOT=${OUTPUT_ROOT:-"/path/to/outputs/gr00t_n1_7_libero"}
 # Qwen3-VL / Cosmos-Reason2 backbone (architecture + processor/tokenizer).
-export COSMOS_LOCAL_PATH=${COSMOS_LOCAL_PATH:-"/path/to/groot/Cosmos-Reason2-2B"}
+export COSMOS_LOCAL_PATH=${COSMOS_LOCAL_PATH:-"/path/to/gr00t/Cosmos-Reason2-2B"}
 export TOKENIZER_PATH=${TOKENIZER_PATH:-"$COSMOS_LOCAL_PATH"}
-GROOT_N1_7_OPS_SRC=${GROOT_N1_7_OPS_SRC:-"$LOONGFORGE_PATH/ops/cuda_source/groot_n1_7_op"}
+GR00T_N1_7_OPS_SRC=${GR00T_N1_7_OPS_SRC:-"$LOONGFORGE_PATH/ops/cuda_source/gr00t_n1_7_op"}
 TRAIN_PY=${TRAIN_PY:-"python"}
 
 # ---- Suites ----
@@ -41,14 +41,14 @@ if [ "${#SUITES[@]}" -eq 1 ] && [ "${SUITES[0]}" = "all" ]; then
 fi
 
 # GR00T-N1.7 fused CUDA ops (built once, then importable).
-if ! "$TRAIN_PY" -c "import groot_n1_7_op" >/dev/null 2>&1; then
-    [ -f "$GROOT_N1_7_OPS_SRC/setup.py" ] || {
-        echo "ERROR: groot_n1_7_op not installed and sources not found at $GROOT_N1_7_OPS_SRC." >&2
+if ! "$TRAIN_PY" -c "import gr00t_n1_7_op" >/dev/null 2>&1; then
+    [ -f "$GR00T_N1_7_OPS_SRC/setup.py" ] || {
+        echo "ERROR: gr00t_n1_7_op not installed and sources not found at $GR00T_N1_7_OPS_SRC." >&2
         exit 1
     }
-    echo "Installing GR00T-N1.7 CUDA operators from $GROOT_N1_7_OPS_SRC"
+    echo "Installing GR00T-N1.7 CUDA operators from $GR00T_N1_7_OPS_SRC"
     NVCC_THREADS=${NVCC_THREADS:-${MAX_JOBS:-8}} \
-        "$TRAIN_PY" -m pip install --no-build-isolation -e "$GROOT_N1_7_OPS_SRC"
+        "$TRAIN_PY" -m pip install --no-build-isolation -e "$GR00T_N1_7_OPS_SRC"
 fi
 
 # ---- Env ----
@@ -135,7 +135,7 @@ for suite in "${SUITES[@]}"; do
 
     DATA_ARGS=(
         --dataset-format lerobot_datasets
-        --dataset-strategy groot_n1_7
+        --dataset-strategy gr00t_n1_7
         --dataset-path "$DATASET_PATH"
         --lerobotdataset-version v2.1
         --video-backend torchcodec
@@ -194,7 +194,7 @@ for suite in "${SUITES[@]}"; do
 
     "$TRAIN_PY" -m torch.distributed.run "${DISTRIBUTED_ARGS[@]}" \
         "$LOONGFORGE_PATH/loongforge/embodied/train.py" \
-        --model-name groot_n1_7 \
+        --model-name gr00t_n1_7 \
         "${DATA_ARGS[@]}" \
         "${TRAINING_ARGS[@]}" \
         "${DISTRIBUTED_TRAINING_ARGS[@]}" \

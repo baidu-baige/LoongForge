@@ -281,7 +281,7 @@ class DreamZeroPreparedBatch(dict):
 
     DreamZero batches have dynamic, embodiment-dependent keys (video/state/action/
     text/... vary by embodiment + language mode), so a typed ``PreparedBatch``
-    dataclass (pi05/groot style) does not fit. This ``dict`` subclass keeps
+    dataclass (pi05/gr00t style) does not fit. This ``dict`` subclass keeps
     ``batch["k"]`` and ``isinstance(batch, dict)`` working for
     ``DreamZeroPolicy.forward`` / ``_prepare_action_input`` unchanged, while adding
     ``.to(device)`` / ``pin_memory()`` so the generic trainer's

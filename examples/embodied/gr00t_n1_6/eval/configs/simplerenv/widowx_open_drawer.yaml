@@ -43,7 +43,7 @@ server:
   port: 13461
   health_port: 13462
   python: /path/to/envs/loongforge/bin/python
-  log: /path/to/reports/groot_n1_6/simplerenv/widowx_open_drawer/policy_server.log
+  log: /path/to/reports/gr00t_n1_6/simplerenv/widowx_open_drawer/policy_server.log
   start_timeout_sec: 2400
   random_init: false
   ckpt_path: /path/to/GR00T-N1.6-bridge
@@ -59,14 +59,14 @@ env:
   # `external_dependencies/SimplerEnv` submodule (github.com/squarefk/SimplerEnv,
   # see that repo's .gitmodules). Upstream simpler-env/SimplerEnv registers
   # neither widowx drawer task and does not expose `agent.eef_pos`. Details:
-  # loongforge/embodied/eval/docs/patches/simplerenv/groot_n1_6.md.
+  # loongforge/embodied/eval/docs/patches/simplerenv/gr00t_n1_6.md.
   simplerenv_root: /path/to/SimplerEnv
   ld_library_path: /path/to/nvidia_lib
   nvidia_lib_dir: /path/to/nvidia_lib
   nvidia_icd_json: /path/to/nvidia_lib/10_nvidia.json
 
 run:
-  output_dir: /path/to/reports/groot_n1_6/simplerenv/widowx_open_drawer
+  output_dir: /path/to/reports/gr00t_n1_6/simplerenv/widowx_open_drawer
   seed: 0
   episode_idx: 0
   obj_episode_id: 0

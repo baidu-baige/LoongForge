@@ -106,7 +106,7 @@ LOONGFORGE_PATH=/path/to/LoongForge \
 CHECKPOINT_PATH=/path/to/GR00T-N1.7-3B \
 COSMOS_LOCAL_PATH=/path/to/Cosmos-Reason2-2B \
 DATASET_ROOT=/path/to/IPEC-COMMUNITY \
-OUTPUT_ROOT=/path/to/outputs/groot_n1_7_libero \
+OUTPUT_ROOT=/path/to/outputs/gr00t_n1_7_libero \
 bash run_libero_sft.sh spatial
 
 # Finetune all suites in turn (spatial, object, goal, 10)
@@ -136,7 +136,7 @@ Each suite is trained separately. Checkpoints are saved to `$OUTPUT_ROOT/libero_
 | `SAVE_INTERVAL` | 1000 | Checkpoint save interval (iterations) |
 | `LR_WARMUP_ITERS` | `TRAIN_ITERS / 20` | Learning-rate warmup iterations (5%), followed by cosine decay to 0; peak learning rate is 1e-4 |
 
-**Model and data configuration**: model and data parameters are configured in `configs/models/embodied/groot_n1_7.yaml`. Commonly used fields:
+**Model and data configuration**: model and data parameters are configured in `configs/models/embodied/gr00t_n1_7.yaml`. Commonly used fields:
 
 | Field | Default | Description |
 |---|:---:|---|
@@ -184,7 +184,7 @@ Data-loading arguments (`DATA_ARGS`):
 | `--dataloader-multiprocessing-context` | `fork` | Start method of DataLoader worker processes |
 | `--distributed-sampler-mode` | `block` | Partitions samples across ranks in contiguous shards (instead of round-robin) |
 
-**Fused operators**: GR00T-N1.7 depends on a set of custom fused CUDA operators, `groot_n1_7_op` (sources under `ops/cuda_source/groot_n1_7_op`), which reduce kernel count and memory traffic:
+**Fused operators**: GR00T-N1.7 depends on a set of custom fused CUDA operators, `gr00t_n1_7_op` (sources under `ops/cuda_source/gr00t_n1_7_op`), which reduce kernel count and memory traffic:
 
 | Operator | Description |
 |---|---|
@@ -192,10 +192,10 @@ Data-loading arguments (`DATA_ARGS`):
 | Fused AdamW | Fused AdamW built on `MultiTensorApply`, numerically aligned with PyTorch AdamW; provides a capturable variant that can be captured by CUDA Graph. Only used with `--optimizer TEFusedAdamW`; the LIBERO script's default `AdamW` does not use it |
 | DDP reducer bucket control | Controls gradient bucket initialization of the DDP `c10d::Reducer`, used together with in-graph gradient sync |
 
-On startup, the training script checks whether `groot_n1_7_op` can be imported and, if not, builds and installs it from source automatically (only needed once; takes a few minutes). You can also install it manually beforehand:
+On startup, the training script checks whether `gr00t_n1_7_op` can be imported and, if not, builds and installs it from source automatically (only needed once; takes a few minutes). You can also install it manually beforehand:
 
 ```bash
-cd ops/cuda_source/groot_n1_7_op
+cd ops/cuda_source/gr00t_n1_7_op
 pip install --no-build-isolation -e .
 ```
 
@@ -253,7 +253,7 @@ Evaluation uses a server / client architecture: the LoongForge policy server loa
 cd examples/embodied/gr00t_n1_7/eval
 
 COSMOS_PATH=/path/to/Cosmos-Reason2-2B \
-CKPT_PATH=/path/to/outputs/groot_n1_7_libero/libero_{suite}/checkpoints/steps_20000 \
+CKPT_PATH=/path/to/outputs/gr00t_n1_7_libero/libero_{suite}/checkpoints/steps_20000 \
 STATS_PATH=/path/to/IPEC-COMMUNITY/libero_{suite}_no_noops_1.0.0_lerobot/meta/stats.json \
 LOONGFORGE_PATH=/path/to/LoongForge \
 OUT_ROOT=/path/to/outputs \

@@ -111,7 +111,7 @@ model.forward(batch)
 | 功能 | 配置项 | 默认值 | 取值 / 类型 | 说明 |
 | --- | --- | --- | --- | --- |
 | LeRobotdataset 版本 | `--lerobotdataset-version` | `v3.0` | `v2.0`, `v2.1`, `v3.0` | 解析不同 LeRobot 磁盘格式 |
-| 数据策略 | `--dataset-strategy` | `default` | `default`, `fastwam`, `groot_n1_7`, `cosmos3_droid`, `dreamzero` | 选择 LeRobot 构建策略 |
+| 数据策略 | `--dataset-strategy` | `default` | `default`, `fastwam`, `gr00t_n1_7`, `cosmos3_droid`, `dreamzero` | 选择 LeRobot 构建策略 |
 | 视频后端 | `--video-backend` | `torchcodec` | `torchcodec`, `decord`, `opencv`, `pyav`, `torchvision_av` | 视频解码实现 |
 | robot 类型 | `--robot-type` | `None` | 字符串 | 选择 embodiment / action-state layout |
 

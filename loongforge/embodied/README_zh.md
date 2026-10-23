@@ -126,7 +126,7 @@ loongforge/embodied/
 `BaseTrainer` 用模板方法固化训练全生命周期（`setup → 训练循环 → 单步 → 前向/反向 → 收尾`）：
 
 - **通用能力**：优化器 / LR 调度、梯度裁剪与 NaN 清理、checkpoint 保存与续训、分布式日志、确定性控制；
-- **训练器选择**：标准 SFT 用 `FinetuneTrainer`；特殊范式（多流、CUDA Graph）自定义子类（如 `custom/groot_n1_6/`），`trainer_builder.py` 注册、`--trainer-type` 选择；
+- **训练器选择**：标准 SFT 用 `FinetuneTrainer`；特殊范式（多流、CUDA Graph）自定义子类（如 `custom/gr00t_n1_6/`），`trainer_builder.py` 注册、`--trainer-type` 选择；
 - **分布式**：内置多种策略，按需选择——`ddp`（数据并行）、`ddp` + `--zero-optimizer`（ZeRO Stage-1，分片优化器状态）、`fsdp`（全分片）、`hsdp`（混合分片，设 `--hsdp-shard-size`）。
 
 ### 新增一个模型

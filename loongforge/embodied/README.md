@@ -126,7 +126,7 @@ Resolution flow: `--model-name` routes through `config_map.py` to the model's YA
 `BaseTrainer` fixes the training lifecycle into a template (`setup → training loop → step → forward/backward → finalize`):
 
 - **Common machinery** — optimizer / LR scheduling, gradient clipping & NaN cleanup, checkpoint save & resume, distributed logging, determinism control;
-- **Trainer selection** — standard SFT uses `FinetuneTrainer`; special paradigms (multi-stream, CUDA Graph) subclass it (e.g. `custom/groot_n1_6/`), registered in `trainer_builder.py` and selected with `--trainer-type`;
+- **Trainer selection** — standard SFT uses `FinetuneTrainer`; special paradigms (multi-stream, CUDA Graph) subclass it (e.g. `custom/gr00t_n1_6/`), registered in `trainer_builder.py` and selected with `--trainer-type`;
 - **Distribution** — multiple strategies to choose from: `ddp` (data parallel), `ddp` + `--zero-optimizer` (ZeRO Stage-1, sharded optimizer states), `fsdp` (fully sharded), `hsdp` (hybrid sharded, set `--hsdp-shard-size`).
 
 ### Adding a new model

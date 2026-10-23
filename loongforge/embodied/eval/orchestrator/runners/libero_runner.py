@@ -648,7 +648,7 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--task-suite-name", default="libero_goal")
     parser.add_argument("--max-tasks", type=int, default=1, help="<=0 means all tasks in suite")
     parser.add_argument("--episodes-per-task", type=int, default=1)
-    parser.add_argument("--libero-protocol", choices=["legacy", "groot_official"], default="legacy")
+    parser.add_argument("--libero-protocol", choices=["legacy", "gr00t_official"], default="legacy")
     parser.add_argument("--num-steps-wait", type=int, default=10)
     parser.add_argument("--max-steps", type=int, default=-1, help="<=0 means suite default")
     parser.add_argument(

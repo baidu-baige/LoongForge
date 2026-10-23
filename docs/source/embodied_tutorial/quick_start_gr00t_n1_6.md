@@ -51,14 +51,14 @@ export LOONGFORGE_PATH=/workspace/LoongForge
 export CHECKPOINT_PATH=/workspace/huggingface.co/nvidia/GR00T-N1.6-3B
 export EAGLE_LOCAL_PATH=/workspace/huggingface.co/aravindhs-NV/eagle3-processor-groot-n1d6
 export DATA_PATH=/workspace/libero_10
-export OUTPUT_DIR=/workspace/outputs/groot_n1_6
-export TENSORBOARD_PATH=/workspace/tensorboard-log/groot_n1_6
+export OUTPUT_DIR=/workspace/outputs/gr00t_n1_6
+export TENSORBOARD_PATH=/workspace/tensorboard-log/gr00t_n1_6
 ```
 ### 2.1 Script Without Performance Optimizations
 Use this to validate the pipeline first. It disables CUDA Graph and DDP static graph, and uses the plain `AdamW` optimizer:
 
 ```bash
-bash /workspace/LoongForge/examples/embodied/gr00t_n1_6/run_groot_n1_6_ddp_finetune.sh \
+bash /workspace/LoongForge/examples/embodied/gr00t_n1_6/run_gr00t_n1_6_ddp_finetune.sh \
     --optimizer AdamW \
     --cuda-graph-impl none \
     --cuda-graph-pad-length 0 \
@@ -68,7 +68,7 @@ bash /workspace/LoongForge/examples/embodied/gr00t_n1_6/run_groot_n1_6_ddp_finet
 The default script already enables the main performance optimizations:
 
 ```bash
-bash /workspace/LoongForge/examples/embodied/gr00t_n1_6/run_groot_n1_6_ddp_finetune.sh
+bash /workspace/LoongForge/examples/embodied/gr00t_n1_6/run_gr00t_n1_6_ddp_finetune.sh
 ```
 Key performance optimization switches:
 

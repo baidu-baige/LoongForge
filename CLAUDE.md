@@ -221,7 +221,7 @@ Defined in `loongforge/utils/constants.py`. These classes (inheriting `_BaseFami
 - **`LanguageModelFamilies`**: llama, llama2, llama3, llama3.1, qwen, qwen1.5, qwen2, qwen2.5, qwen3, qwen3_next, deepseek, internlm2.5, minimax, mimo, glm
 - **`VisionLanguageModelFamilies`**: qwen2_vl, qwen2_5_vl, qwen3_vl, llava_ov_1_5, vlm, intern_vl, ernie4_5_vl, qwen3_5, kimi_k2_5
 - **`CustomModelFamilies`**: wan2_2_i2v
-- **`VisionLanguageActionModelFamilies`**: pi05, groot_n1_6
+- **`VisionLanguageActionModelFamilies`**: pi05, gr00t_n1_6
 
 ### Dependency Management
 

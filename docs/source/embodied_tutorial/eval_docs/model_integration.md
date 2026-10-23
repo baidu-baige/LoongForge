@@ -281,7 +281,7 @@ Location: `factories/<model>_factory.py`; register with `@register_factory("<mod
 - `build(...)`: load the model — import, config, weights / `random_init`, device/dtype — and return `PredictActionModelSpec(model=..., metadata={...})`, where `model` implements `predict_action` (see §2 The `predict_action` contract).
 - The registry key must pair with a PayloadBuilder of the same `model_type` (both must be registered for the run to start — see the startup fail-fast in §1 Overview).
 
-References: `factories/pi05_factory.py`, `factories/xvla_factory.py`, `factories/groot_n1_6_factory.py`.
+References: `factories/pi05_factory.py`, `factories/xvla_factory.py`, `factories/gr00t_n1_6_factory.py`.
 
 ### 3.2 PayloadBuilder
 
@@ -291,7 +291,7 @@ Location: `payload_builders/<model>.py`; register with `@register_payload_builde
 - `build(canonical, ctx) -> dict`: canonical observation (from the adapter) → `predict_action` kwargs — image packing per the view policy, state per `state_encoding`, model-specific fields.
 - Optional closed-loop hooks: `reset()` / `update_from_response()` / `note_env_action()`.
 
-References: `payload_builders/pi05.py`, `payload_builders/xvla.py`, `payload_builders/groot_n1_6.py`.
+References: `payload_builders/pi05.py`, `payload_builders/xvla.py`, `payload_builders/gr00t_n1_6.py`.
 
 ### 3.3 ActionDecoder
 

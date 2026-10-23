@@ -46,7 +46,7 @@ def _lingbot_va_strategy_builder() -> Callable:
 
 
 def _groot_n1_7_strategy_builder() -> Callable:
-    from loongforge.embodied.data.datasets.groot_n1_7 import (
+    from loongforge.embodied.data.datasets.gr00t_n1_7 import (
         build_groot_n1_7_lerobot_dataset,
     )
 
@@ -83,7 +83,7 @@ _DATASET_STRATEGY_LOADERS: dict[str, Callable[[], Callable]] = {
     "vlda": _vlda_strategy_builder,
     "fastwam": _fastwam_strategy_builder,
     "lingbot_va": _lingbot_va_strategy_builder,
-    "groot_n1_7": _groot_n1_7_strategy_builder,
+    "gr00t_n1_7": _groot_n1_7_strategy_builder,
     "cosmos3_droid": _cosmos3_droid_strategy_builder,
     "dreamzero": _dreamzero_strategy_builder,
     "wall_oss_0_5": _wall_oss_0_5_strategy_builder,

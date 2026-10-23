@@ -16,14 +16,14 @@ set -euo pipefail
 
 # ---- Paths ----
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/path/to/LoongForge"}
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/path/to/groot/GR00T-N1.7-3B"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"/path/to/gr00t/GR00T-N1.7-3B"}
 # Videos must already be converted from AV1 to H.264 (torchcodec cannot decode AV1).
 DATASET_PATH=${DATASET_PATH:-"/path/to/datasets/IPEC-COMMUNITY/fractal20220817_data_lerobot"}
-OUTPUT_ROOT=${OUTPUT_ROOT:-"/path/to/outputs/groot_n1_7_fractal"}
+OUTPUT_ROOT=${OUTPUT_ROOT:-"/path/to/outputs/gr00t_n1_7_fractal"}
 # Qwen3-VL / Cosmos-Reason2 backbone (architecture + processor/tokenizer).
-export COSMOS_LOCAL_PATH=${COSMOS_LOCAL_PATH:-"/path/to/groot/Cosmos-Reason2-2B"}
+export COSMOS_LOCAL_PATH=${COSMOS_LOCAL_PATH:-"/path/to/gr00t/Cosmos-Reason2-2B"}
 export TOKENIZER_PATH=${TOKENIZER_PATH:-"$COSMOS_LOCAL_PATH"}
-GROOT_N1_7_OPS_SRC=${GROOT_N1_7_OPS_SRC:-"$LOONGFORGE_PATH/ops/cuda_source/groot_n1_7_op"}
+GR00T_N1_7_OPS_SRC=${GR00T_N1_7_OPS_SRC:-"$LOONGFORGE_PATH/ops/cuda_source/gr00t_n1_7_op"}
 TRAIN_PY=${TRAIN_PY:-"python"}
 
 # ---- Extra train.py flags (after --) ----
@@ -35,14 +35,14 @@ while [ "$#" -gt 0 ]; do
 done
 
 # GR00T-N1.7 fused CUDA ops (built once, then importable).
-if ! "$TRAIN_PY" -c "import groot_n1_7_op" >/dev/null 2>&1; then
-    [ -f "$GROOT_N1_7_OPS_SRC/setup.py" ] || {
-        echo "ERROR: groot_n1_7_op not installed and sources not found at $GROOT_N1_7_OPS_SRC." >&2
+if ! "$TRAIN_PY" -c "import gr00t_n1_7_op" >/dev/null 2>&1; then
+    [ -f "$GR00T_N1_7_OPS_SRC/setup.py" ] || {
+        echo "ERROR: gr00t_n1_7_op not installed and sources not found at $GR00T_N1_7_OPS_SRC." >&2
         exit 1
     }
-    echo "Installing GR00T-N1.7 CUDA operators from $GROOT_N1_7_OPS_SRC"
+    echo "Installing GR00T-N1.7 CUDA operators from $GR00T_N1_7_OPS_SRC"
     NVCC_THREADS=${NVCC_THREADS:-${MAX_JOBS:-8}} \
-        "$TRAIN_PY" -m pip install --no-build-isolation -e "$GROOT_N1_7_OPS_SRC"
+        "$TRAIN_PY" -m pip install --no-build-isolation -e "$GR00T_N1_7_OPS_SRC"
 fi
 
 # ---- Env ----
@@ -88,12 +88,12 @@ LOG_FILE="$OUTPUT_ROOT/fractal.log"
 mkdir -p "$OUTPUT_DIR"
 
 MODEL_CONFIG_ARGS=(
-    --model-name groot_n1_7
+    --model-name gr00t_n1_7
 )
 
 DATA_ARGS=(
     --dataset-format lerobot_datasets
-    --dataset-strategy groot_n1_7
+    --dataset-strategy gr00t_n1_7
     --dataset-path "$DATASET_PATH"
     --lerobotdataset-version v2.1
     --video-backend torchcodec

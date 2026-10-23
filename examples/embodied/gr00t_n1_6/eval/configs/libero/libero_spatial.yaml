@@ -32,7 +32,7 @@ server:
   port: 13491
   health_port: 13492
   python: /path/to/envs/loongforge/bin/python
-  log: /path/to/reports/groot_n1_6/libero/libero_spatial/policy_server.log
+  log: /path/to/reports/gr00t_n1_6/libero/libero_spatial/policy_server.log
   start_timeout_sec: 2400
   random_init: false
   ckpt_path: /path/to/GR00T-N1.6-LIBERO
@@ -49,7 +49,7 @@ env:
   ld_library_path: /path/to/nvidia_lib
 
 run:
-  output_dir: /path/to/reports/groot_n1_6/libero/libero_spatial
+  output_dir: /path/to/reports/gr00t_n1_6/libero/libero_spatial
   seed: 7
   save_trace: false
   save_replay: false

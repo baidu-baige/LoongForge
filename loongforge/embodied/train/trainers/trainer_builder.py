@@ -5,9 +5,9 @@
 
 import logging
 
-from loongforge.embodied.train.trainers.custom.groot_n1_6 import GrootN1d6Trainer
+from loongforge.embodied.train.trainers.custom.gr00t_n1_6 import GrootN1d6Trainer
 from loongforge.embodied.train.trainers.custom.lingbot_va import LingBotFinetuneTrainer
-from loongforge.embodied.train.trainers.custom.groot_n1_7 import GrootN1d7Trainer
+from loongforge.embodied.train.trainers.custom.gr00t_n1_7 import GrootN1d7Trainer
 from loongforge.embodied.train.trainers.supervised.finetune_trainer import FinetuneTrainer
 from loongforge.embodied.train.trainers.custom.vlda import VLDAFinetuneTrainer
 
