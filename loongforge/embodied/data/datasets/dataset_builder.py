@@ -39,6 +39,12 @@ def _fastwam_strategy_builder() -> Callable:
     return build_fastwam_lerobot_dataset
 
 
+def _vpp2_strategy_builder() -> Callable:
+    from loongforge.embodied.data.datasets.vpp2 import build_vpp2_lerobot_dataset
+
+    return build_vpp2_lerobot_dataset
+
+
 def _lingbot_va_strategy_builder() -> Callable:
     from loongforge.embodied.data.datasets.lingbot_va import build_lingbot_dataset
 
@@ -82,6 +88,7 @@ _DATASET_STRATEGY_LOADERS: dict[str, Callable[[], Callable]] = {
     "default": _default_strategy_builder,
     "vlda": _vlda_strategy_builder,
     "fastwam": _fastwam_strategy_builder,
+    "vpp2": _vpp2_strategy_builder,
     "lingbot_va": _lingbot_va_strategy_builder,
     "gr00t_n1_7": _groot_n1_7_strategy_builder,
     "cosmos3_droid": _cosmos3_droid_strategy_builder,

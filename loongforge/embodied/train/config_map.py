@@ -36,6 +36,8 @@ from loongforge.embodied.model.wall_oss_0_5.model_configuration_wall_oss_0_5 imp
 from loongforge.embodied.data.datasets.wall_oss_0_5.transforms.data_configuration_wall_oss_0_5 import (
     WallOss05DataConfig,
 )
+from loongforge.embodied.model.vpp2.modeling_configuration_vpp2 import VPP2ModelConfig
+from loongforge.embodied.data.datasets.vpp2.transforms.data_configuration_vpp2 import VPP2DataConfig
 
 _CONFIGS_DIR = (
     Path(__file__).resolve().parent.parent.parent.parent
@@ -88,6 +90,7 @@ MODEL_SCHEMA = {
         "dreamzero_yam_wan21_14b.yaml", DreamZeroConfig, DreamZeroDataConfig
     ),
     "wall_oss_0_5": ModelSchema("wall_oss_0_5.yaml", WallOss05ModelConfig, WallOss05DataConfig),
+    "vpp2": ModelSchema("vpp2.yaml", VPP2ModelConfig, VPP2DataConfig),
 }
 
 def get_model_schema(model_name: str) -> ModelSchema:

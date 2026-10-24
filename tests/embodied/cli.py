@@ -82,6 +82,10 @@ _ensure_env_loaded()
 DEFAULT_LOG_ROOT = os.environ.get(
     "EMBODIED_LOG_ROOT", "/workspace/loongforge_embodied_ci/logs")
 
+_MODEL_LOSS_MAE_TOLERANCES = {
+    "vpp2_ddp": 0.001,
+}
+
 
 def parse_args(available_models):
     parser = argparse.ArgumentParser(
@@ -194,6 +198,7 @@ def main():
                 f"--prepare requested but {prepare_sh} not found; skipping")
 
     models = args.models if args.models else available
+    args.loss_mae_tolerances = _MODEL_LOSS_MAE_TOLERANCES
 
     # Preflight baseline check: fail fast before spawning any training subprocess.
     # - normal regression run: every selected model must have a baseline; missing -> exit 2
