@@ -83,7 +83,7 @@ def test_action_scheduler_defaults_match_fastwam():
 
 
 def _lr_trace(warmup, total, lr=1e-4, min_lr=1e-6):
-    from loongforge.training.torch.lr_scheduler import build_scheduler
+    from loongforge.engines.torch.optimizer.lr_scheduler import build_scheduler
 
     opt = torch.optim.AdamW([torch.nn.Parameter(torch.zeros(1))], lr=lr)
     args = SimpleNamespace(lr_decay_style="linear_warmup_cosine_annealing", lr_decay_iters=None,

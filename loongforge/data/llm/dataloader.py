@@ -43,7 +43,7 @@ def build_sft_data_collator(
     """build data collator for sft
 
     ``pad_to_multiple_of`` is computed by the training method from parallelism and
-    precision (``training/megatron/data_padding.py``); the data layer does not derive it.
+    precision (``engines/megatron/data_padding.py``); the data layer does not derive it.
     """
     if not hasattr(tokenizer, "tokenizer"):
         raise TypeError(

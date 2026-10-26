@@ -55,7 +55,7 @@ Or for breaking changes:
 2. Map changed paths to modules:
    - `loongforge/models/language/` → `llm`
    - `loongforge/models/vision/`, `loongforge/models/multimodal/` → `vlm`
-   - `loongforge/engines/`, `loongforge/training/`, `loongforge/extensions/` → `train`
+   - `loongforge/engines/`, `loongforge/training/` → `train`
    - `loongforge/data/` → `data`
    - `loongforge/constants.py` → `train`
    - `tools/mcore_checkpoint_convert/` → `ckpt`
@@ -154,7 +154,7 @@ After PR is created:
 | vlm | `loongforge/models/vision/`, `loongforge/models/multimodal/` |
 | vla | `loongforge/models/embodied/` (VLA models) |
 | diffusion | `loongforge/models/embodied/` (diffusion models) |
-| train | `loongforge/engines/`, `loongforge/training/`, `loongforge/extensions/`, `loongforge/constants.py` |
+| train | `loongforge/engines/`, `loongforge/training/`, `loongforge/constants.py` |
 | data | `loongforge/data/` |
 | ops | `ops/` |
 | ckpt | `tools/mcore_checkpoint_convert/` |

@@ -445,7 +445,7 @@ within ±0.5–0.8.
 | Model and loss definitions | [modeling_vlda.py](../../loongforge/models/embodied/vlda/modeling_vlda.py) |
 | Model configuration | [vlda.yaml](../../configs/models/vlda/vlda.yaml) |
 | Dataset and transforms | [vlda/](../../loongforge/data/embodied/vlda/) |
-| Teacher EMA and checkpoint integration | [vlda_runner.py](../../loongforge/training/torch/vlda_runner.py) |
+| Teacher EMA and checkpoint integration | [vlda_runner.py](../../loongforge/engines/torch/vlda_runner.py) |
 | Evaluation entry | [run_libero_eval.sh](eval/run_libero_eval.sh) |
 
 ## V-JEPA 2

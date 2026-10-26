@@ -17,7 +17,6 @@ from megatron.training.checkpointing import load_args_from_checkpoint
 from omegaconf import DictConfig, OmegaConf
 
 from loongforge.engines.megatron.model_config import build_model_config
-from loongforge.engines.megatron.arguments import loongforge_extra_train_args_provider
 from loongforge.engines.megatron.distributed.loss_reduction import (default_loss_func,
                                                                   loss_func_internvl)
 from loongforge.models.multimodal.position_ids import POSITION_IDX_FUNCS
@@ -71,8 +70,7 @@ def parse_megatron_arguments(extra_args_providers=()):
 
     parser = add_megatron_arguments(parser)
 
-    # Engine arguments first, then the training layer's arguments. Both register
-    # on the same parser, so the CLI and the parsed namespace stay identical.
+    # LoongForge providers register on the same parser as the upstream args.
     for provider in extra_args_providers:
         parser = provider(parser)
 
@@ -124,20 +122,18 @@ def load_and_merge_config(config_path, config_name, hydra_overrides):
 
 
 def parse_arguments(
-    extra_args_provider=None,
+    args_providers,
     validate_extra_args_provider=None,
     extra_validator=None,
 ):
     """Parse CLI and model config into one namespace.
 
-    ``extra_args_provider`` registers additional argument groups on the same
-    parser, after the engine's own groups. ``validate_extra_args_provider`` runs
-    LoongForge's own checks; ``extra_validator`` is forwarded to it so the
-    training layer can add its own checks at the right point in the sequence.
+    ``args_providers`` registers LoongForge argument groups on the same
+    parser. ``validate_extra_args_provider`` runs LoongForge's own checks;
+    ``extra_validator`` is forwarded to it so the training layer can add its
+    own checks at the right point in the sequence.
     """
-    args, hydra_overrides = parse_megatron_arguments(
-        [p for p in (loongforge_extra_train_args_provider, extra_args_provider) if p is not None]
-    )
+    args, hydra_overrides = parse_megatron_arguments(list(args_providers))
 
     # Prep for checkpoint conversion.
     if args.ckpt_convert_format is not None:
@@ -243,15 +239,15 @@ def _register_selective_fp8_decision():
     register_selective_fp8_init_decision(selective_fp8_init_decision)
 
 
-def parse_train_args(extra_args_provider=None, extra_validator=None):
+def parse_train_args(args_providers=(), extra_validator=None):
     """Parse arguments for training.
 
-    ``extra_args_provider`` registers training-side arguments on the same parser
-    as the engine arguments. ``extra_validator`` runs after the tokenizer checks
+    ``args_providers`` registers training-side arguments on the same parser as
+    the engine arguments. ``extra_validator`` runs after the tokenizer checks
     and before the engine's training and parallel checks.
     """
     args, hydra_cfg = parse_arguments(
-        extra_args_provider=extra_args_provider,
+        args_providers=args_providers,
         validate_extra_args_provider=validate_loongforge_extra_args,
         extra_validator=extra_validator,
     )

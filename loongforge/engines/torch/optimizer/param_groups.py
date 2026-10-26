@@ -3,8 +3,8 @@
 
 """Per-module optimizer parameter groups.
 
-The learning-rate schedule itself belongs to the training loop and lives in
-``loongforge.training.torch.lr_scheduler``.
+The learning-rate schedule is a runtime mechanic and lives in
+``loongforge.engines.torch.optimizer.lr_scheduler``.
 """
 
 import logging

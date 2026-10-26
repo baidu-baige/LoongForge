@@ -64,7 +64,7 @@ def build_mp_policy(training_args, model: nn.Module | None = None) -> MixedPreci
         source of dtype-mismatch errors deep inside a layer.
     """
     # Local import to break the train/__init__ -> trainers -> this module cycle.
-    from loongforge.engines.torch.arguments import parse_dtype_from_str
+    from loongforge.engines.torch.arg_types import parse_dtype_from_str
 
     authored_mixed_dtype = (
         is_mixed_param_dtype(model, trainable_only=False) if model is not None else False
@@ -220,7 +220,7 @@ def build_ignored_params(training_args, model: nn.Module, ctx: DistributedContex
 
     ignored_frozen_dtype = None
     if training_args.fsdp_ignored_frozen_param_dtype is not None:
-        from loongforge.engines.torch.arguments import parse_dtype_from_str
+        from loongforge.engines.torch.arg_types import parse_dtype_from_str
 
         ignored_frozen_dtype = parse_dtype_from_str(
             training_args.fsdp_ignored_frozen_param_dtype

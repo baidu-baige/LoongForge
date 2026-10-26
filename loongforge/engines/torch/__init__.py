@@ -4,6 +4,6 @@
 """Torch engine: backend capability for embodied training.
 
 Initialization, model wrapping, optimizer construction, single-step execution,
-and checkpoint IO. The training loop, its arguments, and the learning-rate
-schedule live in ``loongforge.training``.
+checkpoint IO, the training loop, and the learning-rate schedule. CLI
+definitions and family recipes live in ``loongforge.training``.
 """

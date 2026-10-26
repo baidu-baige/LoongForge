@@ -3,6 +3,7 @@
 
 """HuggingFace datasets pipeline: format, tokenize, pack, collate, iterate.
 
-Shared by LLM SFT (sft_llm) and VLM offline-tokenized paths (pretrain_vlm,
-sft_internvl with --is-tokenized-data).
+Shared by LLM SFT (``training/llm/sft.py``) and VLM offline-tokenized paths
+(``training/vlm/pretrain_vlm.py``, ``training/vlm/sft_internvl.py`` with
+--is-tokenized-data).
 """

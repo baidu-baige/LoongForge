@@ -37,8 +37,8 @@ def _energon_read_order_kwargs(config):
     giving Energon more sequences to mix through its parallel shard iterators.
     Disabled values are passed as ``None`` to preserve Energon's defaults.
     """
-    shuffle_buffer_size = config.data_shuffle_buffer_size or 0
-    max_samples_per_sequence = config.data_max_samples_per_sequence or 0
+    shuffle_buffer_size = getattr(config, "data_shuffle_buffer_size", 0) or 0
+    max_samples_per_sequence = getattr(config, "data_max_samples_per_sequence", 0) or 0
     return {
         "shuffle_buffer_size": shuffle_buffer_size if shuffle_buffer_size > 1 else None,
         "max_samples_per_sequence": (

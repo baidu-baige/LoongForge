@@ -122,11 +122,11 @@ def test_get_train_dataset_forwards_read_order_kwargs(data_path, expected_path):
 
 def test_multimodal_argument_defaults_and_overrides():
     namespace = _load_functions(
-        "loongforge/training/megatron/args.py",
-        {"_add_vlm_data_args"},
+        "loongforge/training/vlm/args.py",
+        {"add_vlm_args"},
         {"argparse": argparse},
     )
-    parser = namespace["_add_vlm_data_args"](argparse.ArgumentParser())
+    parser = namespace["add_vlm_args"](argparse.ArgumentParser())
 
     defaults = parser.parse_args([])
     assert defaults.data_shuffle_buffer_size == 0

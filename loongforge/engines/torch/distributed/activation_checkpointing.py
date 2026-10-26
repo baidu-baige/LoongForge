@@ -19,7 +19,7 @@ def apply_activation_checkpointing(
     fp8_backend: str | None = None,
 ) -> None:
     """Checkpoint the modules selected by the patterns, minus those the skip patterns match."""
-    from loongforge.engines.torch.arguments import parse_module_key_patterns
+    from loongforge.engines.torch.arg_types import parse_module_key_patterns
 
     module_patterns = parse_module_key_patterns(
         raw_module_patterns,

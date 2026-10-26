@@ -33,6 +33,18 @@ DATA_BACKEND_STATE_BANNED = (
     ("megatron", "core", "mpu"),
     ("megatron", "training", "checkpointing"),
 )
+# Torch argument groups that only the backend consumes; ``data/`` must not read them.
+TORCH_BACKEND_MIXINS = (
+    "_StepArgs",
+    "_RuntimeArgs",
+    "_CheckpointIOArgs",
+    "_OptimizerArgs",
+    "_LoraArgs",
+    "_CudaGraphArgs",
+    "_ActivationCheckpointArgs",
+    "_FP8Args",
+    "_DistributedArgs",
+)
 # ``engines/`` may import these generic model packages only.
 ENGINE_MODEL_ALLOWED = (
     ("loongforge", "models", "base"),
@@ -134,14 +146,14 @@ def _runtime_imports(path):
 
 
 @lru_cache(maxsize=1)
-def _torch_engine_argument_names():
+def _torch_backend_argument_names():
+    """Field names of the Torch argument groups that the backend alone consumes."""
     names = set()
-    for node in ast.walk(_parse(PKG / "engines" / "torch" / "arguments.py")):
-        if not isinstance(node, ast.ClassDef):
-            continue
-        for item in node.body:
-            if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
-                names.add(item.target.id)
+    for node in ast.walk(_parse(PKG / "training" / "torch_args.py")):
+        if isinstance(node, ast.ClassDef) and node.name in TORCH_BACKEND_MIXINS:
+            for item in node.body:
+                if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
+                    names.add(item.target.id)
     return names
 
 
@@ -159,7 +171,7 @@ class LayeringTest(unittest.TestCase):
     def test_chat_templates_import_no_other_layer(self):
         banned = [
             ("loongforge", layer)
-            for layer in ("engines", "models", "training", "evaluation", "extensions")
+            for layer in ("engines", "models", "training", "evaluation")
         ] + [("loongforge", "data", family) for family in FAMILIES]
         for path in _py_files(CHAT_TEMPLATES):
             for target, _, _ in _imports(path):
@@ -175,7 +187,7 @@ class LayeringTest(unittest.TestCase):
                         self.assertFalse(_starts_with(target, prefix), f"{_rel(path)} imports {'.'.join(target)}")
 
     def test_data_imports_no_training_and_limited_engines(self):
-        banned = [("loongforge", layer) for layer in ("training", "evaluation", "extensions")]
+        banned = [("loongforge", layer) for layer in ("training", "evaluation")]
         for path in _py_files(DATA):
             for target, _, _ in _imports(path):
                 for prefix in banned:
@@ -203,18 +215,15 @@ class LayeringTest(unittest.TestCase):
                     f"{_rel(path)} imports model implementation {'.'.join(target)}",
                 )
 
-    def test_data_reads_no_engine_arguments(self):
-        engine_names = _torch_engine_argument_names()
+    def test_data_reads_no_backend_arguments(self):
+        backend_names = _torch_backend_argument_names()
+        self.assertTrue(backend_names, "Torch backend argument names were not found")
         found = set()
         for path in _py_files(DATA):
             for node in ast.walk(_parse(path)):
-                if (
-                    isinstance(node, ast.Attribute)
-                    and node.attr in engine_names
-                    and _is_training_args(node.value)
-                ):
+                if isinstance(node, ast.Attribute) and node.attr in backend_names and _is_training_args(node.value):
                     found.add((_rel(path), node.lineno, node.attr))
-        self.assertEqual(found, set(), f"data reads Torch engine arguments: {sorted(found)}")
+        self.assertEqual(found, set(), f"data reads Torch backend arguments: {sorted(found)}")
 
     def test_data_holds_no_backend_state(self):
         found = set()
@@ -264,7 +273,7 @@ class LayeringTest(unittest.TestCase):
                 self.assertNotIn(name, GLOBAL_READERS, f"{_rel(path)}:{getattr(node, 'lineno', '?')}")
 
     def test_only_training_imports_training(self):
-        for layer in ("engines", "models", "evaluation", "extensions", "data"):
+        for layer in ("engines", "models", "evaluation", "data"):
             for path in _py_files(PKG / layer):
                 for target in _runtime_imports(path):
                     self.assertFalse(
@@ -280,7 +289,7 @@ class LayeringTest(unittest.TestCase):
                 )
 
     def test_models_do_not_import_other_layers(self):
-        banned = [("loongforge", layer) for layer in ("training", "evaluation", "extensions")]
+        banned = [("loongforge", layer) for layer in ("training", "evaluation")]
         for path in _py_files(PKG / "models"):
             for target in _runtime_imports(path):
                 for prefix in banned:
@@ -311,40 +320,42 @@ class LayeringTest(unittest.TestCase):
                 allowed = any(_starts_with(target, prefix) for prefix in ENGINE_MODEL_ALLOWED)
                 self.assertTrue(allowed, f"{_rel(path)} imports {'.'.join(target)}")
 
-    def test_training_backends_are_isolated(self):
-        for backend, other in (("megatron", "torch"), ("torch", "megatron")):
-            for path in _py_files(PKG / "training" / backend):
+    def test_training_families_are_isolated(self):
+        for family in FAMILIES:
+            others = {("loongforge", "training", other) for other in FAMILIES if other != family}
+            for path in _py_files(PKG / "training" / family):
                 for target in _runtime_imports(path):
-                    self.assertFalse(
-                        _starts_with(target, ("loongforge", "training", other))
-                        or _starts_with(target, ("loongforge", "engines", other)),
-                        f"{_rel(path)} imports {'.'.join(target)}",
-                    )
+                    for prefix in others:
+                        self.assertFalse(
+                            _starts_with(target, prefix),
+                            f"{_rel(path)} imports {'.'.join(target)}",
+                        )
 
-    def test_models_and_engines_do_not_import_extensions(self):
+    def test_models_and_engines_do_not_import_optimizations(self):
+        banned = (("loongforge", "training", "embodied", "optimizations"),)
         for layer in ("models", "engines"):
             for path in _py_files(PKG / layer):
                 for target in _runtime_imports(path):
-                    self.assertFalse(
-                        _starts_with(target, ("loongforge", "extensions")),
-                        f"{_rel(path)} imports {'.'.join(target)}",
-                    )
+                    for prefix in banned:
+                        self.assertFalse(
+                            _starts_with(target, prefix),
+                            f"{_rel(path)} imports {'.'.join(target)}",
+                        )
 
-    def test_extensions_do_not_import_training_or_data(self):
-        for path in _py_files(PKG / "extensions"):
+    def test_embodied_optimizations_do_not_import_other_families(self):
+        for path in _py_files(PKG / "training" / "embodied" / "optimizations"):
             for target in _runtime_imports(path):
-                for layer in ("training", "data"):
+                for family in ("llm", "vlm", "diffusion"):
                     self.assertFalse(
-                        _starts_with(target, ("loongforge", layer)),
+                        _starts_with(target, ("loongforge", "training", family)),
                         f"{_rel(path)} imports {'.'.join(target)}",
                     )
 
-    def test_evaluation_does_not_import_training_or_extensions(self):
+    def test_evaluation_does_not_import_training(self):
         for path in _py_files(PKG / "evaluation"):
             for target in _runtime_imports(path):
                 self.assertFalse(
-                    _starts_with(target, ("loongforge", "training"))
-                    or _starts_with(target, ("loongforge", "extensions")),
+                    _starts_with(target, ("loongforge", "training")),
                     f"{_rel(path)} imports {'.'.join(target)}",
                 )
 

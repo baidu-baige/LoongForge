@@ -15,7 +15,7 @@ from tests.test_vlm_dataset_inputs import REPO_ROOT, _load_functions
 
 torch = pytest.importorskip("torch")
 REBALANCE = "loongforge/engines/megatron/distributed/dp_balance/rebalance/"
-INTERNVL = "loongforge/training/megatron/methods/utils/internvl_dp_balance.py"
+INTERNVL = "loongforge/training/vlm/internvl_dp_balance.py"
 
 
 class ReverseContext:

@@ -15,9 +15,8 @@ from hydra.core.global_hydra import GlobalHydra
 from omegaconf import OmegaConf
 
 from loongforge import constants
-from loongforge.engines.megatron.arguments import loongforge_extra_train_args_provider
 from loongforge.models.catalog import MODEL_CONFIG_REGISTRY, get_config_from_model_name
-from loongforge.training.megatron.args import add_training_args
+from loongforge.training.megatron_args import add_training_args
 
 # CLI options whose YAML key names the same setting; the YAML value wins.
 SAME_MEANING = {
@@ -39,7 +38,6 @@ SAME_MEANING = {
 
 def _loongforge_cli_dests():
     parser = argparse.ArgumentParser(allow_abbrev=False)
-    parser = loongforge_extra_train_args_provider(parser)
     parser = add_training_args(parser)
     return {action.dest for action in parser._actions if action.dest != "help"}
 

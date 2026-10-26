@@ -144,7 +144,7 @@ class Parser:
         # ============================================================================
 
         # INT4 dequantization for Bridge online HF loading (also defined as training
-        # CLI args in loongforge/engines/megatron/arguments.py::_add_extra_bridge_args).
+        # CLI args in tools/mcore_bridge/arguments.py::add_bridge_args).
         param_dict['hf_dequantize_int4'] = getattr(args, 'hf_dequantize_int4', False)
         param_dict['hf_dequantize_mxfp4'] = getattr(args, 'hf_dequantize_mxfp4', False)
         param_dict['hf_dequantize_dtype'] = getattr(args, 'hf_dequantize_dtype', 'bfloat16')
@@ -251,9 +251,10 @@ if __name__ == "__main__":
         '--training-phase', 'pretrain',
     ]
 
-    from loongforge.training.megatron.args import parse_megatron_train_args
+    from loongforge.training.megatron_args import parse_megatron_train_args
+    from tools.mcore_bridge.arguments import add_bridge_args
 
-    args = parse_megatron_train_args()
+    args = parse_megatron_train_args(extra_args_providers=[add_bridge_args])
     parser = Parser(args)
 
     print("=" * 50)

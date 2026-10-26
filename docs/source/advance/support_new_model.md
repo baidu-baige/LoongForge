@@ -179,4 +179,4 @@ A new architecture needs code registration in addition to the steps above:
 - **Model package**: implement the config and model classes under `loongforge/models/language/`, `loongforge/models/vision/`, or `loongforge/models/diffusion/`.
 - **AutoModel registration** (LLM and vision components): add `AutoModel.register(<Config>, <Model>)` in `loongforge/models/language/__init__.py` or `loongforge/models/vision/__init__.py`. The YAML `_target_` selects the config class, and the config class selects the model.
 - **Model family**: add the new YAML `model_type` to `LanguageModelFamilies`, `VisionLanguageModelFamilies`, or `DiffusionModelFamilies` in `loongforge/constants.py`.
-- **Training method** (only if the family has its own method): add a `FAMILY_GROUP` entry in `loongforge/training/megatron/registry.py`.
+- **Training method** (only if the family has its own method): add a `FAMILY_GROUP` and `METHOD_REGISTRY` entry in `loongforge/training/registry.py`, with the recipe under `loongforge/training/<family>/`.

@@ -380,12 +380,11 @@ https://github.com/user-attachments/assets/8563afca-f79a-4a45-bb4f-36e06c0ccbcb
 LoongForge/
 ├── loongforge/                   # Core training framework
 │   ├── train.py                  # Unified training dispatcher
-│   ├── training/                 # Runners and per-model training methods
+│   ├── training/                 # CLI definitions, dispatch table, and per-family recipes
 │   ├── engines/                  # Training runtimes selected by train.py
 │   │   ├── megatron/             #   LLM/VLM/Diffusion runtime
 │   │   │   └── tokenizer/        #   Megatron tokenizer implementation
 │   │   └── torch/                #   Embodied Torch-native runtime
-│   ├── extensions/               # Model x backend training extensions
 │   ├── models/                   # Unified model abstractions
 │   │   ├── catalog.py            # Model names, engines, default YAMLs
 │   │   ├── language/             #   LLM backbones (LLaMA, Qwen, DeepSeek, ...)

@@ -34,7 +34,7 @@ def seq_padding_for_cp(data, padding, pad_token_id=PAD_TOKEN_ID):
     Args:
         data (dict): Data from dataloader.
         padding: ``segment_padding(length)`` and ``total_multiple`` from the training
-            method (``training/megatron/data_padding.VlmPackedPadding``).
+            method (``engines/megatron/data_padding.VlmPackedPadding``).
         pad_token_id (int): Token id used to pad token slots that the
             attention mask will mark as padded. Defaults to the module-level
             ``PAD_TOKEN_ID`` when the caller cannot resolve a tokenizer-aware

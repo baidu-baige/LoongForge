@@ -380,12 +380,11 @@ https://github.com/user-attachments/assets/8563afca-f79a-4a45-bb4f-36e06c0ccbcb
 LoongForge/
 ├── loongforge/                   # 核心训练框架
 │   ├── train.py                  # 统一训练分发入口
-│   ├── training/                 # 训练运行器与逐模型训练方法
+│   ├── training/                 # CLI 定义、训练分发表与各 family 训练配方
 │   ├── engines/                  # train.py 选择的训练运行时
 │   │   ├── megatron/             #   LLM/VLM/Diffusion 运行时
 │   │   │   └── tokenizer/        #   Megatron Tokenizer 实现
 │   │   └── torch/                #   具身 Torch-native 运行时
-│   ├── extensions/               # 模型 × 后端的训练扩展
 │   ├── models/                   # 统一的模型抽象层
 │   │   ├── catalog.py            # 模型名、引擎与默认 YAML
 │   │   ├── language/             #   LLM 主干（LLaMA、Qwen、DeepSeek、...）

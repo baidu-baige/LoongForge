@@ -146,7 +146,7 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
 ## 3. 启动预训练
 
 ### 3.1 LoongForge 提供的额外参数
-除原生 Megatron 参数外，框架还添加了便捷选项（后端参数定义在 `loongforge/engines/megatron/arguments.py` 中，任务和数据参数定义在 `loongforge/training/megatron/args.py` 中）：
+除原生 Megatron 参数外，框架还添加了便捷选项（运行与数据参数定义在 `loongforge/training/megatron_args.py` 中，LLM 专属参数定义在 `loongforge/training/llm/args.py` 中）：
 
 * `--config-file` -- 包含所有模型超参数的 YAML 文件路径，例如 `configs/models/deepseek_v3/deepseek_v3.yaml`。
 * `--model-name` -- 模型简短名称，如 `deepseek-v3`；系统会自动查找对应的 YAML 文件。

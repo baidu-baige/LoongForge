@@ -65,7 +65,8 @@ from megatron.core.enums import ModelType
 from megatron.training.training import get_model
 from megatron.training import print_rank_0
 
-from loongforge.training.megatron.args import parse_megatron_train_args
+from loongforge.training.megatron_args import parse_megatron_train_args
+from tools.mcore_bridge.arguments import add_bridge_args
 from loongforge.engines.megatron.initialize import initialize_loongforge_megatron
 from loongforge.models.language.llm_model_provider import llm_model_provider
 from loongforge.models.multimodal.multimodal_model_provider import omni_model_provider
@@ -379,7 +380,7 @@ def compare_weights(original_path: str, roundtrip_path: str, output_dir: str,
 
 def main():
     # ── Step 1: Parse args (identical to training entry) ──────────────────
-    args = parse_megatron_train_args()
+    args = parse_megatron_train_args(extra_args_providers=[add_bridge_args])
 
     # ── Step 2: Initialize Megatron (identical to training) ───────────────
     initialize_loongforge_megatron(args=args)
@@ -406,7 +407,7 @@ def main():
             is_vlm = False
             break
     if is_vlm:
-        from loongforge.training.megatron.methods.pretrain_vlm import build_multimodal_runtime
+        from loongforge.training.vlm.pretrain_vlm import build_multimodal_runtime
 
         provider = partial(
             omni_model_provider, args=args, model_config=model_config,

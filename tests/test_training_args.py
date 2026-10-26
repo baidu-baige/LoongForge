@@ -7,13 +7,11 @@ import argparse
 
 import pytest
 
-from loongforge.engines.megatron.arguments import loongforge_extra_train_args_provider
-from loongforge.training.megatron.args import add_training_args
+from loongforge.training.megatron_args import add_training_args
 
 
 def _parse(argv):
     parser = argparse.ArgumentParser(allow_abbrev=False)
-    parser = loongforge_extra_train_args_provider(parser)
     parser = add_training_args(parser)
     return parser.parse_args(argv)
 

@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Dispatch training to the runner of the engine that owns the selected model."""
+"""Composition root: resolve the engine, parse its arguments, and run the recipe."""
 
 import argparse
 from importlib import import_module
@@ -10,8 +10,20 @@ import logging
 logging.basicConfig(level=logging.WARNING)
 
 
+def _parse_args(engine):
+    """Parse the engine's training arguments with the current module layout."""
+    if engine == "megatron":
+        from loongforge.training.megatron_args import parse as parse_megatron
+
+        return parse_megatron()
+
+    from loongforge.training.torch_args import parse as parse_torch
+
+    return parse_torch()
+
+
 def main():
-    """Run ``loongforge.training.<engine>.runner.main`` for the engine selected by ``--model-name``."""
+    """Resolve the engine selected by ``--model-name`` and run its recipe."""
     parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
     parser.add_argument("--model-name")
     parser.add_argument("--config-file")
@@ -29,7 +41,9 @@ def main():
         except ValueError as exc:
             parser.error(str(exc))
 
-    return import_module(f"loongforge.training.{engine}.runner").main()
+    parsed = _parse_args(engine)
+    run = import_module("loongforge.training.registry").resolve(engine, parsed)
+    return run()
 
 
 if __name__ == "__main__":

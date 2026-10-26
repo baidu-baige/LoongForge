@@ -13,7 +13,7 @@ This chapter describes the directory layout and launch script convention under e
 | `examples/` | Model-level launch scripts; default configs can be overridden via the trailing pass-through arguments at the end of each script |
 | `configs/models/` | Default YAML configs per model, containing two top-level sections: `model:` and `data:` |
 | `loongforge/train.py` | Training entry point; parses config, builds the Trainer, and starts training |
-| `loongforge/training/torch/args.py` | Definition file for the training recipe arguments; generates the shell CLI |
+| `loongforge/training/torch_args.py` | Definition file for the training recipe arguments; generates the shell CLI |
 | `loongforge/models/catalog.py` | Shared model routing table; binds `--model-name` to an engine, YAML, and (for Torch) typed config classes |
 | `loongforge/models/embodied/` | Torch embodied model architecture and model registration |
 | `loongforge/data/embodied/` | Embodied data pipeline: `dataloader.py` (DataLoader entry), `datasets/` (shared dataset classes: `lerobot_dataset.py`, `dummy_dataset.py`, video backends, stats), `transforms/` (shared per-sample transforms), `sampler.py`, `collator.py`, `registry.py`, and one directory per model with its `transforms/` subdirectory |
@@ -303,7 +303,7 @@ The Trainer module orchestrates the training lifecycle, including distributed co
 
 ### 4.1 Trainer Selection
 
-Select the trainer with `--trainer-type`. Valid values are the keys of `TORCH_TRAINER_TYPES` in `loongforge/training/torch/registry.py`; each maps to a training method module and an optional model-specific optimization package. The default `FinetuneTrainer` covers standard single-data-stream supervised fine-tuning; for multiple data streams, unusual loss combinations, or non-standard step scheduling, add a method module under `loongforge/training/torch/methods/` and register it in `TORCH_TRAINER_TYPES`.
+Select the trainer with `--trainer-type`. Valid values are the keys of `TORCH_TRAINER_TYPES` in `loongforge/training/registry.py`; each maps to a training method module under `loongforge/training/embodied/` and an optional model-specific optimization package under `loongforge/training/embodied/optimizations/`. The default `FinetuneTrainer` covers standard single-data-stream supervised fine-tuning; for multiple data streams, unusual loss combinations, or non-standard step scheduling, add a method module under `loongforge/training/embodied/` and register it in `TORCH_TRAINER_TYPES`.
 
 ### 4.2 Distributed Strategy
 

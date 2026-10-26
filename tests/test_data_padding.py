@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Padding rules live in training; data only applies the result."""
+"""Padding rules live in the engine; data only applies the result."""
 
 import pickle
 from types import SimpleNamespace
@@ -10,7 +10,7 @@ import pytest
 import torch
 
 from loongforge.data.vlm.collator import seq_padding_for_cp
-from loongforge.training.megatron.data_padding import (
+from loongforge.engines.megatron.data_padding import (
     VlmPackedPadding,
     llm_pad_to_multiple_of,
     vlm_packed_padding,

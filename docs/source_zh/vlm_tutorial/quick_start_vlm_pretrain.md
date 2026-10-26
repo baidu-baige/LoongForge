@@ -255,7 +255,7 @@ rm -rf $SAVE_PATCH
 
 ### 3.1 参数配置说明
 
-在开源 Megatron 提供的参数基础上，LoongForge 添加了更便捷的训练启动参数。后端参数见 loongforge/engines/megatron/arguments.py，任务和数据参数见 loongforge/training/megatron/args.py。主要参数说明如下：
+在开源 Megatron 提供的参数基础上，LoongForge 添加了更便捷的训练启动参数。运行与数据参数见 loongforge/training/megatron_args.py，VLM 专属参数见 loongforge/training/vlm/args.py。主要参数说明如下：
 
 * `--training-phase`：指定训练阶段为 pretrain
 * `--add-question-in-pretrain`：启用后，问题将被拼接并添加到训练输入中；禁用时，仅使用答案或其他默认文本字段进行训练

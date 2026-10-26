@@ -179,4 +179,4 @@ MODEL_CONFIG_REGISTRY = {
 - **模型包**：在 `loongforge/models/language/`、`loongforge/models/vision/` 或 `loongforge/models/diffusion/` 下实现配置类和模型类。
 - **AutoModel 注册**（LLM 和视觉组件）：在 `loongforge/models/language/__init__.py` 或 `loongforge/models/vision/__init__.py` 中添加 `AutoModel.register(<Config>, <Model>)`。YAML 的 `_target_` 选择配置类，配置类再选择模型。
 - **模型 family**：把新的 YAML `model_type` 登记到 `loongforge/constants.py` 的 `LanguageModelFamilies`、`VisionLanguageModelFamilies` 或 `DiffusionModelFamilies`。
-- **训练方法**（仅当该 family 有专用方法时）：在 `loongforge/training/megatron/registry.py` 中添加 `FAMILY_GROUP` 条目。
+- **训练方法**（仅当该 family 有专用方法时）：在 `loongforge/training/registry.py` 中添加 `FAMILY_GROUP` 和 `METHOD_REGISTRY` 条目，配方文件放在 `loongforge/training/<family>/` 下。

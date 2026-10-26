@@ -5,7 +5,7 @@
 
 Checks the combinations that only make sense for this backend: CUDA graph, FSDP,
 DDP ZeRO, DMuon, LoRA, and FP8. Recipe checks (learning rate, step counts, data
-loading, profiling) live in ``loongforge.training.torch.args.validate``, which
+loading, profiling) live in ``loongforge.training.torch_args.validate``, which
 calls :func:`validate_engine_args` last.
 """
 

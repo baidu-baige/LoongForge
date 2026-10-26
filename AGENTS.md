@@ -22,10 +22,10 @@ python -m build --sdist --wheel --outdir dist/
 | Path | Responsibility |
 |---|---|
 | `loongforge/train.py` | Training entrypoint and engine routing |
-| `loongforge/training/<backend>/` | Loop, lifecycle, registry, non-backend args, schedules, logging, profiling; `methods/` assembles model, data, and objective for a task |
-| `loongforge/engines/<backend>/` | Backend args, initialization, parallelism, model wrapping, optimizer, step execution, checkpointing |
+| `loongforge/training/` | CLI definitions (`megatron_args.py`, `torch_args.py`, family `args.py`), `registry.py`, `sft_data_config.py`, and family recipes (`llm/`, `vlm/`, `diffusion/`, `embodied/`) |
+| `loongforge/engines/<backend>/` | Backend execution: argument consumption, initialization, parallelism, model wrapping, optimizer, step execution, checkpointing, runner, logging, profiling |
 | `loongforge/models/` | Model implementations, configs, kernels, and registries (`language`, `vision`, `multimodal`, `diffusion`, `embodied`) |
-| `loongforge/extensions/` | Model × backend training extensions; may import `models` and `engines`, never `training` or `data` |
+| `loongforge/training/embodied/optimizations/` | Model × backend training extensions; may import `models`, `engines`, and the same family |
 | `loongforge/data/` | Family data packages (`llm/`, `vlm/`, `diffusion/`, `embodied/`): datasets, transforms, collators, samplers, and each family's `dataloader.py`; `chat_templates/` holds the shared chat templates, registry, and multimodal plugins |
 | `loongforge/evaluation/` | Inference services and evaluation |
 | `configs/` | Model and data configurations |
@@ -38,12 +38,12 @@ MCore weight conversion: `tools/mcore_checkpoint_convert/module_convertor/model.
 
 ## Code Organization & Dependencies
 
-- **Four layers**: `data/` owns samples and data formats; `models/` owns network structure; `engines/<backend>/` owns backend execution and performance; `training/<backend>/` owns what this run does.
+- **Four layers**: `data/` owns samples and data formats; `models/` owns network structure; `engines/<backend>/` owns backend execution, runtime mechanics, and performance; `training/` owns CLI definitions and what this run does (family recipes).
 - **Dependency direction**: `training -> engines -> models`; `data -> models` (declarative modules only); no cycles; backends never import each other. Declarative resources (configs, schemas, registry tables, chat templates) may be read from any layer.
-- **Ownership test**: if the code still makes sense with another backend, it belongs to `training/` or `data/`; otherwise to `engines/<backend>/` (parallelism, optimizer, low precision, step execution, checkpoint format).
+- **Ownership test**: if the code still makes sense with another backend, it belongs to `training/` or `data/`; otherwise to `engines/<backend>/` (runner, parallelism, optimizer, low precision, step execution, checkpoint format, profiling, logging).
 - **Runtime facts by arguments**: `data/` never reads backend args, global readers, or distributed state; the training method passes them down.
-- **Parameter ownership**: backend execution parameters go to `engines/<backend>/arguments.py`; run, task, data, logging, and lifecycle parameters go to `training/<backend>/args.py`. Where a value is read does not decide where it is defined.
-- **Non-obvious contracts**: ChunkPipe queue handoff, lazy loading of models and backends, `extensions/<backend>/<model>/` placement, and upstream reuse.
+- **Parameter ownership**: all LoongForge CLI definitions belong in `training/` (`megatron_args.py`, `torch_args.py`, and family `args.py`); `engines/<backend>/` consumes parsed args and owns execution implementations. Where a value is read does not decide where it is defined. Migration from the current split is tracked in `.comate/specs/training-family-layout-and-params/doc.md`.
+- **Non-obvious contracts**: ChunkPipe queue handoff, lazy loading of models and backends, `training/embodied/optimizations/<model>/` placement, and upstream reuse.
 
 ## Extending Functionality
 
@@ -51,16 +51,16 @@ Follow existing models and tasks for interfaces and naming.
 
 | Change | Primary Entrypoints |
 |---|---|
-| New LLM / VLM / Diffusion | Model package, `models/catalog.py`, `configs/models/`, `examples/`; register with `AutoModel.register(<Config>, <Model>)` in `models/language/__init__.py` or `models/vision/__init__.py`; add the family in `loongforge/constants.py` and, when it has its own method, in `training/megatron/registry.py`; VLM data encoders go in `data/vlm/` (`TASK_ENCODER_REGISTRY`) |
+| New LLM / VLM / Diffusion | Model package, `models/catalog.py`, `configs/models/`, `examples/`; register with `AutoModel.register(<Config>, <Model>)` in `models/language/__init__.py` or `models/vision/__init__.py`; add the family in `loongforge/constants.py` and, when it has its own method, in `training/registry.py`; VLM data encoders go in `data/vlm/` (`TASK_ENCODER_REGISTRY`) |
 | New Embodied Model | One `MODEL_PACKAGES` entry in `models/embodied/registry.py` plus `models/catalog.py`; a matching `models/embodied/<pkg>/` with `modeling_<pkg>.py` and a `data/embodied/<pkg>/` with `<pkg>_dataset.py`, `data_configuration_<pkg>.py`, `samplers.py`, and `transforms/`; add `DATASET_STRATEGIES` only for a custom strategy; optional eval factory |
 | New Data Format | Family data module; embodied formats and strategies in `data/embodied/registry.py` (`DATASET_FORMATS`, `DATASET_STRATEGIES`) |
-| New Training Objective | `training/<backend>/methods/` and the matching `training/<backend>/registry.py` |
-| New CLI Argument | Backend execution: `engines/<backend>/arguments.py`; recipe, task, data, logging, or lifecycle: `training/<backend>/args.py` |
+| New Training Objective | `training/<family>/` and the matching `training/registry.py` entry |
+| New CLI Argument | `training/megatron_args.py`, `training/torch_args.py`, or the matching `training/<family>/args.py` |
 | New Parallelism / Comm | `distributed/` under the target engine |
-| Single-Model Torch Opt | `extensions/torch/<model>/` and `TORCH_TRAINER_TYPES` in `training/torch/registry.py`; generic mechanisms go to `engines/torch/` |
+| Single-Model Torch Opt | `training/embodied/optimizations/<model>/` and `TORCH_TRAINER_TYPES` in `training/registry.py`; generic mechanisms go to `engines/torch/` |
 | New Chat Template | `data/chat_templates/jinja/` and `data/chat_templates/registry.py` |
 
-- **File Naming**: Inside `models/`, use `modeling_<model>.py`, `configuration_<model>.py`, and `processing_<model>.py`. Layer specs use `<model>_layer_spec.py`; training methods use `<phase>_<scope>.py`. Embodied data uses `<pkg>_dataset.py`, `data_configuration_<pkg>.py`, `samplers.py`, and under `transforms/`: `<pkg>_transform.py`, `<pkg>_collator.py`, `<pkg>_processor.py`, plus model-specific augmentation helpers. Mirror existing configs, transforms, and collators.
+- **File Naming**: Inside `models/`, use `modeling_<model>.py`, `configuration_<model>.py`, and `processing_<model>.py`. Layer specs use `<model>_layer_spec.py`; training recipes use `<phase>.py` for generic families and `<phase>_<model>.py` for model variants (`pretrain_vlm.py`, `pretrain_wan.py`, `sft_internvl.py`). Embodied data uses `<pkg>_dataset.py`, `data_configuration_<pkg>.py`, `samplers.py`, and under `transforms/`: `<pkg>_transform.py`, `<pkg>_collator.py`, `<pkg>_processor.py`, plus model-specific augmentation helpers. Mirror existing configs, transforms, and collators.
 
 ## Code Style
 
