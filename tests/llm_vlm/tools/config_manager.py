@@ -253,6 +253,8 @@ class ConfigManager(object):
         def recursive_replace(match):
             # Get variable name: prioritize group(1) with braces, otherwise group(2) without braces
             key = match.group(1) if match.group(1) else match.group(2)
+            if key in os.environ:
+                return os.environ[key]
             return str(config.get(key, match.group(0)))
 
         # Load common.yaml

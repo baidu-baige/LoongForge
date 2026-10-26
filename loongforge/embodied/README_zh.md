@@ -3,8 +3,16 @@
 `loongforge/embodied/` 是一个 **torch 原生的具身模型训练子系统**——涵盖视觉-语言-动作（VLA）策略模型与世界-动作模型（WAM）——在广泛的开源模型支持之上，兼顾生产级的训练性能。
 
 - **Torch 原生架构**：完全基于原生 PyTorch，构建了统一的 `data`、`model`、`trainer` 抽象，可灵活复用或扩展。
-- **广泛的开源模型支持**：π0.5、GR00T-N1.6 / N1.7、xVLA、Lingbot-VA、FastWAM、DreamZero、Cosmos3 等均支持微调，且精度与官方 baseline 对齐。
+- **广泛的开源模型支持**：Pi0.5、GR00T-N1.6 / N1.7、xVLA、Wall-OSS-0.5、LingBot-VA、FastWAM、DreamZero、Cosmos3 等均支持微调，且精度与官方 baseline 对齐。
 - **高训练吞吐**：典型模型最高可达 2x+ 吞吐提升，集成 `torch.compile`、CUDA Graph、自定义 kernel 与 I/O 优化，并支持 DDP、ZeRO-1、FSDP、HSDP 等多种分布式策略。
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)"  srcset="../../docs/assets/images/architecture/loongforge-embodied-architecture-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="../../docs/assets/images/architecture/loongforge-embodied-architecture.svg">
+    <img alt="LoongForge-Embodied 架构：一体化数据管线、加速模型训练（可扩展的模型接入、加速工具集、分布式训练）与一体化评测" src="../../docs/assets/images/architecture/loongforge-embodied-architecture.svg" width="100%">
+  </picture>
+</p>
 
 ---
 
@@ -20,14 +28,14 @@
 
 完整的框架使用说明请参阅 [用户手册](../../docs/source_zh/embodied_tutorial/overview.md)，各模型的快速入门：
 
-- [π0.5 (pi05)](../../docs/source_zh/embodied_tutorial/quick_start_pi05.md)
-- [GR00T-N1.6](../../docs/source_zh/embodied_tutorial/quick_start_groot_n1_6.md)
-- [GR00T-N1.7](../../docs/source_zh/embodied_tutorial/quick_start_groot_n1_7.md)
+- [Pi0.5 (pi05)](../../docs/source_zh/embodied_tutorial/quick_start_pi05.md)
+- [GR00T-N1.6](../../docs/source_zh/embodied_tutorial/quick_start_gr00t_n1_6.md)
+- [GR00T-N1.7](../../docs/source_zh/embodied_tutorial/quick_start_gr00t_n1_7.md)
 - [FastWAM](../../docs/source_zh/embodied_tutorial/quick_start_fastwam.md)
 - [DreamZero](../../docs/source_zh/embodied_tutorial/quick_start_dreamzero.md)
 - [Cosmos3](../../docs/source_zh/embodied_tutorial/quick_start_cosmos3.md)
 - [xVLA](../../docs/source_zh/embodied_tutorial/quick_start_xvla.md)
-- [Lingbot-VA](../../docs/source_zh/embodied_tutorial/quick_start_lingbot_va.md)
+- [LingBot-VA](../../docs/source_zh/embodied_tutorial/quick_start_lingbot_va.md)
 
 ---
 
@@ -118,7 +126,7 @@ loongforge/embodied/
 `BaseTrainer` 用模板方法固化训练全生命周期（`setup → 训练循环 → 单步 → 前向/反向 → 收尾`）：
 
 - **通用能力**：优化器 / LR 调度、梯度裁剪与 NaN 清理、checkpoint 保存与续训、分布式日志、确定性控制；
-- **训练器选择**：标准 SFT 用 `FinetuneTrainer`；特殊范式（多流、CUDA Graph）自定义子类（如 `custom/groot_n1_6/`），`trainer_builder.py` 注册、`--trainer-type` 选择；
+- **训练器选择**：标准 SFT 用 `FinetuneTrainer`；特殊范式（多流、CUDA Graph）自定义子类（如 `custom/gr00t_n1_6/`），`trainer_builder.py` 注册、`--trainer-type` 选择；
 - **分布式**：内置多种策略，按需选择——`ddp`（数据并行）、`ddp` + `--zero-optimizer`（ZeRO Stage-1，分片优化器状态）、`fsdp`（全分片）、`hsdp`（混合分片，设 `--hsdp-shard-size`）。
 
 ### 新增一个模型

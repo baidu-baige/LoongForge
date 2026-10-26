@@ -83,6 +83,7 @@ def save_checkpoint(
     epoch: int = 0,
     dataloader_state: Optional[Dict] = None,
     model_cfg=None,
+    data_cfg=None,
 ):
     """Save a full checkpoint or a consolidated LoRA adapter checkpoint."""
     # Make sure any previous async save has finalized before we touch a new
@@ -133,6 +134,12 @@ def save_checkpoint(
             model, optimizer, scheduler, path, ctx, training_args, epoch,
             dataloader_state, save_format, model_cfg=model_cfg,
         )
+
+    # Format-independent: the eval loader needs the data spec next to the weights
+    # for dcp as much as for safetensors/pt. Tiny and synchronous, so an async dcp
+    # save still has it on disk; a failed async commit removes the whole dir.
+    if ctx.is_main and data_cfg is not None and training_args.save_processor_config:
+        _write_processor_config(path, data_cfg)
 
     if future is not None:
         # Defer ``resume_meta.json`` until the async write has flushed —
@@ -298,6 +305,25 @@ def maybe_finalize_pending_save(
 def _write_resume_meta(path: str, meta: dict):
     with open(os.path.join(path, "resume_meta.json"), "w") as f:
         json.dump(meta, f, indent=2)
+
+
+def _write_processor_config(path: str, data_cfg) -> None:
+    """Write the eval-time ``processor_config.json`` next to the model weights.
+
+    Mirrors the official Isaac-GR00T checkpoint layout so the eval server can read
+    the image-pipeline spec verbatim (``_load_processor_kwargs`` -> ``processor_kwargs``)
+    instead of re-deriving it. Every field of the training ``data_cfg`` is emitted,
+    so any model's eval loader can recover its data spec from the checkpoint alone;
+    loaders read the keys they need and ignore the rest.
+    """
+    if is_dataclass(data_cfg) or isinstance(data_cfg, Mapping):
+        processor_kwargs = _config_to_json_value(data_cfg)
+    else:
+        processor_kwargs = _config_to_json_value(
+            {k: v for k, v in vars(data_cfg).items() if not k.startswith("_")}
+        )
+    with open(os.path.join(path, "processor_config.json"), "w", encoding="utf-8") as f:
+        json.dump({"processor_kwargs": processor_kwargs}, f, indent=2)
 
 
 def load_pretrained(model: nn.Module, checkpoint_path: str, ctx: DistributedContext) -> nn.Module:

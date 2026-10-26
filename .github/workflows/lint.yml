@@ -42,7 +42,7 @@ jobs:
           # Keep the listing separate from the filter: a failing git command has
           # to fail the step, while `grep` exiting 1 only means the filter
           # emptied the list. Piping them hid both behind the same `|| true`.
-          grep -vE '^(third_party|patches)/' candidate-python.txt \
+          grep -vE '^third_party/' candidate-python.txt \
             | sort -u > changed-python.txt || true
 
           if [ -s changed-python.txt ]; then

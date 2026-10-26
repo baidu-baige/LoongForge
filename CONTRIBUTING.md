@@ -37,7 +37,7 @@ LoongForge manages its dependencies using two strategies:
 |---|---|---|
 | **LoongForge** (this repo) | fork → PR | `baidu-baige/LoongForge` |
 | **Loong-Megatron** | fork → PR | `baidu-baige/Loong-Megatron` |
-| **TransformerEngine** | patch files | `patches/TransformerEngine_<tag>/` in LoongForge |
+| **TransformerEngine** | patch files | `third_party/patches/TransformerEngine_<tag>/` in LoongForge |
 
 ### Step 0 — Fork the repositories
 

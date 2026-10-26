@@ -205,7 +205,7 @@ class _ModelRoutingArgs:
     model_name: Optional[str] = field(
         default=None,
         metadata={
-            "help": "Model identifier (e.g. 'pi05', 'groot_n1_6'). Selects the "
+            "help": "Model identifier (e.g. 'pi05', 'gr00t_n1_6'). Selects the "
                     "ModelConfig/DataConfig classes and default YAML via "
                     "MODEL_SCHEMA. Required."
         },
@@ -526,6 +526,15 @@ class _LearningRateArgs:
         default=None,
         metadata={
             "help": "Number of scheduler decay steps. Defaults to --train-iters when unset."
+        },
+    )
+    lr_decay_start_iters: int = field(
+        default=0,
+        metadata={
+            "cli_type": parse_non_negative_int,
+            "help": "Optimizer step at which custom cosine decay begins, holding "
+                    "the peak LR after warmup until then. 0 starts decay immediately "
+                    "after warmup. Requires --custom-lr-lambda."
         },
     )
     min_lr: float = field(
@@ -855,6 +864,19 @@ class _DataArgs:
                     "'cyclic' (round-robin) or 'block' (contiguous shards).",
         },
     )
+    sampler_epoch_mode: str = field(
+        default="advance",
+        metadata={
+            "choices": ["advance", "fixed"],
+            "help": "Whether the sampler's epoch advances between epochs. "
+                    "'advance' (default) uses seed+epoch, so every epoch reshuffles. "
+                    "'fixed' pins the epoch to 0, so every epoch reuses the SAME "
+                    "permutation -- this reproduces standalone FastWAM, whose "
+                    "ResumableEpochSampler epoch is never advanced. Only used by "
+                    "model types that register their own sampler builder (currently "
+                    "fastwam); see data/datasets/<model>/samplers.py.",
+        },
+    )
     batch_drop_last: bool = field(
         default=False,
         metadata={
@@ -912,6 +934,14 @@ class _CheckpointArgs:
         metadata={
             "help": "Save checkpoints asynchronously in the background (dcp "
                     "format only)."
+        },
+    )
+    save_processor_config: bool = field(
+        default=False,
+        metadata={
+            "help": "Write processor_config.json (the training data config) into "
+                    "every steps_N dir for the eval loader. Required by GR00T-N1.7 "
+                    "eval; enable for models whose eval loader reads it."
         },
     )
 

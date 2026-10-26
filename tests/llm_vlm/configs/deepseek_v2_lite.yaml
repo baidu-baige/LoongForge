@@ -11,7 +11,7 @@ HF_CKPT_PATH: $pfs_path/huggingface.co/deepseek-ai/DeepSeek-V2-Lite
 DATA_PATH: $pfs_path/omni_datasets/LoongForge/deepseek_v2_lite/pile_test/pile-deepseek_text_document
 TOKENIZER_PATH: $pfs_path/huggingface.co/deepseek-ai/DeepSeek-V2-Lite
 CHECKPOINT_PATH: $step1_output_path
-TENSORBOARD_PATH: /workspace/tensorboard/$model_name.log
+TENSORBOARD_PATH: $training_log_path/tensorboard/$model_name.log
 MODEL_CONFIG_PATH: $LOONGFORGE_PATH/configs/models/deepseek2/deepseek_v2_lite.yaml
 CONVERT_FILE: $LOONGFORGE_PATH/configs/models/deepseek2/ckpt_convert/deepseek_v2_lite_convert.yaml
 
@@ -40,7 +40,7 @@ scenarios:
             --num_experts=64
             --expert_tensor_parallel_size=2
             --expert_parallel_size=4
-            --megatron_path=/workspace/Loong-Megatron
+            --megatron_path=${megatron_path}
             --load_ckpt_path=${HF_CKPT_PATH}
             --save_ckpt_path=${CHECKPOINT_PATH}
             --no_save_optim
@@ -59,6 +59,7 @@ scenarios:
             --tokenizer-type HFTokenizer
             --hf-tokenizer-path $TOKENIZER_PATH
             --data-path $DATA_PATH
+            --data-cache-path $dataset_cache_path
             --split 99990,8,2'
           TRAINING_ARGS: '
             --training-phase pretrain
@@ -70,7 +71,7 @@ scenarios:
             --global-batch-size ${global_batch_size}
             --lr 1e-4
             --train-iters ${train_iters}
-            --load ${CHECKPOINT_PATH}
+            --load ${HF_CKPT_PATH}
             --lr-decay-iters 320000
             --lr-decay-style cosine
             --min-lr 1.0e-5

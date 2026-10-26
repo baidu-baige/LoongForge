@@ -297,7 +297,11 @@ class DSAIndexerFused(MegatronModule):
         # every pipeline stage but the last, because 1F1B keeps more microbatches in flight
         # there; sizing the tensor by num_chunks_per_seq made append_chunk_indexer_key_cache
         # index past the end as soon as PP > 1.
-        total_cache_tokens = self.indexer_key_cache_chunk_size * self.config.chunksize
+        # Slots are sized by the largest chunk so a variable-length chunk table
+        # still maps to a constant-stride layout (slot k starts at k * slot_size).
+        # In uniform mode max_chunk_size == chunksize, so this is unchanged.
+        slot_size = self.config.max_chunk_size or self.config.chunksize
+        total_cache_tokens = self.indexer_key_cache_chunk_size * slot_size
         cache_shape = (total_cache_tokens, self.config.micro_batch_size, self.index_head_dim)
 
         self.indexer_key_cache = torch.zeros(cache_shape, device=device, dtype=dtype)
@@ -356,8 +360,13 @@ class DSAIndexerFused(MegatronModule):
         available_chunk_id = self.empty_chunk_indices.pop(0)
         self.micro_batch_to_cache_chunk_map[current_microbatch] = available_chunk_id
 
-        cache_indices = torch.arange(self.config.chunksize, device=indexer_key.device) + \
-            (available_chunk_id * self.config.chunksize)
+        # Write this chunk's actual length (indexer_key.shape[0]) into a
+        # max_chunk_size-strided slot. Uniform mode: length == chunksize and
+        # slot_size == chunksize, so indices match the previous fixed layout.
+        slot_size = self.config.max_chunk_size or self.config.chunksize
+        cur_len = indexer_key.shape[0]
+        cache_indices = torch.arange(cur_len, device=indexer_key.device) + \
+            (available_chunk_id * slot_size)
         if self.is_enable_grad_chunkpipe():
             # Detach to prevent gradient tracking of the same computational graph twice
             self.indexer_key_cache[cache_indices, :, :] = indexer_key.clone().detach()
@@ -402,13 +411,17 @@ class DSAIndexerFused(MegatronModule):
         cached_keys = []
 
         # Retrieve all previous chunks from cache
+        slot_size = self.config.max_chunk_size or self.config.chunksize
         for chunk_offset in range(chunks_in_current_sequence):
             microbatch_idx = starting_microbatch_idx + chunk_offset
             cache_chunk_idx = self.micro_batch_to_cache_chunk_map[microbatch_idx]
 
+            # chunk_offset is the previous chunk's position in the group, so its
+            # length is chunk_sizes[chunk_offset]; the slot is slot_size-strided.
+            prev_len = self.config.chunk_sizes[chunk_offset]
             chunk_indices = torch.arange(
-                self.config.chunksize, device=self.indexer_key_cache.device
-            ) + (cache_chunk_idx * self.config.chunksize)
+                prev_len, device=self.indexer_key_cache.device
+            ) + (cache_chunk_idx * slot_size)
 
             cached_key = self.indexer_key_cache[chunk_indices, :, :]
 
@@ -532,7 +545,7 @@ class DSAIndexerFused(MegatronModule):
             ck_fwd_mic = self.config.chunkpipe_forward_microbatch % self.num_chunks_per_seq
             if not self.config.chunkpipe_forward:
                 ck_fwd_mic = self.config.chunkpipe_backward_microbatch % self.num_chunks_per_seq
-            pos_emb_offset = ck_fwd_mic * self.config.chunksize
+            pos_emb_offset = self.config.cu_chunks[ck_fwd_mic]
 
         # rotary_pos_emb:[s, b, 1, 64]
         mscale = 1.0
@@ -692,7 +705,7 @@ class DSAIndexerFused(MegatronModule):
             ck_fwd_mic = self.config.chunkpipe_forward_microbatch % self.num_chunks_per_seq
             if not self.config.chunkpipe_forward:
                 ck_fwd_mic = self.config.chunkpipe_backward_microbatch % self.num_chunks_per_seq
-            kv_offset += ck_fwd_mic * self.config.chunksize
+            kv_offset += self.config.cu_chunks[ck_fwd_mic]
         (
             index_score_topk,  # [s/TP, topk]
             topk_indices  # [s/TP, topk]
@@ -902,7 +915,7 @@ class DSAttentionFused(MegatronModule):
             ck_fwd_mic = self.config.chunkpipe_forward_microbatch % self.config.chunk_num_per_seq
             if not self.config.chunkpipe_forward:
                 ck_fwd_mic = self.config.chunkpipe_backward_microbatch % self.config.chunk_num_per_seq
-            offset += ck_fwd_mic * self.config.chunksize
+            offset += self.config.cu_chunks[ck_fwd_mic]
 
         output, p_out = self.sparse_attention(
             chunk_query,
@@ -942,7 +955,12 @@ class DSAttentionFused(MegatronModule):
             if self.use_dsa_sp_first:
                 loss_norm = sq * self.pg_collection.tp.size()
             elif getattr(self.config, 'enable_chunkpipe', False):
-                loss_norm = sq * self.config.chunk_num_per_seq
+                # Normalize each chunk's KL by the full (local) sequence length so
+                # the N chunk-microbatches sum to a sequence-level mean. sq is this
+                # chunk's local length; scale it up to the whole sequence via the
+                # prefix-sum total. Uniform mode: cu_chunks[-1]/chunk_sizes[cur]
+                # == chunk_num_per_seq, so this is exactly sq * chunk_num_per_seq.
+                loss_norm = sq * self.config.cu_chunks[-1] / self.config.chunk_sizes[ck_fwd_mic]
             else:
                 loss_norm = sq
             indexer_loss = indexer_loss_coeff * loss / loss_norm

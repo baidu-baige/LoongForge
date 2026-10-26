@@ -486,8 +486,10 @@ class MLASelfAttentionFused(MLASelfAttention):
         current_chunk_idx = microbatch_idx % self.num_chunks_per_seq
         start_microbatch_idx = microbatch_idx - current_chunk_idx
 
-        # Calculate total sequence length after concatenation
-        total_concatenated_tokens = (current_chunk_idx + 1) * self.config.chunksize
+        # Calculate total sequence length after concatenation. cu_chunks is the
+        # prefix-sum of chunk_sizes; uniform mode: cu_chunks[k] == k * chunksize.
+        slot_size = self.config.max_chunk_size or self.config.chunksize
+        total_concatenated_tokens = self.config.cu_chunks[current_chunk_idx + 1]
         # DSA key shape: [seq, batch, kv_lora_rank + qk_pos_emb_head_dim]
         key_hidden_size = self.config.kv_lora_rank + self.config.qk_pos_emb_head_dim
         concatenated_key_shape = (total_concatenated_tokens, self.config.micro_batch_size, key_hidden_size)
@@ -520,10 +522,13 @@ class MLASelfAttentionFused(MLASelfAttention):
         for prev_chunk_idx in range(current_chunk_idx):
             cache_chunk_idx = self.micro_batch_to_cache_chunk_map[start_microbatch_idx + prev_chunk_idx]
             
+            # prev_chunk_idx is the previous chunk's position in the group, so its
+            # length is chunk_sizes[prev_chunk_idx]; slots are slot_size-strided.
+            prev_len = self.config.chunk_sizes[prev_chunk_idx]
             tp_size = parallel_state.get_tensor_model_parallel_world_size()
-            kv_indices = torch.arange(self.config.chunksize // tp_size) + \
-                (cache_chunk_idx * self.config.chunksize // tp_size)
-            pos_indices = torch.arange(self.config.chunksize) + (cache_chunk_idx * self.config.chunksize)
+            kv_indices = torch.arange(prev_len // tp_size) + \
+                (cache_chunk_idx * slot_size // tp_size)
+            pos_indices = torch.arange(prev_len) + (cache_chunk_idx * slot_size)
 
             cached_kv_compressed = self.kv_compressed_cache[kv_indices, :, :]
             cached_key_pos_emb = self.key_pos_emb_cache[pos_indices, :, 0:1, :]
@@ -544,11 +549,11 @@ class MLASelfAttentionFused(MLASelfAttention):
             # Reconstruct key as [kv_compressed, k_pos_emb]
             cached_key = torch.cat([cached_kv_compressed_all, cached_key_pos_emb.squeeze(1)], dim=-1)
             
-            concatenated_key[current_pos : current_pos + self.config.chunksize, :, :] = cached_key
-            current_pos += self.config.chunksize
+            concatenated_key[current_pos : current_pos + prev_len, :, :] = cached_key
+            current_pos += prev_len
 
         # Add current chunk's key
-        concatenated_key[current_pos : current_pos + self.config.chunksize, :, :] = curr_key
+        concatenated_key[current_pos : current_pos + curr_key.shape[0], :, :] = curr_key
             
         return concatenated_key, None
 
@@ -1059,7 +1064,9 @@ class MLASelfAttentionFused(MLASelfAttention):
             ck_fwd_mic = self.config.chunkpipe_forward_microbatch % self.num_chunks_per_seq
             if not self.config.chunkpipe_forward:
                 ck_fwd_mic = self.config.chunkpipe_backward_microbatch % self.num_chunks_per_seq
-            pos_emb_offset = ck_fwd_mic * self.config.chunksize
+            # Start token index of this chunk = prefix-sum offset.
+            # Uniform mode: cu_chunks[ck_fwd_mic] == ck_fwd_mic * chunksize.
+            pos_emb_offset = self.config.cu_chunks[ck_fwd_mic]
 
         mscale = 1.0
         packed_seq = packed_seq_params is not None and packed_seq_params.qkv_format == "thd"

@@ -12,10 +12,13 @@ import json
 import os
 import pathlib
 import sys
+import tempfile
 from types import SimpleNamespace
 from typing import Any, Dict
 
 from loongforge.embodied.eval.orchestrator.runners import libero_runner
+from loongforge.embodied.eval.orchestrator.runners._common import guard_output_dir
+from loongforge.embodied.eval.metrics import repro_metadata
 from loongforge.embodied.eval.orchestrator.config import apply_config, expand_sweep, load_config
 from loongforge.embodied.eval.orchestrator.server_manager import (
     ManagedServer,
@@ -39,14 +42,27 @@ def _benchmark_family(config: Dict[str, Any]) -> str:
 
 
 def _timestamped_run_config(config: Dict[str, Any]) -> Dict[str, Any]:
-    """Run _timestamped_run_config."""
+    """Resolve the run output directory.
+
+    ``run.resume: true`` reuses ``run.output_dir`` as-is and requires it to
+    exist; a timestamped sibling would always be empty and make resume a no-op.
+    """
     run_config = config.get("run") or {}
     if not isinstance(run_config, dict):
         raise ValueError("run section must be a mapping when set")
+
+    output_dir = run_config.get("output_dir")
+    if run_config.get("resume"):
+        if not output_dir:
+            raise SystemExit("run.resume=true requires run.output_dir")
+        output_path = pathlib.Path(str(output_dir))
+        if not output_path.is_dir():
+            raise SystemExit(f"run.resume=true but output_dir does not exist: {output_path}")
+        return config
+
     if run_config.get("timestamped_output", True) is False:
         return config
 
-    output_dir = run_config.get("output_dir")
     if not output_dir:
         return config
 
@@ -61,6 +77,29 @@ def _timestamped_run_config(config: Dict[str, Any]) -> Dict[str, Any]:
     if isinstance(server_config, dict):
         server_config["log"] = str(timestamped_output / "policy_server.log")
     return item
+
+
+def _write_effective_config(config: Dict[str, Any], fallback_path: str) -> str:
+    """Persist the expanded config so the policy server sees the same values.
+
+    The server is launched with ``--config`` and reads that file itself. Without
+    this, sweep overrides (e.g. ``server.port``) and the timestamped
+    output/log paths would apply to the client only, leaving the server on the
+    original values.
+    """
+    output_dir = (config.get("run") or {}).get("output_dir")
+    if output_dir:
+        path = pathlib.Path(str(output_dir)) / "effective_config.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        handle, name = tempfile.mkstemp(prefix="eval_effective_", suffix=".json")
+        os.close(handle)
+        path = pathlib.Path(name)
+    path.write_text(
+        json.dumps(config, ensure_ascii=False, indent=2, default=str) + "\n",
+        encoding="utf-8",
+    )
+    return str(path)
 
 
 def _server_args(config: Dict[str, Any], config_path: str = "") -> argparse.Namespace:
@@ -85,6 +124,12 @@ def _run_libero_once(config: Dict[str, Any], config_path: str = "") -> Dict[str,
     args.raw_config = config
     server_args = _server_args(config, config_path)
     ensure_libero_config(server_args)
+    # Fail fast before paying the model-load cost when the results directory
+    # cannot be reused safely.
+    guard_output_dir(args)
+    if args.resume and not args.restart:
+        repro_metadata.ensure_manifest_matches_checkpoint(args.output_dir, args.ckpt_path)
+        args._manifest_checked = True
     original = {
         key: os.environ.get(key) for key in ["MUJOCO_GL", "PYOPENGL_PLATFORM", "LD_LIBRARY_PATH", "LIBERO_CONFIG_PATH"]
     }
@@ -138,6 +183,10 @@ def _run_calvin_once(config: Dict[str, Any], config_path: str = "") -> Dict[str,
             sys.path.insert(0, path)
     os.environ["PYTHONPATH"] = ":".join(calvin_paths + [os.environ.get("PYTHONPATH", "")])
 
+    guard_output_dir(args)
+    if args.resume and not args.restart:
+        repro_metadata.ensure_manifest_matches_checkpoint(args.output_dir, args.ckpt_path)
+        args._manifest_checked = True
     server = ManagedServer(_server_args(config, config_path))
     try:
         server.start()
@@ -250,9 +299,29 @@ def main() -> None:
     args = build_argparser().parse_args()
     config_path = str(pathlib.Path(args.config).resolve())
     config = load_config(config_path)
-    results = [_run_once(_timestamped_run_config(sweep_config), config_path) for sweep_config in expand_sweep(config)]
+    results = []
+    for sweep_config in expand_sweep(config):
+        effective = _timestamped_run_config(sweep_config)
+        effective_path = _write_effective_config(effective, config_path)
+        results.append(_run_once(effective, effective_path))
     if len(results) > 1:
         print(json.dumps({"n_runs": len(results), "runs": results}, ensure_ascii=False, indent=2, default=str))
+    failed = [result for result in results if result.get("ok") is False]
+    if failed:
+        for result in failed:
+            print(
+                json.dumps(
+                    {
+                        "incomplete": True,
+                        "benchmark": result.get("benchmark"),
+                        "output_dir": result.get("results_path"),
+                        "violations": result.get("episode_floor_violations", []),
+                    },
+                    ensure_ascii=False,
+                ),
+                file=sys.stderr,
+            )
+        sys.exit(2)
 
 
 if __name__ == "__main__":

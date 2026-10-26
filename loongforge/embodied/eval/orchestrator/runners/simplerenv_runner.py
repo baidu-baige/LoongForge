@@ -176,6 +176,7 @@ def run_evaluation(args: argparse.Namespace) -> Dict[str, Any]:
         camera_name=args.camera_name,
         action_scale=args.action_scale,
         rotation_mode=args.rotation_mode,
+        google_sticky_gripper=args.google_sticky_gripper,
     )
     payload_builder, action_decoder_key, action_decoder = _common.build_policy_stack(args, adapter)
     env, env_name = _build_env(args, adapter)
@@ -336,6 +337,7 @@ def _apply_config(args: argparse.Namespace, config: Dict[str, Any]) -> argparse.
         (benchmark, "control_mode", "control_mode"),
         (benchmark, "action_scale", "action_scale"),
         (benchmark, "rotation_mode", "rotation_mode"),
+        (benchmark, "google_sticky_gripper", "google_sticky_gripper"),
         (benchmark, "max_steps", "max_steps"),
         (benchmark, "success_settle_steps", "success_settle_steps"),
         (benchmark, "success_settle_gripper", "success_settle_gripper"),
@@ -363,6 +365,12 @@ def _apply_config(args: argparse.Namespace, config: Dict[str, Any]) -> argparse.
         value = section.get(key) if isinstance(section, dict) else None
         if value is not None:
             setattr(args, attr, value)
+    # Preserve the full YAML so build_policy_stack (_common.build_policy_stack)
+    # can read model.state_encoding / action_encoding. Without this, raw_config
+    # defaults to {} and the GR00T-N1.7 builder falls back to its default
+    # state_encoding=libero_ee_axis_angle, sending a LIBERO-format proprio to a
+    # SimplerEnv-Bridge model -> every widowx episode fails (0/N).
+    args.raw_config = config
     return args
 
 
@@ -384,6 +392,9 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--control-mode", default="arm_pd_ee_target_delta_pose_align2_gripper_pd_joint_pos")
     parser.add_argument("--action-scale", type=float, default=1.0)
     parser.add_argument("--rotation-mode", choices=["euler", "axis_angle"], default="euler")
+    # google_robot only: Isaac-GR00T 15-step sticky gripper. Off by default
+    # (gripper passed through); GR00T Fractal configs set benchmark.google_sticky_gripper.
+    parser.add_argument("--google-sticky-gripper", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--disable-action-cache", action="store_true")
     parser.add_argument("--action-ensemble", action="store_true")
     parser.add_argument("--action-ensemble-horizon", type=int, default=7)

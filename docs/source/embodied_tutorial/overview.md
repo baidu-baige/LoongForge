@@ -112,7 +112,7 @@ When using the LeRobot format, the following arguments give finer control over d
 | Feature | Argument | Default | Values / Type | Description |
 | --- | --- | --- | --- | --- |
 | LeRobotDataset version | `--lerobotdataset-version` | `v3.0` | `v2.0`, `v2.1`, `v3.0` | Parse different LeRobot on-disk formats |
-| Data strategy | `--dataset-strategy` | `default` | `default`, `fastwam`, `groot_n1_7`, `cosmos3_droid`, `dreamzero` | Select LeRobot build strategy |
+| Data strategy | `--dataset-strategy` | `default` | `default`, `fastwam`, `gr00t_n1_7`, `cosmos3_droid`, `dreamzero` | Select LeRobot build strategy |
 | Video backend | `--video-backend` | `torchcodec` | `torchcodec`, `decord`, `opencv`, `pyav`, `torchvision_av` | Video decoding implementation |
 | Robot type | `--robot-type` | `None` | String | Select embodiment / action-state layout |
 
@@ -263,6 +263,7 @@ The checkpoint module offers:
 | Save format | `--save-format` | `safetensors` | `safetensors`, `pt`, `dcp` | Checkpoint file format |
 | Save training state | `--save-training-state` | `True` | Bool flag | Save optimizer, scheduler, RNG, and DataLoader state |
 | Async save | `--async-save` | `False` | Bool flag | Enable async saving for DCP format |
+| Save processor config | `--save-processor-config` | `False` | Bool flag | Write `processor_config.json` (training data config) into each `steps_N`; required by GR00T-N1.7 eval |
 
 Resume example:
 

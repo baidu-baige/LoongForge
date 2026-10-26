@@ -1690,11 +1690,14 @@ def train_step(
         tmp_num_microbatches = get_num_microbatches()
         tmp_seq_length = args.seq_length
         if args.enable_chunkpipe:
-            tmp_seq_length = args.chunksize
+            # P2P/activation shape hint: largest chunk. Uniform mode: == chunksize.
+            # (True variable-length P2P across PP additionally needs
+            # config.variable_seq_lengths.)
+            tmp_seq_length = getattr(args, "max_chunk_size", 0) or args.chunksize
             if args.training_phase != "sft":
                 # Pretrain: DataLoader produces full sequences, ChunkDataIterator
                 # splits them, so num_microbatches must be inflated.
-                num_chunks = args.seq_length // args.chunksize
+                num_chunks = args.chunk_num_per_seq
                 tmp_num_microbatches *= num_chunks
             # SFT: DataLoader already produces chunk-level micro-batches,
             # num_microbatches is already correct.

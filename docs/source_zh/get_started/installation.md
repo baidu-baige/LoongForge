@@ -31,12 +31,12 @@ LoongForge 使用两种不同策略管理其关键上游依赖：
 | 依赖 | 策略 | 位置 |
 |---|---|---|
 | **Megatron-LM** | git 子模块（LoongForge fork） | `third_party/Loong-Megatron/` |
-| **TransformerEngine** | 对上游 NVIDIA tag 的补丁 | `patches/TransformerEngine_<tag>/` |
+| **TransformerEngine** | 对上游 NVIDIA tag 的补丁 | `third_party/patches/TransformerEngine_<tag>/` |
 
 **Megatron-LM** 通过 git 子模块固定到
 [Loong-Megatron](https://github.com/baidu-baige/Loong-Megatron) fork 的特定提交。所有 LoongForge 特有的改动直接存在于 fork 分支中，不应用补丁。
 
-**TransformerEngine** 从上游 NVIDIA 仓库克隆，检出指定的社区 tag，然后应用 LoongForge 特有的修复补丁。补丁目录后缀与其目标的上游 tag 匹配（例如 `patches/TransformerEngine_v2.9/`）。
+**TransformerEngine** 从上游 NVIDIA 仓库克隆，检出指定的社区 tag，然后应用 LoongForge 特有的修复补丁。补丁目录后缀与其目标的上游 tag 匹配（例如 `third_party/patches/TransformerEngine_v2.9/`）。
 
 ---
 
@@ -145,7 +145,7 @@ python setup_env.py --te-tag v2.9
 
 1. 从上游 NVIDIA 仓库克隆 `TransformerEngine`。
 2. 检出指定的 TE tag 并创建本地分支（`loongforge_<tag>`）。
-3. 将 `patches/TransformerEngine_<tag>/` 中的补丁应用到 TransformerEngine。
+3. 将 `third_party/patches/TransformerEngine_<tag>/` 中的补丁应用到 TransformerEngine。
 4. 编译并安装 `TransformerEngine`。
 
 提示：某些模型架构（如 DeepSeek 系列）需要额外的编译依赖，如 DeepEP、DeepGEMM、FlashMLA 和 Flash Attention，这些未包含在 pip 安装中。它们已预构建在 Docker 镜像中。如果源码安装需要这些依赖，请参考 [`docker/Dockerfile`](https://github.com/baidu-baige/LoongForge/blob/master/docker/Dockerfile) 获取确切版本和构建步骤。

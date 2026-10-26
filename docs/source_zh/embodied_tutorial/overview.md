@@ -111,7 +111,7 @@ model.forward(batch)
 | 功能 | 配置项 | 默认值 | 取值 / 类型 | 说明 |
 | --- | --- | --- | --- | --- |
 | LeRobotdataset 版本 | `--lerobotdataset-version` | `v3.0` | `v2.0`, `v2.1`, `v3.0` | 解析不同 LeRobot 磁盘格式 |
-| 数据策略 | `--dataset-strategy` | `default` | `default`, `fastwam`, `groot_n1_7`, `cosmos3_droid`, `dreamzero` | 选择 LeRobot 构建策略 |
+| 数据策略 | `--dataset-strategy` | `default` | `default`, `fastwam`, `gr00t_n1_7`, `cosmos3_droid`, `dreamzero` | 选择 LeRobot 构建策略 |
 | 视频后端 | `--video-backend` | `torchcodec` | `torchcodec`, `decord`, `opencv`, `pyav`, `torchvision_av` | 视频解码实现 |
 | robot 类型 | `--robot-type` | `None` | 字符串 | 选择 embodiment / action-state layout |
 
@@ -262,6 +262,7 @@ Checkpoint 模块提供以下能力：
 | 保存格式 | `--save-format` | `safetensors` | `safetensors`, `pt`, `dcp` | checkpoint 文件格式 |
 | 保存训练状态 | `--save-training-state` | `True` | 布尔开关 | 保存 optimizer、scheduler、RNG 与 DataLoader 状态 |
 | 异步保存 | `--async-save` | `False` | 布尔开关 | DCP 格式下可启用异步保存 |
+| 保存 processor 配置 | `--save-processor-config` | `False` | 布尔开关 | 在每个 `steps_N` 写入 `processor_config.json`（训练 data config），GR00T-N1.7 评测依赖此文件 |
 
 续训示例：
 

@@ -103,6 +103,7 @@ class SimplerEnvAdapter(BaseBenchmarkAdapter):
         camera_name: Optional[str] = None,
         action_scale: float = 1.0,
         rotation_mode: str = "euler",
+        google_sticky_gripper: bool = False,
     ) -> None:
         """Run __init__."""
         if task_name not in TASK_TO_ENV_NAME:
@@ -118,6 +119,19 @@ class SimplerEnvAdapter(BaseBenchmarkAdapter):
         self.camera_name = camera_name or _default_camera_name(robot_setup)
         self.action_scale = action_scale
         self.rotation_mode = rotation_mode
+        # Only consulted for google_robot. Off by default: the gripper value is
+        # passed through unchanged (the pre-sticky google_robot behavior); GR00T
+        # Fractal configs turn it on for Isaac-GR00T parity.
+        self.google_sticky_gripper = google_sticky_gripper
+        # Google-robot sticky-gripper state. Mirrors the official Isaac-GR00T
+        # GoogleFractalEnv, which "sticks" a triggered gripper action for
+        # ``sticky_gripper_num_repeat`` steps. The adapter is constructed once
+        # per episode (one runner process per episode), so initializing here is
+        # equivalent to the wrapper resetting it in ``reset()``.
+        self._sticky_action_is_on = False
+        self._sticky_gripper_action = 0.0
+        self._gripper_action_repeat = 0
+        self._sticky_gripper_num_repeat = 15
 
     def obs_to_canonical(self, env_obs: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         """Convert a SimplerEnv obs into a benchmark-neutral canonical dict."""
@@ -226,8 +240,32 @@ class SimplerEnvAdapter(BaseBenchmarkAdapter):
         """Run _convert_gripper."""
         value = float(np.asarray(gripper_value, dtype=np.float32).reshape(-1)[0])
         if self.policy_setup == "google_robot":
+            if self.google_sticky_gripper:
+                return np.asarray([self._google_sticky_gripper(value)], dtype=np.float32)
             return np.asarray([value], dtype=np.float32)
         return np.asarray([2.0 * (value > 0.5) - 1.0], dtype=np.float32)
+
+    def _google_sticky_gripper(self, current_gripper_action: float) -> float:
+        """Replicate Isaac-GR00T ``GoogleFractalEnv._postprocess_gripper``.
+
+        ``[0, 1] -> [-1, 1]``, negate, then "stick" the triggered action for
+        ``sticky_gripper_num_repeat`` (15) steps. Without this the Fractal grasp
+        tasks never close the gripper reliably (continuous pass-through makes
+        pick_coke_can etc. fail every episode).
+        """
+        current_gripper_action = current_gripper_action * 2.0 - 1.0
+        relative_gripper_action = -current_gripper_action
+        if abs(relative_gripper_action) > 0.5 and self._sticky_action_is_on is False:
+            self._sticky_action_is_on = True
+            self._sticky_gripper_action = relative_gripper_action
+        if self._sticky_action_is_on:
+            self._gripper_action_repeat += 1
+            relative_gripper_action = self._sticky_gripper_action
+        if self._gripper_action_repeat == self._sticky_gripper_num_repeat:
+            self._sticky_action_is_on = False
+            self._gripper_action_repeat = 0
+            self._sticky_gripper_action = 0.0
+        return float(relative_gripper_action)
 
     def get_eval_context(self) -> Dict[str, Any]:
         """Run get_eval_context."""

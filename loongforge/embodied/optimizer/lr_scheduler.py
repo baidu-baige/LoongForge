@@ -348,6 +348,7 @@ def build_scheduler(optimizer, training_args):
         end_lr = float(training_args.min_lr if training_args.min_lr is not None else peak_lr * 0.1)
         num_warmup_steps = int(training_args.lr_warmup_iters)
         num_training_steps = int(training_args.lr_decay_iters or training_args.train_iters)
+        decay_start_step = max(num_warmup_steps, training_args.lr_decay_start_iters)
 
         def lr_lambda(current_step: int):
             if current_step < num_warmup_steps:
@@ -355,8 +356,11 @@ def build_scheduler(optimizer, training_args):
                 current_lr = init_lr + (peak_lr - init_lr) * current_step / num_warmup_steps
                 return current_lr / peak_lr
 
-            decay_steps = num_training_steps - num_warmup_steps
-            progress = min(1.0, (current_step - num_warmup_steps) / max(1, decay_steps))
+            if current_step < decay_start_step:
+                return 1.0
+
+            decay_steps = num_training_steps - decay_start_step
+            progress = min(1.0, (current_step - decay_start_step) / max(1, decay_steps))
             cos = 0.5 * (1 + math.cos(math.pi * progress))
             current_lr = end_lr + (peak_lr - end_lr) * cos
             return current_lr / peak_lr

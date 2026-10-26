@@ -75,12 +75,13 @@ def main():
 
     # 2. Apply patches to TransformerEngine
     print("\n[2/3] Applying patches to TransformerEngine...")
-    apply_script = os.path.join(omni_path, "patches/apply_patches.sh")
+    patch_dir = os.path.join(omni_path, "third_party", "patches")
+    apply_script = os.path.join(patch_dir, "apply_patches.sh")
     if not os.path.exists(apply_script):
         print(f"Error: Patch script not found at {apply_script}")
         sys.exit(1)
 
-    te_patch_dir = os.path.join(omni_path, f"patches/TransformerEngine_{args.te_tag}")
+    te_patch_dir = os.path.join(patch_dir, f"TransformerEngine_{args.te_tag}")
     if not os.path.isdir(te_patch_dir):
         print(f"Error: TE patch directory not found: {te_patch_dir}")
         sys.exit(1)

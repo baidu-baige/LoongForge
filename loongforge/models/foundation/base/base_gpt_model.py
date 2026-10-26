@@ -348,7 +348,9 @@ class BaseGPTModel(BaseMegatronLanguageModule):
                     "chunkpipe_chunk_idx_in_group is not set. "
                     "Please ensure the scheduler is properly configured for chunkpipe."
                 )
-            chunk_offset = self.config.chunkpipe_chunk_idx_in_group * self.config.chunksize
+            # Start token index of this chunk = prefix-sum offset. Uniform mode:
+            # cu_chunks[idx] == idx * chunksize.
+            chunk_offset = self.config.cu_chunks[self.config.chunkpipe_chunk_idx_in_group]
 
         if self.position_embedding_type == 'rope' and not self.config.multi_latent_attention:
             use_flash_infer_fused_rope = (
@@ -704,10 +706,16 @@ class BaseGPTModel(BaseMegatronLanguageModule):
                         packed_seq_params=roll_packed_seq_params,
                     )
 
+                    # Current chunk's token width (variable-length aware). Uniform
+                    # mode: chunk_sizes[idx] == chunksize.
+                    cur_chunk_len = (
+                        self.config.chunk_sizes[self.config.chunkpipe_chunk_idx_in_group]
+                        if self.config.enable_chunkpipe else None
+                    )
                     # Compute mtp loss without storing logits to save memory.
                     mtp_loss = self.compute_output_layer_and_language_model_loss(
                         hidden_states_list[mtp_layer_number + 1],
-                        labels=mtp_labels[:, :self.config.chunksize] if self.config.enable_chunkpipe else mtp_labels,
+                        labels=mtp_labels[:, :cur_chunk_len] if self.config.enable_chunkpipe else mtp_labels,
                         weight=self.shared_embedding_or_output_weight()
                         if self.share_embeddings_and_output_weights else self.output_layer.weight,
                         sequence_parallel_enabled=self.output_layer.sequence_parallel,
@@ -723,7 +731,7 @@ class BaseGPTModel(BaseMegatronLanguageModule):
                         # For SFT chunkpipe, normalize each chunk's contribution by
                         # the source sequence's total valid-token count so that all
                         # chunks of the same sequence accumulate to a sequence-level mean.
-                        loss_mask_chunk = loss_mask[:, :self.config.chunksize]
+                        loss_mask_chunk = loss_mask[:, :cur_chunk_len]
                         mtp_loss = loss_mask_chunk * mtp_loss
                         if getattr(self.config, 'sft_chunkpipe_mode', False) and mtp_group_total_tokens is not None:
                             num_tokens = mtp_group_total_tokens.to(
@@ -731,7 +739,8 @@ class BaseGPTModel(BaseMegatronLanguageModule):
                             ).reshape(-1)[0]
                         else:
                             # Pretrain chunkpipe keeps the original next-batch normalization.
-                            num_tokens = (self.config.chunksize * self.config.chunk_num_per_seq
+                            # cu_chunks[-1] == seq_length == chunksize * chunk_num_per_seq.
+                            num_tokens = (self.config.cu_chunks[-1]
                                           - mtp_layer_number - 1)
                     else:
                         mtp_loss = loss_mask * mtp_loss

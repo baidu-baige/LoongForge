@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import pathlib
+import sys
 import time
 from typing import Any, Dict, List, Optional
 
@@ -26,16 +27,21 @@ from loongforge.embodied.eval.metrics import (
     append_jsonl,
     completed_episode_keys,
     load_jsonl,
+    summarize_suites,
     write_eval_report,
     write_suite_summary_csv,
     write_summary_csv,
 )
+from loongforge.embodied.eval.metrics import repro_metadata
 from loongforge.embodied.eval.action_decoders import ActionDecoder
 from loongforge.embodied.eval.orchestrator.config import (
     build_rpc_payload,
 )
 from loongforge.embodied.eval.orchestrator.runners import _common
 from loongforge.embodied.eval.orchestrator.runners._common import StepTimeoutError, alarm_timeout, avg as _avg
+from loongforge.embodied.eval.orchestrator.runners.libero_gr00t_runner import (
+    GROOT_OFFICIAL_PROTOCOL, _run_batch_groot_official,
+)
 from loongforge.embodied.eval.payload_builders import PayloadBuilder
 from loongforge.embodied.eval.protocol import PROTOCOL_VERSION
 from loongforge.embodied.eval.transport import PolicyClient
@@ -79,6 +85,39 @@ def _get_libero_env(task, resolution: int, seed: int):
 def _extract_primary_frame(obs: Dict[str, Any]) -> np.ndarray:
     """Run _extract_primary_frame."""
     return np.ascontiguousarray(obs["agentview_image"][::-1, ::-1])
+
+
+# One env per task, seeded once -- the official eval semantics (`--env-seed-mode per_task`).
+# The official harness creates the env outside its 50-trial loop with `cfg.seed` and reuses
+# it, so the env's internal RNG advances across trials and each trial's scene is a function
+# of (seed, trial order), not of episode_idx alone. LIBERO's own `env.seed()` comment notes
+# the seed "seems to affect object positions even when using fixed initial state", so this
+# is not cosmetic: with `--env-seed-mode per_episode` (the default, kept for compatibility)
+# LoongForge re-creates and re-seeds the env every episode and therefore renders a
+# different observation for the same recorded initial state.
+_ENV_CACHE: Dict[str, Any] = {"key": None, "env": None}
+
+
+def _get_cached_env(task, resolution: int, seed: int):
+    """Return a per-task cached env, creating it (and seeding it) on first use."""
+    key = (str(getattr(task, "language", task)), int(resolution), int(seed))
+    if _ENV_CACHE.get("key") != key:
+        close_cached_env()
+        env, _ = _get_libero_env(task, resolution, seed)
+        _ENV_CACHE["key"] = key
+        _ENV_CACHE["env"] = env
+    return _ENV_CACHE["env"]
+
+
+def close_cached_env() -> None:
+    """Close the cached env if any (called per task switch and at batch exit)."""
+    env = _ENV_CACHE.get("env")
+    if env is not None:
+        try:
+            env.close()
+        finally:
+            _ENV_CACHE["env"] = None
+            _ENV_CACHE["key"] = None
 
 
 def _save_replay(
@@ -176,10 +215,7 @@ def _failure_record(
         "trace_path": trace_path,
         "server_metadata": None,
         "repro": {
-            "git_sha": None,
-            "benchmark_commit": None,
-            "docker_image": None,
-            "python_env_hash": None,
+            **repro_metadata.repro_fields(("libero",)),
             "global_seed": args.seed,
             "episode_seed": episode_seed,
             "protocol_version": PROTOCOL_VERSION,
@@ -216,8 +252,16 @@ def run_episode(
     args: argparse.Namespace,
 ) -> Dict[str, Any]:
     """Run run_episode."""
-    episode_seed = int(args.seed) + task_id * 1000 + episode_idx
-    np.random.seed(episode_seed)
+    env_seed_mode = str(getattr(args, "env_seed_mode", "per_episode"))
+    if env_seed_mode == "per_task":
+        # Official semantics: seed once per task (process), env reused across trials.
+        episode_seed = int(args.seed)
+        if not _ENV_CACHE.get("np_seeded"):
+            np.random.seed(episode_seed)
+            _ENV_CACHE["np_seeded"] = True
+    else:
+        episode_seed = int(args.seed) + task_id * 1000 + episode_idx
+        np.random.seed(episode_seed)
 
     task_description = task.language
     episode_id = f"libero/{task_suite_name}/task={task_id}/episode={episode_idx}"
@@ -232,19 +276,37 @@ def run_episode(
 
     try:
         with alarm_timeout(args.per_episode_timeout_sec, EpisodeTimeoutError):
-            env, task_description = _get_libero_env(task, _render_resolution(args), episode_seed)
+            if env_seed_mode == "per_task":
+                env = _get_cached_env(task, _render_resolution(args), episode_seed)
+            else:
+                env, task_description = _get_libero_env(task, _render_resolution(args), episode_seed)
             reset_start = time.time()
             client.reset(episode_id)
             payload_builder.reset(episode_id)
             action_decoder.reset()
             env.reset()
             obs = env.set_init_state(initial_state)
-            # set_init_state teleports the sim but robosuite OSC controllers only
-            # refresh ee_pos/ee_ori_mat inside step(); force a sync so the first
-            # observation does not mix the pre-reset controller pose with the
-            # init-state quaternion.
-            for robot in env.env.robots:
-                robot.controller.update(force=True)
+            # set_init_state teleports the sim, but the robosuite OSC caches
+            # (ee_pos / ee_ori_mat / Jacobians / mass matrix) are only refreshed by
+            # `Controller.update()`, which `run_controller()` calls before every sim
+            # step and which clears the `new_update` flag. Forcing a refresh here
+            # therefore *removes* the refresh the first num_steps_wait dummy step
+            # would otherwise do, changing the torques applied during those dummy
+            # steps -- i.e. the arm pose and both camera images at the first policy
+            # call. The default is therefore ON: that is the legacy LoongForge
+            # behaviour every other model's recorded LIBERO numbers were taken with.
+            # The official FastWAM eval does NOT force it: measured 2026-09-20 with
+            # the same weights/input, the first call's `input_image` was
+            # bit-identical to the official harness with the forced update disabled,
+            # and differed by max|d|=1.77 (1.3% of pixels) with it enabled -- so the
+            # FastWAM eval configs set `benchmark.controller_force_update: false`.
+            # LIBERO_CONTROLLER_FORCE_UPDATE=1 forces it on regardless.
+            force_controller_update = bool(getattr(args, "controller_force_update", True))
+            if os.environ.get("LIBERO_CONTROLLER_FORCE_UPDATE") == "1":
+                force_controller_update = True
+            if force_controller_update:
+                for robot in env.env.robots:
+                    robot.controller.update(force=True)
             reset_time_sec = time.time() - reset_start
 
             # Explicit benchmark.max_steps takes priority over the suite
@@ -375,7 +437,9 @@ def run_episode(
             trace_path=trace_path,
         )
     finally:
-        if env is not None:
+        # In `per_task` mode the env is cached and reused across trials (official semantics),
+        # so it must NOT be closed here -- run_batch closes it on task switch / at exit.
+        if env is not None and str(getattr(args, "env_seed_mode", "per_episode")) != "per_task":
             env.close()
 
     success = bool(info.get("success", done))
@@ -415,10 +479,7 @@ def run_episode(
         "trace_path": trace_path,
         "server_metadata": client.metadata,
         "repro": {
-            "git_sha": None,
-            "benchmark_commit": None,
-            "docker_image": None,
-            "python_env_hash": None,
+            **repro_metadata.repro_fields(("libero",)),
             "global_seed": args.seed,
             "episode_seed": episode_seed,
             "protocol_version": PROTOCOL_VERSION,
@@ -427,25 +488,62 @@ def run_episode(
     }
 
 
+def _manifest_protocol(args: argparse.Namespace) -> Dict[str, Any]:
+    """Return the protocol knobs that affect the measured success rate."""
+    model_config = (getattr(args, "raw_config", None) or {}).get("model") or {}
+    return {
+        "seed": args.seed,
+        "episodes_per_task": args.episodes_per_task,
+        "num_steps_wait": args.num_steps_wait,
+        "max_steps": args.max_steps,
+        "env_seed_mode": getattr(args, "env_seed_mode", None),
+        "control_mode": getattr(args, "control_mode", None),
+        "continuous_gripper": getattr(args, "continuous_gripper", None),
+        "prefer_controller_ee": getattr(args, "prefer_controller_ee", None),
+        "controller_force_update": getattr(args, "controller_force_update", None),
+        "chunk_execute_steps": getattr(args, "chunk_execute_steps", None),
+        "noise_seed": model_config.get("noise_seed"),
+        "num_inference_steps": model_config.get("num_inference_steps"),
+    }
+
+
 def run_batch(args: argparse.Namespace) -> Dict[str, Any]:
     """Run run_batch."""
+    protocol = getattr(args, "libero_protocol", "legacy")
+    if protocol == GROOT_OFFICIAL_PROTOCOL:
+        return _run_batch_groot_official(args)
+    if protocol != "legacy":
+        raise ValueError(f"Unknown LIBERO protocol: {protocol!r}")
     os.environ.setdefault("MUJOCO_GL", "egl")
     os.environ.setdefault("PYOPENGL_PLATFORM", "egl")
 
     from libero.libero import benchmark
 
-    output_dir = pathlib.Path(args.output_dir)
+    output_dir = _common.guard_output_dir(args)
     output_dir.mkdir(parents=True, exist_ok=True)
     results_path = output_dir / "results.jsonl"
     summary_path = output_dir / "summary.csv"
     suite_summary_path = output_dir / "suite_summary.csv"
+    min_episodes = _common.resolve_min_episodes(args)
 
     existing_records = load_jsonl(results_path)
-    completed = completed_episode_keys(existing_records) if args.resume else set()
     if args.restart and results_path.exists():
         results_path.unlink()
-        completed = set()
         existing_records = []
+    completed = completed_episode_keys(existing_records) if args.resume and not args.restart else set()
+    expected_counts: Dict[int, int] = {}
+
+    if args.resume and not args.restart and not getattr(args, "_manifest_checked", False):
+        repro_metadata.ensure_manifest_matches_checkpoint(output_dir, args.ckpt_path)
+    if args.restart or not args.resume or repro_metadata.load_run_manifest(output_dir) is None:
+        repro_metadata.write_run_manifest(
+            output_dir,
+            config=getattr(args, "raw_config", None),
+            args=args,
+            protocol=_manifest_protocol(args),
+            protocol_version=PROTOCOL_VERSION,
+            benchmark_modules=("libero",),
+        )
 
     task_suite = benchmark.get_benchmark_dict()[args.task_suite_name]()
     n_tasks = task_suite.n_tasks if args.max_tasks <= 0 else min(task_suite.n_tasks, args.max_tasks)
@@ -461,11 +559,14 @@ def run_batch(args: argparse.Namespace) -> Dict[str, Any]:
     )
     payload_builder, action_decoder_key, action_decoder = _common.build_policy_stack(args, adapter)
     logging.info(
-        "libero runner: model_type=%s action_encoding=%s adapter.action_space=%s decoder_key=%s",
+        "libero runner: model_type=%s action_encoding=%s adapter.action_space=%s decoder_key=%s "
+        "prefer_controller_ee=%s controller_force_update=%s",
         type(payload_builder).__name__,
         getattr(payload_builder, "action_encoding", ""),
         adapter.action_space,
         action_decoder_key or "<identity>",
+        adapter.prefer_controller_ee,
+        bool(getattr(args, "controller_force_update", True)),
     )
     server_manager = getattr(args, "server_manager", None)
     if server_manager is not None:
@@ -479,6 +580,7 @@ def run_batch(args: argparse.Namespace) -> Dict[str, Any]:
             task = task_suite.get_task(task_id)
             initial_states = task_suite.get_task_init_states(task_id)
             n_episodes = min(args.episodes_per_task, len(initial_states))
+            expected_counts[task_id] = n_episodes
             for episode_idx in range(n_episodes):
                 key = ("libero", args.task_suite_name, task_id, episode_idx)
                 if key in completed:
@@ -520,25 +622,39 @@ def run_batch(args: argparse.Namespace) -> Dict[str, Any]:
                 print(json.dumps(record, ensure_ascii=False), flush=True)
     finally:
         client.close()
+        close_cached_env()  # no-op unless --env-seed-mode per_task kept an env alive
 
     all_records = existing_records + new_records
     write_summary_csv(summary_path, all_records)
-    write_suite_summary_csv(suite_summary_path, all_records, min_episodes=args.min_episodes_per_task)
+    write_suite_summary_csv(
+        suite_summary_path,
+        all_records,
+        min_episodes=min_episodes,
+        expected_counts=expected_counts,
+    )
     report = None
     if args.generate_report:
         report = write_eval_report(
             results_path,
             output_dir / "report",
             title=f"LIBERO Eval Report: {args.task_suite_name}",
-            min_episodes_per_task=args.min_episodes_per_task,
+            min_episodes_per_task=min_episodes,
+            expected_counts=expected_counts,
         )
+    suite_rows = summarize_suites(all_records, min_episodes=min_episodes, expected_counts=expected_counts)
+    violations = [row["episode_floor_violations"] for row in suite_rows if not row["episode_floor_met"]]
     successes = sum(int(record.get("success", 0)) for record in all_records)
+    infra_failed = sum(int(row.get("infra_failed", 0)) for row in suite_rows)
+    evaluated = len(all_records) - infra_failed
     return {
         "benchmark": "libero",
         "task_suite": args.task_suite_name,
         "n_records": len(all_records),
         "new_records": len(new_records),
-        "success_rate": successes / len(all_records) if all_records else 0.0,
+        "success_rate": successes / evaluated if evaluated else 0.0,
+        "infra_failed": infra_failed,
+        "ok": not violations,
+        "episode_floor_violations": violations,
         "results_path": str(results_path),
         "summary_path": str(summary_path),
         "suite_summary_path": str(suite_summary_path),
@@ -575,22 +691,70 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--task-suite-name", default="libero_goal")
     parser.add_argument("--max-tasks", type=int, default=1, help="<=0 means all tasks in suite")
     parser.add_argument("--episodes-per-task", type=int, default=1)
+    parser.add_argument("--libero-protocol", choices=["legacy", "gr00t_official"], default="legacy")
     parser.add_argument("--num-steps-wait", type=int, default=10)
     parser.add_argument("--max-steps", type=int, default=-1, help="<=0 means suite default")
-    parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=7,
+        help="Global env seed; per-episode seed is seed + task_id*1000 + episode_idx.",
+    )
+    parser.add_argument(
+        "--env-seed-mode",
+        default="per_episode",
+        choices=["per_episode", "per_task"],
+        help=(
+            "per_episode (default, legacy): new env + seed per episode "
+            "(`seed + task_id*1000 + episode_idx`). "
+            "per_task: one env per task seeded with --seed and reused across trials "
+            "(official FastWAM eval semantics; see docs §4.8)."
+        ),
+    )
+    parser.add_argument(
+        "--prefer-controller-ee",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Source the proprio end-effector position from the OSC controller's cached "
+            "ee_pos (default, X-VLA convention) or, with --no-prefer-controller-ee, from the "
+            "observation's robot0_eef_pos (official FastWAM convention; the two differ by "
+            "sub-millimetre amounts because the controller cache is refreshed inside "
+            "run_controller, i.e. before the physics step). Settable from the eval YAML via "
+            "benchmark.prefer_controller_ee."
+        ),
+    )
+    parser.add_argument(
+        "--controller-force-update",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Force a robosuite OSC cache refresh (ee_pos/ee_ori_mat/Jacobians/mass "
+            "matrix) right after set_init_state. Default ON = legacy LoongForge "
+            "behaviour; the official FastWAM eval does not force it, so its configs "
+            "set benchmark.controller_force_update=false (see the comment in "
+            "run_episode: disabling it changes the arm motion during num_steps_wait "
+            "and hence the first observation)."
+        ),
+    )
     parser.add_argument("--unnorm-key", default="franka")
     parser.add_argument("--ckpt-path", default="")
     parser.add_argument("--model-name", default="loongforge")
     parser.add_argument("--save-replay", action="store_true")
     parser.add_argument("--save-trace", action="store_true")
-    parser.add_argument("--resume", action="store_true", default=True)
+    parser.add_argument("--resume", action="store_true", default=False)
     parser.add_argument("--restart", action="store_true")
     parser.add_argument("--policy-call-timeout-ms", type=float, default=5000.0)
     parser.add_argument("--per-step-timeout-sec", type=float, default=30.0)
     parser.add_argument("--per-episode-timeout-sec", type=float, default=600.0)
     parser.add_argument("--max-retries", type=int, default=0)
     parser.add_argument("--generate-report", action="store_true")
-    parser.add_argument("--min-episodes-per-task", type=int, default=1)
+    parser.add_argument(
+        "--min-episodes-per-task",
+        type=int,
+        default=0,
+        help="Completeness floor per task; 0 means episodes_per_task.",
+    )
     parser.add_argument("--continuous-gripper", action="store_true", default=False,
                         help="Pass raw gripper value directly to LIBERO without binarization")
     parser.add_argument(
@@ -611,6 +775,8 @@ def main() -> None:
     args = build_argparser().parse_args()
     summary = run_batch(args)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
+    if summary.get("ok") is False:
+        sys.exit(2)
 
 
 if __name__ == "__main__":

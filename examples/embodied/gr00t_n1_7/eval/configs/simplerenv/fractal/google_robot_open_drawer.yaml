@@ -1,0 +1,84 @@
+# Public template: replace every /path/to/... placeholder before use.
+#
+# GR00T-N1.7 x SimplerEnv Google robot (Fractal) -- google_robot_open_drawer, official parity.
+#   --max_episode_steps 300 -> benchmark.max_steps (counts INNER env steps)
+#   --n_action_steps 1      -> server.chunk_execute_steps (replan every step)
+#   simpler_env.make() forces prepackaged_config=True, so the env applies its
+#   own visual-matching scene / overlay / control_mode; no control_mode here.
+#
+
+benchmark:
+  name: simplerenv
+  task_name: google_robot_open_drawer
+  robot_setup: google_robot
+  prepackaged_config: true
+  sim_freq: 500
+  control_freq: 5
+  action_scale: 1.0
+  rotation_mode: axis_angle    # pass roll/pitch/yaw through unchanged
+  google_sticky_gripper: true  # official GoogleFractalEnv gripper (15-step sticky)
+  max_steps: 300
+  success_settle_steps: 0
+
+model:
+  backend: loongforge
+  model_type: Gr00tN1d7
+  base_model_path: /path/to/Cosmos-Reason2-2B
+  model_name: /path/to/Cosmos-Reason2-2B
+  # Raw-quaternion 8D state [pos(3), quat_xyzw(4), gripper_closedness] read
+  # from the Google agent's eef_pos; image resized to 320x256 like the official
+  # GoogleFractalEnv wrapper.
+  state_encoding: simpler_google
+  action_encoding: simpler_abs_euler
+  use_flash_attention: true
+  # Inference-only: keep the frozen backbone in bf16 and every head frozen,
+  # matching the server config the reported Fractal numbers were measured with.
+  backbone_trainable_params_fp32: false
+  tune_projector: false
+  tune_diffusion_model: false
+  tune_vlln: false
+
+server:
+  host: 127.0.0.1
+  port: 13837
+  health_port: 13838
+  python: /path/to/conda/envs/loongforge/bin/python
+  log: /path/to/reports/gr00t_n1_7/simplerenv/google_robot_open_drawer/policy_server.log
+  start_timeout_sec: 2400
+  random_init: false
+  ckpt_path: /path/to/GR00T-N1.7-SimplerEnv-Fractal
+  dataset_statistics_path: /path/to/GR00T-N1.7-SimplerEnv-Fractal/statistics.json
+  embodiment_tag: simpler_env_google
+  chunk_execute_steps: 1       # official --n_action_steps
+  use_bf16: true
+  loongforge_root: /path/to/LoongForge-VLA
+
+env:
+  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  # SimplerEnv checkout: the fork NVIDIA/Isaac-GR00T pins as its
+  # `external_dependencies/SimplerEnv` submodule (exposes `agent.eef_pos`).
+  simplerenv_root: /path/to/SimplerEnv
+  ld_library_path: /path/to/nvidia_lib
+  nvidia_lib_dir: /path/to/nvidia_lib
+  nvidia_icd_json: /path/to/nvidia_lib/10_nvidia.json
+
+run:
+  output_dir: /path/to/reports/gr00t_n1_7/simplerenv/google_robot_open_drawer
+  seed: 0
+  episode_idx: 0
+  obj_episode_id: 0
+  save_trace: false
+  save_replay: false
+  # chunk_execute_steps=1 replans every step, so no server-side chunk is reused.
+  disable_action_cache: true
+  timestamped_output: false
+
+# The SimplerEnv runner evaluates ONE episode per invocation. Under
+# prepackaged_config the env randomizes the layout from its own episode_rng,
+# seeded by `run.seed + run.episode_idx`, so `run.episode_idx` above is the
+# episode variable (not run.obj_episode_id).
+
+timeouts:
+  policy_call_ms: 600000
+  per_step_sec: 600
+  per_episode_sec: 3600
