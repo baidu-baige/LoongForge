@@ -19,24 +19,19 @@ holds only the generic ``sitecustomize`` entry point.
 
 import os
 
-# Marker the main process sets (and spawn children inherit) to gate the hook.
-_SPAWN_COMPAT_ENV = "LOONGFORGE_SPAWN_WORKER_COMPAT"
-
 
 def arm_spawn_workers() -> None:
     """From the main process, arm spawn DataLoader workers to run :func:`apply`.
 
     Puts the ``spawn_bootstrap`` directory (which holds ``sitecustomize.py``) on
-    ``PYTHONPATH`` and sets the gate marker. Both are copied into ``os.environ``
-    of every ``spawn``-started child, so the child's interpreter finds and runs
-    our ``sitecustomize`` at startup. Idempotent; safe to call more than once.
+    ``PYTHONPATH``. It is copied into ``os.environ`` of every ``spawn``-started
+    child, so the child's interpreter finds and runs our ``sitecustomize`` at
+    startup. Idempotent; safe to call more than once.
 
-    Note the scope: ``PYTHONPATH`` is process-wide, so every child spawned after
-    this call also searches that directory. The directory holds only the gated
-    ``sitecustomize`` entry point, and the gate marker is what makes it act, so an
-    unrelated child imports a module that does nothing. A pre-existing
-    ``sitecustomize`` earlier on the path still wins; ours only runs when there is
-    none.
+    Note the scope: ``PYTHONPATH`` is process-wide, so every Python child started
+    after this call (not only DataLoader workers) runs :func:`apply` at startup.
+    A pre-existing ``sitecustomize`` earlier on the path still wins; ours only
+    runs when there is none.
     """
     here = os.path.dirname(os.path.abspath(__file__))  # .../datasets/lingbot_vla_v2
     bootstrap = os.path.join(here, "spawn_bootstrap")
@@ -45,7 +40,6 @@ def arm_spawn_workers() -> None:
         os.environ["PYTHONPATH"] = (
             bootstrap + os.pathsep + existing if existing else bootstrap
         )
-    os.environ[_SPAWN_COMPAT_ENV] = "1"
 
 
 def apply() -> None:

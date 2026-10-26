@@ -75,9 +75,9 @@ class LingbotVLAV2ModelConfig:
     use_moe_expert_lr: bool = True
     split_fused_experts_from_decoder_fsdp: bool = False
 
-    # ── Model-side training switches (benchmark parity) ──
-    gradient_checkpointing: bool = True
-    use_compile: bool = True
+    # ── Model-side training switches (defaults match lingbot_vla_v2.yaml) ──
+    gradient_checkpointing: bool = False
+    use_compile: bool = False
     enable_mixed_precision: bool = True
     init_device: str = "cuda"
     # Run the frozen depth/video teachers on a side stream + worker thread so they

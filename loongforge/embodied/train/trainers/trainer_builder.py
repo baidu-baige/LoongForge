@@ -10,11 +10,13 @@ from loongforge.embodied.train.trainers.custom.lingbot_va import LingBotFinetune
 from loongforge.embodied.train.trainers.custom.groot_n1_7 import GrootN1d7Trainer
 from loongforge.embodied.train.trainers.custom.lingbot_vla_v2 import LingbotVlaV2Trainer
 from loongforge.embodied.train.trainers.supervised.finetune_trainer import FinetuneTrainer
+from loongforge.embodied.train.trainers.custom.tensor_wise_trainer import TensorWiseTrainer
 
 logger = logging.getLogger(__name__)
 
 _TRAINER_CLASSES = {
     "FinetuneTrainer": FinetuneTrainer,
+    "TensorWiseTrainer": TensorWiseTrainer,
     "GrootN1d6Trainer": GrootN1d6Trainer,
     "LingBotFinetuneTrainer": LingBotFinetuneTrainer,
     "GrootN1d7Trainer": GrootN1d7Trainer,

@@ -9,7 +9,7 @@ generic validator carries a single call.
 
 # --trainer-type values whose trainer drives TensorWiseOptimizer. Selecting one
 # of them is what enables tensor_wise; a new integration adds its trainer here.
-TENSOR_WISE_TRAINERS = ("LingbotVlaV2Trainer",)
+TENSOR_WISE_TRAINERS = ("TensorWiseTrainer", "LingbotVlaV2Trainer")
 
 # tensor_wise takes over gradient communication instead of the DDP wrapper, so any
 # explicitly set DDP knob would be silently ignored. Only knobs whose default is
@@ -65,6 +65,10 @@ def validate_tensor_wise_args(training_args) -> None:
             f"--fp8 is not supported with --trainer-type {trainer}: tensor_wise "
             "replaces wrap_model, which is where FP8 conversion happens."
         )
+    # The parameter plan copies the masters while the trainer wraps the model,
+    # and meta tensors are only materialized after that.
+    if training_args.init_on_meta:
+        raise ValueError(f"--init-on-meta is not supported with --trainer-type {trainer}.")
     # The rank-local masters only survive in the dcp layout. The trainer refuses
     # this at save time; failing here avoids finding out hours in.
     if (

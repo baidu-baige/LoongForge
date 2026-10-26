@@ -438,13 +438,13 @@ The collective knobs are the `model.tensor_wise:` section of the model YAML, or 
 
 The `param_sync_fp8_*` and `param_sync_bf16_with_fp8` fields apply only to `fp8_e4m3_delta`.
 
-To bring another model onto tensor_wise, write a trainer that drives `TensorWiseOptimizer` the way `LingbotVlaV2Trainer` does (the contract is in the `TensorWiseOptimizer` docstring), add its `--trainer-type` name to `TENSOR_WISE_TRAINERS` (`tensor_wise_optimizer/validation.py`), give the model config a `tensor_wise: TensorWiseConfig` field for the knobs above, and return a `ParameterClassPolicy` (or the default `DefaultParameterPolicy`) as its parameter policy.
+To bring another model onto tensor_wise, start with `--trainer-type TensorWiseTrainer` (`trainers/custom/tensor_wise_trainer.py`): it runs any model `FinetuneTrainer` runs, keeps every parameter in `--dtype` and uses the `--optimizer` optimizer over the fp32 masters. A model that needs its own precision classes, Muon or compile subclasses it the way `LingbotVlaV2Trainer` does, adds the new `--trainer-type` name to `TENSOR_WISE_TRAINERS` (`tensor_wise_optimizer/validation.py`), and returns a `ParameterClassPolicy` as its parameter policy. Either way, a `tensor_wise: TensorWiseConfig` field in the model config carries the knobs above; without it the defaults apply.
 
 Constraints:
 
-- Requires `--distributed-strategy ddp`; `--zero-optimizer`, `--fp8` and `--ddp-*` are rejected; `--optimizer muon` requires a tensor_wise trainer.
+- Requires `--distributed-strategy ddp`; `--zero-optimizer`, `--fp8`, `--init-on-meta` and `--ddp-*` are rejected; `--optimizer muon` requires a tensor_wise trainer.
 - Training-state checkpoints require `--save-format dcp` and cannot be combined with `--use-lora`; pass `--no-save-training-state` to export weights only.
-- Module buffers (for example BatchNorm statistics) are not synchronized, and `--init-on-meta` has not been validated. Check both before moving a model onto tensor_wise.
+- Module buffers (for example BatchNorm statistics) are not synchronized. Check this before moving a model onto tensor_wise.
 
 ### 4.3 Stability and Runtime Control
 
