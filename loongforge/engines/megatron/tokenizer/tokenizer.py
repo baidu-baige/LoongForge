@@ -16,7 +16,7 @@ from megatron.training.utils import print_rank_0
 from .tokenization_hf import AutoTokenizerFromHF
 
 if TYPE_CHECKING:
-    from loongforge.chat_templates.base import ChatTemplate
+    from loongforge.data.chat_templates.base import ChatTemplate
 
 
 def _update_tokenizer_with_template(

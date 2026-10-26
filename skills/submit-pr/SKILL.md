@@ -56,7 +56,7 @@ Or for breaking changes:
    - `loongforge/models/language/` → `llm`
    - `loongforge/models/vision/`, `loongforge/models/multimodal/` → `vlm`
    - `loongforge/engines/`, `loongforge/training/`, `loongforge/extensions/` → `train`
-   - `loongforge/data/`, `loongforge/chat_templates/` → `data`
+   - `loongforge/data/` → `data`
    - `loongforge/constants.py` → `train`
    - `tools/mcore_checkpoint_convert/` → `ckpt`
    - `loongforge/models/base/peft/` → `peft`
@@ -155,7 +155,7 @@ After PR is created:
 | vla | `loongforge/models/embodied/` (VLA models) |
 | diffusion | `loongforge/models/embodied/` (diffusion models) |
 | train | `loongforge/engines/`, `loongforge/training/`, `loongforge/extensions/`, `loongforge/constants.py` |
-| data | `loongforge/data/`, `loongforge/chat_templates/` |
+| data | `loongforge/data/` |
 | ops | `ops/` |
 | ckpt | `tools/mcore_checkpoint_convert/` |
 | peft | `loongforge/models/base/peft/` |

@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Union, Dict, List, Any, Optional, Sequence
 
 from datasets import Features, Value
 
-from loongforge.chat_templates.base import DataRoles
+from loongforge.data.chat_templates.base import DataRoles
 
 
 if TYPE_CHECKING:

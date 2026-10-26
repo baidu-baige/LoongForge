@@ -394,9 +394,9 @@ LoongForge/
 │   │   ├── diffusion/            #   Diffusion 模型（WAN、Qwen-Image）
 │   │   ├── base/                 #   公共 Layer 与工具
 │   │   └── embodied/             #   具身模型实现
-│   ├── chat_templates/           # 对话模板与 jinja 文件
-│   ├── data/                     # 数据流水线，按模型家族分目录
+│   ├── data/                     # 数据流水线与对话模板
 │   │   ├── llm/ vlm/ embodied/ diffusion/
+│   │   └── chat_templates/       #   对话模板、注册表与多模态插件
 │   └── evaluation/embodied/      # 具身评测
 ├── third_party/Loong-Megatron/   # Patched Megatron-LM（git submodule）
 ├── configs/                      # Hydra YAML 配置（模型、数据）

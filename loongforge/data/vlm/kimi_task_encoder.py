@@ -9,9 +9,9 @@ from loongforge.data.vlm.vlm_task_encoder import VLMTaskEncoder
 from typing import Optional, Tuple
 
 from loongforge import constants
-from loongforge.chat_templates.base import DataRoles
-from loongforge.chat_templates.hf import HFChatTemplate
-from loongforge.chat_templates.plugins.base import Placeholder
+from loongforge.data.chat_templates.base import DataRoles
+from loongforge.data.chat_templates.hf import HFChatTemplate
+from loongforge.data.chat_templates.plugins.base import Placeholder
 
 # Kimi multimodal special tokens
 MEDIA_BEGIN = "<|media_begin|>"

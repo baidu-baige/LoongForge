@@ -11,7 +11,7 @@ from transformers import ProcessorMixin
 from megatron.core.utils import log_single_rank
 
 from loongforge import constants
-from loongforge.chat_templates.base import ChatTemplate
+from loongforge.data.chat_templates.base import ChatTemplate
 
 from .blended_hf_dataset_config import BlendedHuggingFaceDatasetConfig
 

@@ -42,9 +42,8 @@ from .plugins.base import MMPlugin
 class TokenizerProtocol(Protocol):
     """Tokenizer surface used by chat templates.
 
-    Defined locally so ``chat_templates`` stays a leaf layer: it must not import
-    engines or any concrete tokenizer implementation, not even under
-    ``TYPE_CHECKING``.
+    Defined locally so this package depends on neither ``engines`` nor a concrete
+    tokenizer implementation.
     """
 
     tokenizer: Any

@@ -12,7 +12,7 @@ providers register on the same parser.
 
 import argparse
 
-from loongforge.chat_templates.registry import get_support_templates
+from loongforge.data.chat_templates.registry import get_support_templates
 
 
 def loongforge_extra_train_args_provider(parser: argparse.ArgumentParser):

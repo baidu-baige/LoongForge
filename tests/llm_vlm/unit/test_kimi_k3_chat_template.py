@@ -11,7 +11,7 @@ what the vision tower emits.
 
 import pytest
 
-from loongforge.chat_templates.registry import MAPPING_NAME_TO_TEMPLATE
+from loongforge.data.chat_templates.registry import MAPPING_NAME_TO_TEMPLATE
 
 
 def plugin(name: str):

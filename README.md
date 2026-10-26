@@ -394,9 +394,9 @@ LoongForge/
 │   │   ├── diffusion/            #   Diffusion models (WAN, Qwen-Image)
 │   │   ├── base/                 #   Shared layers and utilities
 │   │   └── embodied/             #   Embodied model implementations
-│   ├── chat_templates/           # Chat templates and jinja files
-│   ├── data/                     # Data pipelines, one dir per model family
+│   ├── data/                     # Data pipelines and chat templates
 │   │   ├── llm/ vlm/ embodied/ diffusion/
+│   │   └── chat_templates/       #   Chat templates, registry, multimodal plugins
 │   └── evaluation/embodied/      # Embodied evaluation
 ├── third_party/Loong-Megatron/   # Patched Megatron-LM (git submodule)
 ├── configs/                      # Hydra YAML configs (models, data)

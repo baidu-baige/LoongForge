@@ -27,8 +27,8 @@ from .base_task_encoder import (
     BaseTaskBatchPacked,
 )
 from .cookers import _parse_messages
-from loongforge.chat_templates.base import DataRoles
-from loongforge.chat_templates.hf import HFChatTemplate
+from loongforge.data.chat_templates.base import DataRoles
+from loongforge.data.chat_templates.hf import HFChatTemplate
 from loongforge.data.vlm.flavors import (
     AVData,
     ENERGON_LT_7,

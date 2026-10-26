@@ -10,15 +10,12 @@ import torch
 import torch.nn as nn
 from flash_attn import flash_attn_func
 from transformers.cache_utils import Cache
-from transformers.modeling_flash_attention_utils import (
-    is_flash_attn_greater_or_equal_2_10,
-)
+from transformers.utils import is_flash_attn_greater_or_equal_2_10, logging
 from transformers.models.qwen2_5_vl.configuration_qwen2_5_vl import Qwen2_5_VLConfig
 from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
     Qwen2_5_VLRotaryEmbedding,
     repeat_kv,
 )
-from transformers.utils import logging
 
 from loongforge.models.embodied.wall_oss_0_5.wall_oss_05_fused_ops import m_rope, permute, unpermute
 

@@ -60,7 +60,7 @@ model:
       num_hidden_layers: 12
       # Florence2SdpaAttention: FlashAttention-2 (no-mask) then SDPA. false keeps SDPA.
       sdpa_use_fa2: true
-      # NOTE: config.json lists `num_beams: 3`, but transformers v5.3.0 removed
+      # NOTE: config.json lists `num_beams: 3`, but transformers 5.x removed
       # generation params (num_beams, ...) from PretrainedConfig — they now live
       # in GenerationConfig. Florence2LanguageConfig(**text_config) drops it via
       # **kwargs, so it cannot pass through and is intentionally omitted here.

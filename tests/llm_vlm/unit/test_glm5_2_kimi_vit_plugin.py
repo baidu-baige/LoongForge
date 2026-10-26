@@ -17,14 +17,14 @@ from transformers import AutoImageProcessor, AutoTokenizer
 from transformers.dynamic_module_utils import get_class_from_dynamic_module
 from transformers.processing_utils import ProcessorMixin
 
-from loongforge.chat_templates.registry import MAPPING_NAME_TO_TEMPLATE
-from loongforge.chat_templates.plugins.kimi import KimiPlugin
+from loongforge.data.chat_templates.registry import MAPPING_NAME_TO_TEMPLATE
+from loongforge.data.chat_templates.plugins.kimi import KimiPlugin
 import loongforge.data.vlm.dataloader as dataloader_provider
 from loongforge.data.vlm.base_task_encoder import BaseTaskEncoder
 from loongforge.data.vlm.kimi_task_encoder import KimiTaskEncoder
 from loongforge.data.vlm.vlm_task_encoder import VLMTaskEncoder
 from loongforge.models.multimodal.encoder_model import OmniEncoderModel
-from loongforge.chat_templates.base import DataRoles
+from loongforge.data.chat_templates.base import DataRoles
 
 
 class Glm52KimiVitPluginTest(unittest.TestCase):

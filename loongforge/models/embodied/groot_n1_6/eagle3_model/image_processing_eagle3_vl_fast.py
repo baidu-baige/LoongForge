@@ -11,29 +11,16 @@
 # Licensed under The MIT License [see LICENSE for details]
 # --------------------------------------------------------
 
-# copied from transformers:
-# `models/llava_onevision/image_processing_llava_onevision_fast.py`
+# Adapted from the pre-5.4 fast image processors (for example
+# `models/llava_onevision/image_processing_llava_onevision_fast.py`).
+# Transformers 5.4 removed `image_processing_utils_fast`; the equivalent API is
+# `TorchvisionBackend` with the transforms helpers below.
 from typing import Optional, Union
 
 import numpy as np
+from transformers.image_processing_backends import TorchvisionBackend
 from transformers.image_processing_utils import BatchFeature
-from transformers.image_processing_utils_fast import (
-    BaseImageProcessorFast,
-    group_images_by_shape,
-    reorder_images,
-)
-try:
-    from transformers.image_processing_utils_fast import DefaultFastImageProcessorKwargs
-except ImportError:
-    from transformers.image_processing_utils_fast import ImagesKwargs as DefaultFastImageProcessorKwargs
-
-# These docstrings were added in newer versions of transformers - provide fallbacks for compatibility
-try:
-    from transformers.image_processing_utils_fast import (
-        BASE_IMAGE_PROCESSOR_FAST_DOCSTRING,
-    )
-except ImportError:
-    BASE_IMAGE_PROCESSOR_FAST_DOCSTRING = ""
+from transformers.image_transforms import group_images_by_shape, reorder_images
 from transformers.image_utils import (
     IMAGENET_STANDARD_MEAN,  # 0.5, 0.5, 0.5
     IMAGENET_STANDARD_STD,  # 0.5, 0.5, 0.5
@@ -45,7 +32,7 @@ from transformers.image_utils import (
     make_flat_list_of_images,
     validate_kwargs,
 )
-from transformers.processing_utils import Unpack
+from transformers.processing_utils import ImagesKwargs, Unpack
 from transformers.utils import (
     TensorType,
     add_start_docstrings,
@@ -95,10 +82,15 @@ def crop(img: torch.Tensor, left: int, top: int, right: int, bottom: int) -> tor
 
 # noqa: PY033 - Added docstring to comply with PY033
 # noqa: N801, PY039
-class Eagle3VLFastImageProcessorKwargs(DefaultFastImageProcessorKwargs):
+# The fast-specific docstring constant no longer exists upstream; the class
+# docstring below carries the local description.
+BASE_IMAGE_PROCESSOR_FAST_DOCSTRING = ""
+
+
+class Eagle3VLFastImageProcessorKwargs(ImagesKwargs):
     """Typed kwargs for :class:`Eagle3VLImageProcessorFast`.
 
-    Extends ``DefaultFastImageProcessorKwargs`` with Eagle3-VL-specific options.
+    Extends ``ImagesKwargs`` with Eagle3-VL-specific options.
 
     Attributes:
         do_pad: Whether to pad the patch/token dimension to the longest sample
@@ -124,7 +116,7 @@ class Eagle3VLFastImageProcessorKwargs(DefaultFastImageProcessorKwargs):
     """,
 )
 # noqa: PY033 - Added docstring to comply with PY033
-class Eagle3VLImageProcessorFast(BaseImageProcessorFast):  # noqa: N801, PY039 - Fixed class name to camel case
+class Eagle3VLImageProcessorFast(TorchvisionBackend):  # noqa: N801, PY039 - Fixed class name to camel case
     """Fast image/video preprocessor for Eagle3-VL visual inputs.
 
     This processor accepts image-like inputs (PIL images, numpy arrays, torch tensors,

@@ -29,7 +29,7 @@ import datasets
 from datasets import Dataset, IterableDataset
 
 from loongforge import constants
-from loongforge.chat_templates.hf import HFChatTemplate
+from loongforge.data.chat_templates.hf import HFChatTemplate
 
 if TYPE_CHECKING:
     from .sft_dataset_config import SFTDatasetConfig
