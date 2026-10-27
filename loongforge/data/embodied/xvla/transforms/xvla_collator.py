@@ -34,7 +34,7 @@ from typing import Any, Dict, List
 
 import torch
 
-from loongforge.data.embodied.collator import BaseCollator
+from loongforge.data.embodied.shared.collator_base import BaseCollator
 from loongforge.data.embodied.registry import register_collator
 from loongforge.data.embodied.xvla.transforms.xvla_transform import (
     XVLAEncodeImageTransform,

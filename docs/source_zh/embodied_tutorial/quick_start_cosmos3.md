@@ -47,7 +47,7 @@ DROID 数据不需要额外的离线预处理，训练时通过内建的 `cosmos
 --dataset-strategy cosmos3_droid     # Cosmos3 官方 DROID 数据处理策略
 ```
 
-其余目标分辨率、动作 chunk 长度、CFG dropout 等已经写在 `configs/models/cosmos3/nano.yaml` 的 `data` 段（默认 `target_h/target_w=480`、`action_chunk_length=32`、`action_fps=15.0`），通常不需要覆盖。
+其余动作 chunk 长度、CFG dropout 等已经写在 `configs/models/cosmos3/nano.yaml` 的 `data` 段（默认 `action_chunk_length=32`、`action_fps=15.0`），通常不需要覆盖。视频分辨率由 transform 固定解析到 480 档。
 
 ## 2. 启动训练
 

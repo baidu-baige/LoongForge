@@ -25,8 +25,8 @@ if TYPE_CHECKING:
 MODEL_PACKAGES: Dict[str, str] = {
     "vlda": "vlda",
     "pi05": "pi05",
-    "Gr00tN1d6": "groot_n1_6",
-    "Gr00tN1d7": "groot_n1_7",
+    "Gr00tN1d6": "gr00t_n1_6",
+    "Gr00tN1d7": "gr00t_n1_7",
     "xvla": "xvla",
     "fastwam": "fastwam",
     "cosmos3": "cosmos3",

@@ -50,8 +50,8 @@ def _previous_method(family, phase):
 class TrainDispatchTest(unittest.TestCase):
     def test_torch_trainer_resolves_only_selected_factory(self):
         cases = (
-            ("GrootN1d6Trainer", "sft", "groot_n1_6"),
-            ("GrootN1d7Trainer", "sft", "groot_n1_7"),
+            ("Gr00tN1d6Trainer", "sft", "gr00t_n1_6"),
+            ("Gr00tN1d7Trainer", "sft", "gr00t_n1_7"),
             ("LingBotFinetuneTrainer", "sft_lingbot_va", "lingbot_va"),
         )
         for trainer, method_name, model in cases:
@@ -84,7 +84,7 @@ class TrainDispatchTest(unittest.TestCase):
         cases = (
             (["train.py", "--model-name", "qwen3-0.6b"], "megatron"),
             (["train.py", "--model-name", "pi05"], "torch"),
-            (["train.py", "--model-name", "GROOT-N1-6"], "torch"),
+            (["train.py", "--model-name", "GR00T-N1-6"], "torch"),
             (["train.py", "--model-name", "pi05", "--config-file", "custom.yaml"], "torch"),
             (["train.py", "--config-file", "custom.yaml"], "megatron"),
         )

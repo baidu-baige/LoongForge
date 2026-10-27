@@ -109,8 +109,8 @@ def _shard_core(core, *, mesh, mp_policy, reshard_after_forward: bool):
         param_dtype=torch.float32,
         reduce_dtype=torch.float32,
     )
-    # Same fp32 params and fp32 gradient reduction, but FSDP no longer
-    # materializes an fp32 copy of the activation. The RMSNorm kernel widens
+    # Same fp32 params and fp32 gradient reduction, but FSDP does not
+    # materialize an fp32 copy of the activation. The RMSNorm kernel widens
     # bf16 -> fp32 per element instead, which is lossless, so this removes a
     # cast without touching how the norm parameters are sharded or reduced.
     fp32_mp_nocast = MixedPrecisionPolicy(

@@ -42,8 +42,6 @@ class Cosmos3DataConfig:
     max_text_tokens: int = 2048
     action_fps: float = 15.0
     cfg_dropout_rate: float = 0.0
-    target_h: int = 480
-    target_w: int = 480
     video_backend: str = "torchcodec"
     use_image_augmentation: bool = False
     colorjitter_on_gpu: bool = False

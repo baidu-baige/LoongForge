@@ -10,8 +10,8 @@
 :maxdepth: 1
 
 quick_start_pi05
-quick_start_groot_n1_6
-quick_start_groot_n1_7
+quick_start_gr00t_n1_6
+quick_start_gr00t_n1_7
 quick_start_xvla
 ```
 

@@ -90,9 +90,9 @@ _CONCAT_VIEW_DESCRIPTION = (
 
 # Verbatim copy of cosmos_framework/data/vfm/action/domain_utils.py's
 # ``EMBODIMENT_TO_DOMAIN_ID`` registry. Keeping it inline avoids depending on
-# cosmos at import time and keeps the mapping deterministic across runs (the
-# previous ``hash(name) % 32`` implementation was non-deterministic because
-# Python's str hash is randomized via ``PYTHONHASHSEED``).
+# cosmos at import time and keeps the mapping deterministic across runs; a
+# stable mapping is used because Python's str hash is randomized via
+# ``PYTHONHASHSEED``.
 _EMBODIMENT_TO_DOMAIN_ID: Dict[str, int] = {
     "no_action": 0,
     "av": 1,

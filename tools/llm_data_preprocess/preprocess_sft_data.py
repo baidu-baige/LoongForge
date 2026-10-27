@@ -8,8 +8,8 @@ from datasets import DatasetDict
 
 from megatron.core.datasets.utils import get_blend_from_list, Split
 
-from loongforge.data.llm.sft_dataset import SFTDataset
-from loongforge.data.llm.sft_dataset_config import SFTDatasetConfig
+from loongforge.data.llm.sft.dataset import SFTDataset
+from loongforge.data.llm.sft.dataset_config import SFTDatasetConfig
 from loongforge.data.chat_templates.base import ChatTemplate
 from loongforge.data.chat_templates.hf import HFChatTemplate, load_chat_template_kwargs
 from loongforge.data.chat_templates.registry import get_support_templates

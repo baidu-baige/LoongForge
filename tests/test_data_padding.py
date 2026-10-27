@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-from loongforge.data.vlm.collator import seq_padding_for_cp
+from loongforge.data.vlm.dataloader import seq_padding_for_cp
 from loongforge.engines.megatron.data_padding import (
     VlmPackedPadding,
     llm_pad_to_multiple_of,

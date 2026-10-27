@@ -13,7 +13,7 @@ import numpy as np
 import torch
 from transformers import AutoProcessor
 
-from loongforge.data.embodied.collator import BaseCollator
+from loongforge.data.embodied.shared.collator_base import BaseCollator
 from loongforge.data.embodied.registry import register_collator
 from loongforge.data.embodied.wall_oss_0_5.transforms.wall_oss_0_5_utils import (
     load_norm_stats,

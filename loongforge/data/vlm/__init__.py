@@ -1,23 +1,30 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Multimodal data utilities and task encoder registry."""
+"""Multimodal (Energon) data pipeline and task encoder registry.
+
+Pipeline: ``samples.py`` (sample types) -> ``cookers.py`` (raw WebDataset to
+samples) -> ``encoders/`` (samples to model inputs) -> ``dataloader.py``
+(collation and Energon iterators). ``packer.py`` and
+``length_sort_dataset.py`` control packing and batch order.
+``task_encoder_base.py`` holds the base sample types and ``BaseTaskEncoder``.
+"""
 
 import importlib
 
-# Sample types live in ``flavors``; importing them here would pull in
+# Sample types live in ``samples``; importing them here would pull in
 # megatron.energon for every import of this package.
 
 # Registry for multimodal task encoders so configs can swap them without
 # touching individual encoder modules.
 TASK_ENCODER_REGISTRY = {
-    "vlmtaskencoder": "loongforge.data.vlm.vlm_task_encoder.VLMTaskEncoder",
-    "internvltaskencoder": "loongforge.data.vlm.internvl_task_encoder.InternVLTaskEncoder",
-    "llavaov15taskencoder": "loongforge.data.vlm.llava_ov_task_encoder.LLavaOv15TaskEncoder",
-    "ernietaskencoder": "loongforge.data.vlm.ernie.ernie_task_encoder.ErnieTaskEncoder",
-    "kimitaskencoder": "loongforge.data.vlm.kimi_task_encoder.KimiTaskEncoder",
+    "vlmtaskencoder": "loongforge.data.vlm.encoders.vlm.VLMTaskEncoder",
+    "internvltaskencoder": "loongforge.data.vlm.encoders.internvl.task_encoder.InternVLTaskEncoder",
+    "llavaov15taskencoder": "loongforge.data.vlm.encoders.llava_ov.LLaVAOv15TaskEncoder",
+    "ernietaskencoder": "loongforge.data.vlm.encoders.ernie.task_encoder.ErnieTaskEncoder",
+    "kimitaskencoder": "loongforge.data.vlm.encoders.kimi.KimiTaskEncoder",
     "minicpmv46taskencoder": (
-        "loongforge.data.vlm.minicpm_v_4_6_task_encoder.MiniCPMV46TaskEncoder"
+        "loongforge.data.vlm.encoders.minicpm_v_4_6.MiniCPMV46TaskEncoder"
     ),
 }
 

@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Energon cookers: convert raw WebDataset samples into flavors."""
+"""Energon cookers: convert raw WebDataset samples into typed samples."""
 
 import functools
 from pathlib import Path
@@ -10,7 +10,7 @@ import yaml
 
 from megatron.energon.task_encoder.base import stateless
 
-from loongforge.data.vlm.flavors import (
+from loongforge.data.vlm.samples import (
     ENERGON_LT_7,
     PackedCaptioningSample,
     PackedVQASample,

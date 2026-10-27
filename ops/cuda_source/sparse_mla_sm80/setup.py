@@ -4,10 +4,10 @@
 """Build script for the SM80 sparse MLA extension.
 
 Targets sm_80 by default and honours TORCH_CUDA_ARCH_LIST, following the
-convention of cuda_source/groot_n1_7_op/setup.py rather than the hard-coded
+convention of cuda_source/gr00t_n1_7_op/setup.py rather than the hard-coded
 `-gencode` used by the SM100-only attention ops in this repository.
 
-Unlike groot_n1_7_op the arch list is *filtered*: the kernel uses
+Unlike gr00t_n1_7_op the arch list is *filtered*: the kernel uses
 `mma.sync.aligned.m16n8k16...bf16`, which ptxas rejects below sm_80.  Many images
 ship a broad TORCH_CUDA_ARCH_LIST (e.g. "7.5 8.0 8.6 9.0 10.0 12.0+PTX"), so
 honouring it verbatim breaks the build.

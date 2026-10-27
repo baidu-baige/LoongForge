@@ -23,7 +23,7 @@ import torch
 from transformers import AutoTokenizer
 from transformers.data.data_collator import DataCollatorMixin
 
-from loongforge.data.embodied.collator import _move_to_device, _pin_memory
+from loongforge.data.embodied.shared.collator_base import _move_to_device, _pin_memory
 from loongforge.data.embodied.registry import register_collator
 
 from ..schema import EmbodimentTag
@@ -269,15 +269,16 @@ class DreamZeroPreparedBatch(dict):
 
     DreamZero batches have dynamic, embodiment-dependent keys (video/state/action/
     text/... vary by embodiment + language mode), so a typed ``PreparedBatch``
-    dataclass (pi05/groot style) does not fit. This ``dict`` subclass keeps
+    dataclass (pi05/gr00t style) does not fit. This ``dict`` subclass keeps
     ``batch["k"]`` and ``isinstance(batch, dict)`` working for
     ``DreamZeroPolicy.forward`` / ``_prepare_action_input`` unchanged, while adding
     ``.to(device)`` / ``pin_memory()`` so the generic trainer's
     ``_move_batch_to_device`` moves it uniformly like other models' PreparedBatch.
 
-    Values are identical to the legacy plain-dict output; only the container type
-    changes. Device movement now happens in the trainer (idempotent w.r.t. the
-    per-tensor move still done inside ``_prepare_action_input``).
+    The container is a dict subclass; values and key access match the plain-dict
+    form used by ``DreamZeroPolicy``. Device movement now happens in the trainer
+    (idempotent w.r.t. the per-tensor move still done inside
+    ``_prepare_action_input``).
     """
 
     def to(self, device) -> "DreamZeroPreparedBatch":

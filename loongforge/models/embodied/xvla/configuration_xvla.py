@@ -25,7 +25,7 @@ Two families of config coexist here:
   ``XVLAConfig``) — passed to the ``PreTrainedModel`` constructors, whose
   ``super().__init__(config)`` requires a ``PretrainedConfig`` instance.
 
-* OmegaConf schema dataclass (``XvlaModelConfig``) — used by
+* OmegaConf schema dataclass (``XVLAModelConfig``) — used by
   ``loongforge.training.torch_args`` as the structured schema that the YAML
   ``model:`` section is merged into.  Kept as a plain dataclass so
   ``OmegaConf.structured`` accepts it; the merged instance is converted to
@@ -455,7 +455,7 @@ class Florence2ConfigSchema:
 
 
 @dataclass
-class XvlaModelConfig:
+class XVLAModelConfig:
     """X-VLA model-structure config (maps 1:1 to YAML ``model:`` section)."""
 
     model_type: str = "xvla"

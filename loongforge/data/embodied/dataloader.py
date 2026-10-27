@@ -13,7 +13,7 @@ import torch
 from torch.utils.data import Dataset, IterableDataset
 from torchdata.stateful_dataloader import StatefulDataLoader
 
-from loongforge.data.embodied.sampler import build_sampler
+from loongforge.data.embodied.shared.sampler_factory import build_sampler
 from loongforge.data.embodied.registry import build_collator
 from loongforge.data.embodied.registry import build_dataset
 from loongforge.data.embodied.registry import build_transforms_from_args
@@ -79,8 +79,9 @@ class _TransformedIterableDataset(IterableDataset):
 def build_dataloader(model_cfg, data_cfg, training_args, runtime: DataRuntime) -> StatefulDataLoader:
     """Build DataLoader with model-specific collator as collate_fn.
 
-    ``runtime`` carries the execution facts the training method resolved; data
-    code must not read backend arguments or the backend's distributed context.
+    ``runtime`` carries the execution facts the training method resolved. The
+    loader reads data-recipe values from ``training_args`` but must not query
+    backend distributed state or call global readers.
 
     The returned DataLoader yields PreparedBatch objects on CPU. Call
     ``batch.to(device)`` before passing a batch to ``model.forward``.

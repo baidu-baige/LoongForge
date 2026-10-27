@@ -16,7 +16,7 @@
 | `loongforge/training/torch_args.py` | 训练流程参数定义文件，负责生成 shell CLI |
 | `loongforge/models/catalog.py` | 统一模型路由表，将 `--model-name` 绑定到引擎、YAML，以及 Torch 所需的配置类型 |
 | `loongforge/models/embodied/` | Torch 具身模型组网与模型注册 |
-| `loongforge/data/embodied/` | 具身数据流水线：`dataloader.py`（DataLoader 入口）、`datasets/`（共用数据集类：`lerobot_dataset.py`、`dummy_dataset.py`、视频后端、统计）、`transforms/`（共用逐样本变换）、`sampler.py`（采样）、`collator.py`（拼批）、`registry.py`（注册表），以及每个模型一个目录（模型目录下带 `transforms/`） |
+| `loongforge/data/embodied/` | 具身数据流水线：`dataloader.py`（DataLoader 入口）、`registry.py`（模型类型注册表）、`shared/`（所有模型共用：`formats/` 数据集类，含 `lerobot_dataset.py`、`dummy_dataset.py`、视频后端与统计；`transforms/` 逐样本变换；`collator_base.py` 拼批；`sampler_factory.py` 采样），以及每个模型一个目录（模型目录下带 `transforms/`） |
 
 训练链路如下：
 
@@ -110,7 +110,7 @@ model.forward(batch)
 | 功能 | 配置项 | 默认值 | 取值 / 类型 | 说明 |
 | --- | --- | --- | --- | --- |
 | LeRobotdataset 版本 | `--lerobotdataset-version` | `v3.0` | `v2.0`, `v2.1`, `v3.0` | 解析不同 LeRobot 磁盘格式 |
-| 数据策略 | `--dataset-strategy` | `default` | `default`, `fastwam`, `lingbot_va`, `groot_n1_7`, `cosmos3_droid`, `dreamzero`, `wall_oss_0_5` | 选择 LeRobot 构建策略 |
+| 数据策略 | `--dataset-strategy` | `default` | `default`, `fastwam`, `lingbot_va`, `gr00t_n1_7`, `cosmos3_droid`, `dreamzero`, `wall_oss_0_5` | 选择 LeRobot 构建策略 |
 | 视频后端 | `--video-backend` | `torchcodec` | `torchcodec`, `decord`, `opencv`, `pyav`, `torchvision_av` | 视频解码实现 |
 
 > **注意：** `--video-backend` 用于指定 `--lerobotdataset-version` v2.x 系列及其变体的数据读取后端；v3.0 系列默认支持 `torchcodec`、`pyav` 两种后端。

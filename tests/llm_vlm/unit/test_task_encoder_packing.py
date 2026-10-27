@@ -17,13 +17,12 @@ from unittest.mock import patch
 import pytest
 import torch
 
-from loongforge.data.vlm.base_task_encoder import (
+from loongforge.data.vlm.task_encoder_base import (
     BaseTaskEncoder,
     BaseTaskSample,
     BaseTaskSamplePacked,
     _format_packed_sample_overflow_error,
 )
-from loongforge.data.vlm.flavors import ENERGON_LT_7
 
 # Energon < 7.0 declares ``__subflavor__`` as a dataclass field on the base
 # ``Sample`` class, so the LoongForge sample constructors accept (and require)
@@ -35,9 +34,9 @@ _ACCEPTS_SUBFLAVOR = "__subflavor__" in inspect.signature(
 
 
 def make_encoder(seq_length: int = 64) -> BaseTaskEncoder:
-    """Build an encoder carrying only the args the packing method needs."""
+    """Build an encoder carrying only the config the packing method needs."""
     encoder = BaseTaskEncoder.__new__(BaseTaskEncoder)
-    encoder.args = SimpleNamespace(seq_length=seq_length)
+    encoder.config = SimpleNamespace(seq_length=seq_length)
     return encoder
 
 

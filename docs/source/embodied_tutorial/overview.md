@@ -16,7 +16,7 @@ This chapter describes the directory layout and launch script convention under e
 | `loongforge/training/torch_args.py` | Definition file for the training recipe arguments; generates the shell CLI |
 | `loongforge/models/catalog.py` | Shared model routing table; binds `--model-name` to an engine, YAML, and (for Torch) typed config classes |
 | `loongforge/models/embodied/` | Torch embodied model architecture and model registration |
-| `loongforge/data/embodied/` | Embodied data pipeline: `dataloader.py` (DataLoader entry), `datasets/` (shared dataset classes: `lerobot_dataset.py`, `dummy_dataset.py`, video backends, stats), `transforms/` (shared per-sample transforms), `sampler.py`, `collator.py`, `registry.py`, and one directory per model with its `transforms/` subdirectory |
+| `loongforge/data/embodied/` | Embodied data pipeline: `dataloader.py` (DataLoader entry), `registry.py` (model-type registry), `shared/` (code used by every model: `formats/` dataset classes including `lerobot_dataset.py`, `dummy_dataset.py`, video backends and stats; `transforms/` per-sample transforms; `collator_base.py`; `sampler_factory.py`), and one directory per model with its `transforms/` subdirectory |
 
 The training pipeline is:
 
@@ -111,7 +111,7 @@ When using the LeRobot format, the following arguments give finer control over d
 | Feature | Argument | Default | Values / Type | Description |
 | --- | --- | --- | --- | --- |
 | LeRobotDataset version | `--lerobotdataset-version` | `v3.0` | `v2.0`, `v2.1`, `v3.0` | Parse different LeRobot on-disk formats |
-| Data strategy | `--dataset-strategy` | `default` | `default`, `fastwam`, `lingbot_va`, `groot_n1_7`, `cosmos3_droid`, `dreamzero`, `wall_oss_0_5` | Select LeRobot build strategy |
+| Data strategy | `--dataset-strategy` | `default` | `default`, `fastwam`, `lingbot_va`, `gr00t_n1_7`, `cosmos3_droid`, `dreamzero`, `wall_oss_0_5` | Select LeRobot build strategy |
 | Video backend | `--video-backend` | `torchcodec` | `torchcodec`, `decord`, `opencv`, `pyav`, `torchvision_av` | Video decoding implementation |
 
 > **Note:** `--video-backend` selects the reading backend for `--lerobotdataset-version` v2.x and its variants. The v3.0 series supports `torchcodec` and `pyav` by default.

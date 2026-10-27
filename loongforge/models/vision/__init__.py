@@ -17,8 +17,8 @@ from .qwen3_vl.qwen3_vl_config import Qwen3VisionModelConfig
 from .qwen3_5.vision_model import Qwen35VisionModel
 from .qwen3_5.qwen3_5_vision_config import Qwen35VisionConfig
 
-from .llavaov1_5.llavaov_1_5_config import RiceVisionConfig
-from .llavaov1_5.rice_vision_model import RiceViTModel
+from .llava_ov_1_5.llava_ov_1_5_config import RiceVisionConfig
+from .llava_ov_1_5.rice_vision_model import RiceViTModel
 from transformers import AutoModel
 
 from .internvl.intern_vision_model import InternVisionModel

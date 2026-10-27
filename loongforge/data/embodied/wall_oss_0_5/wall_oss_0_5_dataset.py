@@ -10,7 +10,7 @@ import logging
 import torch
 from torch.utils.data import random_split
 
-from loongforge.data.embodied.datasets.lerobot_dataset import LeRobotV3Dataset
+from loongforge.data.embodied.shared.formats.lerobot_dataset import LeRobotV3Dataset
 
 logger = logging.getLogger(__name__)
 

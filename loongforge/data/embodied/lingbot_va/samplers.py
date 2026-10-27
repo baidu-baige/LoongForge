@@ -17,7 +17,7 @@ from loongforge.models.embodied.lingbot_va.features import feature_enabled
 from torch.utils.data import Sampler
 
 from loongforge.data.embodied.registry import register_sampler_builder
-from loongforge.data.embodied.sampler import (
+from loongforge.data.embodied.shared.sampler_factory import (
     SamplerBuilderContext,
     default_sampler_builder,
 )

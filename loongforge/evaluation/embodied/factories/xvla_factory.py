@@ -13,7 +13,7 @@ from loongforge.evaluation.embodied.servers.eval_server_config import EvalServer
 from loongforge.evaluation.embodied.servers.loongforge_policy import (
     PredictActionModelSpec,
 )
-from loongforge.models.embodied.xvla.configuration_xvla import XvlaModelConfig
+from loongforge.models.embodied.xvla.configuration_xvla import XVLAModelConfig
 from loongforge.models.embodied.registry import build_model
 
 
@@ -21,18 +21,18 @@ from loongforge.models.embodied.registry import build_model
 class XVLAModelFactory:
     """Build an XVLA model instance that implements the common predict_action interface."""
 
-    model_config_cls = XvlaModelConfig
+    model_config_cls = XVLAModelConfig
 
     @classmethod
     def build(
         cls,
-        model_cfg: XvlaModelConfig,
+        model_cfg: XVLAModelConfig,
         server_args: EvalServerArgs,
     ) -> PredictActionModelSpec:
         """Create XVLAPolicy and return it with metadata for the generic eval policy.
 
         Args:
-            model_cfg: Typed XvlaModelConfig resolved from the eval YAML model section.
+            model_cfg: Typed XVLAModelConfig resolved from the eval YAML model section.
             server_args: Typed EvalServerArgs with runtime/infra options.
         """
         import torch

@@ -47,7 +47,7 @@ DROID data requires no extra offline preprocessing. Frame stitching, image augme
 --dataset-strategy cosmos3_droid     # Official Cosmos3 DROID data-processing strategy
 ```
 
-Remaining settings like target resolution, action chunk length, CFG dropout are already set in the data section of `configs/models/cosmos3/nano.yaml` (defaults: `target_h/target_w=480`, `action_chunk_length=32`, `action_fps=15.0`), and generally don't need overriding.
+Remaining settings like action chunk length and CFG dropout are already set in the data section of `configs/models/cosmos3/nano.yaml` (defaults: `action_chunk_length=32`, `action_fps=15.0`), and generally don't need overriding. The transform resolves video resolution to the 480 tier.
 
 ## 2. Launch Training
 

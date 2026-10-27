@@ -45,7 +45,7 @@ examples/pi05/eval/run_libero_eval.sh
 examples/xvla/eval/run_libero_eval.sh
 
 # GR00T-N1.6
-examples/groot_n1_6/eval/run_libero_eval.sh
+examples/gr00t_n1_6/eval/run_libero_eval.sh
 ```
 
 Environment variables:

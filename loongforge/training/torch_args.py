@@ -53,7 +53,7 @@ class _ModelRoutingArgs:
     model_name: Optional[str] = field(
         default=None,
         metadata={
-            "help": "Model identifier (e.g. 'pi05', 'groot_n1_6'). Selects the "
+            "help": "Model identifier (e.g. 'pi05', 'gr00t_n1_6'). Selects the "
                     "ModelConfig/DataConfig classes and default YAML via "
                     "loongforge.models.catalog. Required."
         },

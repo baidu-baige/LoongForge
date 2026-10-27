@@ -21,7 +21,7 @@ from pathlib import Path
 
 from typing import Any, Dict, List
 
-from loongforge.data.embodied.datasets.lerobot_dataset import (
+from loongforge.data.embodied.shared.formats.lerobot_dataset import (
     LeRobotV3Dataset,
     build_default_lerobot_dataset,
 )
@@ -77,7 +77,7 @@ def build_fastwam_lerobot_dataset(model_cfg, data_cfg, training_args, runtime):
     """
     roots = [Path(part.strip()) for part in str(training_args.dataset_path or "").split(",") if part.strip()]
     if len(roots) > 1:
-        from loongforge.data.embodied.datasets.lerobot_dataset import MultiLeRobotV2Dataset
+        from loongforge.data.embodied.shared.formats.lerobot_dataset import MultiLeRobotV2Dataset
 
         return MultiLeRobotV2Dataset(
             roots=roots,

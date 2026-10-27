@@ -56,8 +56,6 @@ model:
 # Data config.
 data:
   cfg_dropout_rate: 0.1
-  target_h: 480
-  target_w: 480
   max_text_tokens: 99999
   action_chunk_length: 32
   action_fps: 15.0

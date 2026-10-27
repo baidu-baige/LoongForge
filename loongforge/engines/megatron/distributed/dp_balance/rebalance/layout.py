@@ -3,16 +3,16 @@
 
 """Batch layout registry for DP load balancing.
 
-``dp_balance`` owns the sample reordering algorithm; a model family owns the
-batch layout that algorithm operates on.  A layout supplies two callbacks:
+``dp_balance`` owns the sample reordering algorithm and the built-in batch
+layouts. The training method installs or overrides the layout for its model
+family before the loop starts. A layout supplies two callbacks:
 
 * ``reorder``: redistribute one packed micro-batch across DP ranks.
 * ``cumulative_lengths``: cumulative sequence offsets used by the warm-up
   statistics.
 
-Every model family that enables DP load balancing registers its layout in its
-training method before the loop starts. The engine holds no default: a missing
-registration is an error, not a silent VLM assumption.
+The engine holds no default: a missing registration is an error, not a silent
+VLM assumption.
 """
 
 from __future__ import annotations

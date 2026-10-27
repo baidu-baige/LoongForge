@@ -49,8 +49,8 @@ def _predict_action(self, images, instructions, state=None, dataset_stats=None):
 
     from loongforge.data.embodied.pi05.transforms.pi05_collator import tokenize_prompts
     from loongforge.data.embodied.pi05.transforms.pi05_transform import StateDiscretizationTransform
-    from loongforge.data.embodied.transforms.builders import convert_stats
-    from loongforge.data.embodied.transforms.image_transform import ImageTransform
+    from loongforge.data.embodied.shared.transforms.builders import convert_stats
+    from loongforge.data.embodied.shared.transforms.image_transform import ImageTransform
 
     with torch.no_grad():
         device = next(self.parameters()).device

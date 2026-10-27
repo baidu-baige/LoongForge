@@ -25,12 +25,12 @@ from typing import Any, Callable, Dict, Iterable, Optional, Type, TYPE_CHECKING
 from loongforge.models.embodied.registry import MODEL_PACKAGES
 
 if TYPE_CHECKING:
-    from loongforge.data.embodied.transforms.base import ComposedTransform
+    from loongforge.data.embodied.shared.transforms.base import ComposedTransform
 
 # Data-only model types that map to a plain module under ``loongforge.data.embodied``.
 # Importing that module must register the model's builders.
 PLAIN_MODULES: Dict[str, str] = {
-    "dummy": "collator",
+    "dummy": "shared.collator_base",
 }
 
 _KNOWN_MODEL_TYPES = frozenset({*MODEL_PACKAGES, *PLAIN_MODULES})
@@ -40,11 +40,11 @@ _KNOWN_MODEL_TYPES = frozenset({*MODEL_PACKAGES, *PLAIN_MODULES})
 # ``"default"`` strategy is the stock lerobot build; model-specific strategies
 # plug custom multi-frame geometry into the same generic dataset classes.
 DATASET_STRATEGIES: Dict[str, str] = {
-    "default": "datasets.lerobot_dataset:build_default_lerobot_dataset",
+    "default": "shared.formats.lerobot_dataset:build_default_lerobot_dataset",
     "vlda": "vlda.vlda_dataset:build_vlda_dataset",
     "fastwam": "fastwam.fastwam_dataset:build_fastwam_lerobot_dataset",
     "lingbot_va": "lingbot_va.lingbot_va_dataset:build_lingbot_dataset",
-    "groot_n1_7": "groot_n1_7.groot_n1_7_dataset:build_groot_n1_7_lerobot_dataset",
+    "gr00t_n1_7": "gr00t_n1_7.gr00t_n1_7_dataset:build_gr00t_n1_7_lerobot_dataset",
     "cosmos3_droid": "cosmos3.cosmos3_dataset:build_droid_dataset",
     "dreamzero": "dreamzero.dreamzero_dataset:build_dreamzero_dataset",
     "wall_oss_0_5": "wall_oss_0_5.wall_oss_0_5_dataset:build_wall_oss_0_5_lerobot_dataset",
@@ -55,7 +55,7 @@ DATASET_STRATEGIES: Dict[str, str] = {
 DATASET_FORMATS: Dict[str, str] = {
     "lerobot_datasets": "registry:build_dataset_by_strategy",
     "hdf5_datasets": "xvla.xvla_dataset:build_hdf5_dataset",
-    "dummy_datasets": "datasets.dummy_dataset:build_dummy_dataset",
+    "dummy_datasets": "shared.formats.dummy_dataset:build_dummy_dataset",
 }
 
 
@@ -63,8 +63,9 @@ DATASET_FORMATS: Dict[str, str] = {
 class DataRuntime:
     """Execution facts the training method resolves for embodied data components.
 
-    Data code reads these instead of backend arguments or the backend's
-    distributed context, so it stays independent of the engine schema.
+    Components read these instead of querying the backend's distributed context.
+    Data-recipe values still come from ``training_args``; global readers
+    (``get_args``, ``parallel_state``) stay out of the data layer.
     """
 
     rank: int = 0
@@ -190,7 +191,7 @@ def build_transforms_from_args(
     runtime: DataRuntime,
 ) -> Optional["ComposedTransform"]:
     """Build per-sample transforms for ``model_cfg.model_type``; None if there are none."""
-    from loongforge.data.embodied.transforms.base import ComposedTransform
+    from loongforge.data.embodied.shared.transforms.base import ComposedTransform
 
     model_type = model_cfg.model_type
     if not model_type:

@@ -41,7 +41,7 @@ from torch.utils.data import Dataset, get_worker_info
 
 try:
     from lerobot.datasets.lerobot_dataset import LeRobotDatasetMetadata
-    from loongforge.data.embodied.datasets.lerobot_dataset import LeRobotV3Dataset
+    from loongforge.data.embodied.shared.formats.lerobot_dataset import LeRobotV3Dataset
 except ImportError:
     LeRobotV3Dataset = object
     LeRobotDatasetMetadata = None

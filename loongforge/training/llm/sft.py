@@ -29,10 +29,13 @@ from loongforge.engines.megatron import (
 )
 from megatron.training.utils import print_rank_0
 
-from loongforge.data.llm.sft_dataset import SFTDataset
-from loongforge.data.llm.sft_dataset_config import SFTDatasetConfig
+from loongforge.data.llm.sft.dataset import SFTDataset
+from loongforge.data.llm.sft.dataset_config import SFTDatasetConfig
 from loongforge.data.llm.blended_hf_dataset_builder import BlendedHuggingFaceDatasetBuilder
-from loongforge.data.llm.sft_data_collator import DataCollatorForSupervisedDataset
+from loongforge.data.llm.sft.collator import (
+    DataCollatorForSupervisedDataset,
+    build_sft_data_collator,
+)
 
 from loongforge import constants
 
@@ -43,10 +46,9 @@ from loongforge.engines.megatron.distributed.context_parallel import get_batch_o
 from loongforge.engines.megatron.data_padding import llm_pad_to_multiple_of
 from loongforge.data.llm.blended_hf_dataset_config import get_dataset_blend_from_list
 from loongforge.engines.megatron.checkpointing import load_dataloader_state
-from loongforge.training.sft_data_config import sft_loader_config
 from loongforge.data.llm.dataloader import (
+    SFTLoaderConfig,
     build_sft_cyclic_iterators,
-    build_sft_data_collator,
 )
 from loongforge.training.llm.pretrain import get_embedding_ranks, model_provider
 
@@ -663,7 +665,7 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
     ).build()
 
     # will use external dataloader type for sft
-    loader_config = sft_loader_config(args)
+    loader_config = SFTLoaderConfig.from_args(args)
     data_collator = build_sft_data_collator(
         DataCollatorForSupervisedDataset,
         loader_config,

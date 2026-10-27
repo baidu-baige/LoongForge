@@ -21,7 +21,7 @@ Usage rules (must follow)
 Shared fields
 -------------
 Fields that the model also needs (e.g. action head dims, action_horizon) live
-on ``XvlaModelConfig`` and are NOT duplicated here.  The data side reads them
+on ``XVLAModelConfig`` and are NOT duplicated here.  The data side reads them
 from the ``model_cfg`` instance passed alongside this ``DataConfig``.
 """
 

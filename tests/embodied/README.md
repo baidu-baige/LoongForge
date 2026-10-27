@@ -125,8 +125,8 @@ chip=a model_names="pi05_ddp" bash tests/embodied/run.sh
 bash tests/embodied/run.sh --chip a --models pi05_ddp
 
 # Run multiple scripts
-chip=a model_names="pi05_ddp groot_n1_6_ddp" bash tests/embodied/run.sh
-bash tests/embodied/run.sh --chip a --models pi05_ddp groot_n1_6_ddp
+chip=a model_names="pi05_ddp gr00t_n1_6_ddp" bash tests/embodied/run.sh
+bash tests/embodied/run.sh --chip a --models pi05_ddp gr00t_n1_6_ddp
 
 # First-time baseline collection (no comparison, write the current result into tests/embodied/baseline/<chip>/)
 chip=a auto_collect_baseline=true bash tests/embodied/run.sh
@@ -160,7 +160,7 @@ Every option supports two forms, with **CLI flags taking precedence over environ
 
 | Environment variable | CLI flag | Default | Description |
 |---|---|---|---|
-| `model_names` | `--models MODEL ...` | empty (=all) | Names to regress (must be in `config/scripts.yaml`); env-var form is a space-separated string, e.g. `model_names="pi05_ddp groot_n1_6_ddp"` |
+| `model_names` | `--models MODEL ...` | empty (=all) | Names to regress (must be in `config/scripts.yaml`); env-var form is a space-separated string, e.g. `model_names="pi05_ddp gr00t_n1_6_ddp"` |
 | `chip` | `--chip` | **required** | Chip model, `a` / `p`; determines the baseline subdirectory `tests/embodied/baseline/<chip>/` |
 | `TIMEOUT` | `--timeout` | `3600` | Per-script timeout (seconds); on timeout, SIGTERM→SIGKILL the process group |
 | `accuracy_relative_tolerance` | `--accuracy_relative_tolerance` | `0.02` | Per-iteration relative-error threshold for loss-type metrics (hard check) |

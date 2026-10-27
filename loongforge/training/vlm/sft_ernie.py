@@ -13,7 +13,7 @@ from megatron.training import get_timers
 
 from megatron.training.utils import print_rank_0
 from loongforge.engines.megatron import get_args, get_tokenizer
-from loongforge.data.vlm.ernie.utils.data_utils import ErnieTensorDataset
+from loongforge.data.vlm.encoders.ernie.utils.data_utils import ErnieTensorDataset
 from loongforge.engines.megatron.runner import pretrain
 from megatron.core import parallel_state
 from megatron.core import mpu, tensor_parallel
@@ -193,17 +193,17 @@ def train_valid_test_datasets_provider_energon(train_val_test_num_samples):
     """
     from loongforge.data.vlm import build_task_encoder
     from loongforge.data.vlm.dataloader import (
+        VLMDataConfig,
         get_train_dataset,
         get_train_loader,
     )
     from loongforge.engines.megatron.checkpointing import load_dataloader_state
-    from loongforge.training.vlm.data_configs import vlm_data_config
 
     args = get_args()
-    task_encoder = build_task_encoder(vlm_data_config(args), get_tokenizer())
+    task_encoder = build_task_encoder(VLMDataConfig.from_args(args), get_tokenizer())
     train_ds = get_train_dataset(
         task_encoder,
-        vlm_data_config(args),
+        VLMDataConfig.from_args(args),
         dp_rank=parallel_state.get_data_parallel_rank(),
         dp_size=parallel_state.get_data_parallel_world_size(),
         dp_group=parallel_state.get_data_parallel_group(),

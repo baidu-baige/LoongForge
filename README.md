@@ -277,8 +277,8 @@ Click any model for its training examples; see [`configs/models/`](./configs/mod
 <td valign="top">
 <ul>
 <li><a href="examples/pi05/">Pi0.5</a></li>
-<li><a href="examples/groot_n1_6/">GR00T-N1.6</a></li>
-<li><a href="examples/groot_n1_7/">GR00T-N1.7</a></li>
+<li><a href="examples/gr00t_n1_6/">GR00T-N1.6</a></li>
+<li><a href="examples/gr00t_n1_7/">GR00T-N1.7</a></li>
 <li><a href="examples/xvla/">xVLA</a></li>
 <li><a href="examples/wall_oss_0_5/">Wall-OSS-0.5</a></li>
 <li><a href="examples/fastwam/">FastWAM</a></li>

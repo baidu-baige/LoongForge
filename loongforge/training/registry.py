@@ -50,8 +50,8 @@ METHOD_REGISTRY: Dict[Tuple[str, str], str] = {
 TORCH_TRAINER_TYPES: Dict[str, Tuple[str, str | None]] = {
     "FinetuneTrainer": ("sft", None),
     "VLDAFinetuneTrainer": ("sft_vlda", None),
-    "GrootN1d6Trainer": ("sft", "loongforge.training.embodied.optimizations.groot_n1_6.factory"),
-    "GrootN1d7Trainer": ("sft", "loongforge.training.embodied.optimizations.groot_n1_7.factory"),
+    "Gr00tN1d6Trainer": ("sft", "loongforge.training.embodied.optimizations.gr00t_n1_6.factory"),
+    "Gr00tN1d7Trainer": ("sft", "loongforge.training.embodied.optimizations.gr00t_n1_7.factory"),
     "LingBotFinetuneTrainer": ("sft_lingbot_va", "loongforge.training.embodied.optimizations.lingbot_va.factory"),
     "WallOss05Trainer": ("sft", "loongforge.training.embodied.optimizations.wall_oss_0_5.factory"),
 }

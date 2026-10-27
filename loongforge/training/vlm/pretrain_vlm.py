@@ -34,20 +34,20 @@ from loongforge.engines.megatron.data_padding import (
     vlm_packed_padding,
 )
 from loongforge.data.llm.dataloader import (
-    build_sft_data_collator,
+    SFTLoaderConfig,
     build_sft_cyclic_iterators,
     load_pretokenized_dataset,
 )
+from loongforge.data.llm.sft.collator import build_sft_data_collator
 from loongforge.data.vlm.dataloader import (
+    VLMDataConfig,
+    VLMPretrainCollator,
     get_train_dataset,
     get_val_dataset,
     get_train_loader,
 )
 from loongforge.data.vlm import build_task_encoder
-from loongforge.data.vlm.collator import VLMPretrainCollator
 from loongforge.engines.megatron.checkpointing import load_dataloader_state
-from loongforge.training.sft_data_config import sft_loader_config
-from loongforge.training.vlm.data_configs import vlm_data_config
 
 
 from loongforge.models.multimodal.multimodal_model_provider import (
@@ -401,8 +401,8 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None,
     import loongforge.engines.megatron.distributed.dp_balance.patches  # noqa: F401
     args = get_args()
     tokenizer = get_tokenizer()
-    loader_config = sft_loader_config(args)
-    data_config = vlm_data_config(args)
+    loader_config = SFTLoaderConfig.from_args(args)
+    data_config = VLMDataConfig.from_args(args)
 
     if args.is_tokenized_data:
         dpr = parallel_state.get_data_parallel_rank()

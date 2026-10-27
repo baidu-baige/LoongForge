@@ -17,7 +17,7 @@ class _EmbodiedRoutingArgs:
         default="FinetuneTrainer",
         metadata={
             "help": "Trainer class to instantiate (e.g. FinetuneTrainer, "
-                    "GrootN1d6Trainer); resolved by the trainer builder registry."
+                    "Gr00tN1d6Trainer); resolved by the trainer builder registry."
         },
     )
 
@@ -44,7 +44,7 @@ class _EmbodiedDataArgs:
         metadata={
             "help": "Under --dataset-format lerobot_datasets: the model-specific "
                     "dataset build strategy ('default', 'fastwam', "
-                    "'lingbot_va', 'groot_n1_7', 'cosmos3_droid', "
+                    "'lingbot_va', 'gr00t_n1_7', 'cosmos3_droid', "
                     "'dreamzero', or 'wall_oss_0_5'); unknown values raise "
                     "ValueError."
         },

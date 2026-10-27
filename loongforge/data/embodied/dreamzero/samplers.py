@@ -44,10 +44,10 @@ from torch.utils.data import Sampler
 from torchdata.stateful_dataloader.sampler import StatefulDistributedSampler
 
 from loongforge.data.embodied.registry import register_sampler_builder
-from loongforge.data.embodied.sampler import GlobalBatchShardSampler, _StatefulIndexIterator
+from loongforge.data.embodied.shared.sampler_factory import GlobalBatchShardSampler, _StatefulIndexIterator
 
 if TYPE_CHECKING:
-    from loongforge.data.embodied.sampler import SamplerBuilderContext
+    from loongforge.data.embodied.shared.sampler_factory import SamplerBuilderContext
     from loongforge.data.embodied.registry import DataRuntime
 
     from .dreamzero_dataset import DreamZeroLeRobotDataset
@@ -481,7 +481,7 @@ def build_dreamzero_sampler(
     * ``<Descriptor>Sampler`` PascalCase; model prefix only when the sampler is
       genuinely model-specific.
     * ``global_batch_shard`` -> ``GlobalBatchShardSampler`` (dataset-agnostic DP
-      index layout; no prefix, defined in ``embodied/sampler.py``).
+      index layout; no prefix, defined in ``embodied/shared/sampler_factory.py``).
     * ``sharded`` -> ``DreamZeroShardedSampler`` (LeRobot-trajectory specific, so
       it keeps the ``DreamZero`` prefix).
     * ``distributed`` -> torchdata ``StatefulDistributedSampler``.

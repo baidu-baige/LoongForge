@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 
 import torch
 
-from loongforge.data.embodied.collator import BaseCollator
+from loongforge.data.embodied.shared.collator_base import BaseCollator
 from loongforge.data.embodied.registry import register_collator
 from loongforge.models.embodied.cosmos3.sequence_packing import SequencePlan
 
@@ -84,7 +84,7 @@ class Cosmos3Batch:
 
 
 class DeferredVideoTail:
-    """ColorJitter + everything after it, moved out of the dataloader worker.
+    """ColorJitter + everything after it, runs outside the dataloader worker.
 
     ColorJitter on a full-resolution 3-view stack is the worker bottleneck, so
     ``colorjitter_on_gpu`` defers it. Deferring only the jitter would change the
@@ -117,9 +117,6 @@ class DeferredVideoTail:
     def __setstate__(self, state):
         """Rebuild from the shipped parameters (the transform is not pickled)."""
         self.__init__(*state["params"])
-
-    # NOTE: params are kept for provenance; build_image_augmentor owns the values
-    # actually used, so the in-worker and device-side transforms cannot drift.
 
     def _augment(self, stack: torch.Tensor, rng_state: torch.Tensor) -> torch.Tensor:
         """Run crop -> resize -> ColorJitter from the worker's RNG position.

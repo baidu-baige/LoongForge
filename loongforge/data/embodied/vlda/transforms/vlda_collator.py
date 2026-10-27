@@ -8,7 +8,7 @@ from dataclasses import dataclass
 import torch
 from torch.utils.data import default_collate
 
-from loongforge.data.embodied.collator import BaseCollator, PreparedBatch
+from loongforge.data.embodied.shared.collator_base import BaseCollator, PreparedBatch
 from loongforge.data.embodied.registry import register_collator
 
 

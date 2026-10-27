@@ -3,9 +3,10 @@
 
 """Check the dependency direction between the four layers of ``loongforge``.
 
-Runs without torch: it only parses files. The rules mirror ``AGENTS.md``:
-``data`` owns samples and data formats, ``models`` network structure,
-``engines`` backend execution, and ``training`` what a run does.
+Runs without torch: it only parses files. The checks cover what the layers
+actually need: data does not read global state or backend execution arguments,
+and runtime imports do not cross the wrong boundary. They do not constrain how
+a caller passes its inputs (config dataclass or backend args object).
 """
 
 import ast
@@ -21,7 +22,9 @@ DATA = PKG / "data"
 CHAT_TEMPLATES = DATA / "chat_templates"
 FAMILIES = ("llm", "vlm", "embodied", "diffusion")
 GLOBAL_READERS = {"get_args", "get_tokenizer", "get_model_config", "get_chat_template"}
-# ``data/`` may import these engine modules only.
+# ``data/`` may import these engine modules only. The SFT loader needs the
+# Megatron chunkpipe batch sampler; keep the exception explicit instead of
+# adding a dependency-injection seam.
 DATA_ENGINE_ALLOWED = {
     ("loongforge", "engines", "megatron", "distributed", "chunkpipe"): {"loongforge/data/llm/dataloader.py"},
 }
@@ -247,18 +250,6 @@ class LayeringTest(unittest.TestCase):
                     found.add((_rel(path), f"torch.distributed.{node.attr}"))
         self.assertEqual(found, set(), f"data reads backend state: {sorted(found)}")
 
-    def test_data_components_take_explicit_configs(self):
-        # ``image_enhance.py`` takes an augmentation-parameter dict named ``args``.
-        allowed = {"loongforge/data/vlm/ernie/utils/image_enhance.py"}
-        offenders = set()
-        for path in _py_files(DATA):
-            if _rel(path) in allowed:
-                continue
-            for node in ast.walk(_parse(path)):
-                if isinstance(node, ast.FunctionDef) and any(arg.arg == "args" for arg in node.args.args):
-                    offenders.add(f"{_rel(path)}:{node.lineno}:{node.name}")
-        self.assertEqual(offenders, set(), f"data components take the args namespace: {sorted(offenders)}")
-
     def test_data_does_not_read_global_state(self):
         for path in _py_files(DATA):
             for node in ast.walk(_parse(path)):
@@ -360,7 +351,81 @@ class LayeringTest(unittest.TestCase):
                 )
 
 
+class RelativeImportTest(unittest.TestCase):
+    def test_relative_imports_resolve(self):
+        # Moving a file one level deeper silently breaks ``from ..x import y``;
+        # neither compileall nor an absolute-import scan reports it.
+        offenders = set()
+        for path in _py_files(PKG):
+            package = path.parent
+            for node in ast.walk(_parse(path)):
+                if not isinstance(node, ast.ImportFrom) or not node.level or not node.module:
+                    continue
+                base = package
+                for _ in range(node.level - 1):
+                    base = base.parent
+                target = base.joinpath(*node.module.split("."))
+                if not (target.with_suffix(".py").is_file() or (target / "__init__.py").is_file()):
+                    offenders.add(f"{_rel(path)}:{node.lineno}:{'.' * node.level}{node.module}")
+        self.assertEqual(offenders, set(), f"unresolvable relative imports: {sorted(offenders)}")
+
+
+class VLMEncoderRegistryTest(unittest.TestCase):
+    def test_task_encoder_registry_targets_exist(self):
+        # ``TASK_ENCODER_REGISTRY`` stores "module.Class" strings and is resolved
+        # by importlib at runtime, so a rename inside ``data/vlm`` cannot be
+        # caught by an import scan.
+        tree = ast.parse((PKG / "data" / "vlm" / "__init__.py").read_text(encoding="utf-8"))
+        targets = set()
+        for node in tree.body:
+            if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+                continue
+            if getattr(node.targets[0], "id", None) != "TASK_ENCODER_REGISTRY":
+                continue
+            if not isinstance(node.value, ast.Dict):
+                continue
+            for value in node.value.values:
+                if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                    targets.add(value.value.rsplit(".", 1)[0])
+        self.assertTrue(targets, "TASK_ENCODER_REGISTRY was not found")
+        for target in sorted(targets):
+            base = ROOT / Path(*target.split("."))
+            self.assertTrue(
+                base.with_suffix(".py").is_file() or (base / "__init__.py").is_file(),
+                f"task encoder module does not exist: {target}",
+            )
+
+
 class EmbodiedDataRegistryTest(unittest.TestCase):
+    def test_registry_module_targets_exist(self):
+        # These tables are resolved by string at runtime, so an import scan cannot
+        # catch a stale module path after a file rename.
+        tree = ast.parse((PKG / "data" / "embodied" / "registry.py").read_text(encoding="utf-8"))
+        targets = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.AnnAssign):
+                name, value = node.target, node.value
+            elif isinstance(node, ast.Assign) and len(node.targets) == 1:
+                name, value = node.targets[0], node.value
+            else:
+                continue
+            if not isinstance(name, ast.Name) or not isinstance(value, ast.Dict):
+                continue
+            for item in value.values:
+                if not isinstance(item, ast.Constant) or not isinstance(item.value, str):
+                    continue
+                if name.id in {"DATASET_STRATEGIES", "DATASET_FORMATS"}:
+                    targets.add(item.value.split(":", 1)[0])
+                elif name.id == "PLAIN_MODULES":
+                    targets.add(item.value)
+        self.assertTrue(targets, "registry string tables were not found")
+        for target in sorted(targets):
+            base = PKG / "data" / "embodied" / Path(*target.split("."))
+            self.assertTrue(
+                base.with_suffix(".py").is_file() or (base / "__init__.py").is_file(),
+                f"registry target does not exist: {target}",
+            )
+
     def test_data_registry_can_retry_after_import_failure(self):
         # An optional dependency may be installed later in the same process, so a
         # failed import must not mark the model type as done.

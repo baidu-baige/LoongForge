@@ -15,7 +15,7 @@ from tests.test_vlm_dataset_inputs import REPO_ROOT, _load_functions
 
 torch = pytest.importorskip("torch")
 REBALANCE = "loongforge/engines/megatron/distributed/dp_balance/rebalance/"
-INTERNVL = "loongforge/training/vlm/internvl_dp_balance.py"
+INTERNVL = "loongforge/engines/megatron/distributed/dp_balance/rebalance/internvl.py"
 
 
 class ReverseContext:
@@ -96,7 +96,6 @@ def test_internvl_reorder_and_layout_registration(skip):
     modules = {
         "loongforge.engines.megatron": SimpleNamespace(get_args=lambda: args, get_tokenizer=lambda: tokenizer),
         "loongforge.engines.megatron.distributed.dp_balance.rebalance.layout": SimpleNamespace(**layout),
-        "loongforge.models.vision.internvl.internvl_config": SimpleNamespace(IMG_CONTEXT_TOKEN="<IMG_CONTEXT>"),
     }
     with patch.dict(sys.modules, modules):
         functions = runpy.run_path(str(REPO_ROOT / INTERNVL))

@@ -558,18 +558,18 @@ MODEL_CONFIG_REGISTRY = {
         "model_config": "loongforge.models.embodied.pi05.configuration_pi05.Pi05ModelConfig",
         "data_config": "loongforge.data.embodied.pi05.data_configuration_pi05.Pi05DataConfig",
     },
-    "groot_n1_6": {
+    "gr00t_n1_6": {
         "engine": "torch",
-        "config_path": "configs/models/groot_n1_6",
-        "config_name": "groot_n1_6",
-        "model_config": "loongforge.models.embodied.groot_n1_6.configuration_groot_n1_6.GrootN1d6ModelConfig",
-        "data_config": "loongforge.data.embodied.groot_n1_6.data_configuration_groot_n1_6.GrootN1d6DataConfig",
+        "config_path": "configs/models/gr00t_n1_6",
+        "config_name": "gr00t_n1_6",
+        "model_config": "loongforge.models.embodied.gr00t_n1_6.configuration_gr00t_n1_6.Gr00tN1d6ModelConfig",
+        "data_config": "loongforge.data.embodied.gr00t_n1_6.data_configuration_gr00t_n1_6.Gr00tN1d6DataConfig",
     },
     "xvla": {
         "engine": "torch",
         "config_path": "configs/models/xvla",
         "config_name": "xvla",
-        "model_config": "loongforge.models.embodied.xvla.configuration_xvla.XvlaModelConfig",
+        "model_config": "loongforge.models.embodied.xvla.configuration_xvla.XVLAModelConfig",
         "data_config": "loongforge.data.embodied.xvla.data_configuration_xvla.XVLADataConfig",
     },
     "vlda": {
@@ -586,12 +586,12 @@ MODEL_CONFIG_REGISTRY = {
         "model_config": "loongforge.models.embodied.fastwam.configuration_fastwam.FastWAMModelConfig",
         "data_config": "loongforge.data.embodied.fastwam.data_configuration_fastwam.FastWAMDataConfig",
     },
-    "groot_n1_7": {
+    "gr00t_n1_7": {
         "engine": "torch",
-        "config_path": "configs/models/groot_n1_7",
-        "config_name": "groot_n1_7",
-        "model_config": "loongforge.models.embodied.groot_n1_7.configuration_groot_n1_7.GrootN1d7Config",
-        "data_config": "loongforge.data.embodied.groot_n1_7.data_configuration_groot_n1_7.GrootN1d7DataConfig",
+        "config_path": "configs/models/gr00t_n1_7",
+        "config_name": "gr00t_n1_7",
+        "model_config": "loongforge.models.embodied.gr00t_n1_7.configuration_gr00t_n1_7.Gr00tN1d7Config",
+        "data_config": "loongforge.data.embodied.gr00t_n1_7.data_configuration_gr00t_n1_7.Gr00tN1d7DataConfig",
     },
     "cosmos3_nano": {
         "engine": "torch",

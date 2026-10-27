@@ -8,7 +8,7 @@ from __future__ import annotations
 from torch.utils.data import DistributedSampler
 
 from loongforge.data.embodied.registry import register_sampler_builder
-from loongforge.data.embodied.sampler import SamplerBuilderContext
+from loongforge.data.embodied.shared.sampler_factory import SamplerBuilderContext
 
 
 @register_sampler_builder("wall_oss_0_5")

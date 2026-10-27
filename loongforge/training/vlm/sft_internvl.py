@@ -18,24 +18,24 @@ from megatron.core.utils import StragglerDetector
 from loongforge.engines.megatron import (get_args, get_tokenizer, get_model_config)
 from megatron.core.enums import ModelType
 from loongforge.engines.megatron.runner import pretrain
-from loongforge.data.vlm.internvl_task_encoder import InternVLTaskEncoder
+from loongforge.data.vlm.encoders.internvl.task_encoder import InternVLTaskEncoder
 from loongforge.engines.megatron.distributed.dp_balance.rebalance.layout import install_batch_layout
-from loongforge.training.vlm.internvl_dp_balance import INTERNVL_BATCH_LAYOUT
+from loongforge.engines.megatron.distributed.dp_balance.rebalance.internvl import INTERNVL_BATCH_LAYOUT
 from loongforge.engines.megatron.data_padding import (
     llm_pad_to_multiple_of,
 )
 from loongforge.data.llm.dataloader import (
-    build_sft_data_collator,
+    SFTLoaderConfig,
     build_sft_cyclic_iterators,
     load_pretokenized_dataset,
 )
+from loongforge.data.llm.sft.collator import build_sft_data_collator
 from loongforge.data.vlm.dataloader import (
+    VLMDataConfig,
     get_train_dataset,
     get_train_loader,
 )
 from loongforge.engines.megatron.checkpointing import load_dataloader_state
-from loongforge.training.sft_data_config import sft_loader_config
-from loongforge.training.vlm.data_configs import vlm_data_config
 from loongforge.models.multimodal.multimodal_model_provider import (
     omni_model_provider,
 )
@@ -184,8 +184,8 @@ def forward_step(data_iterator, model):
 def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None):
     import loongforge.engines.megatron.distributed.dp_balance.patches  # noqa: F401
     args = get_args()
-    loader_config = sft_loader_config(args)
-    data_config = vlm_data_config(args)
+    loader_config = SFTLoaderConfig.from_args(args)
+    data_config = VLMDataConfig.from_args(args)
     if mpu.get_tensor_model_parallel_rank() != 0:
         return None, None, None
 

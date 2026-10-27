@@ -20,9 +20,9 @@ from transformers.processing_utils import ProcessorMixin
 from loongforge.data.chat_templates.registry import MAPPING_NAME_TO_TEMPLATE
 from loongforge.data.chat_templates.plugins.kimi import KimiPlugin
 import loongforge.data.vlm.dataloader as dataloader_provider
-from loongforge.data.vlm.base_task_encoder import BaseTaskEncoder
-from loongforge.data.vlm.kimi_task_encoder import KimiTaskEncoder
-from loongforge.data.vlm.vlm_task_encoder import VLMTaskEncoder
+from loongforge.data.vlm.task_encoder_base import BaseTaskEncoder
+from loongforge.data.vlm.encoders.kimi import KimiTaskEncoder
+from loongforge.data.vlm.encoders.vlm import VLMTaskEncoder
 from loongforge.models.multimodal.encoder_model import OmniEncoderModel
 from loongforge.data.chat_templates.base import DataRoles
 
@@ -111,7 +111,7 @@ class Glm52KimiVitPluginTest(unittest.TestCase):
             processor_path, trust_remote_code=True
         )
         encoder = object.__new__(KimiTaskEncoder)
-        encoder.args = SimpleNamespace(
+        encoder.config = SimpleNamespace(
             train_on_prompt=False, history_mask_loss=False
         )
         encoder.chat_template = MAPPING_NAME_TO_TEMPLATE["kimi-k2.6-hf"]
@@ -157,7 +157,7 @@ class VLMTaskEncoderCompatibilityTest(unittest.TestCase):
 
     def test_registered_hf_templates_use_hf_message_encoding(self):
         encoder = object.__new__(VLMTaskEncoder)
-        encoder.args = SimpleNamespace(
+        encoder.config = SimpleNamespace(
             train_on_prompt=False,
             history_mask_loss=False,
         )
@@ -237,11 +237,11 @@ class VLMTaskEncoderCompatibilityTest(unittest.TestCase):
                 with patch.object(
                     BaseTaskEncoder,
                     "__init__",
-                    lambda encoder, args, tokenizer, chat_template=None: setattr(
-                        encoder, "args", args
+                    lambda encoder, config, tokenizer, chat_template=None: setattr(
+                        encoder, "config", config
                     ),
                 ), patch(
-                    "loongforge.data.vlm.vlm_task_encoder.AutoProcessor.from_pretrained",
+                    "loongforge.data.vlm.encoders.vlm.AutoProcessor.from_pretrained",
                     side_effect=load_processor,
                 ):
                     VLMTaskEncoder(args, Mock())

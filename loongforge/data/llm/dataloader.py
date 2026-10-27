@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""SFT dataloader utilities: iterators, collators, and cyclic data builders.
+"""SFT dataloader utilities: config and cyclic data builders.
 
 The tokenized-data branches of the VLM and InternVL methods reuse this module: they
 read a dataset pre-sharded per data-parallel rank and wrap it in the same iterators.
@@ -9,73 +9,74 @@ read a dataset pre-sharded per data-parallel rank and wrap it in the same iterat
 
 import logging
 import os
-from typing import Optional, Type, Union
+from dataclasses import dataclass
+from typing import Optional, Union
 
 from torch.utils.data import DataLoader
-from transformers.utils import PaddingStrategy
 
 from datasets import Dataset, IterableDataset, load_from_disk
 from datasets.distributed import split_dataset_by_node
 
 from megatron.legacy.data.data_samplers import MegatronPretrainingRandomSampler
 
-from loongforge import constants
 from loongforge.engines.megatron.distributed.chunkpipe import ChunkPipeGroupBatchSampler
-from .loader_config import SFTLoaderConfig
-from .sft_data_collator import DataCollatorForSupervisedDataset
+from .sft.collator import DataCollatorForSupervisedDataset
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class SFTLoaderConfig:
+    """Data-recipe fields needed to assemble the SFT loader.
+
+    Built by the training method from its arguments; the loader never reads
+    backend arguments or global CLI state.
+    """
+
+    tokenizer_type: str
+    variable_seq_lengths: bool
+    enable_chunkpipe: bool
+    chunksize: int
+    seq_length: int
+    sft_chunkpipe_mode: bool
+    mtp_num_layers: int
+    sft_data_streaming: bool
+    streaming_buffer_size: int
+    seed: int
+    micro_batch_size: int
+    global_batch_size: int
+    data_sharding: bool
+    chunkpipe_enable_synthesis: bool
+    num_workers: int
+    dataloader_save: Optional[str] = None
+
+    @classmethod
+    def from_args(cls, args) -> "SFTLoaderConfig":
+        """Build the loader recipe from the training arguments."""
+        return cls(
+            tokenizer_type=args.tokenizer_type,
+            variable_seq_lengths=args.variable_seq_lengths,
+            enable_chunkpipe=args.enable_chunkpipe,
+            chunksize=args.chunksize,
+            seq_length=args.seq_length,
+            sft_chunkpipe_mode=getattr(args, "sft_chunkpipe_mode", False),
+            mtp_num_layers=args.mtp_num_layers or 0,
+            sft_data_streaming=args.sft_data_streaming,
+            streaming_buffer_size=args.streaming_buffer_size,
+            seed=args.seed,
+            micro_batch_size=args.micro_batch_size,
+            global_batch_size=args.global_batch_size,
+            data_sharding=args.data_sharding,
+            chunkpipe_enable_synthesis=getattr(args, "chunkpipe_enable_synthesis", False),
+            num_workers=args.num_workers,
+            dataloader_save=args.dataloader_save,
+        )
 
 
 def _cyclic_iter(iterable):
     """Yield from ``iterable`` forever."""
     while True:
         yield from iterable
-
-
-def build_sft_data_collator(
-    collator_cls: Type[DataCollatorForSupervisedDataset],
-    config: SFTLoaderConfig,
-    tokenizer,
-    pad_to_multiple_of: int,
-    **kwargs,
-) -> DataCollatorForSupervisedDataset:
-    """build data collator for sft
-
-    ``pad_to_multiple_of`` is computed by the training method from parallelism and
-    precision (``engines/megatron/data_padding.py``); the data layer does not derive it.
-    """
-    if not hasattr(tokenizer, "tokenizer"):
-        raise TypeError(
-            "Only support HFTokenizer for sft, but got "
-            f"{type(tokenizer).__name__} (tokenizer_type={config.tokenizer_type})."
-        )
-
-    padding = (
-        PaddingStrategy.LONGEST
-        if config.variable_seq_lengths
-        else PaddingStrategy.MAX_LENGTH
-    )
-
-    # When chunkpipe is enabled, all base chunks are already padded to chunksize.
-    # If SFT chunkpipe + MTP is enabled, the collator temporarily strips bridge
-    # tokens, pads only the base part to pad_to_multiple_of, then appends bridge
-    # tokens back.
-    max_length = config.chunksize if config.enable_chunkpipe else config.seq_length
-
-    if config.enable_chunkpipe and config.sft_chunkpipe_mode:
-        kwargs["chunkpipe_base_length"] = config.chunksize
-        kwargs["chunkpipe_mtp_num_layers"] = config.mtp_num_layers
-
-    data_collator = collator_cls(
-        tokenizer=tokenizer.tokenizer,
-        label_pad_token_id=constants.IGNORE_INDEX,
-        pad_to_multiple_of=pad_to_multiple_of,
-        padding=padding,
-        max_length=max_length,
-        **kwargs,
-    )
-    return data_collator
 
 
 class _IterableWithState:
