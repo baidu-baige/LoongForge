@@ -12,7 +12,7 @@ Validates the kernel-backend seam end to end at the autograd-function level:
 
 Run with::
 
-    PYTHONPATH=third_party/Loong-Megatron:. python -m pytest tests/test_dsa_fused_sm80.py -q
+    PYTHONPATH=third_party/Loong-Megatron:. python -m pytest tests/llm_vlm/unit/test_dsa_fused_sm80.py -q
 """
 
 import os

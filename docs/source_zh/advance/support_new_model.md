@@ -164,7 +164,7 @@ MODEL_CONFIG_REGISTRY = {
 
 ## 4. 添加 example 脚本
 
-`examples/` 与 `examples_xpu/` 的目录结构由 `tests/test_layout_paths.py` 强制校验，请遵循以下约定：
+`examples/` 与 `examples_xpu/` 的目录结构请遵循以下约定：
 
 - **一个模型一个目录。** 目录名必须是 `configs/models/` 下已有的模型目录，或是它的某个版本（如 `llama3.1` 属于 `llama3` 系列）。不要再新增 `family.x/` 这类分组目录。
 - **二层层级固定为阶段目录。** 模型目录下只允许 `pretrain/`、`finetuning/`、`checkpoint_convert/`、`eval/`、`preprocess/` 五个阶段目录，以及存放数据集夹具的 `assets/` 和 `README.md`；启动脚本不要放在模型根目录。用不到的阶段目录不必创建。

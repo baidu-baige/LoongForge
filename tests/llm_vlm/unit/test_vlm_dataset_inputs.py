@@ -11,7 +11,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def _load_functions(relative_path, names, namespace=None):

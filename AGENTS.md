@@ -21,7 +21,9 @@ bash examples/qwen2.5/pretrain/pretrain_qwen2.5_7b.sh              # LLM/VLM/dif
 bash examples/pi05/finetuning/finetune_pi05_fsdp.sh                # embodied (Torch)
 
 # Test. Details for each suite are in tests/README.md.
-python -m pytest tests/test_*.py                                   # unit and contract tests
+python -m pytest tests/test_*.py                                   # CI and release contract tests
+python -m pytest tests/llm_vlm/unit                                # Megatron-side unit tests
+python -m pytest tests/embodied/unit tests/embodied/evaluation     # Torch-side unit tests and embodied evaluation
 bash tests/llm_vlm/main_start.sh                                   # LLM/VLM E2E
 bash tests/embodied/run.sh --chip a --list_models                  # list embodied regression targets
 bash tests/embodied/run.sh --chip a --models <name> --dry_run      # validate setup, then drop --dry_run

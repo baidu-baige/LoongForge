@@ -164,7 +164,7 @@ MODEL_CONFIG_REGISTRY = {
 
 ## 4. Adding Example Scripts
 
-Keep `examples/` and `examples_xpu/` machine-checkable: `tests/test_layout_paths.py` enforces the rules below.
+Keep `examples/` and `examples_xpu/` consistent with the rules below.
 
 - **One directory per model.** The directory name must match a model directory under `configs/models/`, or name a version of one (`llama3.1` extends `llama3`). Do not add grouping directories such as a `family.x/` wildcard.
 - **Five phase directories.** A model directory contains only `pretrain/`, `finetuning/`, `checkpoint_convert/`, `eval/`, and `preprocess/`, plus `assets/` for dataset fixtures and `README.md`. Launch scripts never sit at the model root, and a model only needs the directories it actually uses.

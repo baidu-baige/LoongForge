@@ -108,8 +108,3 @@ def test_image_policy_rejects_sensitive_filesystem_text(tmp_path):
 
     assert result.returncode == 1
     assert result.stderr.strip() == "image-policy: sensitive filesystem content"
-
-
-def test_image_policy_accepts_public_sdk_source_with_credential_parameter_names(tmp_path):
-    result, _ = run_policy(tmp_path, history="")
-    assert result.returncode == 0

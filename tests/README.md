@@ -3,12 +3,16 @@
 The `tests/` directory hosts three independent, self-contained test suites. Each owns its own
 scripts, configs, and baselines — they share nothing except being rooted under `tests/`.
 
-The top level of `tests/` also holds standalone unit tests (`tests/test_*.py`), in two groups:
+The top level of `tests/` holds only the CI and release contract tests. Unit tests live with the suite
+of the engine they exercise:
 
-| Group | Files | Under test | How it runs |
+| Group | Location | Under test | How it runs |
 |---|---|---|---|
-| Repository rules and component units | the other `tests/test_*.py` | layout and dependency rules, model configs, data builders, dispatch | `python -m pytest tests/test_*.py`; `test_dp_balance_layout.py` needs multiple GPUs |
-| CI and release contract tests | `test_ci_*.py`, `test_ci_helpers.js`, `test_release_*.py`, `test_sensitive_scan.py`, `test_doc_links.py`, `test_image_policy.py` | `ci/`, `.github/scripts/`, `docker/` | `.github/workflows/workflow-lint.yml` runs them on a CPU runner without torch; the JS file uses `node --test` |
+| CI and release contract tests | `tests/test_*.py`, `tests/test_ci_helpers.js` | `ci/`, `.github/scripts/`, `docker/`, and the E2E harness | `.github/workflows/workflow-lint.yml` runs them on a CPU runner without torch; the JS file uses `node --test` |
+| Megatron-side unit tests | `tests/llm_vlm/unit/` | models, data, and checkpoint conversion used by the Megatron engine | `python -m pytest tests/llm_vlm/unit`; needs torch and Megatron, some tests need a GPU. `e2e_dsa_sm80.py`, `parallel_precision_compare.py`, and `align_multimodal.py` are manual `torchrun` scripts |
+| Torch-side unit tests | `tests/embodied/unit/`, `tests/embodied/evaluation/` | the Torch engine, embodied models, and embodied evaluation | `python -m pytest tests/embodied/unit tests/embodied/evaluation`; `unit/` needs torch, some tests need a GPU |
+
+workflow-lint also runs the torch-free `tests/llm_vlm/unit/test_vlm_dataloader_read_order.py`.
 
 CI contract tests stay in `tests/` on purpose: `tests/` is the single pytest root, and the workflow
 lists the files it runs explicitly, so being next to the code they exercise adds nothing.

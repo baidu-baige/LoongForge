@@ -44,7 +44,7 @@ def load_base_model_config(monkeypatch):
     )
 
     module_path = (
-        Path(__file__).parent.parent
+        Path(__file__).parents[3]
         / "loongforge"
         / "models"
         / "common"

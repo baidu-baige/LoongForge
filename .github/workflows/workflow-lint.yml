@@ -51,4 +51,4 @@ jobs:
             tests/test_release_request.py \
             tests/test_release_regression_harness.py \
             tests/test_sensitive_scan.py \
-            tests/test_vlm_dataloader_read_order.py
+            tests/llm_vlm/unit/test_vlm_dataloader_read_order.py
