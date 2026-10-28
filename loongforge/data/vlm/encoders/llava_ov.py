@@ -14,7 +14,7 @@ from transformers import AutoProcessor
 from typing_extensions import override
 
 from loongforge.data.vlm.length_sort_dataset import LengthPoolSortDataset
-from loongforge import constants
+from loongforge.data import IGNORE_INDEX, TrainingPhase
 
 from ..task_encoder_base import BaseTaskSample
 from .vlm import (
@@ -41,7 +41,7 @@ class LLaVAOv15TaskEncoder(VLMTaskEncoder):
 
     def encode_vqa(self, sample: VQASample) -> BaseTaskSample:
         """Encode pretrain sample in Qwen2VL style."""
-        if self.config.training_phase == constants.TrainingPhase.PRETRAIN:
+        if self.config.training_phase == TrainingPhase.PRETRAIN:
             if self.config.add_question_in_pretrain:
                 text = (sample.context + sample.answers).replace(
                     "<image>", IMAGE_TOKEN_WITH_TAGS
@@ -52,7 +52,7 @@ class LLaVAOv15TaskEncoder(VLMTaskEncoder):
             input_ids, target, imgs, image_grid_thw, attn_mask = self._process(
                 sample.image, text
             )
-        elif self.config.training_phase == constants.TrainingPhase.SFT:
+        elif self.config.training_phase == TrainingPhase.SFT:
 
             if len(sample.answers) < 1:
                 raise ValueError("sample.answers < 1!")
@@ -109,7 +109,7 @@ class LLaVAOv15TaskEncoder(VLMTaskEncoder):
             input_ids, _, imgs, image_grid_thw, attn_mask = self._process(
                 sample.image, text, add_special_tokens=False
             )
-            target = torch.ones_like(input_ids) * constants.IGNORE_INDEX
+            target = torch.ones_like(input_ids) * IGNORE_INDEX
             answers = self.tokenizer.tokenize(sample.answers, add_special_tokens=False)
             target[-len(answers) - 1 : -1] = torch.tensor(answers)
             target[-1] = input_ids[-1]

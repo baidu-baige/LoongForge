@@ -103,51 +103,8 @@ def on_train_begin(model, ctx) -> None:
 
 
 def on_after_data_iterators_initialized(model, *, training_args, completed_steps, optimizer, ctx) -> None:
-    """Hook after dataloader iterators are initialized."""
-    from loongforge.engines.torch.distributed.utils import unwrap_model
-    raw = unwrap_model(model)
-    hook = getattr(raw, "on_after_data_iterators_initialized", None)
-    if callable(hook):
-        hook(
-            args=training_args,
-            completed_steps=completed_steps,
-            optimizer=optimizer,
-        )
+    """Hook after dataloader iterators are initialized; model-specific methods override it."""
 
 
 def on_after_train_batch_fetch(model, batch, *, training_args, completed_steps, micro_step) -> None:
-    """Hook after a training batch is fetched.
-
-    A model hook may return ``(seed, cpu_burn)`` to request an RNG reset. The
-    reset is applied here so models stay free of global RNG side effects.
-    """
-    from loongforge.engines.torch.distributed.utils import unwrap_model
-    raw = unwrap_model(model)
-    hook = getattr(raw, "on_after_train_batch_fetch", None)
-    if not callable(hook):
-        return
-    rng_reset = hook(
-        args=training_args,
-        completed_steps=completed_steps,
-        micro_step=micro_step,
-        batch=batch,
-    )
-    if rng_reset is None:
-        return
-    import torch
-
-    from loongforge.engines.torch.initialize import set_seed
-
-    seed, cpu_burn = rng_reset
-    seed, cpu_burn = int(seed), int(cpu_burn)
-    if cpu_burn < 0:
-        raise ValueError("RNG reset cpu_burn must be >= 0")
-    set_seed(seed)
-    if cpu_burn:
-        torch.rand(cpu_burn)
-    logger.info(
-        "%s reset training RNG after first batch fetch: seed=%d cpu_burn=%d",
-        raw.__class__.__name__,
-        seed,
-        cpu_burn,
-    )
+    """Hook after a training batch is fetched; model-specific methods override it."""

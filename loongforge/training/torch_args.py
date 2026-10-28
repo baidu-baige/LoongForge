@@ -1722,15 +1722,10 @@ def parse_train_args():
     return training_args, model_cfg, data_cfg
 
 
-# Alias used by the composition root.
-parse = parse_train_args
-
-
 __all__ = [
     "TrainingArgs",
     "add_args_from_dataclass",
     "build_arg_parser",
-    "parse",
     "parse_train_args",
     "validate",
 ]

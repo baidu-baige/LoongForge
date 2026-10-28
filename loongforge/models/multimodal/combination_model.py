@@ -9,10 +9,10 @@ from typing import Any, Dict, Optional, Tuple
 
 import torch
 from torch import Tensor
-from .encoder_model import OmniEncoderModel
-from loongforge.models.base.context_parallel import get_inputs_on_this_cp_rank
+from .encoder_model import MultimodalEncoderModel
+from loongforge.models.common.context_parallel import get_inputs_on_this_cp_rank
 from transformers.models.auto.modeling_auto import AutoModel
-from loongforge.models.base import BaseMegatronModule, BaseModelConfig
+from loongforge.models.common import BaseMegatronModule, BaseModelConfig
 from megatron.core import InferenceParams, tensor_parallel
 from megatron.core import parallel_state as mpu
 from loongforge.models.multimodal.runtime import MultimodalRuntime
@@ -20,8 +20,8 @@ from megatron.core.pipeline_parallel.fine_grained_activation_offload import (
     fine_grained_offloading_init_chunk_handler,
 )
 
-class OmniCombinationModel(BaseMegatronModule):
-    """Omni multimodal combination model"""
+class MultimodalCombinationModel(BaseMegatronModule):
+    """Multimodal combination model"""
     def __init__(
         self,
         config: BaseModelConfig,
@@ -59,7 +59,7 @@ class OmniCombinationModel(BaseMegatronModule):
         self.disable_param_offloading = True
 
         if config.image_encoder is not None and add_encoder:
-            self.encoder_model = OmniEncoderModel(
+            self.encoder_model = MultimodalEncoderModel(
                 config,
                 vocab_size=language_vocab_size,
                 max_sequence_length=language_max_sequence_length,
@@ -101,7 +101,7 @@ class OmniCombinationModel(BaseMegatronModule):
             )
         else:
             raise ValueError(
-                "OmniCombinationModel requires a foundation_config to initialize foundation_model."
+                "MultimodalCombinationModel requires a foundation_config to initialize foundation_model."
             )
 
         self.share_embeddings_and_output_weights = (
@@ -227,6 +227,95 @@ class OmniCombinationModel(BaseMegatronModule):
         torch.distributed.broadcast(tensor, group=group, src=src)
 
         return tensor
+
+    def hetero_encoder_forward(self, batch_list, round_idx):
+        """Encode this TP rank's micro-batch of one full-hetero-DP round.
+
+        Every TP rank embeds the text of all ``batch_list`` entries, because the word
+        embedding is vocab-parallel. The outputs stay in ``vit_contexts`` until
+        ``hetero_encoder_backward`` runs for the same round.
+        """
+        input_embeds_list = []
+        for i in range(len(batch_list)):
+            input_embeds = self.encoder_model.text_forward(
+                batch_list[i]["tokens"],
+                batch_list[i]["position_ids"]
+            )
+            input_embeds_list.append(input_embeds)
+
+        batch_id = mpu.get_tensor_model_parallel_rank()
+        (
+            local_images,
+            local_image_grid_thw,
+            local_pixel_values_videos,
+            local_video_grid_thw,
+            local_input_ids,
+            local_attn_mask,
+            local_labels,
+            local_cu_lengths,
+            local_max_lengths,
+            local_position_ids,
+            local_loss_mask,
+            local_packed_seq_params,
+        ) = batch_list[batch_id].values()
+
+        (
+            combined_embeddings,
+            decode_input,
+            visual_pos_masks,
+            deepstack_visual_embeds,
+        ) = self.encoder_model(
+            input_ids=local_input_ids,
+            position_ids=local_position_ids,
+            image_inputs=dict(
+                images=local_images,
+                image_grid_thw=local_image_grid_thw,
+            ) if local_images is not None else None,
+            video_inputs=dict(
+                pixel_values_videos=local_pixel_values_videos,
+                video_grid_thw=local_video_grid_thw,
+            ) if local_pixel_values_videos is not None else None,
+            inference_params=None,
+            inputs_embeds=input_embeds_list[batch_id],
+            enable_encoder_hetero_dp=True,
+        )
+
+        self.vit_contexts.setdefault(round_idx, {
+            "local_embedding": combined_embeddings,
+            "grads": None,
+            "local_visual_pos_masks": visual_pos_masks,
+            "local_deepstack_visual_embeds": deepstack_visual_embeds,
+            "local_deepstack_visual_embeds_grads": None,
+        })
+        return combined_embeddings, visual_pos_masks, deepstack_visual_embeds
+
+    def hetero_encoder_backward(self, round_idx, grads, deepstack_grads):
+        """Backpropagate one full-hetero-DP round through the encoder.
+
+        ``grads`` and ``deepstack_grads`` are this rank's slices of the decoder
+        gradients; ``deepstack_grads`` is None when the round has no DeepStack outputs.
+        """
+        ctx = self.vit_contexts[round_idx]
+        ctx["grads"] = grads
+        if deepstack_grads is not None:
+            ctx["local_deepstack_visual_embeds_grads"] = deepstack_grads
+
+        backward_tensors = [ctx["local_embedding"]]
+        backward_grads = [ctx["grads"]]
+        if ctx["local_deepstack_visual_embeds_grads"] is not None:
+            backward_tensors += ctx["local_deepstack_visual_embeds"]
+            backward_grads += ctx["local_deepstack_visual_embeds_grads"]
+
+        torch.autograd.backward(
+            tensors=backward_tensors,
+            grad_tensors=backward_grads,
+            retain_graph=False,
+        )
+        del self.vit_contexts[round_idx]
+
+    def clear_hetero_contexts(self):
+        """Drop the encoder contexts left from this step."""
+        self.vit_contexts.clear()
 
     def forward(
         self,
@@ -595,12 +684,11 @@ class OmniCombinationModel(BaseMegatronModule):
             self.preprocess_for_fine_grained_offloading()
 
         """Build the schedule plan for the model."""
-        if self.runtime.schedule_plan_factory is None:
-            raise RuntimeError(
-                "build_schedule_plan needs the schedule_plan_factory passed by the training method"
-            )
+        from loongforge.models.multimodal.model_chunk_schedule_plan import (
+            TransformerModelChunkSchedulePlan,
+        )
 
-        return self.runtime.schedule_plan_factory(
+        return TransformerModelChunkSchedulePlan(
             self,
             image_inputs=image_inputs,
             video_inputs=video_inputs,

@@ -16,7 +16,7 @@ from loongforge.data.embodied.vlda.data_configuration_vlda import VLDADataConfig
 from loongforge.data.embodied.vlda.vlda_dataset import load_norm_stats
 from loongforge.evaluation.embodied.factories.registry import register_factory
 from loongforge.evaluation.embodied.servers.loongforge_policy import PredictActionModelSpec
-from loongforge.models.embodied.vlda.configuration_vlda import VLDAModelConfig
+from loongforge.models.embodied.vlda.model_configuration_vlda import VLDAModelConfig
 
 
 @torch.no_grad()

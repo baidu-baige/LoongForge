@@ -3,9 +3,10 @@
 
 """Batch layout registry for DP load balancing.
 
-``dp_balance`` owns the sample reordering algorithm and the built-in batch
-layouts. The training method installs or overrides the layout for its model
-family before the loop starts. A layout supplies two callbacks:
+``dp_balance`` owns the sample reordering algorithm. Each packed batch format
+defines its layout in ``loongforge/data`` (for example
+``data/vlm/dp_balance_layout.py``), and the training method installs the layout
+for its model family before the loop starts. A layout supplies two callbacks:
 
 * ``reorder``: redistribute one packed micro-batch across DP ranks.
 * ``cumulative_lengths``: cumulative sequence offsets used by the warm-up

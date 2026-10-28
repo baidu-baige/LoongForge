@@ -23,7 +23,7 @@ import loongforge.data.vlm.dataloader as dataloader_provider
 from loongforge.data.vlm.task_encoder_base import BaseTaskEncoder
 from loongforge.data.vlm.encoders.kimi import KimiTaskEncoder
 from loongforge.data.vlm.encoders.vlm import VLMTaskEncoder
-from loongforge.models.multimodal.encoder_model import OmniEncoderModel
+from loongforge.models.multimodal.encoder_model import MultimodalEncoderModel
 from loongforge.data.chat_templates.base import DataRoles
 
 
@@ -329,7 +329,7 @@ class OmniImageFeatureValidationTest(unittest.TestCase):
 
     @staticmethod
     def _encoder_with_features(feature_count):
-        encoder = object.__new__(OmniEncoderModel)
+        encoder = object.__new__(MultimodalEncoderModel)
         encoder.image_encoder = Mock()
         encoder.image_encoder.config = SimpleNamespace(image_token_id=99)
         encoder.image_encoder.return_value = (

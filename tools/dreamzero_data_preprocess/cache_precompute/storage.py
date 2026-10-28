@@ -16,7 +16,7 @@ from typing import Any
 import numpy as np
 import torch
 
-from loongforge.models.embodied.dreamzero.precomputed_cache.artifact import (
+from loongforge.data.embodied.dreamzero.precomputed_artifact import (
     TENSOR_SHARDS_FORMAT,
     sha256_file,
     tensor_to_storage_array,

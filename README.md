@@ -387,11 +387,11 @@ LoongForge/
 │   │   └── torch/                #   Embodied Torch-native runtime
 │   ├── models/                   # Unified model abstractions
 │   │   ├── catalog.py            # Model names, engines, default YAMLs
-│   │   ├── language/             #   LLM backbones (LLaMA, Qwen, DeepSeek, ...)
-│   │   ├── vision/               #   Vision encoders (ViT, Qwen-VL, InternVL, ...)
+│   │   ├── foundation/           #   LLM backbones (LLaMA, Qwen, DeepSeek, ...)
+│   │   ├── encoder/              #   Vision encoders (ViT, Qwen-VL, InternVL, ...)
 │   │   ├── multimodal/           #   Multi-modal composition
 │   │   ├── diffusion/            #   Diffusion models (WAN, Qwen-Image)
-│   │   ├── base/                 #   Shared layers and utilities
+│   │   ├── common/               #   Shared layers and utilities
 │   │   └── embodied/             #   Embodied model implementations
 │   ├── data/                     # Data pipelines and chat templates
 │   │   ├── llm/ vlm/ embodied/ diffusion/

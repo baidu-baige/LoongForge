@@ -302,7 +302,7 @@ Trainer 模块负责训练生命周期编排，包括分布式上下文初始化
 
 ### 4.1 Trainer 选择
 
-通过 `--trainer-type` 选择训练器，可选值为 `loongforge/training/registry.py` 中 `TORCH_TRAINER_TYPES` 的键，每个键对应 `loongforge/training/embodied/` 下的一个训练 method 模块，以及 `loongforge/training/embodied/optimizations/` 下可选的单模型 optimization 包。默认的 `FinetuneTrainer` 适用于标准单数据流的监督微调；若涉及多数据流、特殊 loss 组合或非标准 step 调度，可在 `loongforge/training/embodied/` 下新增 method 模块，并登记到 `TORCH_TRAINER_TYPES`。
+通过 `--trainer-type` 选择训练器，可选值为 `loongforge/train.py` 中 `TORCH_TRAINER_TYPES` 的键，每个键对应 `loongforge/training/embodied/` 下的一个训练 method 模块，以及 `loongforge/training/embodied/custom/` 下可选的单模型定制包。默认的 `FinetuneTrainer` 适用于标准单数据流的监督微调。若涉及多数据流或特殊 loss 组合，可在 `loongforge/training/embodied/` 下新增 method 模块。若需要非标准 step 调度，可在 `loongforge/training/embodied/custom/<model>/` 下新增 `factory.py`，由其中的 `build_hooks` 返回 `TrainerHooks`。新的训练器类型需登记到 `TORCH_TRAINER_TYPES`。
 
 ### 4.2 分布式策略
 

@@ -1,4 +1,4 @@
-_target_: loongforge.models.vision.RiceVisionConfig
+_target_: loongforge.models.encoder.RiceVisionConfig
 
 num_layers: 24
 hidden_size: 1024

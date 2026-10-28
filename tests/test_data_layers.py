@@ -22,14 +22,12 @@ DATA = PKG / "data"
 CHAT_TEMPLATES = DATA / "chat_templates"
 FAMILIES = ("llm", "vlm", "embodied", "diffusion")
 GLOBAL_READERS = {"get_args", "get_tokenizer", "get_model_config", "get_chat_template"}
-# ``data/`` may import these engine modules only. The SFT loader needs the
-# Megatron chunkpipe batch sampler; keep the exception explicit instead of
-# adding a dependency-injection seam.
-DATA_ENGINE_ALLOWED = {
-    ("loongforge", "engines", "megatron", "distributed", "chunkpipe"): {"loongforge/data/llm/dataloader.py"},
-}
-# Declarative ``data/`` packages that ``engines/`` may read.
-ENGINE_DATA_ALLOWED = (("loongforge", "data", "chat_templates"),)
+# Declarative ``data/`` packages and names that ``engines/`` may read.
+ENGINE_DATA_ALLOWED = (
+    ("loongforge", "data", "chat_templates"),
+    ("loongforge", "data", "IGNORE_INDEX"),
+    ("loongforge", "data", "TrainingPhase"),
+)
 # Backend state that ``data/`` must receive as arguments instead of reading it.
 DATA_BACKEND_STATE_BANNED = (
     ("megatron", "core", "parallel_state"),
@@ -50,7 +48,7 @@ TORCH_BACKEND_MIXINS = (
 )
 # ``engines/`` may import these generic model packages only.
 ENGINE_MODEL_ALLOWED = (
-    ("loongforge", "models", "base"),
+    ("loongforge", "models", "common"),
     ("loongforge", "models", "catalog"),
     ("loongforge", "models", "multimodal"),
 )
@@ -58,6 +56,8 @@ ENGINE_MODEL_ALLOWED = (
 
 def _is_model_implementation(module_name):
     """True when a ``models/`` module denotes an implementation, not a contract."""
+    if "configuration" in module_name:
+        return False
     return (
         module_name.startswith("modeling_")
         or module_name.endswith(("_model", "_layer_spec"))
@@ -189,19 +189,12 @@ class LayeringTest(unittest.TestCase):
                     for prefix in others:
                         self.assertFalse(_starts_with(target, prefix), f"{_rel(path)} imports {'.'.join(target)}")
 
-    def test_data_imports_no_training_and_limited_engines(self):
-        banned = [("loongforge", layer) for layer in ("training", "evaluation")]
+    def test_data_imports_no_engines_or_training(self):
+        banned = [("loongforge", layer) for layer in ("engines", "training", "evaluation")]
         for path in _py_files(DATA):
             for target, _, _ in _imports(path):
                 for prefix in banned:
                     self.assertFalse(_starts_with(target, prefix), f"{_rel(path)}: {'.'.join(target)}")
-                if not _starts_with(target, ("loongforge", "engines")):
-                    continue
-                allowed = any(
-                    _starts_with(target, prefix) and (files is None or _rel(path) in files)
-                    for prefix, files in DATA_ENGINE_ALLOWED.items()
-                )
-                self.assertTrue(allowed, f"{_rel(path)} imports {'.'.join(target)}")
 
     def test_data_do_not_import_model_implementations(self):
         for path in _py_files(DATA):
@@ -321,26 +314,6 @@ class LayeringTest(unittest.TestCase):
                             _starts_with(target, prefix),
                             f"{_rel(path)} imports {'.'.join(target)}",
                         )
-
-    def test_models_and_engines_do_not_import_optimizations(self):
-        banned = (("loongforge", "training", "embodied", "optimizations"),)
-        for layer in ("models", "engines"):
-            for path in _py_files(PKG / layer):
-                for target in _runtime_imports(path):
-                    for prefix in banned:
-                        self.assertFalse(
-                            _starts_with(target, prefix),
-                            f"{_rel(path)} imports {'.'.join(target)}",
-                        )
-
-    def test_embodied_optimizations_do_not_import_other_families(self):
-        for path in _py_files(PKG / "training" / "embodied" / "optimizations"):
-            for target in _runtime_imports(path):
-                for family in ("llm", "vlm", "diffusion"):
-                    self.assertFalse(
-                        _starts_with(target, ("loongforge", "training", family)),
-                        f"{_rel(path)} imports {'.'.join(target)}",
-                    )
 
     def test_evaluation_does_not_import_training(self):
         for path in _py_files(PKG / "evaluation"):

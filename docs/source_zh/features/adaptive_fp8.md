@@ -161,7 +161,7 @@ Dense 模块类型（`layernorm_column` / `column` / `row` / `duplicated`）使�
 
 ```yaml
 # 示例：configs/models/deepseek_v3/deepseek_v3_fp8_sel.yaml
-_target_: loongforge.models.language.DeepseekConfig
+_target_: loongforge.models.foundation.DeepseekConfig
 defaults:
   - deepseek_v3
   - _self_

@@ -387,11 +387,11 @@ LoongForge/
 │   │   └── torch/                #   具身 Torch-native 运行时
 │   ├── models/                   # 统一的模型抽象层
 │   │   ├── catalog.py            # 模型名、引擎与默认 YAML
-│   │   ├── language/             #   LLM 主干（LLaMA、Qwen、DeepSeek、...）
-│   │   ├── vision/               #   视觉编码器（ViT、Qwen-VL、InternVL、...）
+│   │   ├── foundation/           #   LLM 主干（LLaMA、Qwen、DeepSeek、...）
+│   │   ├── encoder/              #   视觉编码器（ViT、Qwen-VL、InternVL、...）
 │   │   ├── multimodal/           #   多模态组合
 │   │   ├── diffusion/            #   Diffusion 模型（WAN、Qwen-Image）
-│   │   ├── base/                 #   公共 Layer 与工具
+│   │   ├── common/               #   公共 Layer 与工具
 │   │   └── embodied/             #   具身模型实现
 │   ├── data/                     # 数据流水线与对话模板
 │   │   ├── llm/ vlm/ embodied/ diffusion/

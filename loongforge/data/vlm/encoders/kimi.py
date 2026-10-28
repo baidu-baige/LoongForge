@@ -8,7 +8,7 @@ import torch
 from loongforge.data.vlm.encoders.vlm import VLMTaskEncoder
 from typing import Optional, Tuple
 
-from loongforge import constants
+from loongforge.data import IGNORE_INDEX
 from loongforge.data.chat_templates.base import DataRoles
 from loongforge.data.chat_templates.hf import HFChatTemplate
 from loongforge.data.chat_templates.plugins.base import Placeholder
@@ -219,7 +219,7 @@ class KimiTaskEncoder(VLMTaskEncoder):
                     num_tokens = feature_lengths[image_idx]
                     # Add num_tokens copies of media_content_id
                     new_input_ids.extend([media_content_id] * num_tokens)
-                    new_target.extend([constants.IGNORE_INDEX] * num_tokens)
+                    new_target.extend([IGNORE_INDEX] * num_tokens)
                     new_attn_mask.extend(
                         [False] * num_tokens
                     )  # Not masked for attention
@@ -331,11 +331,11 @@ class KimiTaskEncoder(VLMTaskEncoder):
 
         # Mask everything before answer
         if answer_start_pos is not None:
-            target[:answer_start_pos] = constants.IGNORE_INDEX
+            target[:answer_start_pos] = IGNORE_INDEX
 
         # Also mask the final <|im_end|> token
         if input_ids_list[-1] == im_end_id:
-            target[-1] = constants.IGNORE_INDEX
+            target[-1] = IGNORE_INDEX
 
         return target
 

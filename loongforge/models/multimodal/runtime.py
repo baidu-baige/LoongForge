@@ -4,7 +4,7 @@
 """Backend bindings a multimodal model receives instead of importing the engine.
 
 The training method builds this object from the engine and passes it to
-``omni_model_provider``; the model only calls the supplied callables.
+``multimodal_model_provider``; the model only calls the supplied callables.
 """
 
 from dataclasses import dataclass
@@ -23,5 +23,3 @@ class MultimodalRuntime:
     parallel_state_switch: Callable[[str], None]
     #: DP-balanced vision encoder forward, or None when it is disabled.
     vit_balance: Optional[Callable[..., Any]] = None
-    #: Factory building the fine-grained EP schedule plan, or None when unused.
-    schedule_plan_factory: Optional[Callable[..., Any]] = None

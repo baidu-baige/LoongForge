@@ -19,7 +19,7 @@ from loongforge.data.embodied.fastwam.transforms.fastwam_transform import (
     FastWAMLinearNormalizeTransform,
     _fastwam_linear_params,
 )
-from loongforge.models.embodied.fastwam.configuration_fastwam import FastWAMModelConfig
+from loongforge.models.embodied.fastwam.modeling_configuration_fastwam import FastWAMModelConfig
 
 
 def _stats(lo, hi, extra=None):

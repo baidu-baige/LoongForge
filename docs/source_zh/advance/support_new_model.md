@@ -11,7 +11,7 @@
 
 ```yaml
 # 继承该模型系列的通用配置类
-_target_: loongforge.models.language.LLaMAConfig
+_target_: loongforge.models.foundation.LLaMAConfig
 
 # 必须是 LanguageModelFamilies 中的值，决定模型 family 和训练方法
 model_type: "llama"
@@ -53,7 +53,7 @@ VLM 可以看作 **ViT + 投影层 + LLM**。添加新 VLM 模型时，LLM 部�
 
 ```yaml
 # 通过此路径找到 Qwen2VisionRMSNormConfig 类，使用以下参数（如 num_layers、hidden_size 等）创建其实例
-_target_: loongforge.models.vision.Qwen2VisionRMSNormConfig
+_target_: loongforge.models.encoder.Qwen2VisionRMSNormConfig
 
 num_layers: 32
 hidden_size: 1280
@@ -67,14 +67,14 @@ image_size: [1344, 1344]
 ```
 
 ### 2.2 投影层配置
-Projector 的实现与 OmniEncoder 相互关联。每种 VLM 模型配备专用的 Projector。你需要选择 Projector 类型，其维度信息将在模型组合配置中指定。
+Projector 的实现与 MultimodalEncoder 相互关联。每种 VLM 模型配备专用的 Projector。你需要选择 Projector 类型，其维度信息将在模型组合配置中指定。
 
 * **路径**：configs/models/image_projector/<projector_name>.yaml
 * **示例**：configs/models/image_projector/qwen_mlp_adapter.yaml
 
 ```yaml
 # 选择 image_projector 类型
-_target_: loongforge.models.vision.MLPAdapterConfig
+_target_: loongforge.models.encoder.MLPAdapterConfig
 
 # 修改组件特定的配置参数
 normalization: "RMSNorm"
@@ -176,7 +176,7 @@ MODEL_CONFIG_REGISTRY = {
 
 新增架构时，除上述步骤外还需要在代码中注册：
 
-- **模型包**：在 `loongforge/models/language/`、`loongforge/models/vision/` 或 `loongforge/models/diffusion/` 下实现配置类和模型类。
-- **AutoModel 注册**（LLM 和视觉组件）：在 `loongforge/models/language/__init__.py` 或 `loongforge/models/vision/__init__.py` 中添加 `AutoModel.register(<Config>, <Model>)`。YAML 的 `_target_` 选择配置类，配置类再选择模型。
-- **模型 family**：把新的 YAML `model_type` 登记到 `loongforge/constants.py` 的 `LanguageModelFamilies`、`VisionLanguageModelFamilies` 或 `DiffusionModelFamilies`。
-- **训练方法**（仅当该 family 有专用方法时）：在 `loongforge/training/registry.py` 中添加 `FAMILY_GROUP` 和 `METHOD_REGISTRY` 条目，配方文件放在 `loongforge/training/<family>/` 下。
+- **模型包**：在 `loongforge/models/foundation/`、`loongforge/models/encoder/` 或 `loongforge/models/diffusion/` 下实现配置类和模型类。
+- **AutoModel 注册**（LLM 和视觉组件）：在 `loongforge/models/foundation/__init__.py` 或 `loongforge/models/encoder/__init__.py` 中添加 `AutoModel.register(<Config>, <Model>)`。YAML 的 `_target_` 选择配置类，配置类再选择模型。
+- **模型 family**：把新的 YAML `model_type` 登记到 `loongforge/models/catalog.py` 的 `LanguageModelFamilies`、`VisionLanguageModelFamilies` 或 `DiffusionModelFamilies`。
+- **训练方法**（仅当该 family 有专用方法时）：在 `loongforge/train.py` 中添加 `FAMILY_GROUP` 和 `METHOD_REGISTRY` 条目，配方文件放在 `loongforge/training/<family>/` 下。

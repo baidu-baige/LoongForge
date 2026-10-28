@@ -11,7 +11,6 @@ frozen-module mode management.
 
 from __future__ import annotations
 
-import logging
 from collections import deque
 from dataclasses import fields
 from typing import Any
@@ -28,13 +27,11 @@ from transformers.feature_extraction_utils import BatchFeature
 
 from loongforge.models.embodied.registry import register_model
 
-from .configuration_dreamzero import DreamZeroConfig
+from .model_configuration_dreamzero import DreamZeroConfig
 from .modules.action_head_tf import WANPolicyHead, WANPolicyHeadConfig
 from .precomputed_cache import build_precomputed_cache_config
 
 __all__ = ["DreamZeroPolicy", "DreamZeroConfig", "build_action_head_config"]
-
-logger = logging.getLogger(__name__)
 
 
 def build_action_head_config(model_config: DreamZeroConfig) -> WANPolicyHeadConfig:
@@ -171,8 +168,6 @@ class DreamZeroPolicy(PreTrainedPolicy):
         )
         # Closed-loop inference: per-episode action queue.
         self._action_queue: deque[Tensor] = deque(maxlen=config.n_action_steps)
-        self._initial_param_rounding_done = False
-        self._train_rng_reset_after_first_batch_done = False
 
     @classmethod
     def from_pretrained(cls, cfg: Any) -> "DreamZeroPolicy":
@@ -249,142 +244,6 @@ class DreamZeroPolicy(PreTrainedPolicy):
         if mode:
             self.set_frozen_modules_to_eval_mode()
         return self
-
-    def on_after_data_iterators_initialized(
-        self,
-        *,
-        args: Any,
-        completed_steps: int,
-        optimizer: torch.optim.Optimizer | None,
-    ) -> None:
-        """Apply one-time DreamZero FSDP initialization compatibility rounding."""
-        del args
-        if optimizer is None or self._initial_param_rounding_done:
-            return
-        if completed_steps != 0:
-            self._initial_param_rounding_done = True
-            return
-
-        dtype_name = self.config.fsdp_initial_param_rounding_dtype
-        target_dtype = self._resolve_initial_param_rounding_dtype(dtype_name)
-        if target_dtype is None:
-            self._initial_param_rounding_done = True
-            return
-
-        rounded_params = 0
-        rounded_numel = 0
-        fallback_params = 0
-        fallback_numel = 0
-        skipped_params = 0
-
-        with torch.no_grad():
-            for group in optimizer.param_groups:
-                for param in group.get("params", []):
-                    if param is None or not param.requires_grad:
-                        continue
-                    if not torch.is_floating_point(param):
-                        skipped_params += 1
-                        continue
-
-                    local = self._mutable_local_tensor(param)
-                    if local is not None:
-                        if not torch.is_floating_point(local):
-                            skipped_params += 1
-                            continue
-                        local.copy_(local.to(dtype=target_dtype).to(dtype=local.dtype))
-                        rounded_params += 1
-                        rounded_numel += int(local.numel())
-                        continue
-
-                    param.data.copy_(
-                        param.data.to(dtype=target_dtype).to(dtype=param.dtype)
-                    )
-                    fallback_params += 1
-                    fallback_numel += int(param.numel())
-
-        self._initial_param_rounding_done = True
-
-        rank_zero = not torch.distributed.is_available() or not torch.distributed.is_initialized()
-        if rank_zero or torch.distributed.get_rank() == 0:
-            logger.info(
-                "DreamZero initial FSDP param rounding: dtype=%s "
-                "local_params=%d local_numel=%d fallback_params=%d "
-                "fallback_numel=%d skipped=%d",
-                str(target_dtype).replace("torch.", ""),
-                rounded_params,
-                rounded_numel,
-                fallback_params,
-                fallback_numel,
-                skipped_params,
-            )
-
-    @staticmethod
-    def _resolve_initial_param_rounding_dtype(dtype_name: Any) -> torch.dtype | None:
-        """Resolve the configured initial parameter-rounding dtype."""
-        if dtype_name is None:
-            return None
-        mode = str(dtype_name).strip().lower()
-        if mode in {"", "0", "false", "no", "off", "none", "null"}:
-            return None
-        if mode in {"1", "true", "yes", "on", "bf16", "bfloat16"}:
-            return torch.bfloat16
-        if mode in {"fp16", "float16", "half"}:
-            return torch.float16
-        raise ValueError(
-            "DreamZeroConfig.fsdp_initial_param_rounding_dtype must be one of "
-            "null/bf16/bfloat16/fp16/float16"
-        )
-
-    @staticmethod
-    def _mutable_local_tensor(param: torch.Tensor) -> torch.Tensor | None:
-        """Return the mutable local tensor backing a regular or DTensor parameter."""
-        data = param.data
-        local = getattr(data, "_local_tensor", None)
-        if torch.is_tensor(local):
-            return local
-        detached = param.detach()
-        local = getattr(detached, "_local_tensor", None)
-        if torch.is_tensor(local):
-            return local
-        if torch.is_tensor(data) and not hasattr(data, "to_local"):
-            return data
-        return None
-
-    def on_after_train_batch_fetch(
-        self,
-        *,
-        args: Any,
-        completed_steps: int,
-        micro_step: int,
-        batch: Any = None,
-    ) -> tuple[int, int] | None:
-        """Decide DreamZero's first-forward RNG policy after the first batch fetch.
-
-        Returns ``(seed, cpu_burn)`` when the training loop should reset the RNG,
-        or ``None`` when no reset is needed. Applying the reset is the caller's
-        job: models do not mutate global RNG state.
-        """
-        del micro_step, batch
-        if self._train_rng_reset_after_first_batch_done:
-            return None
-        if not self.config.train_rng_reset_after_first_batch:
-            self._train_rng_reset_after_first_batch_done = True
-            return None
-        if args.resume or completed_steps != 0:
-            self._train_rng_reset_after_first_batch_done = True
-            return None
-
-        seed = self.config.train_rng_seed
-        if seed is None:
-            seed = int(args.seed or 0)
-        seed = int(seed)
-
-        cpu_burn = int(self.config.train_rng_cpu_burn)
-        if cpu_burn < 0:
-            raise ValueError("DreamZeroConfig.train_rng_cpu_burn must be >= 0")
-
-        self._train_rng_reset_after_first_batch_done = True
-        return seed, cpu_burn
 
     def forward(
         self, batch: dict[str, Tensor], reduction: str = "mean"

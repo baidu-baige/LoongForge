@@ -47,7 +47,7 @@ ViT 对单张图像的自注意力计算代价与视觉 Token 数量的平方成
 --use-vit-dp-balance
 ```
 
-此功能适用于使用 `OmniEncoderModel` 架构的 **VLM 模型**（例如 Qwen2-VL、Qwen3-VL 及其他基于 `image_grid_thw` 的 ViT 编码器模型）。
+此功能适用于使用 `MultimodalEncoderModel` 架构的 **VLM 模型**（例如 Qwen2-VL、Qwen3-VL 及其他基于 `image_grid_thw` 的 ViT 编码器模型）。
 
 它可以**独立使用，也可以与** VLM 级别的 DP 负载均衡（`--use-vlm-dp-balance`）**组合使用**。
 
@@ -66,10 +66,10 @@ ViT 对单张图像的自注意力计算代价与视觉 Token 数量的平方成
 
 ### 4.1 入口点与集成
 
-ViT DP 均衡通过 `dp_balance_vit_encoder()`（定义在 `vit_balance.py` 中）在 `OmniEncoderModel.encode_images()` 内部调用。该函数包装了 ViT 模块调用：
+ViT DP 均衡通过 `dp_balance_vit_encoder()`（定义在 `vit_balance.py` 中）在 `MultimodalEncoderModel.encode_images()` 内部调用。该函数包装了 ViT 模块调用：
 
 ```python
-### Inside OmniEncoderModel.encode_images():
+### Inside MultimodalEncoderModel.encode_images():
 if args.use_vit_dp_balance:
     pixel_embeds, window_index, deepstack = dp_balance_vit_encoder(
         vit_module, pixel_values, image_grid_thw
@@ -190,10 +190,10 @@ Compute reverse_reorder_plan from forward plan
 ---
 
 ## 5. 支持的模型
-该功能集成在 `OmniEncoderModel.encode_images()` 中，支持所有使用基于 `image_grid_thw` 的 ViT 编码器的 VLM 模型，包括：
+该功能集成在 `MultimodalEncoderModel.encode_images()` 中，支持所有使用基于 `image_grid_thw` 的 ViT 编码器的 VLM 模型，包括：
 
 * **Qwen2-VL** / **Qwen3-VL**
-* 其他基于 `OmniEncoderModel` 架构构建的模型
+* 其他基于 `MultimodalEncoderModel` 架构构建的模型
 
 ---
 

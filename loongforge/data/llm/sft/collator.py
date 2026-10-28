@@ -12,7 +12,7 @@ from transformers.utils import PaddingStrategy
 
 import torch
 
-from loongforge import constants
+from loongforge.data import IGNORE_INDEX
 
 if TYPE_CHECKING:
     from transformers import PreTrainedTokenizerBase
@@ -31,7 +31,7 @@ class DataCollatorForSupervisedDataset:
     padding: Optional[Union[bool, str, "PaddingStrategy"]] = None
     max_length: Optional[int] = None
     pad_to_multiple_of: Optional[int] = None
-    label_pad_token_id: int = constants.IGNORE_INDEX
+    label_pad_token_id: int = IGNORE_INDEX
     return_tensors: str = "pt"
     chunkpipe_base_length: Optional[int] = None
     chunkpipe_mtp_num_layers: int = 0
@@ -205,7 +205,7 @@ def build_sft_data_collator(
 
     data_collator = collator_cls(
         tokenizer=tokenizer.tokenizer,
-        label_pad_token_id=constants.IGNORE_INDEX,
+        label_pad_token_id=IGNORE_INDEX,
         pad_to_multiple_of=pad_to_multiple_of,
         padding=padding,
         max_length=max_length,

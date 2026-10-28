@@ -15,7 +15,7 @@ from megatron.training.arguments import validate_args
 from packaging.version import Version as PkgVersion
 
 from loongforge.engines.megatron.tokenizer import get_default_tokenizer
-from loongforge import constants
+from loongforge.models.catalog import VisionLanguageModelFamilies
 from megatron.core.utils import is_torch_min_version
 from megatron.training.utils import get_device_arch_version, print_rank_0
 from loongforge.engines.megatron.utils import (get_transformers_version,
@@ -88,7 +88,7 @@ def _validate_extra_model_args(args, config):
         )
 
     # Version guard for Qwen3-VL: transformers must be recent enough.
-    if args.model_family == constants.VisionLanguageModelFamilies.QWEN3_VL:
+    if args.model_family == VisionLanguageModelFamilies.QWEN3_VL:
         required = PkgVersion("4.57.1")
         current = get_transformers_version()
         assert current >= required, (

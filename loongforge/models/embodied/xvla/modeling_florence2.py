@@ -42,9 +42,9 @@ from transformers.utils import (
     is_flash_attn_2_available,
     is_flash_attn_greater_or_equal_2_10,
 )
-from .configuration_xvla import Florence2Config
-from .configuration_xvla import Florence2LanguageConfig
-from .configuration_xvla import Florence2VisionConfig
+from .model_configuration_xvla import Florence2Config
+from .model_configuration_xvla import Florence2LanguageConfig
+from .model_configuration_xvla import Florence2VisionConfig
 
 
 from transformers.activations import ACT2FN

@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Full heterogeneous DP (``--enable-full-hetero-dp``): per-step state, CPU offload, strided encoder data.
+"""Full heterogeneous DP (``--enable-full-hetero-dp``): per-step state, CPU offload, encoder parallel facts.
 
 Encoder ranks run the vision encoder for every microbatch of their decoder DP group, gather the
 embeddings, and scatter the gradients back after the decoder backward. ``train_step``, the model's
@@ -9,22 +9,19 @@ encoder path and the EP-overlap callables share the state kept here:
 
 - embedding / grad / visual-pos-mask / deepstack lists of the current step;
 - the CPU offload manager (``--full-hetero-dp-cpu-offload``);
-- the encoder data iterator, assembled here from the dataset or Energon loader the method builds;
+- the encoder data iterator, which the training method builds with ``data/vlm/samplers.py``
+  from the sizes ``encoder_parallel_facts`` returns;
 - the method's batch functions.
 
 ``HeteroStepContext`` owns all of it. The training method creates it, ``train_step``
 fills the per-step lists and calls ``end_step`` after the step.
 """
 
-import queue
-import threading
 from typing import Dict, Optional, Tuple
 
 import torch
-from torch.utils.data import DataLoader
 
 from megatron.core import mpu
-from megatron.legacy.data.data_samplers import MegatronPretrainingRandomSampler
 
 
 class HeteroStepContext:
@@ -223,141 +220,11 @@ def reload_list_item(
 
 
 # ---------------------------------------------------------------------------
-# Strided encoder data: each PP rank's encoder reads only its own microbatches
+# Parallel sizes for the strided encoder samplers in ``data/vlm/samplers.py``
 # ---------------------------------------------------------------------------
 
-_SENTINEL = object()
-
-
-class PrefetchIterator:
-    """Prefetches items from a source iterator in a background thread.
-
-    Allows the next training step's data to be loaded while the current
-    step's encoder/decoder computation is running.
-    """
-
-    def __init__(self, source_iter, prefetch_count):
-        self._queue = queue.Queue(maxsize=prefetch_count)
-        self._source = source_iter
-        self._thread = threading.Thread(target=self._worker, daemon=True)
-        self._thread.start()
-
-    def _worker(self):
-        try:
-            while True:
-                item = next(self._source)
-                self._queue.put(item)
-        except StopIteration:
-            self._queue.put(_SENTINEL)
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        item = self._queue.get()
-        if item is _SENTINEL:
-            raise StopIteration
-        return item
-
-
-class EncoderStridedSampler:
-    """Yields only microbatches assigned to this PP rank's encoder.
-
-    Internally iterates the same index sequence as the decoder's sampler,
-    but only yields batches at positions belonging to this PP rank.
-
-    Processes items in chunks of num_real_microbatch (one step's worth)
-    to ensure the position pattern is always step-relative, staying in
-    sync with the decoder's DataLoader across steps.
-    """
-
-    def __init__(self, dataset, total_samples, consumed_samples, micro_batch_size,
-                 data_parallel_rank, data_parallel_size, data_sharding,
-                 pp_rank, tp_size, model_size, num_real_microbatch):
-        self.dataset = dataset
-        self.total_samples = total_samples
-        self.consumed_samples = consumed_samples
-        self.micro_batch_size = micro_batch_size
-        self.data_parallel_rank = data_parallel_rank
-        self.data_parallel_size = data_parallel_size
-        self.data_sharding = data_sharding
-        self.pp_rank = pp_rank
-        self.tp_size = tp_size
-        self.model_size = model_size
-        self.num_real_microbatch = num_real_microbatch
-
-    def __len__(self):
-        return self.total_samples
-
-    def __iter__(self):
-        base_sampler = MegatronPretrainingRandomSampler(
-            self.dataset,
-            total_samples=self.total_samples,
-            consumed_samples=self.consumed_samples,
-            micro_batch_size=self.micro_batch_size,
-            data_parallel_rank=self.data_parallel_rank,
-            data_parallel_size=self.data_parallel_size,
-            data_sharding=self.data_sharding,
-        )
-        start = self.pp_rank * self.tp_size
-        end = start + self.tp_size
-        # Process in step-sized chunks to keep position pattern step-relative
-        step_buffer = []
-        for batch in base_sampler:
-            step_buffer.append(batch)
-            if len(step_buffer) == self.num_real_microbatch:
-                for i, b in enumerate(step_buffer):
-                    if start <= (i % self.model_size) < end:
-                        yield b
-                step_buffer = []
-        # Yield remaining partial step
-        for i, b in enumerate(step_buffer):
-            if start <= (i % self.model_size) < end:
-                yield b
-
-
-class EncoderStridedIterator:
-    """Iterator-level strided filter for streaming (Energon/WebDataset) dataloaders.
-
-    Wraps an EnergonDataloader, consumes all microbatches from it but only
-    yields those assigned to this PP rank. Logically equivalent to
-    EncoderStridedSampler but for iterable (non-indexable) datasets.
-
-    Buffers microbatches in step-sized chunks (num_real_microbatch) to
-    maintain correct position-based assignment, identical to the logic in
-    EncoderStridedSampler.
-    """
-
-    def __init__(self, energon_dataloader, pp_rank, tp_size, model_size, num_real_microbatch):
-        self._source = energon_dataloader
-        self._pp_rank = pp_rank
-        self._tp_size = tp_size
-        self._model_size = model_size
-        self._num_real_microbatch = num_real_microbatch
-        self._gen = self._filter()
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        return next(self._gen)
-
-    def _filter(self):
-        start = self._pp_rank * self._tp_size
-        end = start + self._tp_size
-        step_buffer = []
-        while True:
-            batch = next(self._source)
-            step_buffer.append(batch)
-            if len(step_buffer) == self._num_real_microbatch:
-                for i, b in enumerate(step_buffer):
-                    if start <= (i % self._model_size) < end:
-                        yield b
-                step_buffer = []
-
-
-def _encoder_parallel_facts():
-    """Return the PP/TP/model-size/microbatch facts the strided sampler needs."""
+def encoder_parallel_facts():
+    """Return the PP/TP/model-size/microbatch sizes the strided encoder samplers need."""
     from ..initialize import (
         get_model_size,
         get_num_micro_batches_per_decoder_dp,
@@ -367,68 +234,10 @@ def _encoder_parallel_facts():
     pp_rank = mpu.get_pipeline_model_parallel_rank()
     tp_size = mpu.get_tensor_model_parallel_world_size()
     _, encoder_rounds = get_num_micro_batches_per_decoder_dp()
-    return (
-        pp_rank,
-        tp_size,
-        get_model_size(),
-        get_num_real_micro_batches_per_decoder_dp(),
-        tp_size * encoder_rounds,
-    )
-
-
-def build_encoder_data_iterator(
-    dataset,
-    consumed_samples,
-    data_collator,
-    *,
-    micro_batch_size,
-    num_workers,
-    data_sharding,
-):
-    """Build the strided encoder DataLoader for full hetero DP.
-
-    Uses ``EncoderStridedSampler`` to yield only microbatches assigned to this PP
-    rank, avoiding unnecessary disk IO for microbatches handled by other ranks.
-    """
-    from megatron.training.training import cyclic_iter
-
-    pp_rank, tp_size, model_size, num_real_microbatch, prefetch_count = _encoder_parallel_facts()
-    batch_sampler = EncoderStridedSampler(
-        dataset,
-        total_samples=len(dataset),
-        consumed_samples=consumed_samples,
-        micro_batch_size=micro_batch_size,
-        data_parallel_rank=mpu.get_data_parallel_rank(),
-        data_parallel_size=mpu.get_data_parallel_world_size(),
-        data_sharding=data_sharding,
+    return dict(
         pp_rank=pp_rank,
         tp_size=tp_size,
-        model_size=model_size,
-        num_real_microbatch=num_real_microbatch,
+        model_size=get_model_size(),
+        num_real_microbatch=get_num_real_micro_batches_per_decoder_dp(),
+        prefetch_count=tp_size * encoder_rounds,
     )
-    dataloader = DataLoader(
-        dataset,
-        batch_sampler=batch_sampler,
-        collate_fn=data_collator,
-        num_workers=num_workers,
-        pin_memory=True,
-        persistent_workers=True if num_workers > 0 else False,
-    )
-    return PrefetchIterator(iter(cyclic_iter(dataloader)), prefetch_count=prefetch_count)
-
-
-def build_encoder_energon_iterator(energon_dataloader):
-    """Wrap an Energon encoder loader with the strided/prefetch iterator for full hetero DP.
-
-    The loader itself is built by the training method from its data config; this
-    function only owns the parallelism-specific wrapping.
-    """
-    pp_rank, tp_size, model_size, num_real_microbatch, prefetch_count = _encoder_parallel_facts()
-    strided_iter = EncoderStridedIterator(
-        energon_dataloader=energon_dataloader,
-        pp_rank=pp_rank,
-        tp_size=tp_size,
-        model_size=model_size,
-        num_real_microbatch=num_real_microbatch,
-    )
-    return PrefetchIterator(strided_iter, prefetch_count=prefetch_count)

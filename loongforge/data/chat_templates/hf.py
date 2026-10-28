@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from loongforge.constants import IGNORE_INDEX
+from loongforge.data import IGNORE_INDEX
 
 from .base import ChatTemplate, TokenizerProtocol
 

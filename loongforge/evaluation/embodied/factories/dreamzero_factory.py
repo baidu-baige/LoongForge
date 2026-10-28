@@ -37,7 +37,7 @@ import numpy as np
 from loongforge.evaluation.embodied.factories.registry import register_factory
 from loongforge.evaluation.embodied.servers.eval_server_config import EvalServerArgs
 from loongforge.evaluation.embodied.servers.loongforge_policy import PredictActionModelSpec
-from loongforge.models.embodied.dreamzero.configuration_dreamzero import DreamZeroConfig
+from loongforge.models.embodied.dreamzero.model_configuration_dreamzero import DreamZeroConfig
 from loongforge.models.embodied.dreamzero.modeling_dreamzero_infer import DreamZeroInferenceModel
 from loongforge.models.embodied.registry import build_model
 

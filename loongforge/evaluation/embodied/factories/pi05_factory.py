@@ -16,7 +16,7 @@ from loongforge.evaluation.embodied.servers.loongforge_policy import (
     GenericPredictActionPolicy,
     PredictActionModelSpec,
 )
-from loongforge.models.embodied.pi05.configuration_pi05 import Pi05ModelConfig
+from loongforge.models.embodied.pi05.model_configuration_pi05 import Pi05ModelConfig
 from loongforge.models.embodied.registry import build_model
 
 

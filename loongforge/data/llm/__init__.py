@@ -7,6 +7,7 @@ File map: ``sft/`` holds the pipeline (``format_utils.py`` raw -> unified
 messages, ``preprocess.py`` encode/truncate/pack/chunkpipe, ``dataset.py``
 dataset build, ``collator.py`` batch padding and the collator factory);
 ``dataloader.py`` holds ``SFTLoaderConfig`` and the iterators;
+``samplers.py`` holds the ChunkPipe batch sampler;
 ``blended_hf_dataset_*.py`` hold the dataset blend config and builder.
 
 Shared by LLM SFT (``training/llm/sft.py``) and VLM offline-tokenized paths

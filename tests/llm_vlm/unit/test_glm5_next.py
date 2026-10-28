@@ -2,21 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 """Unit tests for the GLM-5.3-Flash text adapter."""
 
-import sys
 import unittest
-from pathlib import Path
 
 import torch
 import torch.distributed as dist
 
-
-MODEL_DIR = Path(__file__).resolve().parents[3] / "loongforge/models/language/glm5_next"
-sys.path.insert(0, str(MODEL_DIR))
-
-from glm5_next_config import Glm5NextConfig, Glm5NextVisionConfig
-from glm5_next_attention import KPoolDSAIndexer, KPoolDSAttention
-from glm5_next_layer_spec import get_glm5_next_decoder_block_spec
-from glm5_next_model import Glm5NextModel
+from loongforge.models.foundation.glm5_next.glm5_next_config import Glm5NextConfig, Glm5NextVisionConfig
+from loongforge.models.foundation.glm5_next.glm5_next_attention import KPoolDSAIndexer, KPoolDSAttention
+from loongforge.models.foundation.glm5_next.glm5_next_layer_spec import get_glm5_next_decoder_block_spec
+from loongforge.models.foundation.glm5_next.glm5_next_model import Glm5NextModel
 from megatron.core.transformer.multi_latent_attention import MLASelfAttention
 
 

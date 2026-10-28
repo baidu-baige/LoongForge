@@ -14,7 +14,7 @@ import torch.nn.functional as F
 import yaml
 from transformers.utils import PaddingStrategy
 
-from loongforge import constants
+from loongforge.data import IGNORE_INDEX, TrainingPhase
 from loongforge.models.multimodal.position_ids import get_position_ids
 from megatron import energon
 from megatron.core.datasets.utils import get_blend_from_list
@@ -24,7 +24,6 @@ from .samples import ENERGON_LT_7
 
 logger = logging.getLogger(__name__)
 
-IGNORE_INDEX = constants.IGNORE_INDEX
 # Fallback pad id (Qwen ``<|endoftext|>``) for tokenizers without a pad token.
 PAD_TOKEN_ID = 151643
 
@@ -85,7 +84,7 @@ class VLMDataConfig:
     sft_dataset_config: Optional[str] = None
     strict_mode: bool = False
     task_encoder: Optional[str] = None
-    training_phase: str = constants.TrainingPhase.PRETRAIN
+    training_phase: str = TrainingPhase.PRETRAIN
     training_rice_vl_max_answer_length: int = 4096
     use_thumbnail: bool = False
     video_max_pixels: int = 65536 * 28 * 28

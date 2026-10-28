@@ -12,5 +12,7 @@ Submodules:
     train_hooks     - Training loop decorators for warmup profiling
     rerun_iterator  - Extended RerunDataIterator with __iter__ support
     vit_balance     - ViT encoder DP load balancing
-    rebalance/      - Core rebalancing logic (balance, pack, reconstruct, warmup)
+    rebalance/      - Core rebalancing logic (balance, layout registry, warmup)
+
+Batch layouts live with their data formats in ``loongforge/data``.
 """

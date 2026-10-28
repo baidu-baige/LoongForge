@@ -24,7 +24,7 @@ from megatron.core import parallel_state
 
 from transformers import DataCollatorForSeq2Seq
 
-from loongforge import constants
+from loongforge.data import TrainingPhase
 from loongforge.engines.megatron import get_args, get_chat_template, get_model_config, get_tokenizer
 
 from loongforge.engines.megatron.train_step import dump_model_input_example_once
@@ -47,13 +47,22 @@ from loongforge.data.vlm.dataloader import (
     get_train_loader,
 )
 from loongforge.data.vlm import build_task_encoder
+from loongforge.data.vlm.dp_balance_layout import reorder_data_for_vlm, vlm_cumulative_lengths
+from loongforge.data.vlm.samplers import (
+    build_encoder_data_iterator,
+    build_encoder_energon_iterator,
+)
 from loongforge.engines.megatron.checkpointing import load_dataloader_state
 
 
 from loongforge.models.multimodal.multimodal_model_provider import (
-    omni_model_provider,
+    multimodal_model_provider,
 )
 from loongforge.engines.megatron.distributed import hetero_dp
+from loongforge.engines.megatron.distributed.dp_balance.rebalance.layout import (
+    BatchLayout,
+    install_batch_layout,
+)
 from loongforge.engines.megatron.distributed.context_parallel import get_batch_on_this_cp_rank
 from loongforge.engines.megatron.distributed.loss_reduction import default_loss_func
 from loongforge.engines.megatron.initialize import (
@@ -227,14 +236,6 @@ def build_multimodal_runtime(args):
         get_model_size,
     )
 
-    scheduler_factory = None
-    if args.overlap_moe_expert_parallel_comm:
-        from loongforge.engines.megatron.distributed.model_chunk_schedule_plan import (
-            TransformerModelChunkSchedulePlan,
-        )
-
-        scheduler_factory = TransformerModelChunkSchedulePlan
-
     vit_balance = None
     if args.use_vit_dp_balance:
         from loongforge.engines.megatron.distributed.dp_balance.vit_balance import (
@@ -248,7 +249,6 @@ def build_multimodal_runtime(args):
         model_size=get_model_size(),
         parallel_state_switch=change_parallel_state,
         vit_balance=vit_balance,
-        schedule_plan_factory=scheduler_factory,
     )
 
 
@@ -432,13 +432,16 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None,
 
         # Build encoder-specific iterator for full_hetero_dp
         if getattr(args, 'enable_full_hetero_dp', False):
-            encoder_iter = hetero_dp.build_encoder_data_iterator(
+            encoder_iter = build_encoder_data_iterator(
                 train_ds,
                 args.consumed_train_samples,
                 collator,
                 micro_batch_size=args.micro_batch_size,
                 num_workers=args.num_workers,
                 data_sharding=args.data_sharding,
+                data_parallel_rank=dpr,
+                data_parallel_size=dpw,
+                **hetero_dp.encoder_parallel_facts(),
             )
             if hetero_step is None:
                 raise RuntimeError("full hetero DP needs the step context from the training method")
@@ -449,7 +452,7 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None,
     else:
         dpr = parallel_state.get_data_parallel_rank()
         dpw = parallel_state.get_data_parallel_world_size()
-        chat_template = get_chat_template() if args.training_phase == constants.TrainingPhase.SFT else None
+        chat_template = get_chat_template() if args.training_phase == TrainingPhase.SFT else None
         task_encoder = build_task_encoder(data_config, tokenizer, chat_template)
         train_dataset = get_train_dataset(
             task_encoder,
@@ -496,7 +499,9 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None,
             encoder_dataloader = get_train_loader(
                 encoder_dataset, collator, load_dataloader_state(args)
             )
-            encoder_iter = hetero_dp.build_encoder_energon_iterator(encoder_dataloader)
+            encoder_iter = build_encoder_energon_iterator(
+                encoder_dataloader, **hetero_dp.encoder_parallel_facts()
+            )
             if hetero_step is None:
                 raise RuntimeError("full hetero DP needs the step context from the training method")
             hetero_step.encoder_data_iterator = encoder_iter
@@ -520,17 +525,21 @@ def get_embedding_ranks(pp_ranks: List[int]):
 def model_provider(pre_process=True, post_process=True, vp_stage=None):
     """Build the multimodal model with this run's args and model config."""
     args = get_args()
-    return omni_model_provider(pre_process, post_process, vp_stage=vp_stage, args=args,
+    return multimodal_model_provider(pre_process, post_process, vp_stage=vp_stage, args=args,
                                model_config=get_model_config(), runtime=build_multimodal_runtime(args))
+
+
+VLM_BATCH_LAYOUT = BatchLayout(
+    reorder=reorder_data_for_vlm,
+    cumulative_lengths=vlm_cumulative_lengths,
+    caller="VLM",
+)
 
 
 def install_vlm_batch_layout(args):
     """Give DP load balancing the VLM packed layout; the engine keeps no model-family default."""
     if not args.use_vlm_dp_balance:
         return
-    from loongforge.engines.megatron.distributed.dp_balance.rebalance.balance import VLM_BATCH_LAYOUT
-    from loongforge.engines.megatron.distributed.dp_balance.rebalance.layout import install_batch_layout
-
     install_batch_layout(args.model_family, VLM_BATCH_LAYOUT)
 
 

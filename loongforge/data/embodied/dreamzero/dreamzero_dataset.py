@@ -28,7 +28,7 @@ from loongforge.models.embodied.dreamzero.precomputed_cache import (
     DreamZeroPrecomputedCacheConfig,
     build_precomputed_cache_config,
 )
-from loongforge.models.embodied.dreamzero.precomputed_cache.artifact import (
+from .precomputed_artifact import (
     DreamZeroPrecomputedFeatureArtifact,
 )
 

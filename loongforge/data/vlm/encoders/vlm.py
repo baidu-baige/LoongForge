@@ -16,7 +16,7 @@ from megatron.energon import (
 from megatron.energon.task_encoder.base import stateless
 from transformers import AutoProcessor
 from transformers.processing_utils import ProcessorMixin
-from loongforge import constants
+from loongforge.data import IGNORE_INDEX, TrainingPhase
 from qwen_vl_utils.vision_process import smart_nframes, smart_resize
 from torchvision import transforms
 from torchvision.transforms import InterpolationMode
@@ -293,7 +293,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
 
         target = input_ids.clone()
         for token_id in self._mask_token_ids():
-            target[target == token_id] = constants.IGNORE_INDEX
+            target[target == token_id] = IGNORE_INDEX
 
         if image_grid_thw is not None:
             input_ids, target, attn_mask = self._expand_media(
@@ -316,7 +316,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
         input_ids, _, imgs, image_grid_thw, attn_mask = self._process(
             image, text, add_special_tokens=False
         )
-        target = torch.ones_like(input_ids) * constants.IGNORE_INDEX
+        target = torch.ones_like(input_ids) * IGNORE_INDEX
         answer_ids = self.tokenizer.tokenize(answer, add_special_tokens=False)
         target[-len(answer_ids) - 1 : -1] = torch.tensor(answer_ids)
         target[-1] = input_ids[-1]
@@ -392,7 +392,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
                 tools=tools,
                 train_on_prompt=getattr(self.config, "train_on_prompt", False),
                 history_mask_loss=getattr(self.config, "history_mask_loss", False),
-                ignore_index=constants.IGNORE_INDEX,
+                ignore_index=IGNORE_INDEX,
             )
         else:
             encode_pairs = self.chat_template.encode_multiturn(
@@ -403,7 +403,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
             input_ids, target = [], []
             for source_ids, target_ids in encode_pairs:
                 input_ids += source_ids + target_ids
-                target += [constants.IGNORE_INDEX] * len(source_ids) + target_ids
+                target += [IGNORE_INDEX] * len(source_ids) + target_ids
 
         return torch.tensor(input_ids), torch.tensor(target)
 
@@ -435,7 +435,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
         https://github.com/NVIDIA/Megatron-Energon/blob/develop/src/megatron/energon/flavors/captioning.py
         """
 
-        assert self.config.training_phase == constants.TrainingPhase.PRETRAIN, "Only support PRETRAIN phase"
+        assert self.config.training_phase == TrainingPhase.PRETRAIN, "Only support PRETRAIN phase"
 
         text = (
             self.image_token_with_tags + sample.caption + self.tokenizer.tokenizer.eos_token
@@ -461,7 +461,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
 
     def encode_vqa(self, sample: VQASample) -> BaseTaskSample:
         """Encode pretrain sample in Qwen2VL style."""
-        if self.config.training_phase == constants.TrainingPhase.PRETRAIN:
+        if self.config.training_phase == TrainingPhase.PRETRAIN:
             if self.config.add_question_in_pretrain:
                 text = (sample.context + sample.answers).replace(
                     "<image>", self.image_token_with_tags
@@ -470,7 +470,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
                 text = self.image_token_with_tags + sample.answers
             text = text + self.tokenizer.tokenizer.eos_token
             input_ids, target, imgs, image_grid_thw, attn_mask = self._process(sample.image, text)
-        elif self.config.training_phase == constants.TrainingPhase.SFT:
+        elif self.config.training_phase == TrainingPhase.SFT:
             input_ids, target, attn_mask, imgs, image_grid_thw = self.process_sft_vqa(sample.context, \
                                         sample.answers, sample.image)
         else:
@@ -492,7 +492,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
 
     def encode_multi_vid_qa(self, sample: VQASample) -> BaseTaskSample:
         """Encode sample in Qwen2VL style."""
-        if self.config.training_phase == constants.TrainingPhase.SFT:
+        if self.config.training_phase == TrainingPhase.SFT:
             (
                 input_ids,
                 target,
@@ -532,7 +532,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
 
     def encode_multi_mix_qa(self, sample: MultiMixQASample) -> BaseTaskSample:
         """Encode sample in Qwen2VL style."""
-        if self.config.training_phase == constants.TrainingPhase.SFT:
+        if self.config.training_phase == TrainingPhase.SFT:
             (
                 input_ids,
                 target,
@@ -576,7 +576,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
 
     def encode_chat_mix(self, sample: ChatMixSample) -> Optional[BaseTaskSample]:
         """Encode chat-format multimodal sample (with optional tool calling)."""
-        if self.config.training_phase != constants.TrainingPhase.SFT:
+        if self.config.training_phase != TrainingPhase.SFT:
             raise NotImplementedError(
                 f"encode_chat_mix only supports SFT, got {self.config.training_phase}"
             )

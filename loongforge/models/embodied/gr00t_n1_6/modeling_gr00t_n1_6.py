@@ -49,9 +49,9 @@ from loongforge.models.embodied.gr00t_n1_6.eagle3_model.image_augmentations impo
 )
 
 from .eagle3_model.eagle_backbone import EagleBackbone
-from .configuration_gr00t_n1_6 import Gr00tN1d6ModelConfig
-from .dit import AlternateVLDiT, DiT
-from .embodiment_mlp import (
+from .model_configuration_gr00t_n1_6 import Gr00tN1d6ModelConfig
+from .modules.dit import AlternateVLDiT, DiT
+from .modules.embodiment_mlp import (
     CategorySpecificMLP,
     MultiEmbodimentActionEncoder,
 )

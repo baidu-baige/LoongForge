@@ -1,4 +1,4 @@
-_target_: loongforge.models.vision.ErnieVisionConfig
+_target_: loongforge.models.encoder.ErnieVisionConfig
 
 num_layers: 32
 embed_dim: 1280

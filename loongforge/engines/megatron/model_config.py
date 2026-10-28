@@ -7,7 +7,12 @@ import torch
 from megatron.core.transformer import MLATransformerConfig, TransformerConfig
 from megatron.core.activations import squared_relu
 import torch.nn.functional as F
-from loongforge import constants
+from loongforge.models.catalog import (
+    DiffusionModelFamilies,
+    TOP_LEVEL_MODEL_FAMILIES,
+    VisionLanguageModelFamilies,
+    split_model_config,
+)
 from copy import deepcopy
 from omegaconf import OmegaConf
 from hydra.utils import instantiate, get_class
@@ -100,9 +105,9 @@ def _instantiate_from_args(args_dict, yaml_node):
 
 def build_model_config(args, config):
     """Build model config from args and config"""
-    model_type, model_config = constants.split_model_config(config)
+    model_type, model_config = split_model_config(config)
 
-    if model_type in {*constants.VisionLanguageModelFamilies.names(), *constants.DiffusionModelFamilies.names()}:
+    if model_type in {*VisionLanguageModelFamilies.names(), *DiffusionModelFamilies.names()}:
         # get the global args dict which contains all model component args
         global_args_dict = get_args_dict()
         model_cfgs = {}
@@ -124,7 +129,7 @@ def build_model_config(args, config):
                         model_cfgs[name].image_token
                     )
         return VLMModelConfig(**model_cfgs)
-    if model_type in constants.TOP_LEVEL_MODEL_FAMILIES:
+    if model_type in TOP_LEVEL_MODEL_FAMILIES:
         if "_target_" not in model_config:
             raise ValueError(
                 "Model config missing '_target_' field.\n"

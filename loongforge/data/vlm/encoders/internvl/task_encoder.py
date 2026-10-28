@@ -8,7 +8,7 @@ import torch
 from typing import List, Union
 from dataclasses import dataclass, asdict
 from typing_extensions import override
-from loongforge import constants
+from loongforge.data import IGNORE_INDEX
 from loongforge.data.vlm.samples import ENERGON_LT_7, MultiMixQASample
 from megatron.energon import stateless
 from ...task_encoder_base import (
@@ -229,7 +229,7 @@ class InternVLTaskEncoder(BaseTaskEncoder):
             temp_input_ids = torch.LongTensor([pad_id] * max_item_length)
             temp_input_ids[: feat["tokens"].shape[0]] = feat["tokens"]
             feat["tokens"] = temp_input_ids
-            temp_labels = torch.LongTensor([constants.IGNORE_INDEX] * max_item_length)
+            temp_labels = torch.LongTensor([IGNORE_INDEX] * max_item_length)
             temp_labels[: feat["labels"].shape[0]] = feat["labels"]
             feat["labels"] = temp_labels
             if isinstance(samples[0], MixQATaskSample):

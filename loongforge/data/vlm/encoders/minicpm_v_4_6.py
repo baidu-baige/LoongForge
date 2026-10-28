@@ -5,7 +5,7 @@
 
 import torch
 
-from loongforge import constants
+from loongforge.data import IGNORE_INDEX
 from loongforge.data.chat_templates.plugins.minicpm_v_4_6 import MiniCPMV46Plugin
 from loongforge.data.vlm.encoders.vlm import (
     IMAGE_TOKEN,
@@ -76,7 +76,7 @@ class MiniCPMV46TaskEncoder(VLMTaskEncoder):
             placeholder_length = len(placeholder_ids)
             for start in range(search_start, len(input_id_list) - placeholder_length + 1):
                 if input_id_list[start : start + placeholder_length] == placeholder_ids:
-                    target[start : start + placeholder_length] = constants.IGNORE_INDEX
+                    target[start : start + placeholder_length] = IGNORE_INDEX
                     search_start = start + placeholder_length
                     break
             else:

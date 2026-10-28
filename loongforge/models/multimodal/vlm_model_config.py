@@ -1,11 +1,11 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Omni Model Config"""
+"""VLM config"""
 
 from dataclasses import dataclass
-from loongforge.constants import VisionLanguageModelFamilies
-from loongforge.models.base.base_model_config import BaseModelConfig, BasePeftModelConfig
+from loongforge.models.catalog import VisionLanguageModelFamilies
+from loongforge.models.common.base_model_config import BaseModelConfig, BasePeftModelConfig
 
 
 @dataclass

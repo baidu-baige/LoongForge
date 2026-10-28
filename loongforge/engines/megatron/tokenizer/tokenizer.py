@@ -10,7 +10,8 @@ from megatron.core.datasets.megatron_tokenizer import MegatronLegacyTokenizer
 from megatron.training.tokenizer.tokenizer import _vocab_size_with_padding
 from megatron.training.tokenizer import build_tokenizer as build_megatron_tokenizer
 
-from loongforge import constants
+from loongforge.data import TrainingPhase
+from loongforge.models.catalog import LanguageModelFamilies
 from megatron.training.utils import print_rank_0
 
 from .tokenization_hf import AutoTokenizerFromHF
@@ -107,9 +108,9 @@ def build_tokenizer(
                 args.rank,
             )
 
-        if args.training_phase == constants.TrainingPhase.PRETRAIN:
+        if args.training_phase == TrainingPhase.PRETRAIN:
             if tokenizer.eos is None:
-                if args.model_family == constants.LanguageModelFamilies.QWEN:
+                if args.model_family == LanguageModelFamilies.QWEN:
                     tokenizer.eos = tokenizer.tokenizer.eod_id
 
         elif chat_template is not None:

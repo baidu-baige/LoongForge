@@ -4,18 +4,17 @@
 from functools import partial
 from datetime import timedelta
 import runpy
-import sys
-from types import SimpleNamespace
 from typing import Any, Dict, get_type_hints
 from unittest.mock import Mock, patch
 
 import pytest
 
-from tests.test_vlm_dataset_inputs import REPO_ROOT, _load_functions
+from tests.test_vlm_dataset_inputs import REPO_ROOT
 
 torch = pytest.importorskip("torch")
 REBALANCE = "loongforge/engines/megatron/distributed/dp_balance/rebalance/"
-INTERNVL = "loongforge/engines/megatron/distributed/dp_balance/rebalance/internvl.py"
+VLM_LAYOUT = "loongforge/data/vlm/dp_balance_layout.py"
+INTERNVL = "loongforge/data/vlm/encoders/internvl/dp_balance_layout.py"
 
 
 class ReverseContext:
@@ -39,12 +38,7 @@ class ReverseContext:
 
 
 def vlm_functions():
-    namespace = runpy.run_path(str(REPO_ROOT / REBALANCE / "pack.py"))
-    namespace.update(runpy.run_path(str(REPO_ROOT / REBALANCE / "reconstruct.py")))
-    namespace["partial"] = partial
-    return _load_functions(
-        REBALANCE + "balance.py", {"reorder_data_for_vlm"}, namespace,
-    )
+    return runpy.run_path(str(REPO_ROOT / VLM_LAYOUT))
 
 
 @pytest.mark.parametrize("visuals", [(), ("image",), ("video",), ("image", "video")])
@@ -91,14 +85,7 @@ def test_vlm_reorder_keeps_tokens_and_visuals_together(visuals, skip):
 @pytest.mark.parametrize("skip", [False, True])
 def test_internvl_reorder_and_layout_registration(skip):
     layout = runpy.run_path(str(REPO_ROOT / REBALANCE / "layout.py"))
-    args = SimpleNamespace(force_image_size=2)
-    tokenizer = SimpleNamespace(tokenizer=SimpleNamespace(convert_tokens_to_ids=lambda _: 99))
-    modules = {
-        "loongforge.engines.megatron": SimpleNamespace(get_args=lambda: args, get_tokenizer=lambda: tokenizer),
-        "loongforge.engines.megatron.distributed.dp_balance.rebalance.layout": SimpleNamespace(**layout),
-    }
-    with patch.dict(sys.modules, modules):
-        functions = runpy.run_path(str(REPO_ROOT / INTERNVL))
+    functions = runpy.run_path(str(REPO_ROOT / INTERNVL))
     assert get_type_hints(functions["pack_data_for_intern_vl"])["return"] == Dict[str, Any]
     samples = [
         functions["InternVLDataSample"](
@@ -111,7 +98,7 @@ def test_internvl_reorder_and_layout_registration(skip):
     ]
     data = functions["pack_data_for_intern_vl"](samples)
     ctx = ReverseContext(skip)
-    actual = functions["reorder_data_for_internvl"](data, ctx)
+    actual = functions["reorder_data_for_internvl"](data, ctx, img_size=2, img_context_token_id=99)
     if skip:
         assert actual is data
         ctx.gather.assert_not_called()
@@ -121,9 +108,14 @@ def test_internvl_reorder_and_layout_registration(skip):
         for key in expected:
             torch.testing.assert_close(actual[key], expected[key])
         assert ctx.grouped_calls == 2
-    layout["install_batch_layout"]("intern_vl", functions["INTERNVL_BATCH_LAYOUT"])
+    internvl_layout = layout["BatchLayout"](
+        reorder=partial(functions["reorder_data_for_internvl"], img_size=2, img_context_token_id=99),
+        cumulative_lengths=functions["internvl_cumulative_lengths"],
+        caller="InternVL",
+    )
+    layout["install_batch_layout"]("intern_vl", internvl_layout)
     registered = layout["get_batch_layout"]("intern_vl")
-    assert registered is functions["INTERNVL_BATCH_LAYOUT"]
+    assert registered is internvl_layout
     assert registered.caller == "InternVL"
     assert registered.cumulative_lengths(data) is data["attn_mask"]
 
@@ -136,22 +128,27 @@ def test_unsupported_family():
 
 def _video_worker(rank, rendezvous):
     import torch.distributed as dist
-    from loongforge.engines.megatron.distributed.dp_balance.rebalance import balance, layout as layouts, pack
+    from loongforge.data.vlm import dp_balance_layout as vlm_layout
+    from loongforge.engines.megatron.distributed.dp_balance.rebalance import balance, layout as layouts
 
     dist.init_process_group(
         "gloo", init_method=rendezvous, rank=rank, world_size=2, timeout=timedelta(seconds=60),
     )
     try:
-        layouts.install_batch_layout("qwen3_vl", balance.VLM_BATCH_LAYOUT)
+        default_layout = layouts.BatchLayout(
+            reorder=vlm_layout.reorder_data_for_vlm,
+            cumulative_lengths=vlm_layout.vlm_cumulative_lengths,
+            caller="VLM",
+        )
+        layouts.install_batch_layout("qwen3_vl", default_layout)
         layout = layouts.get_batch_layout("qwen3_vl")
-        assert layout is balance.VLM_BATCH_LAYOUT
-        assert layout.reorder is balance.reorder_data_for_vlm
+        assert layout is default_layout
         assert layout.caller == "VLM"
         # A forced swap exercises the actual gather/all-to-all path on CPU batches.
         ctx = balance.RebalanceContext(1.0, "VLM")
         ctx.plan = lambda _: [[(0, 1)], [(0, 0)]]
         tokens = torch.full((1, rank + 2), rank + 1)
-        data = pack.pack_data_for_vlm([pack.VLMDataSample(
+        data = vlm_layout.pack_data_for_vlm([vlm_layout.VLMDataSample(
             tokens, tokens + 10, torch.ones_like(tokens),
             pixel_values_videos=torch.full((2, 4), rank + 1.0),
             vid_thw=torch.tensor([2, 1, 1]),

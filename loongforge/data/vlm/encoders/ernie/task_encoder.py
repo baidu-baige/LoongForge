@@ -22,7 +22,7 @@ from PIL import Image
 from megatron.energon import Cooker
 from megatron.energon.task_encoder.base import stateless
 
-from loongforge.constants import IGNORE_INDEX
+from loongforge.data import IGNORE_INDEX
 from loongforge.data.vlm.samples import ENERGON_LT_7, MultiMixQASample
 from loongforge.data.vlm.task_encoder_base import (
     BaseTaskEncoder,

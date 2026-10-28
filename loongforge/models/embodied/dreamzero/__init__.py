@@ -6,7 +6,7 @@
 
 def __getattr__(name: str):
     if name == "DreamZeroConfig":
-        from .configuration_dreamzero import DreamZeroConfig
+        from .model_configuration_dreamzero import DreamZeroConfig
 
         return DreamZeroConfig
     if name == "DreamZeroPolicy":

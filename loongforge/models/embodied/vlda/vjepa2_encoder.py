@@ -9,7 +9,7 @@ from functools import partial
 import torch
 from torch import nn
 
-from .configuration_vlda import VJEPA2Config
+from .model_configuration_vlda import VJEPA2Config
 
 logger = logging.getLogger(__name__)
 

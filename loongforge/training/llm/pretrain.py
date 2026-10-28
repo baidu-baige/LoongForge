@@ -41,7 +41,7 @@ from megatron.training.utils import print_rank_0
 from loongforge.engines.megatron import get_args, get_tokenizer
 
 
-from loongforge.models.language.llm_model_provider import llm_model_provider
+from loongforge.models.foundation.llm_model_provider import llm_model_provider
 from loongforge.engines.megatron.runner import pretrain
 
 from loongforge.engines.megatron.global_vars import get_model_config

@@ -70,8 +70,8 @@ from loongforge.engines.megatron.checkpointing import (
     checkpoint_exists,
 )
 from loongforge.engines.megatron.hf_bridge import load_hf_checkpoint_online
-from loongforge.models.base.peft.lora import LoRA, VLMLoRA
-from loongforge.models.base.peft.utils import apply_peft_transformation
+from loongforge.models.common.peft.lora import LoRA, VLMLoRA
+from loongforge.models.common.peft.utils import apply_peft_transformation
 
 
 def is_hf_checkpoint(load_path):
@@ -90,7 +90,7 @@ def _resolve_convert_pp_layout(model_config):
     """Resolve ``pipeline_model_parallel_layout`` for the Bridge converter.
 
     For pure-LLM configs the layout lives on ``model_config`` itself. For VLM
-    (OmniCombinationModel / VLMModelConfig) configs it lives on the foundation
+    (MultimodalCombinationModel / VLMModelConfig) configs it lives on the foundation
     sub-config, because VLMModelConfig does not carry the field at the top
     level. Returning None here makes the converter fall back to a balanced VPP
     partition, which disagrees with the model's custom layout and breaks

@@ -37,7 +37,7 @@ from loongforge.data.llm.sft.collator import (
     build_sft_data_collator,
 )
 
-from loongforge import constants
+from loongforge.data import IGNORE_INDEX
 
 from loongforge.engines.megatron.runner import pretrain
 
@@ -208,7 +208,7 @@ def _build_sft_batch(args, tokenizer, data_b):
         elif not args.enable_chunkpipe:
             # Shift labels for next-token prediction; chunkpipe data is already pre-shifted
             labels = torch.roll(labels, shifts=-1, dims=1)
-            labels[:, -1] = constants.IGNORE_INDEX
+            labels[:, -1] = IGNORE_INDEX
 
     loss_mask_full = data_b["loss_mask"].long() if "loss_mask" in data_b else None
     loss_mask = loss_mask_full
@@ -225,12 +225,12 @@ def _build_sft_batch(args, tokenizer, data_b):
         # pp last && eod_mask_loss
         assert args.eod_mask_loss, "eod_mask_loss should be true here!"
         loss_mask = torch.ones(labels.size(), dtype=torch.float, device=labels.device)
-        loss_mask[labels == constants.IGNORE_INDEX] = 0.0
+        loss_mask[labels == IGNORE_INDEX] = 0.0
         loss_mask[labels == tokenizer.pad] = 0.0
         loss_mask[labels == tokenizer.eos] = 0.0
         if sft_chunkpipe_mtp and mtp_labels is not None:
             mtp_loss_mask = torch.ones(mtp_labels.size(), dtype=torch.float, device=mtp_labels.device)
-            mtp_loss_mask[mtp_labels == constants.IGNORE_INDEX] = 0.0
+            mtp_loss_mask[mtp_labels == IGNORE_INDEX] = 0.0
             mtp_loss_mask[mtp_labels == tokenizer.pad] = 0.0
             mtp_loss_mask[mtp_labels == tokenizer.eos] = 0.0
 
@@ -636,7 +636,7 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
         chat_template=get_chat_template(),
         num_preprocess_workers=args.sft_num_preprocess_workers,
         train_on_prompt=args.train_on_prompt,
-        ignore_index=constants.IGNORE_INDEX,
+        ignore_index=IGNORE_INDEX,
         eod_mask_loss=args.eod_mask_loss,
         history_mask_loss=args.history_mask_loss,
         is_tokenized=args.is_tokenized_data,

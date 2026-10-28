@@ -6,7 +6,7 @@
 from typing import Dict
 
 from loongforge.engines.megatron import get_args
-from loongforge.models.base.context_parallel import get_inputs_on_this_cp_rank
+from loongforge.models.common.context_parallel import get_inputs_on_this_cp_rank
 
 
 def get_batch_on_this_cp_rank(batch: Dict):

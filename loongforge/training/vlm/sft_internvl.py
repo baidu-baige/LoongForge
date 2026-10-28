@@ -4,14 +4,16 @@
 """ sft for internvl model """
 
 
+import os
+
 import torch
+import torch.distributed as dist
 from functools import partial
 from loongforge.training.vlm import pretrain_vlm
 from transformers import DataCollatorForSeq2Seq
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.training import get_timers
 from megatron.core import mpu, tensor_parallel
-from loongforge.engines.megatron.distributed.loss_reduction import default_loss_func
 from megatron.core import parallel_state
 
 from megatron.core.utils import StragglerDetector
@@ -19,8 +21,14 @@ from loongforge.engines.megatron import (get_args, get_tokenizer, get_model_conf
 from megatron.core.enums import ModelType
 from loongforge.engines.megatron.runner import pretrain
 from loongforge.data.vlm.encoders.internvl.task_encoder import InternVLTaskEncoder
-from loongforge.engines.megatron.distributed.dp_balance.rebalance.layout import install_batch_layout
-from loongforge.engines.megatron.distributed.dp_balance.rebalance.internvl import INTERNVL_BATCH_LAYOUT
+from loongforge.data.vlm.encoders.internvl.dp_balance_layout import (
+    internvl_cumulative_lengths,
+    reorder_data_for_internvl,
+)
+from loongforge.engines.megatron.distributed.dp_balance.rebalance.layout import (
+    BatchLayout,
+    install_batch_layout,
+)
 from loongforge.engines.megatron.data_padding import (
     llm_pad_to_multiple_of,
 )
@@ -37,9 +45,9 @@ from loongforge.data.vlm.dataloader import (
 )
 from loongforge.engines.megatron.checkpointing import load_dataloader_state
 from loongforge.models.multimodal.multimodal_model_provider import (
-    omni_model_provider,
+    multimodal_model_provider,
 )
-from loongforge.models.vision.internvl.internvl_config import IMG_CONTEXT_TOKEN
+from loongforge.models.encoder.internvl_vision_models.internvl_config import IMG_CONTEXT_TOKEN
 
 stimer = StragglerDetector()
 
@@ -137,6 +145,84 @@ def filter_ignore_data(input_ids, image_flags, img_context_token_id, num_image_t
     return selected != expected
 
 
+def loss_func_internvl(
+    loss_mask: torch.Tensor, loss_weight: torch.Tensor, output_tensor: torch.Tensor
+):
+    """Loss function.
+
+    Args:
+        loss_mask (torch.Tensor): Used to mask out some portions of the loss
+        output_tensor (torch.Tensor): The tensor with the losses
+
+    Returns:
+        the loss scalar for this micro-batch
+        the number of non-padded tokens in this microbatch
+        a dict containing reporting metrics on the loss and number of tokens across the data parallel ranks
+    """
+    args = get_args()
+
+    valid_mask = True
+    if (loss_weight is not None and loss_weight.sum() == 0) or (loss_mask.sum() == 0):
+        valid_mask = False
+        output_tensor = output_tensor * 0.0  # skip update current microbatch
+
+    losses = output_tensor.view(-1).float()  # [B, s]
+    loss_mask = loss_mask.view(-1).float()  # [B * s]
+
+    if loss_weight is not None:
+        shift_weights = loss_weight.view(-1)
+        shift_weights_sum = shift_weights.sum()
+        if args.loss_reduction_all_gather:
+            torch.distributed.all_reduce(
+                shift_weights_sum,
+                op=dist.ReduceOp.SUM,
+                group=mpu.get_data_parallel_group(with_context_parallel=True),
+            )
+            shift_weights_sum = shift_weights_sum / mpu.get_data_parallel_world_size(
+                with_context_parallel=True
+            )
+        loss = torch.sum(losses * shift_weights)
+    else:
+        loss = torch.sum(losses * loss_mask)
+
+    # Check individual rank losses are not NaN prior to DP all-reduce.
+    if args.check_for_nan_in_loss_and_grad:
+        global_rank = torch.distributed.get_rank()
+        assert not loss.isnan(), (
+            f"Rank {global_rank}: found NaN in local forward loss calculation. "
+            f"Device: {torch.cuda.current_device()}, node: {os.uname()[1]}"
+        )
+
+    # reduce loss for logging.
+    if valid_mask:
+        if loss_weight is not None:
+            num_tokens = shift_weights_sum.clone().detach()
+        else:
+            num_tokens = loss_mask.sum().clone().detach()
+    else:
+        num_tokens = torch.tensor(1.0, device=output_tensor.device)
+
+    reporting_loss = torch.cat([loss.clone().detach().view(1), num_tokens.view(1)])
+
+    loss_reduced_dict = {'lm loss': reporting_loss if not args.legacy_reporting_loss_reduction
+                         else reporting_loss[0] / num_tokens}
+
+    if args.variable_seq_lengths:
+        # for variable seq length, we need to calculate the number of tokens on fly
+        # model output tensor shape is [B, S, H]
+        num_input_tokens = output_tensor.shape[0] * output_tensor.shape[1]
+        input_tokens = torch.tensor(
+            num_input_tokens, dtype=torch.int, device=output_tensor.device
+        )
+        # sum across all dp ranks
+        torch.distributed.all_reduce(input_tokens, group=mpu.get_data_parallel_group())
+        loss_reduced_dict["total_inputs"] = (
+            input_tokens * args.context_parallel_size
+        )
+    num_tokens = torch.as_tensor(num_tokens, dtype=torch.int, device=num_tokens.device)
+    return loss, num_tokens, loss_reduced_dict
+
+
 def forward_step(data_iterator, model):
     """Forward training step.
 
@@ -176,9 +262,7 @@ def forward_step(data_iterator, model):
             print("filter_ignore_data get True, skip current microbatch...")
             output_tensor = output_tensor * 0.0
 
-    model_config = get_model_config()
-    loss_func = getattr(model_config, "loss_func", default_loss_func)
-    return output_tensor, partial(loss_func, loss_mask, loss_weights)
+    return output_tensor, partial(loss_func_internvl, loss_mask, loss_weights)
 
 
 def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None):
@@ -234,7 +318,7 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
 
 def model_provider(pre_process=True, post_process=True, vp_stage=None):
     """Build the multimodal model with this run's args and model config."""
-    return omni_model_provider(
+    return multimodal_model_provider(
         pre_process,
         post_process,
         vp_stage=vp_stage,
@@ -242,6 +326,23 @@ def model_provider(pre_process=True, post_process=True, vp_stage=None):
         model_config=get_model_config(),
         runtime=pretrain_vlm.build_multimodal_runtime(get_args()),
     )
+
+
+def _reorder_internvl_batch(data, ctx):
+    """Bind this run's image size and image-context token id to the InternVL layout."""
+    return reorder_data_for_internvl(
+        data,
+        ctx,
+        img_size=get_args().force_image_size,
+        img_context_token_id=get_tokenizer().tokenizer.convert_tokens_to_ids(IMG_CONTEXT_TOKEN),
+    )
+
+
+INTERNVL_BATCH_LAYOUT = BatchLayout(
+    reorder=_reorder_internvl_batch,
+    cumulative_lengths=internvl_cumulative_lengths,
+    caller="InternVL",
+)
 
 
 def train(args):

@@ -55,7 +55,7 @@ except ImportError:
     layernorm_forward = None
     _transformers_available = False
 
-from loongforge.models.embodied.pi05.configuration_pi05 import Pi05ModelConfig
+from loongforge.models.embodied.pi05.model_configuration_pi05 import Pi05ModelConfig
 from loongforge.models.embodied.registry import register_model
 
 logger = logging.getLogger(__name__)

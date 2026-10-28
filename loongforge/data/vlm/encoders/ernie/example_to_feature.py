@@ -26,7 +26,7 @@ from copy import deepcopy
 
 import numpy as np
 
-from loongforge.constants import IGNORE_INDEX
+from loongforge.data import IGNORE_INDEX
 from . import adaptive as _adaptive_mod
 from . import video_process as _video_process_mod
 from .utils.data_utils import group_frame_by_video, image_info_2_hash, merge_list

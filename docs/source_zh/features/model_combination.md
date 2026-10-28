@@ -11,7 +11,7 @@
 
 ## 1. 核心组件
 
-### OmniEncoderModel
+### MultimodalEncoderModel
 所有编码器组件的抽象基类。
 它将图像、视频、音频或其他模态数据转换为 LLM 可理解的嵌入表示。
 
@@ -21,7 +21,7 @@
 
 ```python
 # loongforge/models/multimodal/encoder_model.py
-class OmniEncoderModel(torch.nn.Module):
+class MultimodalEncoderModel(torch.nn.Module):
     def __init__(self, config, ...):
         # 文本模态
         self.text_encoder = LanguageModelEmbedding(...)
@@ -49,7 +49,7 @@ self.image_encoder.register_forward_hook(
 
 ---
 
-### OmniCombinationModel
+### MultimodalCombinationModel
 多模态组合的核心组件。
 定义数据**何时以及如何**在模态组件之间流动；**不包含实际计算逻辑**。
 
@@ -57,11 +57,11 @@ self.image_encoder.register_forward_hook(
 
 ```python
 # loongforge/models/multimodal/combination_model.py
-class OmniCombinationModel(BaseMegatronModule):
+class MultimodalCombinationModel(BaseMegatronModule):
     def __init__(self, config, ...):
         # 1. 动态初始化编码器模型
         if config.image_encoder is not None and add_encoder:
-            self.encoder_model = OmniEncoderModel(config, ...)
+            self.encoder_model = MultimodalEncoderModel(config, ...)
 
         # 2. 动态初始化 LLM
         if config.foundation is not None and add_decoder:
@@ -70,8 +70,8 @@ class OmniCombinationModel(BaseMegatronModule):
 
 ---
 
-### OmniModelProvider
-解析全局参数，处理分布式初始化（如流水线并行拆分），最终实例化 `OmniCombinationModel`。
+### MultimodalModelProvider
+解析全局参数，处理分布式初始化（如流水线并行拆分），最终实例化 `MultimodalCombinationModel`。
 
 关键能力：
 
@@ -79,14 +79,14 @@ class OmniCombinationModel(BaseMegatronModule):
 
 ```python
 # loongforge/models/multimodal/multimodal_model_provider.py
-def omni_model_provider(...):
+def multimodal_model_provider(...):
     # 自动检测当前 rank 是否为第一个 PP 阶段；决定是否加载编码器
     # 这对于将编码器和解码器放置在不同 GPU 上至关重要
     if args.encoder_pipeline_model_parallel_size in [0, None]:
         add_encoder = mpu.is_pipeline_first_stage()
 
     # 使用环境感知标志构建模型
-    return OmniCombinationModel(..., add_encoder=add_encoder, ...)
+    return MultimodalCombinationModel(..., add_encoder=add_encoder, ...)
 ```
 
 * **参数桥接与适配**：获取全局训练参数和模型配置，将训练关键超参数（`language_vocab_size`、`language_max_sequence_length` 等）注入模型初始化，保证模型配置与训练环境的一致性。
@@ -95,7 +95,7 @@ def omni_model_provider(...):
 args = get_args()
 model_config = get_model_config()
 
-model = OmniCombinationModel(
+model = MultimodalCombinationModel(
     model_config,
     language_vocab_size=args.padded_vocab_size,
     language_max_sequence_length=args.max_position_embeddings,
@@ -153,9 +153,6 @@ model:
   # 多模态模型类型
   model_type: intern_vl
 
-  # 基座模型的损失函数
-  loss_func: ${loss_func:loss_func_internvl}
-
   # 显式设置投影层输出维度以匹配 LLM hidden_size
   image_projector:
     hidden_size: 4096
@@ -167,7 +164,7 @@ model:
     rotary_base: 1000000
 
     # Megatron 层规范，支持 Transformer-Engine 加速
-    model_spec: ["loongforge.models.language.internlm.internlm_layer_spec",
+    model_spec: ["loongforge.models.foundation.internlm.internlm_layer_spec",
                  "get_internlm_layer_with_te_spec"]
 ```
 

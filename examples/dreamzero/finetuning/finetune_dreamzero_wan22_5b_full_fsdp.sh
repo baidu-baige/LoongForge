@@ -173,7 +173,7 @@ DATA_ARGS=(
     --dataloader-prefetch-factor "$DATALOADER_PREFETCH_FACTOR"
 )
 TRAINING_ARGS=(
-    --trainer-type FinetuneTrainer
+    --trainer-type DreamZeroTrainer
     --train-iters "$TRAIN_ITERS"
     --per-device-batch-size "$PER_DEVICE_BATCH_SIZE"
     --gradient-accumulation-steps "$GRADIENT_ACCUMULATION_STEPS"

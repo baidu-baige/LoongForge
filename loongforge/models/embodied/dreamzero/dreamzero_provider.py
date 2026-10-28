@@ -32,7 +32,7 @@ from .action_state_checkpoint import (
     ACTION_STATE_TARGETS as _ACTION_STATE_TARGETS,
     candidate_action_state_files,
 )
-from .configuration_dreamzero import (
+from .model_configuration_dreamzero import (
     DreamZeroConfig,
     _BACKBONE_PRESETS,
     dreamzero_dit_performance_options,

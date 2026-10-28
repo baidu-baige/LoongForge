@@ -4,8 +4,8 @@
 """Single optimizer step: dataclasses, forward/backward, grad clip, update.
 
 All functions operate on an explicit ``StepContext`` rather than ``self.*``.
-``TorchOptimization`` (frozen dataclass, all-None = default behavior)
-lets per-model optimizations override any slice without subclassing.
+``TrainerHooks`` (frozen dataclass, all-None = default behavior)
+lets a trainer type override any slice without subclassing.
 """
 
 from __future__ import annotations
@@ -56,7 +56,7 @@ class StepContext:
     ctx: Any  # DistributedContext
     timers: Any  # StageTimers
     method: ModuleType
-    optimization: "TorchOptimization"
+    hooks: "TrainerHooks"
     fetch_cpu_batch: Callable[[], Any]
     log_loss_spike: Callable[[int, float], None]
     iteration: int = 0
@@ -64,7 +64,7 @@ class StepContext:
 
 
 @dataclass(frozen=True)
-class TorchOptimization:
+class TrainerHooks:
     # consulted by engines/torch/runner.py
     prepare_args: Optional[Callable] = None
     configure_gc: Optional[Callable] = None
@@ -102,8 +102,8 @@ def train_fp8_ctx(step_ctx: StepContext):
     ``te.fp8_autocast`` has to enclose the whole model call, so both the
     standard forward and the CUDA-graph capture go through this.
     """
-    if step_ctx.optimization.fp8_forward_context is not None:
-        return step_ctx.optimization.fp8_forward_context(step_ctx.training_args)
+    if step_ctx.hooks.fp8_forward_context is not None:
+        return step_ctx.hooks.fp8_forward_context(step_ctx.training_args)
     from loongforge.engines.torch.quantization.fp8_utils import resolve_fp8_forward_ctx
 
     return resolve_fp8_forward_ctx(step_ctx.training_args)
@@ -122,9 +122,9 @@ def forward(step_ctx: StepContext, batch):
 
 def move_batch(step_ctx: StepContext, batch):
     """Move a fetched batch to the model device."""
-    opt = step_ctx.optimization
-    if opt.move_batch_to_device is not None:
-        return opt.move_batch_to_device(batch, step_ctx.model)
+    hooks = step_ctx.hooks
+    if hooks.move_batch_to_device is not None:
+        return hooks.move_batch_to_device(batch, step_ctx.model)
     return _move_batch_to_device(batch, step_ctx.model)
 
 
@@ -256,23 +256,23 @@ def _clean_nan_gradients(model, optimizer) -> None:
 
 def train_step(step_ctx: StepContext) -> StepResult:
     """One optimizer step. Returns StepResult."""
-    opt = step_ctx.optimization
-    if opt.run_step is not None:
-        return opt.run_step(step_ctx)
+    hooks = step_ctx.hooks
+    if hooks.run_step is not None:
+        return hooks.run_step(step_ctx)
     args, st = step_ctx.training_args, step_ctx.timers
 
     with st("optimizer-zero-grad"):
         step_ctx.optimizer.zero_grad()
 
-    log_dict, health = (opt.forward_backward or forward_backward)(step_ctx)
+    log_dict, health = (hooks.forward_backward or forward_backward)(step_ctx)
 
     if args.check_for_nan_in_loss_and_grad:
         with st("nan-grad-cleanup"):
-            (opt.clean_nan_gradients or _clean_nan_gradients)(step_ctx.model, step_ctx.optimizer)
+            (hooks.clean_nan_gradients or _clean_nan_gradients)(step_ctx.model, step_ctx.optimizer)
 
     with st("grad-clip"):
         if args.clip_grad > 0:
-            grad_norm = (opt.clip_gradients or _clip_gradients)(step_ctx.model, step_ctx.optimizer, args.clip_grad)
+            grad_norm = (hooks.clip_gradients or _clip_gradients)(step_ctx.model, step_ctx.optimizer, args.clip_grad)
         else:
             from loongforge.engines.torch.optimizer import get_grad_norm
             grad_norm = get_grad_norm(step_ctx.model)

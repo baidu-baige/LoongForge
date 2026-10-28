@@ -19,7 +19,7 @@
 """XVLA per-sample transforms.
 
 Thin :class:`BaseTransform` wrappers around the processing cores in
-:mod:`loongforge.models.embodied.xvla.processing_xvla`. The cores hold the
+:mod:`loongforge.models.embodied.xvla.xvla_processor`. The cores hold the
 tokenizer / image_processor loading + encode logic and have no dependency on
 the training-side ``loongforge.data.embodied`` package, so they can be reused
 from inference paths (e.g. :meth:`XVLAPolicy.predict_action`) without
@@ -49,11 +49,11 @@ from loongforge.data.embodied.registry import (
     TransformBuilderContext,
     register_transform_builder,
 )
-from loongforge.models.embodied.xvla.processing_xvla import (
+from loongforge.models.embodied.xvla.xvla_processor import (
     XVLAImageProcessorCore,
     XVLATokenizerCore,
 )
-from loongforge.models.embodied.xvla.configuration_xvla import resolve_domain_id
+from loongforge.models.embodied.xvla.model_configuration_xvla import resolve_domain_id
 
 
 class XVLATokenizeTransform(BaseTransform, XVLATokenizerCore):

@@ -266,12 +266,10 @@ class StageTimers:
 class TrainingLogger:
     """Handles training metrics logging, W&B integration, and progress tracking.
 
-    This class centralizes all logging-related functionality that was previously
-    scattered in BaseTrainer. It provides:
+    This class centralizes all logging-related functionality. It provides:
       - Metrics collection and formatting
       - W&B integration
       - JSONL metrics export
-      - Progress bar management
       - Training configuration logging
     """
 

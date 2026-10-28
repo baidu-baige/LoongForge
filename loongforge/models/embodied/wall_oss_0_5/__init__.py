@@ -3,7 +3,7 @@
 
 """Wall-OSS-0.5 embodied model package."""
 
-from loongforge.models.embodied.wall_oss_0_5.configuration_wall_oss_0_5 import (
+from loongforge.models.embodied.wall_oss_0_5.model_configuration_wall_oss_0_5 import (
     WallOss05ModelConfig,
 )
 

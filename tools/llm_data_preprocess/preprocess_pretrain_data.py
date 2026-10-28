@@ -22,8 +22,8 @@ except ImportError:
 
 from loongforge.engines.megatron.tokenizer import build_tokenizer
 from megatron.core.datasets import indexed_dataset
-from loongforge import constants
-from loongforge.constants import get_all_model_families
+from loongforge.data import TrainingPhase
+from loongforge.models.catalog import get_all_model_families
 
 
 # https://stackoverflow.com/questions/33139531/preserve-empty-lines-with-nltks-punkt-tokenizer
@@ -271,7 +271,7 @@ def get_args():
     args.make_vocab_size_divisible_by = 128
     args.tensor_model_parallel_size = 1
     args.vocab_extra_ids = 0
-    args.training_phase=constants.TrainingPhase.PRETRAIN
+    args.training_phase=TrainingPhase.PRETRAIN
     args.padding_side = "right"
 
     return args

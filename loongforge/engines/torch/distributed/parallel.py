@@ -158,13 +158,13 @@ def _wrap_dmuon_fsdp(
     *,
     dmuon_shard=None,
 ) -> nn.Module:
-    """Apply the extension-owned FSDP2 + DMuon wrap path.
+    """Apply the FSDP2 + DMuon wrap path supplied by the trainer hooks.
 
     DMuon requires the caller to wrap after ``dmuon.dedicate_params()`` claims
     the Muon-route parameters, before any ``fully_shard`` group exists. The
-    generic planner in ``_wrap_fsdp`` cannot express that ordering, so a model
-    extension supplies ``dmuon_shard`` (``TorchOptimization.wrap_model``) and
-    builds every group itself. The engine keeps the backend-side preparation.
+    generic planner in ``_wrap_fsdp`` cannot express that ordering, so the
+    model's trainer hooks supply ``dmuon_shard`` (``TrainerHooks.wrap_model``)
+    and build every group. The engine keeps the backend-side preparation.
 
     Unlike ``_wrap_fsdp``, storage defaults to fp32 rather than ``--dtype``:
     DMuon keeps fp32 master weights for its dedicated params, so the whole model
@@ -172,9 +172,9 @@ def _wrap_dmuon_fsdp(
     """
     if dmuon_shard is None:
         raise NotImplementedError(
-            "--optimizer=dmuon needs an extension that supplies the FSDP wrap; "
+            "--optimizer=dmuon needs trainer hooks that supply the FSDP wrap; "
             f"model {model.__class__.__name__} was wrapped without one. "
-            "Register a factory in TORCH_TRAINER_TYPES (training/registry.py)."
+            "Register a hooks factory in TORCH_TRAINER_TYPES (loongforge/train.py)."
         )
 
     # Local import to break the train/__init__ -> trainers -> this module cycle.

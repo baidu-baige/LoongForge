@@ -29,7 +29,7 @@ from megatron.training.utils import (
     reduce_max_stat_across_model_parallel_group,
 )
 
-from loongforge import constants
+from loongforge.data import TrainingPhase
 from loongforge.engines.megatron import get_args
 from loongforge.engines.megatron.distributed.batch_broadcast import (
     gather_variable_shape_embeddings,
@@ -95,7 +95,7 @@ def dump_model_input_example_once(
     _PRINTED_MODEL_INPUT_EXAMPLE = True
 
     from loongforge.engines.megatron.global_vars import get_tokenizer as get_loongforge_tokenizer
-    from loongforge.constants import IGNORE_INDEX
+    from loongforge.data import IGNORE_INDEX
 
     tokenizer = get_loongforge_tokenizer()
 
@@ -268,6 +268,7 @@ def train_step(
             all_raw_batches = [next(backup_iter) for _ in range(num_real_microbatch)]
 
         batch_list = []
+        round_outputs = []
         last_real_batch = None
         has_any_real = (pp_layer * tp_size < num_real_microbatch)
         embedding_list = hetero_step.embedding_list
@@ -301,58 +302,13 @@ def train_step(
                     last_real_batch = batch
                     batch_list.append(batch)
 
-            input_embeds_list = []
-            for i in range(tp_size):
-                input_embeds = unwrapped_model.encoder_model.text_forward(
-                    batch_list[i]["tokens"],
-                    batch_list[i]["position_ids"]
-                )
-                input_embeds_list.append(input_embeds)
-
-            batch_id = mpu.get_tensor_model_parallel_rank()
-            (
-                local_images,
-                local_image_grid_thw,
-                local_pixel_values_videos,
-                local_video_grid_thw,
-                local_input_ids,
-                local_attn_mask,
-                local_labels,
-                local_cu_lengths,
-                local_max_lengths,
-                local_position_ids,
-                local_loss_mask,
-                local_packed_seq_params,
-            ) = batch_list[batch_id].values()
-
             (
                 combined_embeddings,
-                decode_input,
                 visual_pos_masks,
                 deepstack_visual_embeds,
-            ) = unwrapped_model.encoder_model(
-                input_ids=local_input_ids,
-                position_ids=local_position_ids,
-                image_inputs=dict(
-                    images=local_images,
-                    image_grid_thw=local_image_grid_thw,
-                ) if local_images is not None else None,
-                video_inputs=dict(
-                    pixel_values_videos=local_pixel_values_videos,
-                    video_grid_thw=local_video_grid_thw,
-                ) if local_pixel_values_videos is not None else None,
-                inference_params=None,
-                inputs_embeds=input_embeds_list[batch_id],
-                enable_encoder_hetero_dp=True,
-            )
-
-            unwrapped_model.vit_contexts.setdefault(round, {
-                "local_embedding": combined_embeddings,
-                "grads": None,
-                "local_visual_pos_masks": visual_pos_masks,
-                "local_deepstack_visual_embeds": deepstack_visual_embeds,
-                "local_deepstack_visual_embeds_grads": None,
-            })
+            ) = unwrapped_model.hetero_encoder_forward(batch_list, round)
+            # Shape references for the gradient scatter after the decoder backward.
+            round_outputs.append((combined_embeddings, deepstack_visual_embeds))
 
             embedding_list.append(
                 gather_variable_shape_embeddings(
@@ -524,47 +480,38 @@ def train_step(
                 src_rank = 0
                 group = mpu.get_model_parallel_group()
                 local_rank = torch.distributed.get_rank(group=group)
-                ctx = local_model.vit_contexts[round]
-                ctx["grads"] = scatter_variable_shape_embeddings(
+                local_embedding, local_deepstack_visual_embeds = round_outputs[round]
+                round_outputs[round] = None
+                grads = scatter_variable_shape_embeddings(
                     reshaped_grad_list[round] if local_rank == src_rank else None,
-                    local_embedding_ref=ctx["local_embedding"],
+                    local_embedding_ref=local_embedding,
                     group=mpu.get_model_parallel_group()
                 )
 
+                deepstack_grads = None
                 deepstack_grads_for_round = hetero_step.deepstack_grad_list[round]
                 if deepstack_grads_for_round is not None:
-                    ctx["local_deepstack_visual_embeds_grads"] = []
-                    for i in range(len(ctx["local_deepstack_visual_embeds"])):
+                    deepstack_grads = []
+                    for i in range(len(local_deepstack_visual_embeds)):
                         # Pad None entries (mock positions) with zero tensors for scatter
                         if local_rank == src_rank:
                             padded_ds_grads = []
                             for g in deepstack_grads_for_round[i]:
                                 if g is None:
-                                    padded_ds_grads.append(torch.zeros_like(ctx["local_deepstack_visual_embeds"][i]))
+                                    padded_ds_grads.append(torch.zeros_like(local_deepstack_visual_embeds[i]))
                                 else:
                                     padded_ds_grads.append(g)
                         else:
                             padded_ds_grads = None
-                        ctx["local_deepstack_visual_embeds_grads"].append(
+                        deepstack_grads.append(
                             scatter_variable_shape_embeddings(
                                 padded_ds_grads,
-                                local_embedding_ref=ctx["local_deepstack_visual_embeds"][i],
+                                local_embedding_ref=local_deepstack_visual_embeds[i],
                                 group=mpu.get_model_parallel_group()
                             )
                         )
 
-                backward_tensors = [ctx["local_embedding"]]
-                backward_grads = [ctx["grads"]]
-                if ctx["local_deepstack_visual_embeds_grads"] is not None:
-                    backward_tensors += ctx["local_deepstack_visual_embeds"]
-                    backward_grads += ctx["local_deepstack_visual_embeds_grads"]
-
-                torch.autograd.backward(
-                    tensors=backward_tensors,
-                    grad_tensors=backward_grads,
-                    retain_graph=False,
-                )
-                del local_model.vit_contexts[round]
+                local_model.hetero_encoder_backward(round, grads, deepstack_grads)
 
             if args.overlap_grad_reduce and _encoder_bucket_groups:
                 for bg in _encoder_bucket_groups:
@@ -575,8 +522,7 @@ def train_step(
         finally:
             _rsm.state = _prev_rsm_state
 
-        for _round_key in list(local_model.vit_contexts.keys()):
-            del local_model.vit_contexts[_round_key]
+        local_model.clear_hetero_contexts()
         
         hetero_step.end_step()
 
@@ -651,7 +597,7 @@ def train_step(
                         loss_reduced[key] = torch.tensor(0.0)
                         continue
                 if (
-                    args.training_phase == constants.TrainingPhase.SFT
+                    args.training_phase == TrainingPhase.SFT
                     and not args.legacy_reporting_loss_reduction
                 ):
                     if args.calculate_per_token_loss:

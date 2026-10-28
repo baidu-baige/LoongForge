@@ -34,7 +34,7 @@ from typing import (
     Union,
 )
 
-from loongforge.constants import IGNORE_INDEX
+from loongforge.data import IGNORE_INDEX
 
 from .plugins.base import MMPlugin
 

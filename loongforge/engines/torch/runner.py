@@ -21,7 +21,7 @@ from typing import Any, Dict, Optional
 from loongforge.engines.torch.initialize import apply_runtime_args, resolve_dtype
 from loongforge.engines.torch.train_step import (
     StepContext,
-    TorchOptimization,
+    TrainerHooks,
     train_step,
 )
 
@@ -37,13 +37,13 @@ class TorchRunner:
         model_cfg,
         data_cfg,
         method: ModuleType,
-        optimization: TorchOptimization,
+        hooks: TrainerHooks,
     ):
         self.training_args = training_args
         self.model_cfg = model_cfg
         self.data_cfg = data_cfg
         self.method = method
-        self.optimization = optimization
+        self.hooks = hooks
 
         self.ctx = None
         self.model = None
@@ -98,11 +98,11 @@ class TorchRunner:
         from loongforge.engines.torch.optimizer.lr_scheduler import build_scheduler
 
         training_args = self.training_args
-        opt = self.optimization
+        hooks = self.hooks
 
-        # Apply optimization-level args tweak
-        if opt.prepare_args is not None:
-            training_args = opt.prepare_args(training_args)
+        # Apply trainer-specific args tweak
+        if hooks.prepare_args is not None:
+            training_args = hooks.prepare_args(training_args)
             self.training_args = training_args
 
         # 1. Distributed context
@@ -125,8 +125,8 @@ class TorchRunner:
         log_effective_config(training_args, self.model_cfg, self.data_cfg)
 
         # GC configuration
-        if opt.configure_gc is not None:
-            opt.configure_gc(training_args, self.ctx)
+        if hooks.configure_gc is not None:
+            hooks.configure_gc(training_args, self.ctx)
         else:
             self._configure_manual_gc()
 
@@ -189,8 +189,8 @@ class TorchRunner:
             start_msg=f"wrap_model: strategy={training_args.distributed_strategy}, dtype={training_args.dtype}",
             end_msg="done in {elapsed}",
         ):
-            if opt.wrap_model is not None:
-                self.model = opt.wrap_model(self.model, training_args, self.ctx)
+            if hooks.wrap_model is not None:
+                self.model = hooks.wrap_model(self.model, training_args, self.ctx)
             else:
                 self.model = wrap_model(self.model, training_args, self.ctx)
 
@@ -214,8 +214,8 @@ class TorchRunner:
             "optimizer",
             start_msg="building optimizer", end_msg="optimizer built in {elapsed}"
         ):
-            if opt.build_optimizer is not None:
-                self.optimizer = opt.build_optimizer(self.model, training_args, self.ctx)
+            if hooks.build_optimizer is not None:
+                self.optimizer = hooks.build_optimizer(self.model, training_args, self.ctx)
             else:
                 self.optimizer = build_optimizer(self.model, training_args)
             self.lr_scheduler = build_scheduler(self.optimizer, training_args)
@@ -241,6 +241,8 @@ class TorchRunner:
             self.dataloaders = self.method.build_dataloaders(
                 self.model_cfg, self.data_cfg, training_args, self.ctx
             )
+            # The method's first loader is the training loader; its epoch is the run's epoch.
+            self._train_loader = next(iter(self.dataloaders))
             self._restore_dataloader_states()
 
         # 10. Print stats
@@ -249,9 +251,9 @@ class TorchRunner:
         # Hook
         self.method.on_train_begin(self.model, self.ctx)
 
-        # Optimization after_setup hook
-        if opt.after_setup is not None:
-            opt.after_setup(training_args)
+        # Trainer after_setup hook
+        if hooks.after_setup is not None:
+            hooks.after_setup(training_args)
 
     # ═══════════════════════════════════════════════
     # Training loop
@@ -262,7 +264,7 @@ class TorchRunner:
         from loongforge.engines.torch.logging import StageTimers
 
         training_args = self.training_args
-        opt = self.optimization
+        hooks = self.hooks
         log_interval = training_args.log_interval
         detail_log_interval = training_args.detail_log_interval
         save_interval = training_args.save_interval
@@ -291,8 +293,8 @@ class TorchRunner:
             ctx=self.ctx,
             timers=self._stage_timers,
             method=self.method,
-            optimization=opt,
-            fetch_cpu_batch=partial(self._fetch_batch_cpu, "vla"),
+            hooks=hooks,
+            fetch_cpu_batch=partial(self._fetch_batch_cpu, self._train_loader),
             log_loss_spike=self.logger.log_loss_spike,
         )
 
@@ -347,8 +349,8 @@ class TorchRunner:
                 on_step_end(metrics, self.completed_steps, self.model, training_args=training_args)
 
             # Step-end hook
-            if opt.on_step_end is not None:
-                opt.on_step_end(metrics, self.completed_steps, self.model)
+            if hooks.on_step_end is not None:
+                hooks.on_step_end(metrics, self.completed_steps, self.model)
             self._maybe_collect_manual_gc()
 
             # Profiler stop
@@ -514,7 +516,7 @@ class TorchRunner:
     def _init_data_iterator(self, name: str):
         """Initialize iterator for named dataloader."""
         dl = self.dataloaders[name]
-        epoch = self._epochs.get(name, self.current_epoch if name == "vla" else 0)
+        epoch = self._epochs.get(name, self.current_epoch if name == self._train_loader else 0)
         sampler = getattr(dl, "sampler", None)
         restored_from_state = name in self._resume_dataloader_state
         if (
@@ -532,7 +534,7 @@ class TorchRunner:
     def _advance_epoch(self, name: str):
         """Move the named dataloader to the next epoch."""
         self._epochs[name] = self._epochs.get(name, 0) + 1
-        if name == "vla":
+        if name == self._train_loader:
             self.current_epoch = self._epochs[name]
         dl = self.dataloaders[name]
         if hasattr(dl, "sampler") and hasattr(dl.sampler, "set_epoch"):
@@ -651,11 +653,11 @@ class TorchRunner:
     def _finalize(self):
         """End of training: save final model, close W&B."""
         from loongforge.engines.torch.checkpointing import flush_pending_save
-        opt = self.optimization
+        hooks = self.hooks
 
-        # Optimization close hook (e.g. graph release, GC restore)
-        if opt.close is not None:
-            opt.close()
+        # Trainer close hook (e.g. graph release, GC restore)
+        if hooks.close is not None:
+            hooks.close()
 
         save_interval = self.training_args.save_interval
         if save_interval and self.completed_steps % save_interval != 0:

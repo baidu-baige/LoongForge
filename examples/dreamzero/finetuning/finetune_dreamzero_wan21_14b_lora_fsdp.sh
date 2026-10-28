@@ -164,7 +164,7 @@ SAVE_INTERVAL=${SAVE_INTERVAL:-0}
 SEED=${SEED:-42}
 
 TRAINING_ARGS=(
-    --trainer-type FinetuneTrainer
+    --trainer-type DreamZeroTrainer
     --use-lora
     --lora-r "${LORA_R:-4}"
     --lora-alpha "${LORA_ALPHA:-4}"

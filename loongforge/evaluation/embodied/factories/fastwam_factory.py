@@ -43,7 +43,7 @@ from typing import Any, Dict, Optional
 from loongforge.evaluation.embodied.factories.registry import register_factory
 from loongforge.evaluation.embodied.servers.eval_server_config import EvalServerArgs
 from loongforge.evaluation.embodied.servers.loongforge_policy import PredictActionModelSpec
-from loongforge.models.embodied.fastwam.configuration_fastwam import FastWAMModelConfig
+from loongforge.models.embodied.fastwam.modeling_configuration_fastwam import FastWAMModelConfig
 from loongforge.models.embodied.registry import build_model
 
 logger = logging.getLogger(__name__)

@@ -6,7 +6,9 @@
 Pipeline: ``samples.py`` (sample types) -> ``cookers.py`` (raw WebDataset to
 samples) -> ``encoders/`` (samples to model inputs) -> ``dataloader.py``
 (collation and Energon iterators). ``packer.py`` and
-``length_sort_dataset.py`` control packing and batch order.
+``length_sort_dataset.py`` control packing and batch order; ``samplers.py``
+holds the encoder samplers of full heterogeneous DP; ``dp_balance_layout.py``
+depacks and re-packs a packed batch for DP load balancing.
 ``task_encoder_base.py`` holds the base sample types and ``BaseTaskEncoder``.
 """
 

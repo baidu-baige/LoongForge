@@ -7,7 +7,7 @@ import pytest
 import torch
 from torch.utils.data import DataLoader
 
-from loongforge.engines.megatron.distributed.chunkpipe import ChunkPipeGroupBatchSampler
+from loongforge.data.llm.samplers import ChunkPipeGroupBatchSampler
 
 # Source groups of 1, 2 and 3 chunks; every group fits a step of 4 micro-batches.
 GROUP_SIZES = [1, 2, 2, 3, 3, 3, 1, 1, 2, 2, 1, 3, 3, 3, 1, 2, 2, 1, 1, 1]

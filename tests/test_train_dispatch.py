@@ -11,14 +11,11 @@ import unittest
 from unittest.mock import patch
 
 import loongforge.train as train
-from loongforge import constants
+from loongforge.data import TrainingPhase
 from loongforge.models import catalog
-from loongforge.training import registry
-
-torch_registry = registry
 
 ROOT = Path(__file__).resolve().parents[1]
-PHASES = (constants.TrainingPhase.PRETRAIN, constants.TrainingPhase.SFT)
+PHASES = (TrainingPhase.PRETRAIN, TrainingPhase.SFT)
 
 
 def _literal_assignment(path, name):
@@ -32,17 +29,17 @@ def _literal_assignment(path, name):
 
 def _previous_method(family, phase):
     """Module path that the removed @register_model_trainer factories ran for (family, phase), or None."""
-    if family in constants.LanguageModelFamilies.names():
+    if family in catalog.LanguageModelFamilies.names():
         return {"pretrain": "loongforge.training.llm.pretrain", "sft": "loongforge.training.llm.sft"}[phase]
-    if family == constants.VisionLanguageModelFamilies.INTERN_VL:
+    if family == catalog.VisionLanguageModelFamilies.INTERN_VL:
         return {"sft": "loongforge.training.vlm.sft_internvl"}.get(phase)
-    if family == constants.VisionLanguageModelFamilies.ERNIE4_5_VL:
+    if family == catalog.VisionLanguageModelFamilies.ERNIE4_5_VL:
         return {"sft": "loongforge.training.vlm.sft_ernie"}.get(phase)
-    if family in constants.VisionLanguageModelFamilies.names():
+    if family in catalog.VisionLanguageModelFamilies.names():
         return {"pretrain": "loongforge.training.vlm.pretrain_vlm", "sft": "loongforge.training.vlm.sft_vlm"}[phase]
-    if family in (constants.DiffusionModelFamilies.WAN2_1_I2V, constants.DiffusionModelFamilies.WAN2_2_I2V):
+    if family in (catalog.DiffusionModelFamilies.WAN2_1_I2V, catalog.DiffusionModelFamilies.WAN2_2_I2V):
         return {"pretrain": "loongforge.training.diffusion.pretrain_wan"}.get(phase)
-    if family == constants.DiffusionModelFamilies.QWEN_IMAGE:
+    if family == catalog.DiffusionModelFamilies.QWEN_IMAGE:
         return {"pretrain": "loongforge.training.diffusion.pretrain_qwen_image"}.get(phase)
     return None
 
@@ -56,28 +53,28 @@ class TrainDispatchTest(unittest.TestCase):
         )
         for trainer, method_name, model in cases:
             method = object()
-            factory = SimpleNamespace(build_optimization=object())
+            factory = SimpleNamespace(build_hooks=object())
             with self.subTest(trainer=trainer), \
-                    patch.object(torch_registry.importlib, "import_module", side_effect=[method, factory]) as load:
-                self.assertEqual(torch_registry.resolve_torch_trainer(trainer), (method, factory.build_optimization))
+                    patch.object(train.importlib, "import_module", side_effect=[method, factory]) as load:
+                self.assertEqual(train.resolve_torch_trainer(trainer), (method, factory.build_hooks))
                 self.assertEqual([call.args[0] for call in load.call_args_list], [
                     f"loongforge.training.embodied.{method_name}",
-                    f"loongforge.training.embodied.optimizations.{model}.factory",
+                    f"loongforge.training.embodied.custom.{model}.factory",
                 ])
 
     def test_default_torch_trainer_and_invalid_selection(self):
-        port = type("TorchOptimization", (), {})
-        module = SimpleNamespace(TorchOptimization=port)
+        port = type("TrainerHooks", (), {})
+        module = SimpleNamespace(TrainerHooks=port)
         with patch.dict(sys.modules, {"loongforge.engines.torch.train_step": module}), \
-                patch.object(torch_registry.importlib, "import_module") as load:
-            method, build = torch_registry.resolve_torch_trainer("FinetuneTrainer")
+                patch.object(train.importlib, "import_module") as load:
+            method, build = train.resolve_torch_trainer("FinetuneTrainer")
             self.assertIs(method, load.return_value)
             self.assertIsInstance(build(None), port)
             load.assert_called_once_with("loongforge.training.embodied.sft")
             load.reset_mock()
             for name in ("", "missing"):
                 with self.assertRaises(ValueError):
-                    torch_registry.resolve_torch_trainer(name)
+                    train.resolve_torch_trainer(name)
             load.assert_not_called()
 
     def test_routes_registered_models_and_config_only_megatron(self):
@@ -89,52 +86,50 @@ class TrainDispatchTest(unittest.TestCase):
             (["train.py", "--config-file", "custom.yaml"], "megatron"),
         )
         for argv, engine in cases:
-            parsed = object()
             result = object()
-            run = lambda: result
-            registry_module = SimpleNamespace(resolve=lambda _engine, _parsed: run)
             with (
                 self.subTest(argv=argv),
                 patch.object(sys, "argv", argv),
-                patch.object(train, "_parse_args", return_value=parsed) as parse,
-                patch.object(train, "import_module", return_value=registry_module) as load,
+                patch.object(train, "_run_megatron", return_value=result) as run_megatron,
+                patch.object(train, "_run_torch", return_value=result) as run_torch,
             ):
                 self.assertIs(train.main(), result)
-                parse.assert_called_once_with(engine)
-                load.assert_called_once_with("loongforge.training.registry")
+                selected, skipped = (run_megatron, run_torch) if engine == "megatron" else (run_torch, run_megatron)
+                selected.assert_called_once_with()
+                skipped.assert_not_called()
 
     def test_megatron_family_and_phase_resolve_to_previous_method(self):
         families = [
-            *constants.LanguageModelFamilies.names(),
-            *constants.VisionLanguageModelFamilies.names(),
-            *constants.DiffusionModelFamilies.names(),
+            *catalog.LanguageModelFamilies.names(),
+            *catalog.VisionLanguageModelFamilies.names(),
+            *catalog.DiffusionModelFamilies.names(),
         ]
         for family in families:
             for phase in PHASES:
                 expected = _previous_method(family, phase)
                 with self.subTest(family=family, phase=phase), \
-                        patch.object(registry.importlib, "import_module") as load:
+                        patch.object(train.importlib, "import_module") as load:
                     if expected is None:
                         with self.assertRaises(ValueError):
-                            registry.resolve_method(family, phase)
+                            train.resolve_method(family, phase)
                         load.assert_not_called()
                     else:
-                        registry.resolve_method(family, phase)
+                        train.resolve_method(family, phase)
                         load.assert_called_once_with(expected)
 
     def test_split_model_config_reads_top_level_or_model_section(self):
-        llm = constants.LanguageModelFamilies.names()[0]
-        vlm = constants.VisionLanguageModelFamilies.names()[0]
+        llm = catalog.LanguageModelFamilies.names()[0]
+        vlm = catalog.VisionLanguageModelFamilies.names()[0]
         top = SimpleNamespace(model_type=llm)
-        self.assertEqual(constants.split_model_config(top), (llm, top))
+        self.assertEqual(catalog.split_model_config(top), (llm, top))
         nested = SimpleNamespace(model_type=vlm)
-        self.assertEqual(constants.split_model_config(SimpleNamespace(model_type=vlm, model=nested)), (vlm, nested))
-        self.assertEqual(constants.split_model_config(SimpleNamespace(model=nested)), (vlm, nested))
+        self.assertEqual(catalog.split_model_config(SimpleNamespace(model_type=vlm, model=nested)), (vlm, nested))
+        self.assertEqual(catalog.split_model_config(SimpleNamespace(model=nested)), (vlm, nested))
         with self.assertRaises(ValueError):
-            constants.split_model_config(SimpleNamespace(model_type=vlm))
+            catalog.split_model_config(SimpleNamespace(model_type=vlm))
 
     def test_megatron_methods_train_through_pretrain(self):
-        for module in sorted(set(registry.METHOD_REGISTRY.values())):
+        for module in sorted(set(train.METHOD_REGISTRY.values())):
             with self.subTest(module=module):
                 tree = ast.parse((ROOT / (module.replace(".", "/") + ".py")).read_text(encoding="utf-8"))
                 train_fn = next(
@@ -202,7 +197,7 @@ class TrainDispatchTest(unittest.TestCase):
         with patch.object(catalog, "import_module", side_effect=modules) as load:
             self.assertEqual(catalog.get_config_types("pi05"), (model_cls, data_cls))
             self.assertEqual([call.args[0] for call in load.call_args_list], [
-                "loongforge.models.embodied.pi05.configuration_pi05",
+                "loongforge.models.embodied.pi05.model_configuration_pi05",
                 "loongforge.data.embodied.pi05.data_configuration_pi05",
             ])
         with self.assertRaises(ValueError):

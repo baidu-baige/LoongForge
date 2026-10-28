@@ -22,7 +22,7 @@ from megatron.core.transformer.enums import AttnMaskType
 from megatron.core.utils import StragglerDetector
 from loongforge.engines.megatron import get_model_config
 from loongforge.models.multimodal.multimodal_model_provider import (
-    omni_model_provider
+    multimodal_model_provider
 )
 from loongforge.engines.megatron.distributed.loss_reduction import default_loss_func
 
@@ -248,7 +248,7 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
 
 def model_provider(pre_process=True, post_process=True, vp_stage=None):
     """Build the multimodal model with this run's args and model config."""
-    return omni_model_provider(
+    return multimodal_model_provider(
         pre_process,
         post_process,
         vp_stage=vp_stage,

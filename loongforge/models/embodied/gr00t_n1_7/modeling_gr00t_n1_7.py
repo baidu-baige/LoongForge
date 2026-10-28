@@ -32,10 +32,10 @@ from loongforge.models.embodied.gr00t_n1_7.embodiment_configs import (
     convert_lerobot_stats_to_gr00t_n1d7_format,
 )
 from loongforge.models.embodied.registry import register_model
-from .configuration_gr00t_n1_7 import Gr00tN1d7Config
-from .dit import AlternateVLDiT, DiT, SelfAttentionTransformer
-from .embodiment_mlp import CategorySpecificMLP, MultiEmbodimentActionEncoder
-from .qwen3_backbone import Qwen3Backbone
+from .model_configuration_gr00t_n1_7 import Gr00tN1d7Config
+from .modules.dit import AlternateVLDiT, DiT, SelfAttentionTransformer
+from .modules.embodiment_mlp import CategorySpecificMLP, MultiEmbodimentActionEncoder
+from .modules.qwen3_backbone import Qwen3Backbone
 
 if TYPE_CHECKING:
     from loongforge.data.embodied.gr00t_n1_6.transforms.gr00t_n1_6_processor import StateActionProcessor

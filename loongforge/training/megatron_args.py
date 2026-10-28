@@ -20,8 +20,9 @@ from typing import Optional
 
 from megatron.training.utils import print_rank_0
 
-from loongforge import constants
+from loongforge.data import TrainingPhase
 from loongforge.data.chat_templates.registry import get_support_templates
+from loongforge.models.catalog import VisionLanguageModelFamilies
 from loongforge.training.diffusion.args import add_diffusion_args
 from loongforge.training.llm.args import add_llm_args
 from loongforge.training.vlm.args import add_vlm_args
@@ -208,8 +209,8 @@ def _add_run_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     group.add_argument(
         "--training-phase",
         type=str,
-        default=constants.TrainingPhase.PRETRAIN,
-        choices=[constants.TrainingPhase.PRETRAIN, constants.TrainingPhase.SFT],
+        default=TrainingPhase.PRETRAIN,
+        choices=[TrainingPhase.PRETRAIN, TrainingPhase.SFT],
         help="Training phase: 'pretrain' for pre-training, 'sft' for supervised fine-tuning. "
              "Default: pretrain",
     )
@@ -760,7 +761,7 @@ def _align_wan_packing_seq_length(args):
 
 def _validate_sft_args(args):
     """Validate SFT arguments."""
-    if args.training_phase != constants.TrainingPhase.SFT:
+    if args.training_phase != TrainingPhase.SFT:
         return
 
     if args.tokenizer_type != "HFTokenizer":
@@ -851,7 +852,7 @@ def _validate_sft_args(args):
     if getattr(args, "enable_chunkpipe", False):
         # A-series (Ampere / sm80) fused-DSA backend only supports ChunkPipe in
         # pretrain; the SFT ChunkPipe path is not implemented for it yet.
-        from loongforge.models.base.experimental_attention_variant.dsa_kernel_backend import (
+        from loongforge.models.common.experimental_attention_variant.dsa_kernel_backend import (
             BACKEND_SM80,
             resolve_backend_name,
         )
@@ -947,7 +948,7 @@ def _validate_sft_args(args):
 
 def _validate_vlm_data_args(args):
     """Validate vision-language data arguments."""
-    if args.model_family not in constants.VisionLanguageModelFamilies.names():
+    if args.model_family not in VisionLanguageModelFamilies.names():
         return
 
     args.variable_seq_lengths = True
@@ -1003,7 +1004,3 @@ def parse_megatron_train_args(extra_args_providers=()):
         args_providers=[add_training_args, *extra_args_providers],
         extra_validator=validate_training_args,
     )
-
-
-# Alias used by the composition root.
-parse = parse_megatron_train_args

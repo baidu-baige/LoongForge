@@ -56,7 +56,7 @@ from loongforge.data.embodied.gr00t_n1_7.gr00t_n1_7_dataset import (
     _resolve_checkpoint_path,
     _resolve_data_action_horizon,
 )
-from loongforge.models.embodied.gr00t_n1_7.configuration_gr00t_n1_7 import Gr00tN1d7Config
+from loongforge.models.embodied.gr00t_n1_7.model_configuration_gr00t_n1_7 import Gr00tN1d7Config
 
 
 @dataclass

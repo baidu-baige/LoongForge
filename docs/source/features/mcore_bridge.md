@@ -357,10 +357,10 @@ Tests are organized by model family under `tests/mcore_bridge_roundtrip/`:
 
 ### Model Provider Selection
 
-The test code defaults to `omni_model_provider` (compatible with all models). To switch:
+The test code defaults to `multimodal_model_provider` (compatible with all models). To switch:
 
 - **Pure LLM** (LLaMA, Qwen2.5, DeepSeek V2, etc.): use `llm_model_provider`
-- **Multimodal** (Qwen2.5-VL, InternVL, etc.): use `omni_model_provider`
+- **Multimodal** (Qwen2.5-VL, InternVL, etc.): use `multimodal_model_provider`
 
 Edit the `get_model()` call in `tests/mcore_bridge_roundtrip/hf_roundtrip_test.py`:
 
@@ -369,7 +369,7 @@ Edit the `get_model()` call in `tests/mcore_bridge_roundtrip/hf_roundtrip_test.p
 model = get_model(llm_model_provider, ModelType.encoder_or_decoder, wrap_with_ddp=False)
 
 # For multimodal (default):
-model = get_model(omni_model_provider, ModelType.encoder_or_decoder, wrap_with_ddp=False)
+model = get_model(multimodal_model_provider, ModelType.encoder_or_decoder, wrap_with_ddp=False)
 ```
 
 ### Important Notes

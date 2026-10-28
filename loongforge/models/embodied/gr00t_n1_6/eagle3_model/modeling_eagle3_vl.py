@@ -231,7 +231,7 @@ def _graph_safe_unpad_and_attend(
 
 
 # Whether training runs a local full_iteration / per_microbatch CUDA graph. The GR00T-N1.6
-# optimization sets it before the model is built; None outside training.
+# trainer hooks set it before the model is built; None outside training.
 _GRAPH_MODE: bool | None = None
 
 

@@ -2,19 +2,19 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-Omni Model Provider.Provides model construction interfaces compatible with existing training frameworks.
+Multimodal Model Provider. Provides model construction interfaces compatible with existing training frameworks.
 """
 
 from __future__ import annotations
 
 from typing import Optional
 
-from .combination_model import OmniCombinationModel
+from .combination_model import MultimodalCombinationModel
 from megatron.core import mpu
 import torch
 
 
-def omni_model_provider(
+def multimodal_model_provider(
     pre_process: bool = True,
     post_process: bool = True,
     parallel_output: bool = True,
@@ -23,9 +23,9 @@ def omni_model_provider(
     args,
     model_config,
     runtime,
-) -> OmniCombinationModel:
+) -> MultimodalCombinationModel:
     """
-    Construct and return an Omni combination model instance.
+    Construct and return a multimodal combination model instance.
     
     This function builds a multimodal combination model from the caller's training args
     and model config, with support for parallel processing and pre/post-processing options.
@@ -39,7 +39,7 @@ def omni_model_provider(
         runtime: ``MultimodalRuntime`` with the engine bindings, built by the training method.
 
     Returns:
-        OmniCombinationModel: Constructed combination model instance
+        MultimodalCombinationModel: Constructed combination model instance
 
     Notes:
         - Supports encoder pipeline parallel processing
@@ -54,7 +54,7 @@ def omni_model_provider(
     else:
         add_encoder = mpu.is_pipeline_first_stage(ignore_virtual=False, vp_stage=vp_stage)
 
-    # temporary fix for omni model config
+    # temporary fix for multimodal model config
     for name in ["image_encoder", "image_projector"]:
         component_config = getattr(model_config, name)
         component_config.pipeline_model_parallel_size = 1
@@ -67,7 +67,7 @@ def omni_model_provider(
         component_config.mtp_num_layers = None
 
     # TODO: fp8 support
-    model = OmniCombinationModel(
+    model = MultimodalCombinationModel(
         model_config,
         parallel_output=parallel_output,
         pre_process=pre_process,

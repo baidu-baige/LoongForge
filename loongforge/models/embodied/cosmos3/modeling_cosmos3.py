@@ -34,7 +34,7 @@ from loongforge.models.embodied.cosmos3.cosmos3_vfm_network import (
     Cosmos3VFMNetworkConfig,
 )
 from loongforge.models.embodied.registry import register_model
-from loongforge.models.embodied.cosmos3.configuration_cosmos3 import Cosmos3ModelConfig
+from loongforge.models.embodied.cosmos3.modeling_configuration_cosmos3 import Cosmos3ModelConfig
 from loongforge.models.embodied.cosmos3.flow_matching import compute_flow_matching_loss
 from loongforge.models.embodied.cosmos3.modeling_utils import has_noisy_tokens
 from loongforge.models.embodied.cosmos3.rectified_flow import RectifiedFlow

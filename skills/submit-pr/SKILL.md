@@ -53,13 +53,13 @@ Or for breaking changes:
 
 1. Look at `git diff origin/master..HEAD --stat` to identify which areas changed
 2. Map changed paths to modules:
-   - `loongforge/models/language/` → `llm`
-   - `loongforge/models/vision/`, `loongforge/models/multimodal/` → `vlm`
+   - `loongforge/models/foundation/` → `llm`
+   - `loongforge/models/encoder/`, `loongforge/models/multimodal/` → `vlm`
    - `loongforge/engines/`, `loongforge/training/` → `train`
    - `loongforge/data/` → `data`
-   - `loongforge/constants.py` → `train`
+   - `loongforge/train.py` → `train`
    - `tools/mcore_checkpoint_convert/` → `ckpt`
-   - `loongforge/models/base/peft/` → `peft`
+   - `loongforge/models/common/peft/` → `peft`
    - `ops/` → `ops`
    - `configs/` → relevant model type (`llm`/`vlm`)
    - `examples_xpu/` → `xpu`
@@ -150,15 +150,15 @@ After PR is created:
 
 | Module | Paths |
 |--------|-------|
-| llm | `loongforge/models/language/`, `configs/models/<llm>/` |
-| vlm | `loongforge/models/vision/`, `loongforge/models/multimodal/` |
+| llm | `loongforge/models/foundation/`, `configs/models/<llm>/` |
+| vlm | `loongforge/models/encoder/`, `loongforge/models/multimodal/` |
 | vla | `loongforge/models/embodied/` (VLA models) |
 | diffusion | `loongforge/models/embodied/` (diffusion models) |
-| train | `loongforge/engines/`, `loongforge/training/`, `loongforge/constants.py` |
+| train | `loongforge/engines/`, `loongforge/training/`, `loongforge/train.py` |
 | data | `loongforge/data/` |
 | ops | `ops/` |
 | ckpt | `tools/mcore_checkpoint_convert/` |
-| peft | `loongforge/models/base/peft/` |
+| peft | `loongforge/models/common/peft/` |
 | docker | `docker/` |
 | xpu | `examples_xpu/` |
 | ci | `.github/workflows/` |

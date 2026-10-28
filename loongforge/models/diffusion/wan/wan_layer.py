@@ -25,7 +25,7 @@ from megatron.core.parallel_state import (
     get_hierarchical_context_parallel_groups,
 )
 
-from loongforge.models.base import BaseModelStditConfig
+from loongforge.models.common import BaseModelStditConfig
 
 
 import transformer_engine.pytorch as te

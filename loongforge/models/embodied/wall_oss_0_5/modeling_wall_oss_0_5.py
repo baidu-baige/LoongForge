@@ -19,7 +19,7 @@ from safetensors.torch import load_file
 from transformers import AutoProcessor
 
 from loongforge.models.embodied.registry import register_model
-from loongforge.models.embodied.wall_oss_0_5.configuration_wall_oss_0_5 import (
+from loongforge.models.embodied.wall_oss_0_5.model_configuration_wall_oss_0_5 import (
     WallOss05ModelConfig,
 )
 from loongforge.models.embodied.wall_oss_0_5.qwen2_5 import (

@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Union, Dict, List, Any, Sequence, Optional, Tu
 import datasets
 from datasets import Dataset, IterableDataset
 
-from loongforge import constants
+from loongforge.data import IGNORE_INDEX
 from loongforge.data.chat_templates.hf import HFChatTemplate
 
 if TYPE_CHECKING:
@@ -560,7 +560,7 @@ def _preprocess_supervised_dataset(
                     config, input_ids, pad_to_multiple_of, config.tokenizer.pad
                 )
                 labels = _pad_sequence_to_multiple(
-                    config, labels, pad_to_multiple_of, constants.IGNORE_INDEX
+                    config, labels, pad_to_multiple_of, IGNORE_INDEX
                 )
                 loss_mask = _pad_sequence_to_multiple(
                     config, loss_mask, pad_to_multiple_of, 0

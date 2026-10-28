@@ -477,7 +477,7 @@ class FastWAMPolicy(nn.Module):
     @classmethod
     def from_pretrained(cls, cfg: Any) -> "FastWAMPolicy":
         """Build a FastWAM policy from a typed FastWAMConfig instance."""
-        from loongforge.models.embodied.fastwam.configuration_fastwam import FastWAMModelConfig
+        from loongforge.models.embodied.fastwam.modeling_configuration_fastwam import FastWAMModelConfig
         from loongforge.models.embodied.fastwam.mot.fastwam import FastWAM
         from loongforge.models.embodied.fastwam.mot.idm import FastWAMIDM
         from loongforge.models.embodied.fastwam.mot.joint import FastWAMJoint

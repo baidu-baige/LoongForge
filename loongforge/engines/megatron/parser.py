@@ -17,14 +17,15 @@ from megatron.training.checkpointing import load_args_from_checkpoint
 from omegaconf import DictConfig, OmegaConf
 
 from loongforge.engines.megatron.model_config import build_model_config
-from loongforge.engines.megatron.distributed.loss_reduction import (default_loss_func,
-                                                                  loss_func_internvl)
+from loongforge.engines.megatron.distributed.loss_reduction import default_loss_func
 from loongforge.models.multimodal.position_ids import POSITION_IDX_FUNCS
 from loongforge.engines.megatron.validators import (validate_loongforge_extra_args,
                                                 validate_custom_model_args,
                                                 validate_megatron_args)
-from loongforge import constants
-from loongforge.models.catalog import get_config_from_model_name
+from loongforge.models.catalog import (TOP_LEVEL_MODEL_FAMILIES,
+                                       VisionLanguageModelFamilies,
+                                       get_config_from_model_name,
+                                       split_model_config)
 from loongforge.engines.megatron.global_vars import (get_hydra_config,
                                                   set_args_dict,
                                                   set_hydra_config,
@@ -43,7 +44,6 @@ def register_custom_resolvers():
     }
     LOSS_FUNC_MAP = {
         "default": default_loss_func,
-        "loss_func_internvl": loss_func_internvl
     }
     OmegaConf.register_new_resolver(
         "act", lambda name: ACTIVATION_MAP[name.lower()], replace=True
@@ -168,12 +168,12 @@ def parse_arguments(
             args.config_path, args.config_name, hydra_overrides
         )
 
-    model_type, model_config = constants.split_model_config(hydra_cfg)
+    model_type, model_config = split_model_config(hydra_cfg)
 
     # TODO: remove this in the future
     args.model_family = model_type
 
-    if model_type in constants.VisionLanguageModelFamilies.names():
+    if model_type in VisionLanguageModelFamilies.names():
         args_dict = {}
         for name, config_values in model_config.items():
             # exclude those non-iterable config values
@@ -202,7 +202,7 @@ def parse_arguments(
         # set global args dict
         set_args_dict(args_dict)
 
-    elif model_type in constants.TOP_LEVEL_MODEL_FAMILIES:
+    elif model_type in TOP_LEVEL_MODEL_FAMILIES:
         # Validate arguments.
         if validate_extra_args_provider is not None:
             validate_extra_args_provider(args, hydra_cfg, extra_validator)

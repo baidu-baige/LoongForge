@@ -17,7 +17,8 @@ re-run the frozen encoders every step.
 `tqdm`; nothing from LoongForge has to be on the path.
 
 `precompute_features.py` and `validate_precomputed_feature_artifact.py` import
-`loongforge.models.embodied`, so the LoongForge repo root must be importable:
+`loongforge.data.embodied` and `loongforge.models.embodied`, so the LoongForge
+repo root must be importable:
 
 ```bash
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-/workspace/LoongForge}

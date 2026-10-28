@@ -19,7 +19,7 @@ from loongforge.models.embodied.pi05.modeling_pi05 import _get_gemma_config
 from loongforge.models.embodied.registry import register_model
 
 from . import vlda_preprocessing as _preprocessing
-from .configuration_vlda import VLDAModelConfig
+from .model_configuration_vlda import VLDAModelConfig
 from .vjepa2_encoder import VJEPA2Encoder
 from .vlda_gemma import PaliGemmaWithExpertModel
 

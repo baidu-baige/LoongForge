@@ -1,10 +1,11 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Model names, engines, default YAMLs, and lazy config type bindings."""
+"""Model names, engines, default YAMLs, lazy config type bindings, and Megatron model families."""
 
 from importlib import import_module
 from pathlib import Path
+from typing import List
 
 
 MODEL_CONFIG_REGISTRY = {
@@ -541,119 +542,119 @@ MODEL_CONFIG_REGISTRY = {
         "engine": "torch",
         "config_path": "configs/models/lingbot_va",
         "config_name": "lingbot_va_robotwin",
-        "model_config": "loongforge.models.embodied.lingbot_va.configuration_lingbot_va.LingBotVAModelConfig",
+        "model_config": "loongforge.models.embodied.lingbot_va.model_configuration_lingbot_va.LingBotVAModelConfig",
         "data_config": "loongforge.data.embodied.lingbot_va.data_configuration_lingbot_va.LingBotVADataConfig",
     },
     "lingbot_va_libero": {
         "engine": "torch",
         "config_path": "configs/models/lingbot_va",
         "config_name": "lingbot_va_libero",
-        "model_config": "loongforge.models.embodied.lingbot_va.configuration_lingbot_va.LingBotVAModelConfig",
+        "model_config": "loongforge.models.embodied.lingbot_va.model_configuration_lingbot_va.LingBotVAModelConfig",
         "data_config": "loongforge.data.embodied.lingbot_va.data_configuration_lingbot_va.LingBotVADataConfig",
     },
     "pi05": {
         "engine": "torch",
         "config_path": "configs/models/pi05",
         "config_name": "pi05",
-        "model_config": "loongforge.models.embodied.pi05.configuration_pi05.Pi05ModelConfig",
+        "model_config": "loongforge.models.embodied.pi05.model_configuration_pi05.Pi05ModelConfig",
         "data_config": "loongforge.data.embodied.pi05.data_configuration_pi05.Pi05DataConfig",
     },
     "gr00t_n1_6": {
         "engine": "torch",
         "config_path": "configs/models/gr00t_n1_6",
         "config_name": "gr00t_n1_6",
-        "model_config": "loongforge.models.embodied.gr00t_n1_6.configuration_gr00t_n1_6.Gr00tN1d6ModelConfig",
+        "model_config": "loongforge.models.embodied.gr00t_n1_6.model_configuration_gr00t_n1_6.Gr00tN1d6ModelConfig",
         "data_config": "loongforge.data.embodied.gr00t_n1_6.data_configuration_gr00t_n1_6.Gr00tN1d6DataConfig",
     },
     "xvla": {
         "engine": "torch",
         "config_path": "configs/models/xvla",
         "config_name": "xvla",
-        "model_config": "loongforge.models.embodied.xvla.configuration_xvla.XVLAModelConfig",
+        "model_config": "loongforge.models.embodied.xvla.model_configuration_xvla.XVLAModelConfig",
         "data_config": "loongforge.data.embodied.xvla.data_configuration_xvla.XVLADataConfig",
     },
     "vlda": {
         "engine": "torch",
         "config_path": "configs/models/vlda",
         "config_name": "vlda",
-        "model_config": "loongforge.models.embodied.vlda.configuration_vlda.VLDAModelConfig",
+        "model_config": "loongforge.models.embodied.vlda.model_configuration_vlda.VLDAModelConfig",
         "data_config": "loongforge.data.embodied.vlda.data_configuration_vlda.VLDADataConfig",
     },
     "fastwam": {
         "engine": "torch",
         "config_path": "configs/models/fastwam",
         "config_name": "fastwam",
-        "model_config": "loongforge.models.embodied.fastwam.configuration_fastwam.FastWAMModelConfig",
+        "model_config": "loongforge.models.embodied.fastwam.modeling_configuration_fastwam.FastWAMModelConfig",
         "data_config": "loongforge.data.embodied.fastwam.data_configuration_fastwam.FastWAMDataConfig",
     },
     "gr00t_n1_7": {
         "engine": "torch",
         "config_path": "configs/models/gr00t_n1_7",
         "config_name": "gr00t_n1_7",
-        "model_config": "loongforge.models.embodied.gr00t_n1_7.configuration_gr00t_n1_7.Gr00tN1d7Config",
+        "model_config": "loongforge.models.embodied.gr00t_n1_7.model_configuration_gr00t_n1_7.Gr00tN1d7Config",
         "data_config": "loongforge.data.embodied.gr00t_n1_7.data_configuration_gr00t_n1_7.Gr00tN1d7DataConfig",
     },
     "cosmos3_nano": {
         "engine": "torch",
         "config_path": "configs/models/cosmos3",
         "config_name": "nano",
-        "model_config": "loongforge.models.embodied.cosmos3.configuration_cosmos3.Cosmos3ModelConfig",
+        "model_config": "loongforge.models.embodied.cosmos3.modeling_configuration_cosmos3.Cosmos3ModelConfig",
         "data_config": "loongforge.data.embodied.cosmos3.data_configuration_cosmos3.Cosmos3DataConfig",
     },
     "dreamzero_lora_wan22_5b": {
         "engine": "torch",
         "config_path": "configs/models/dreamzero",
         "config_name": "dreamzero_wan22_5b",
-        "model_config": "loongforge.models.embodied.dreamzero.configuration_dreamzero.DreamZeroConfig",
+        "model_config": "loongforge.models.embodied.dreamzero.model_configuration_dreamzero.DreamZeroConfig",
         "data_config": "loongforge.data.embodied.dreamzero.data_configuration_dreamzero.DreamZeroDataConfig",
     },
     "dreamzero_full_wan22_5b": {
         "engine": "torch",
         "config_path": "configs/models/dreamzero",
         "config_name": "dreamzero_wan22_5b",
-        "model_config": "loongforge.models.embodied.dreamzero.configuration_dreamzero.DreamZeroConfig",
+        "model_config": "loongforge.models.embodied.dreamzero.model_configuration_dreamzero.DreamZeroConfig",
         "data_config": "loongforge.data.embodied.dreamzero.data_configuration_dreamzero.DreamZeroDataConfig",
     },
     "dreamzero_lora_wan21_14b": {
         "engine": "torch",
         "config_path": "configs/models/dreamzero",
         "config_name": "dreamzero_wan21_14b",
-        "model_config": "loongforge.models.embodied.dreamzero.configuration_dreamzero.DreamZeroConfig",
+        "model_config": "loongforge.models.embodied.dreamzero.model_configuration_dreamzero.DreamZeroConfig",
         "data_config": "loongforge.data.embodied.dreamzero.data_configuration_dreamzero.DreamZeroDataConfig",
     },
     "dreamzero_full_wan21_14b": {
         "engine": "torch",
         "config_path": "configs/models/dreamzero",
         "config_name": "dreamzero_wan21_14b",
-        "model_config": "loongforge.models.embodied.dreamzero.configuration_dreamzero.DreamZeroConfig",
+        "model_config": "loongforge.models.embodied.dreamzero.model_configuration_dreamzero.DreamZeroConfig",
         "data_config": "loongforge.data.embodied.dreamzero.data_configuration_dreamzero.DreamZeroDataConfig",
     },
     "dreamzero_libero_wan22_5b": {
         "engine": "torch",
         "config_path": "configs/models/dreamzero",
         "config_name": "dreamzero_libero_wan22_5b",
-        "model_config": "loongforge.models.embodied.dreamzero.configuration_dreamzero.DreamZeroConfig",
+        "model_config": "loongforge.models.embodied.dreamzero.model_configuration_dreamzero.DreamZeroConfig",
         "data_config": "loongforge.data.embodied.dreamzero.data_configuration_dreamzero.DreamZeroDataConfig",
     },
     "dreamzero_agibot_wan21_14b": {
         "engine": "torch",
         "config_path": "configs/models/dreamzero",
         "config_name": "dreamzero_agibot_wan21_14b",
-        "model_config": "loongforge.models.embodied.dreamzero.configuration_dreamzero.DreamZeroConfig",
+        "model_config": "loongforge.models.embodied.dreamzero.model_configuration_dreamzero.DreamZeroConfig",
         "data_config": "loongforge.data.embodied.dreamzero.data_configuration_dreamzero.DreamZeroDataConfig",
     },
     "dreamzero_yam_wan21_14b": {
         "engine": "torch",
         "config_path": "configs/models/dreamzero",
         "config_name": "dreamzero_yam_wan21_14b",
-        "model_config": "loongforge.models.embodied.dreamzero.configuration_dreamzero.DreamZeroConfig",
+        "model_config": "loongforge.models.embodied.dreamzero.model_configuration_dreamzero.DreamZeroConfig",
         "data_config": "loongforge.data.embodied.dreamzero.data_configuration_dreamzero.DreamZeroDataConfig",
     },
     "wall_oss_0_5": {
         "engine": "torch",
         "config_path": "configs/models/wall_oss_0_5",
         "config_name": "wall_oss_0_5",
-        "model_config": "loongforge.models.embodied.wall_oss_0_5.configuration_wall_oss_0_5.WallOss05ModelConfig",
+        "model_config": "loongforge.models.embodied.wall_oss_0_5.model_configuration_wall_oss_0_5.WallOss05ModelConfig",
         "data_config": "loongforge.data.embodied.wall_oss_0_5.data_configuration_wall_oss_0_5.WallOss05DataConfig",
     },
 }
@@ -701,3 +702,91 @@ def get_config_types(model_name: str):
         module, name = entry[field].rsplit(".", 1)
         classes.append(getattr(import_module(module), name))
     return tuple(classes)
+
+
+######## built-in models #######
+# Using List[str] instead of list[str] to ensure compatibility with older versions of Python(<3.9)
+class _BaseFamilies(object):
+    @classmethod
+    def names(cls) -> List[str]:
+        """Return a list of all string names defined in the class and its subclasses"""
+        string_names = [
+            value
+            for name, value in vars(cls).items()
+            if isinstance(value, str) and not name.startswith("__")
+        ]
+        return string_names
+
+
+class LanguageModelFamilies(_BaseFamilies):
+    """Language model families"""
+
+    LLAMA = "llama"
+    LLAMA2 = "llama2"
+    LLAMA3 = "llama3"
+    LLAMA3_1 = "llama3.1"
+    QWEN = "qwen"
+    QWEN1_5 = "qwen1.5"
+    QWEN2 = "qwen2"
+    QWEN2_5 = "qwen2.5"
+    QWEN3 = "qwen3"
+    QWEN3_NEXT = "qwen3_next"
+    KIMI_K3_LLM = "kimi_k3_llm"
+    DEEPSEEK = "deepseek"
+    DEEPSEEK_V4 = "deepseek_v4"
+    INTERNLM2_5 = "internlm2.5"
+    MINIMAX = "minimax"
+    MIMO = "mimo"
+    GLM = "glm"
+    GLM5_NEXT = "glm5_next"
+
+
+class VisionLanguageModelFamilies(_BaseFamilies):
+    """Vision language model families"""
+
+    QWEN2_VL = "qwen2_vl"
+    QWEN2_5_VL = "qwen2_5_vl"
+    QWEN3_VL = "qwen3_vl"
+    LLAVA_OV_1_5 = "llava_ov_1_5"
+    VLM = "vlm"
+    INTERN_VL = "intern_vl"
+    ERNIE4_5_VL = "ernie4_5_vl"
+    QWEN3_5 = "qwen3_5"
+    MINICPM_V_4_6 = "minicpm_v_4_6"
+    KIMI_K2_5 = "kimi_k2_5"
+    KIMI_K2_6 = "kimi_k2_6"
+    KIMI_K3 = "kimi_k3"
+
+
+class DiffusionModelFamilies(_BaseFamilies):
+    """Diffusion model families (Megatron engine)"""
+
+    WAN2_1_I2V = "wan2_1_i2v"
+    WAN2_2_I2V = "wan2_2_i2v"
+    QWEN_IMAGE = "qwen_image"
+
+
+# Families whose Hydra config puts model_type at the top level; VLM configs put it under ``model``.
+TOP_LEVEL_MODEL_FAMILIES = frozenset(LanguageModelFamilies.names() + DiffusionModelFamilies.names())
+
+
+def split_model_config(config):
+    """Return ``(model_type, model_config)`` of a composed Megatron Hydra config."""
+    if hasattr(config, "model_type") and config.model_type in TOP_LEVEL_MODEL_FAMILIES:
+        return config.model_type, config
+    if not hasattr(config, "model"):
+        raise ValueError("Invalid model configuration structure")
+    return config.model.model_type, config.model
+
+
+def get_all_model_families() -> List[str]:
+    """
+    Get all model families defined in this module dynamically.
+    Returns a flattened list of all string names from all subclasses of _BaseFamilies.
+    """
+    all_families = []
+
+    for family_class in _BaseFamilies.__subclasses__():
+        all_families.extend(family_class.names())
+
+    return all_families

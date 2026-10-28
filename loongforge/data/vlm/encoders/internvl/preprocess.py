@@ -25,7 +25,7 @@ import transformers
 import sys
 import cv2
 
-from loongforge.models.vision.internvl.internvl_config import IMG_CONTEXT_TOKEN
+from loongforge.models.encoder.internvl_vision_models.internvl_config import IMG_CONTEXT_TOKEN
 
 IGNORE_TOKEN_ID = -100
 

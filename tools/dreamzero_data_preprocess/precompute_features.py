@@ -63,7 +63,7 @@ from cache_precompute.storage import (
     _write_tensor_shard_index,
 )
 
-from loongforge.models.embodied.dreamzero.precomputed_cache.artifact import (
+from loongforge.data.embodied.dreamzero.precomputed_artifact import (
     DREAMZERO_PRECOMPUTED_FEATURES_KIND,
     TENSOR_SHARDS_FORMAT,
     dataset_fingerprint,

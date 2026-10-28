@@ -39,7 +39,7 @@ from loongforge.models.embodied.xvla.modeling_florence2 import (
     Florence2Attention,
     Florence2SdpaAttention,
 )
-from loongforge.models.embodied.xvla.configuration_xvla import Florence2LanguageConfig
+from loongforge.models.embodied.xvla.model_configuration_xvla import Florence2LanguageConfig
 from loongforge.models.embodied.xvla.transformer import Attention as ActionAttention
 
 

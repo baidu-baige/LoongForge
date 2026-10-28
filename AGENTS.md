@@ -1,92 +1,52 @@
 # AGENTS.md
 
-LoongForge: large-scale training framework on Loong-Megatron and TransformerEngine for NVIDIA GPUs and Kunlun XPUs. The Megatron engine serves LLMs, VLMs, and diffusion models; the Torch engine serves embodied models.
+LoongForge: large-scale training framework on Loong-Megatron (`third_party/Loong-Megatron`) and TransformerEngine for NVIDIA GPUs and Kunlun XPUs. The Megatron engine serves LLMs, VLMs, and diffusion models; the Torch engine serves embodied (VLA) models. Supported phases: pretrain and SFT.
 
-## Environment & Build
+## Package Management
 
-Run from the repository root. Installation details are in `docs/source/get_started/installation.md`; Kunlun XPU setup is in `docs/source/kunlun_tutorial/install_p800.md`.
+Dependencies are managed with `uv`:
 
 ```bash
+uv venv .venv && source .venv/bin/activate
 git submodule update --init --recursive
 uv pip install -e ".[gpu]"            # ".[xpu]" for Kunlun XPU
-python setup_env.py --te-tag v2.9
-python -m build --sdist --wheel --outdir dist/
+python setup_env.py --te-tag v2.9     # GPU only: fetch, patch, and build TransformerEngine
 ```
 
-- `third_party/Loong-Megatron` is a Git submodule. `setup_env.py` only fetches, patches, and builds TransformerEngine.
-- GPU image: `docker build --build-arg COMPILE_ENV=hopper -f docker/Dockerfile .` (`ampere` / `blackwell` also accepted).
-- Launch with `torchrun loongforge/train.py` and both LoongForge and Loong-Megatron on `PYTHONPATH`. `--model-name` selects the engine and config through `loongforge/models/catalog.py`. On Megatron, `--config-file` without `--model-name` runs the Megatron engine; with `--model-name`, Megatron ignores `--config-file`. On Torch, `--config-file` replaces the catalog YAML and still requires `--model-name`.
-
-## Project Structure
-
-| Path | Responsibility |
-|---|---|
-| `loongforge/train.py` | Training entrypoint and engine routing |
-| `loongforge/training/` | CLI definitions (`megatron_args.py`, `torch_args.py`, family `args.py`), `registry.py`, and family recipes (`llm/`, `vlm/`, `diffusion/`, `embodied/`) |
-| `loongforge/engines/<backend>/` | Backend execution: argument consumption, initialization, parallelism, model wrapping, optimizer, step execution, checkpointing, runner, logging, profiling |
-| `loongforge/models/` | Model implementations, configs, kernels, and registries (`language`, `vision`, `multimodal`, `diffusion`, `embodied`) |
-| `loongforge/training/embodied/optimizations/` | Model × backend training extensions; may import `models`, `engines`, and the same family |
-| `loongforge/data/` | Family data packages (`llm/`, `vlm/`, `diffusion/`, `embodied/`): configs, datasets, transforms, collators, samplers, and each family's `dataloader.py`; `chat_templates/` holds the shared chat templates, registry, and multimodal plugins |
-| `loongforge/evaluation/` | Inference services and evaluation |
-| `configs/` | Model and data configurations |
-| `examples/` | One directory per model with the scripts it supports (`pretrain/`, `finetuning/`, `checkpoint_convert/`, `eval/`, `preprocess/`) |
-| `tools/` | Self-contained offline tools (weight conversion, data preprocessing, benchmarking) |
-| `ops/` | Custom operators |
-| `tests/` | Unit tests and training regression suites (see `tests/README.md`) |
-
-MCore weight conversion: `tools/mcore_checkpoint_convert/module_convertor/model.py`.
-
-## Code Organization & Dependencies
-
-- **Four layers**: `data/` owns samples, data formats, and the family loaders; `models/` owns network structure; `engines/<backend>/` owns backend execution, runtime mechanics, and performance; `training/` owns CLI definitions and what this run does (family recipes).
-- **Dependency direction**: `training -> engines -> models`; `data -> models` (declarative modules only); `data` may use the engine helper it directly needs (currently `engines/megatron/distributed/chunkpipe` in the SFT loader). No cycles; backends never import each other. Declarative resources (configs, schemas, registry tables, chat templates) may be read from any layer.
-- **Ownership test**: if the code still makes sense with another backend, it belongs to `training/` or `data/`; otherwise to `engines/<backend>/` (runner, parallelism, optimizer, low precision, step execution, checkpoint format, profiling, logging).
-- **Runtime facts by arguments**: `data/` must not call global readers (`get_args`, `get_model_config`, `parallel_state`) or read backend execution arguments and distributed state. Callers pass what data needs. Config classes may expose `from_args(args)` helpers; those helpers read data-recipe fields from the object the caller passes, not from global state.
-- **Parameter ownership**: all LoongForge CLI definitions belong in `training/` (`megatron_args.py`, `torch_args.py`, and family `args.py`); `engines/<backend>/` consumes parsed args and owns execution implementations. Where a value is read does not decide where it is defined. Migration from the current split is tracked in `.comate/specs/training-family-layout-and-params/doc.md`.
-- **Non-obvious contracts**: ChunkPipe queue handoff, lazy loading of models and backends, `training/embodied/optimizations/<model>/` placement, DP balance layouts live in `engines/<backend>/distributed/dp_balance`, and upstream reuse.
-
-## Extending Functionality
-
-Follow existing models and tasks for interfaces and naming.
-
-| Change | Primary Entrypoints |
-|---|---|
-| New LLM / VLM / Diffusion | Model package, `models/catalog.py`, `configs/models/`, `examples/`; register with `AutoModel.register(<Config>, <Model>)` in `models/language/__init__.py` or `models/vision/__init__.py`; add the family in `loongforge/constants.py` and, when it has its own method, in `training/registry.py`; VLM data encoders go in `data/vlm/encoders/` (`TASK_ENCODER_REGISTRY`) |
-| New Embodied Model | One `MODEL_PACKAGES` entry in `models/embodied/registry.py` plus `models/catalog.py`; a matching `models/embodied/<pkg>/` with `modeling_<pkg>.py` and a `data/embodied/<pkg>/` with `<pkg>_dataset.py`, `data_configuration_<pkg>.py`, `samplers.py`, and `transforms/`; add `DATASET_STRATEGIES` only for a custom strategy; optional eval factory |
-| New Data Format | Family data module; embodied formats and strategies in `data/embodied/registry.py` (`DATASET_FORMATS`, `DATASET_STRATEGIES`) |
-| New Training Objective | `training/<family>/` and the matching `training/registry.py` entry |
-| New CLI Argument | `training/megatron_args.py`, `training/torch_args.py`, or the matching `training/<family>/args.py` |
-| New Parallelism / Comm | `distributed/` under the target engine |
-| Single-Model Torch Opt | `training/embodied/optimizations/<model>/` and `TORCH_TRAINER_TYPES` in `training/registry.py`; generic mechanisms go to `engines/torch/` |
-| New Chat Template | `data/chat_templates/jinja/` and `data/chat_templates/registry.py` |
-
-- **File Naming**: Inside `models/`, use `modeling_<model>.py`, `configuration_<model>.py`, and `processing_<model>.py`. Layer specs use `<model>_layer_spec.py`; training recipes use `<phase>.py` for generic families and `<phase>_<model>.py` for model variants (`pretrain_vlm.py`, `pretrain_wan.py`, `sft_internvl.py`). Embodied data uses `<pkg>_dataset.py`, `data_configuration_<pkg>.py`, `samplers.py`, and under `transforms/`: `<pkg>_transform.py`, `<pkg>_collator.py`, `<pkg>_processor.py`, plus model-specific augmentation helpers. Shared pieces live in `data/embodied/shared/`: `collator_base.py`, `sampler_factory.py`, `formats/`, and `transforms/`. Mirror existing configs, transforms, and collators.
-
-## Code Style
-
-Ruff and pre-commit are configured in `pyproject.toml` (line length 120); CI versions live in `.github/workflows/`.
+## Common Commands
 
 ```bash
-ruff check path/to/changed_file.py
-pre-commit run --files path/to/changed_file.py
+# Train. Scripts set PYTHONPATH and launch torchrun loongforge/train.py.
+bash examples/qwen2.5/pretrain/pretrain_qwen2.5_7b.sh              # LLM/VLM/diffusion (Megatron)
+bash examples/pi05/finetuning/finetune_pi05_fsdp.sh                # embodied (Torch)
+
+# Test. Details for each suite are in tests/README.md.
+python -m pytest tests/test_*.py                                   # unit and contract tests
+bash tests/llm_vlm/main_start.sh                                   # LLM/VLM E2E
+bash tests/embodied/run.sh --chip a --list_models                  # list embodied regression targets
+bash tests/embodied/run.sh --chip a --models <name> --dry_run      # validate setup, then drop --dry_run
+bash tests/mcore_bridge_roundtrip/qwen3/8b_bridge_roundtrip.sh     # HF <-> Mcore checkpoint roundtrip
+
+# Check
+ruff check <file>
+python3 ci/sensitive_scan.py --paths <path>                        # secrets and internal-info scan
+pre-commit run --files <file>                                      # SPDX headers, gitleaks, sensitive scan
 ```
 
-- Add copyright and SPDX headers to new files. Preserve upstream licenses, attribution, and meaningful comments.
-- Comment non-obvious rationale, constraints, and behavior; document purpose, I/O, and side effects. No redundant identifier restatements, empty TODOs, or development logs.
+## Directory Layout
 
-## Testing & Verification
-
-Match tests to the change, including edge cases. Verify model, data, and distributed changes on target hardware; static checks do not replace training or inference verification. Report commands, results, and unverified areas.
-
-- **Unit tests**: `python -m pytest <path>` (setup in `tests/README.md`).
-- **LLM/VLM E2E**: `bash tests/llm_vlm/main_start.sh`; configs in `tests/llm_vlm/configs/`; set `model_names` (and `include_optional=true` for optional configs).
-- **Embodied regression**: `bash tests/embodied/run.sh --chip a --list_models`, then `--models <name> --dry_run` and `--models <name>`. Register scripts in `tests/embodied/config/scripts.yaml` and baselines under `tests/embodied/baseline/<chip>/` (never reuse a baseline across hardware). Set data, checkpoint, cache, and output paths via environment variables; validates `loss` and `grad_norm`.
-- **Docs & CI**: run `python3 ci/check_doc_links.py` after Markdown edits and check affected workflows.
-
-## Security & Collaboration
-
-- **Security**: Never commit secrets, internal hostnames, mirrors, or personal absolute paths. Pass data, weights, and artifact paths via configs or environment variables. Run `skills/sensitive-scan/SKILL.md` or `python3 ci/sensitive_scan.py` before committing.
-- **Skills**: Live in `skills/`, symlinked by `.claude/skills` and `.agents/skills`.
-- **PRs & Reviews**: Follow `CONTRIBUTING.md`. Use `skills/submit-pr/SKILL.md` and `skills/code-review/SKILL.md`. Post specific issues as inline comments; keep the top-level summary to conclusions, verification results, and overall judgment.
-
-When a repository’s documentation and its existing code disagree, follow the conventions used in the existing code, and in your final reply point out each inconsistency you found between the documentation and the code.
+| Path | Purpose |
+|---|---|
+| `loongforge/train.py` | Training entry point and the tables that map a Megatron family/phase or a Torch `--trainer-type` to a recipe |
+| `loongforge/training/` | What one run does: shared args (`megatron_args.py`, `torch_args.py`), per-family recipes (`llm/`, `vlm/`, `diffusion/`, `embodied/`) that combine data, model, and engine, and single-model training flows (`embodied/custom/`) |
+| `loongforge/engines/` | How training runs for any model: Megatron and torch wrappers for the parallel runtime, precision, model wrapping, optimizer, step loop, and checkpoint I/O (`megatron/`, `torch/`) |
+| `loongforge/models/` | What the network computes (`foundation/`, `encoder/`, `multimodal/`, `diffusion/`, `embodied/`, `common/`), including the model-specific part of engine features such as EP-overlap callables and FSDP/LoRA/FP8 targets; `catalog.py` maps `--model-name` to engine and config |
+| `loongforge/data/` | How samples become batches: per-family datasets, transforms, collators, samplers, and `chat_templates/`; the tokenizer and parallel sizes come in as arguments |
+| `loongforge/evaluation/` | Evaluation (`embodied/`) |
+| `configs/` | YAML model configs (`configs/models/`) and data configs (`configs/data/`) |
+| `examples/` | Per-model training, checkpoint conversion, and evaluation scripts |
+| `examples_xpu/` | Kunlun XPU scripts, mirroring `examples/` |
+| `tools/` | Checkpoint conversion (`mcore_bridge/`, `mcore_checkpoint_convert/`, `torch_dcp_convert/`), data preprocessing, and benchmarks |
+| `ops/` | Custom CUDA and TileLang kernels |
+| `tests/` | Unit tests and three E2E suites: `llm_vlm/`, `embodied/`, `mcore_bridge_roundtrip/` |
+| `third_party/` | `Loong-Megatron` submodule and TransformerEngine patches |

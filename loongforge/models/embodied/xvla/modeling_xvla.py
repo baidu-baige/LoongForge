@@ -31,9 +31,9 @@ from transformers import PreTrainedModel
 from .modeling_florence2 import Florence2ForConditionalGeneration
 from .transformer import SoftPromptedTransformer
 from .action_hub import build_action_space
-from .configuration_xvla import XVLAConfig, resolve_domain_id
+from .model_configuration_xvla import XVLAConfig, resolve_domain_id
 from loongforge.models.embodied.registry import register_model
-from loongforge.models.embodied.xvla.processing_xvla import (
+from loongforge.models.embodied.xvla.xvla_processor import (
     XVLATokenizerCore,
     XVLAImageProcessorCore,
 )

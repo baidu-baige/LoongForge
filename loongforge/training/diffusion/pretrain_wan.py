@@ -15,7 +15,7 @@ from megatron.training import get_timers
 
 from megatron.training.utils import print_rank_0
 from loongforge.engines.megatron import get_args
-from loongforge.constants import DiffusionModelFamilies
+from loongforge.models.catalog import DiffusionModelFamilies
 
 from loongforge.data.diffusion.dataloader import (
     build_latent_dataloader,

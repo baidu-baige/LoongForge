@@ -303,7 +303,7 @@ The Trainer module orchestrates the training lifecycle, including distributed co
 
 ### 4.1 Trainer Selection
 
-Select the trainer with `--trainer-type`. Valid values are the keys of `TORCH_TRAINER_TYPES` in `loongforge/training/registry.py`; each maps to a training method module under `loongforge/training/embodied/` and an optional model-specific optimization package under `loongforge/training/embodied/optimizations/`. The default `FinetuneTrainer` covers standard single-data-stream supervised fine-tuning; for multiple data streams, unusual loss combinations, or non-standard step scheduling, add a method module under `loongforge/training/embodied/` and register it in `TORCH_TRAINER_TYPES`.
+Select the trainer with `--trainer-type`. Valid values are the keys of `TORCH_TRAINER_TYPES` in `loongforge/train.py`; each maps to a training method module under `loongforge/training/embodied/` and an optional model-specific customization package under `loongforge/training/embodied/custom/`. The default `FinetuneTrainer` covers standard single-data-stream supervised fine-tuning. For multiple data streams or unusual loss combinations, add a method module under `loongforge/training/embodied/`. For non-standard step scheduling, add a `factory.py` under `loongforge/training/embodied/custom/<model>/` whose `build_hooks` returns `TrainerHooks`. Register the new trainer type in `TORCH_TRAINER_TYPES`.
 
 ### 4.2 Distributed Strategy
 

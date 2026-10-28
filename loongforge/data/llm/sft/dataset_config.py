@@ -10,7 +10,7 @@ from typing import Optional
 from transformers import ProcessorMixin
 from megatron.core.utils import log_single_rank
 
-from loongforge import constants
+from loongforge.data import IGNORE_INDEX
 from loongforge.data.chat_templates.base import ChatTemplate
 
 from ..blended_hf_dataset_config import BlendedHuggingFaceDatasetConfig
@@ -34,7 +34,7 @@ class SFTDatasetConfig(BlendedHuggingFaceDatasetConfig):
     processor: Optional[ProcessorMixin] = None
     """The processor for the dataset"""
 
-    ignore_index: int = constants.IGNORE_INDEX
+    ignore_index: int = IGNORE_INDEX
     """The index to ignore in the dataset"""
 
     train_on_prompt: bool = False

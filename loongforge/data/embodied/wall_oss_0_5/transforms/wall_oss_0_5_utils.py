@@ -19,7 +19,7 @@ import numpy as np
 import torch
 from transformers import BatchFeature
 
-from loongforge import constants
+from loongforge.data import IGNORE_INDEX
 
 logger = logging.getLogger(__name__)
 
@@ -316,7 +316,7 @@ def preprocesser_call(
     if pad_token_id is None:
         pad_token_id = processor.tokenizer.eos_token_id
 
-    labels = torch.full_like(text_inputs.input_ids, constants.IGNORE_INDEX)
+    labels = torch.full_like(text_inputs.input_ids, IGNORE_INDEX)
     assistant_marker = "<|im_start|>assistant\n"
     im_end_token_id = processor.tokenizer.convert_tokens_to_ids("<|im_end|>")
     assistant_tokens = processor.tokenizer(assistant_marker, add_special_tokens=False).input_ids
@@ -346,8 +346,8 @@ def preprocesser_call(
 
     action_token_id = processor.tokenizer.encode("<|action|>")[0]
     propri_token_id = processor.tokenizer.encode("<|propri|>")[0]
-    labels[labels == action_token_id] = constants.IGNORE_INDEX
-    labels[labels == propri_token_id] = constants.IGNORE_INDEX
-    labels[labels == processor.tokenizer.pad_token_id] = constants.IGNORE_INDEX
-    text_inputs["labels"] = labels if (labels != constants.IGNORE_INDEX).any().item() else None
+    labels[labels == action_token_id] = IGNORE_INDEX
+    labels[labels == propri_token_id] = IGNORE_INDEX
+    labels[labels == processor.tokenizer.pad_token_id] = IGNORE_INDEX
+    text_inputs["labels"] = labels if (labels != IGNORE_INDEX).any().item() else None
     return BatchFeature(data={**text_inputs, **image_inputs, **videos_inputs})

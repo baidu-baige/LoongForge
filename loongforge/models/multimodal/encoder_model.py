@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-OmniEncoderModel: A multimodal encoder that produces input embeddings.
+MultimodalEncoderModel: A multimodal encoder that produces input embeddings.
 
 This model integrates various modality encoders (text, image, video, audio)
     and projects their features into a unified embedding space and returns:
@@ -18,12 +18,12 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Literal
 import torch
 from collections import namedtuple
 from functools import partial
-from ..base import BaseMegatronModule, BaseModelConfig
+from ..common import BaseMegatronModule, BaseModelConfig
 from megatron.core.models.common.embeddings.language_model_embedding import (
     LanguageModelEmbedding,
 )
 from transformers.models.auto.modeling_auto import AutoModel
-from loongforge.models.vision.qwen3_vl.qwen3_vl_config import Qwen3VisionModelConfig
+from loongforge.models.encoder.qwen3_vl_vision_models.qwen3_vl_config import Qwen3VisionModelConfig
 
 
 class _DummyEncoderPassthrough(torch.autograd.Function):
@@ -104,7 +104,7 @@ def make_encoder_forward_hook(module_name, switch_parallel_state):
     return encoder_forward_hook
 
 
-class OmniEncoderModel(torch.nn.Module):
+class MultimodalEncoderModel(torch.nn.Module):
     def __init__(
         self,
         config: BaseModelConfig,
@@ -452,7 +452,7 @@ class OmniEncoderModel(torch.nn.Module):
         enable_encoder_hetero_dp: Optional[bool] = False,
         **kwargs,
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-        """Forward pass for the OmniEncoderModel.
+        """Forward pass for the MultimodalEncoderModel.
 
         Args:
             input_ids: Token IDs for text input

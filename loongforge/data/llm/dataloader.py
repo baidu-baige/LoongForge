@@ -19,7 +19,7 @@ from datasets.distributed import split_dataset_by_node
 
 from megatron.legacy.data.data_samplers import MegatronPretrainingRandomSampler
 
-from loongforge.engines.megatron.distributed.chunkpipe import ChunkPipeGroupBatchSampler
+from .samplers import ChunkPipeGroupBatchSampler
 from .sft.collator import DataCollatorForSupervisedDataset
 
 logger = logging.getLogger(__name__)

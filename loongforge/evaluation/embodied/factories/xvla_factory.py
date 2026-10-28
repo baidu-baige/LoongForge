@@ -13,7 +13,7 @@ from loongforge.evaluation.embodied.servers.eval_server_config import EvalServer
 from loongforge.evaluation.embodied.servers.loongforge_policy import (
     PredictActionModelSpec,
 )
-from loongforge.models.embodied.xvla.configuration_xvla import XVLAModelConfig
+from loongforge.models.embodied.xvla.model_configuration_xvla import XVLAModelConfig
 from loongforge.models.embodied.registry import build_model
 
 

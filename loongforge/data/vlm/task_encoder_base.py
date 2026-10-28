@@ -11,7 +11,7 @@ from typing import Dict, List, Optional, Tuple, Union
 import numpy as np
 import torch
 
-from loongforge import constants
+from loongforge.data import IGNORE_INDEX
 from loongforge.data.vlm.samples import (
     ENERGON_LT_7,
     PackedCaptioningSample,
@@ -324,7 +324,7 @@ class BaseTaskEncoder(DefaultTaskEncoder[BaseTaskSample, BaseTaskSamplePacked, B
         max_seq_len = min(max_seq_len, self.config.seq_length)
 
         tokens = np.full((len(samples), max_seq_len), self.tokenizer.pad, dtype=np.int64)
-        labels = np.full((len(samples), max_seq_len), constants.IGNORE_INDEX, dtype=np.int64)
+        labels = np.full((len(samples), max_seq_len), IGNORE_INDEX, dtype=np.int64)
         attn_masks = np.full((len(samples), max_seq_len), True, dtype=bool)
 
         for i, s in enumerate(samples):

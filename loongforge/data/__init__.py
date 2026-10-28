@@ -9,3 +9,12 @@
 ``embodied/``: per-model VLA data packages and the shared registry.
 ``chat_templates/``: shared templates, registry, and multimodal plugins.
 """
+
+IGNORE_INDEX = -100
+
+
+class TrainingPhase(object):
+    """Training phase"""
+
+    PRETRAIN = "pretrain"
+    SFT = "sft"

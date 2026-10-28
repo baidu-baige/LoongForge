@@ -11,7 +11,7 @@ If your LLM is a new specification of an existing architecture (e.g., from Llama
 
 ```yaml
 # Inherit the common configuration class for this model family
-_target_: loongforge.models.language.LLaMAConfig
+_target_: loongforge.models.foundation.LLaMAConfig
 
 # Must be a LanguageModelFamilies value; selects the model family and training method
 model_type: "llama"
@@ -53,7 +53,7 @@ Define Vision Transformer parameters.
 
 ```yaml
 # Find the Qwen2VisionRMSNormConfig class through this path, use the following parameters (e.g., num_layers, hidden_size, etc.) to create its instance
-_target_: loongforge.models.vision.Qwen2VisionRMSNormConfig
+_target_: loongforge.models.encoder.Qwen2VisionRMSNormConfig
 
 num_layers: 32
 hidden_size: 1280
@@ -67,14 +67,14 @@ image_size: [1344, 1344]
 ```
 
 ### 2.2 Projector Configuration
-The Projector implementation is interrelated with OmniEncoder. Each type of VLM model is equipped with a dedicated Projector. You need to select the Projector type, and its dimension information will be specified in the model combination configuration.
+The Projector implementation is interrelated with MultimodalEncoder. Each type of VLM model is equipped with a dedicated Projector. You need to select the Projector type, and its dimension information will be specified in the model combination configuration.
 
 * **Path**: configs/models/image_projector/<projector_name>.yaml
 * **Example**: configs/models/image_projector/qwen_mlp_adapter.yaml
 
 ```yaml
 # Select image_projector type
-_target_: loongforge.models.vision.MLPAdapterConfig
+_target_: loongforge.models.encoder.MLPAdapterConfig
 
 # Modify component-specific configuration parameters
 normalization: "RMSNorm"
@@ -176,7 +176,7 @@ Keep `examples/` and `examples_xpu/` machine-checkable: `tests/test_layout_paths
 
 A new architecture needs code registration in addition to the steps above:
 
-- **Model package**: implement the config and model classes under `loongforge/models/language/`, `loongforge/models/vision/`, or `loongforge/models/diffusion/`.
-- **AutoModel registration** (LLM and vision components): add `AutoModel.register(<Config>, <Model>)` in `loongforge/models/language/__init__.py` or `loongforge/models/vision/__init__.py`. The YAML `_target_` selects the config class, and the config class selects the model.
-- **Model family**: add the new YAML `model_type` to `LanguageModelFamilies`, `VisionLanguageModelFamilies`, or `DiffusionModelFamilies` in `loongforge/constants.py`.
-- **Training method** (only if the family has its own method): add a `FAMILY_GROUP` and `METHOD_REGISTRY` entry in `loongforge/training/registry.py`, with the recipe under `loongforge/training/<family>/`.
+- **Model package**: implement the config and model classes under `loongforge/models/foundation/`, `loongforge/models/encoder/`, or `loongforge/models/diffusion/`.
+- **AutoModel registration** (LLM and vision components): add `AutoModel.register(<Config>, <Model>)` in `loongforge/models/foundation/__init__.py` or `loongforge/models/encoder/__init__.py`. The YAML `_target_` selects the config class, and the config class selects the model.
+- **Model family**: add the new YAML `model_type` to `LanguageModelFamilies`, `VisionLanguageModelFamilies`, or `DiffusionModelFamilies` in `loongforge/models/catalog.py`.
+- **Training method** (only if the family has its own method): add a `FAMILY_GROUP` and `METHOD_REGISTRY` entry in `loongforge/train.py`, with the recipe under `loongforge/training/<family>/`.

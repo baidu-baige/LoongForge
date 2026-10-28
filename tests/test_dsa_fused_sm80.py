@@ -22,8 +22,8 @@ import torch
 
 import loongforge.train  # noqa: F401 - breaks a circular import in loongforge.models
 
-from loongforge.models.base.experimental_attention_variant import dsa_kernel_backend as bk
-from loongforge.models.base.experimental_attention_variant.dsa_fused_kernels import (
+from loongforge.models.common.experimental_attention_variant import dsa_kernel_backend as bk
+from loongforge.models.common.experimental_attention_variant.dsa_fused_kernels import (
     DSADotProductAttentionFunction,
     DSAIndexerKernelFunction,
 )

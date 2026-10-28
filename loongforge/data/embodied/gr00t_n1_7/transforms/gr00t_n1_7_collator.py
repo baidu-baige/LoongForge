@@ -22,7 +22,7 @@ from loongforge.data.embodied.gr00t_n1_7.data_configuration_gr00t_n1_7 import (
     Gr00tN1d7DataConfig,
 )
 from loongforge.data.embodied.registry import register_collator
-from loongforge.models.embodied.gr00t_n1_7.configuration_gr00t_n1_7 import Gr00tN1d7Config
+from loongforge.models.embodied.gr00t_n1_7.model_configuration_gr00t_n1_7 import Gr00tN1d7Config
 
 
 @dataclass

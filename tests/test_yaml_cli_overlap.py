@@ -14,8 +14,12 @@ from hydra import compose, initialize_config_dir
 from hydra.core.global_hydra import GlobalHydra
 from omegaconf import OmegaConf
 
-from loongforge import constants
-from loongforge.models.catalog import MODEL_CONFIG_REGISTRY, get_config_from_model_name
+from loongforge.models.catalog import (
+    MODEL_CONFIG_REGISTRY,
+    VisionLanguageModelFamilies,
+    get_config_from_model_name,
+    split_model_config,
+)
 from loongforge.training.megatron_args import add_training_args
 
 # CLI options whose YAML key names the same setting; the YAML value wins.
@@ -53,13 +57,13 @@ def _compose(model_name):
 def _written_back_nodes(cfg):
     """Mirror ``parser.parse_arguments``: VLM submodules with ``_target_``, otherwise the whole config."""
     try:
-        model_type, model_config = constants.split_model_config(cfg)
+        model_type, model_config = split_model_config(cfg)
     except ValueError:
         # The parser rejects this config before any write-back.
         return {}
     # Keys only: values may use resolvers that the parser registers at runtime.
     model_config = OmegaConf.to_container(model_config, resolve=False)
-    if model_type not in constants.VisionLanguageModelFamilies.names():
+    if model_type not in VisionLanguageModelFamilies.names():
         return {"<top>": model_config}
     return {
         name: node
