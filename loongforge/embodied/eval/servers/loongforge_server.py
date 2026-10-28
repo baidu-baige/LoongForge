@@ -81,6 +81,34 @@ def start_health_server(port: int, ckpt_path: str) -> None:
     thread.start()
 
 
+def _release_loader_cached_memory() -> None:
+    """Return allocator-cached blocks left over by model loading to the driver.
+
+    Several factories build in fp32 and cast to bf16 at the end (pi05, xvla,
+    GR00T, DreamZero), and some stage the checkpoint tensors on the GPU before
+    copying them into the parameters. PyTorch keeps those freed blocks in its
+    caching allocator, so ``nvidia-smi`` shows the transient high-water mark
+    instead of the live weight size. On a shared card that memory is invisible
+    to other processes (e.g. a co-located simulator) until it is released.
+
+    Only cached blocks are freed; live parameters are untouched. Called before
+    warmup so the warmup activations populate a clean cache.
+    """
+    import torch
+
+    if not torch.cuda.is_available():
+        return
+    reserved_before = torch.cuda.memory_reserved()
+    torch.cuda.empty_cache()
+    reserved_after = torch.cuda.memory_reserved()
+    if reserved_after != reserved_before:
+        logging.info(
+            "Released allocator-cached memory after model load: reserved %.2f GiB -> %.2f GiB",
+            reserved_before / 2**30,
+            reserved_after / 2**30,
+        )
+
+
 def main() -> None:
     """Run main."""
     import argparse
@@ -98,6 +126,7 @@ def main() -> None:
 
     logging.basicConfig(level=logging.INFO, force=True)
     model_spec = build_model_spec(server_args, raw_model_dict)
+    _release_loader_cached_memory()
     _warmup_model(model_spec)
     policy = GenericPredictActionPolicy(
         model=model_spec.model,
