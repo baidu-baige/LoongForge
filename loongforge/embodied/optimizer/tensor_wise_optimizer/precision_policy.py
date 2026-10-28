@@ -29,6 +29,8 @@ from dataclasses import dataclass
 import logging
 from types import SimpleNamespace
 
+from loongforge.embodied.optimizer.muon_builder import muon_route
+
 DTYPES = {"fp32": torch.float32, "bf16": torch.bfloat16,
           "fp16": torch.float16, "fp8_e4m3_delta": torch.uint8}
 # Public precision enums, validated by the parameter plan, collective plan and resolver.
@@ -352,17 +354,19 @@ class DefaultParameterPolicy:
     """Marker-free policy for models that declare no precision classes.
 
     Every parameter keeps the dtype it already has, 1-D tensors (norms, biases)
-    keep fp32 collectives, and everything routes to the registry optimizer. A
-    model that needs fp32 compute, fp32-critical collectives or Muon supplies a
+    keep fp32 collectives, and everything routes to the registry optimizer
+    unless ``muon_ndims`` opts tensors of those ranks into Muon (``muon_route``).
+    A model that needs fp32 compute or fp32-critical collectives supplies a
     ``ParameterClassPolicy`` instead; ``ParameterClassPolicy()`` is not a
     neutral default because it casts to bf16 and routes matrices to Muon.
     """
 
-    def __init__(self, force_comm_critical_below_ndim: int = 2):
-        """Record the ndim below which collectives stay fp32."""
+    def __init__(self, force_comm_critical_below_ndim: int = 2, *, muon_ndims: tuple[int, ...] = ()):
+        """Record the ndim below which collectives stay fp32 and the Muon ranks."""
         if force_comm_critical_below_ndim < 0:
             raise ValueError("force_comm_critical_below_ndim must be non-negative")
         self._force_comm_critical_below_ndim = int(force_comm_critical_below_ndim)
+        self._muon_ndims = tuple(muon_ndims)
 
     def compute_dtype(self, name: str, parameter: nn.Parameter) -> torch.dtype:
         """Keep the parameter's current dtype, so ``--dtype`` stays in charge."""
@@ -377,8 +381,8 @@ class DefaultParameterPolicy:
         return "default"
 
     def optimizer_kind(self, name: str, parameter: nn.Parameter) -> str:
-        """Route every parameter to the registry optimizer; Muon is opt-in."""
-        return "adamw"
+        """Registry optimizer unless ``muon_ndims`` opts the tensor into Muon."""
+        return muon_route(name, parameter, self._muon_ndims)
 
 
 __all__ = [

@@ -10,6 +10,7 @@ forked child then fails as soon as anything touches CUDA.
 
 from __future__ import annotations
 
+import copy
 import os
 import re
 import socket
@@ -32,7 +33,7 @@ from loongforge.embodied.optimizer.tensor_wise_optimizer.tensor_wise_optimizer i
     CollectiveConfig,
     TensorWiseOptimizer,
 )
-from loongforge.embodied.optimizer.tensor_wise_optimizer.optimizer_builder import (
+from loongforge.embodied.optimizer.muon_builder import (
     build_muon_optimizer,
 )
 
@@ -420,6 +421,228 @@ def test_muon_route_publishes_bf16_replicas():
     _run(_worker_muon_bf16)
 
 
+def test_default_policy_routes_to_muon_only_when_opted_in():
+    matrix = nn.Parameter(torch.zeros(4, 4))
+    vector = nn.Parameter(torch.zeros(4))
+    stack = nn.Parameter(torch.zeros(2, 4, 4))
+    assert DefaultParameterPolicy().optimizer_kind("w", matrix) == "adamw"
+    policy = DefaultParameterPolicy(muon_ndims=(2, 3))
+    assert policy.optimizer_kind("layer.weight", matrix) == "muon"
+    assert policy.optimizer_kind("layer.experts", stack) == "muon"
+    assert policy.optimizer_kind("layer.bias", vector) == "adamw"
+    assert policy.optimizer_kind("model.Embed_tokens.weight", matrix) == "adamw"
+    assert policy.optimizer_kind("lm_head.weight", matrix) == "adamw"
+
+
+def _muon_trainer():
+    from loongforge.embodied.train.trainers.custom.tensor_wise_trainer import (
+        TensorWiseTrainer,
+    )
+
+    trainer = TensorWiseTrainer.__new__(TensorWiseTrainer)
+    trainer.training_args = SimpleNamespace(
+        optimizer="muon", lr_base=LR, weight_decay=0.0, muon_momentum=0.95,
+        muon_nesterov=True, muon_ns_steps=5, muon_adjust_lr_fn="match_rms_adamw",
+    )
+    return trainer
+
+
+def _worker_base_trainer_muon(rank):
+    trainer = _muon_trainer()
+    model = _model()
+    optimizer = _build(
+        model, trainer._create_inner_optimizer, trainer._build_parameter_policy(),
+        gradient_reduce_dtype="fp32",
+    )
+    assert optimizer.parameter_plan.muon_parameter_names() == ["0.weight", "2.weight"]
+    assert optimizer.in_step_names == {"0.weight", "2.weight"}
+    before = _replicas(model)
+    _train(model, optimizer, steps=2)
+    assert all(not torch.equal(before[n], p) for n, p in model.named_parameters())
+    _assert_replicas_agree(model)
+
+
+def test_base_trainer_builds_muon_for_any_model():
+    _run(_worker_base_trainer_muon)
+
+
+def _plain_muon_model():
+    torch.manual_seed(0)
+    # Linear, norm, linear, plus an "embed" matrix that must stay on AdamW.
+    model = nn.Sequential(nn.Linear(8, 16), nn.LayerNorm(16), nn.Linear(16, 4))
+    model.embed = nn.Parameter(torch.randn(5, 8))
+    return model
+
+
+def _plain_muon_args():
+    return SimpleNamespace(
+        optimizer="muon", lr_base=LR, weight_decay=0.0, muon_momentum=0.95,
+        muon_nesterov=True, muon_ns_steps=5, muon_adjust_lr_fn="match_rms_adamw",
+    )
+
+
+def _step_plain(model, optimizer, steps, start=0):
+    for step in range(start, start + steps):
+        torch.manual_seed(100 + step)
+        optimizer.zero_grad()
+        (model(torch.randn(3, 8)).square().sum() + model.embed.square().sum()).backward()
+        optimizer.step()
+
+
+def _train_losses(model, optimizer, steps):
+    losses = []
+    for step in range(steps):
+        torch.manual_seed(100 + step)
+        optimizer.zero_grad()
+        loss = model(torch.randn(3, 8)).square().sum() + model.embed.square().sum()
+        loss.backward()
+        optimizer.step()
+        losses.append(loss.detach())
+    return losses
+
+
+@pytest.mark.skipif(not hasattr(torch.optim, "Muon"), reason="torch.optim.Muon needs torch >= 2.9")
+def test_plain_ddp_muon_loss_matches_torch_muon_bitwise():
+    """``--optimizer muon`` against the community reference over 10 steps.
+
+    The control is torch's own ``torch.optim.Muon`` on the 2-D weights plus
+    ``torch.optim.AdamW`` on the rest, built by hand from the same rule; every
+    step's loss must be bitwise equal.
+    """
+    from loongforge.embodied.optimizer.optimizer import build_optimizer
+
+    ours_model = _plain_muon_model()
+    ours = build_optimizer(ours_model, _plain_muon_args())
+
+    ref_model = _plain_muon_model()
+    named = list(ref_model.named_parameters())
+    matrices = [p for n, p in named if p.ndim == 2 and "embed" not in n]
+    others = [p for n, p in named if not (p.ndim == 2 and "embed" not in n)]
+    reference = [
+        torch.optim.Muon(
+            matrices, lr=LR, weight_decay=0.0, momentum=0.95, nesterov=True,
+            ns_steps=5, adjust_lr_fn="match_rms_adamw",
+        ),
+        torch.optim.AdamW(
+            others, lr=LR, betas=(0.9, 0.95), eps=1e-8, weight_decay=0.0,
+            fused=False, foreach=True,
+        ),
+    ]
+
+    class _Both:
+        def zero_grad(self):
+            for opt in reference:
+                opt.zero_grad()
+
+        def step(self):
+            for opt in reference:
+                opt.step()
+
+    ours_losses = _train_losses(ours_model, ours, steps=10)
+    ref_losses = _train_losses(ref_model, _Both(), steps=10)
+    for step, (a, b) in enumerate(zip(ours_losses, ref_losses), start=1):
+        assert torch.equal(a, b), f"step {step}: {a.item()!r} != {b.item()!r}"
+    for (name, p), (_, q) in zip(ours_model.named_parameters(), ref_model.named_parameters()):
+        assert torch.equal(p, q), name
+
+
+def test_plain_ddp_muon_routes_and_updates_every_parameter():
+    from loongforge.embodied.optimizer.optimizer import build_optimizer
+
+    model = _plain_muon_model()
+    optimizer = build_optimizer(model, _plain_muon_args())
+    muon_opt, adamw_opt = optimizer.optimizers
+    names = {id(p): n for n, p in model.named_parameters()}
+    assert sorted(names[id(p)] for g in muon_opt.param_groups for p in g["params"]) == [
+        "0.weight", "2.weight",
+    ]
+    assert sorted(names[id(p)] for g in adamw_opt.param_groups for p in g["params"]) == [
+        "0.bias", "1.bias", "1.weight", "2.bias", "embed",
+    ]
+    before = {n: p.detach().clone() for n, p in model.named_parameters()}
+    _step_plain(model, optimizer, steps=2)
+    assert all(not torch.equal(before[n], p) for n, p in model.named_parameters())
+
+
+def test_plain_ddp_muon_works_with_the_lr_scheduler():
+    from loongforge.embodied.optimizer.lr_scheduler import build_scheduler
+    from loongforge.embodied.optimizer.optimizer import build_optimizer
+
+    model = _plain_muon_model()
+    optimizer = build_optimizer(model, _plain_muon_args())
+    args = SimpleNamespace(
+        lr_decay_style="cosine_with_min_lr", custom_lr_lambda=False, min_lr=1e-6,
+        lr_warmup_iters=2, lr_decay_iters=None, train_iters=10,
+        lr_end=None, polynomial_power=None, num_cycles=None,
+        lr_decay_start_iters=0,
+    )
+    scheduler = build_scheduler(optimizer, args)
+    _step_plain(model, optimizer, steps=3)
+    scheduler.step()
+    assert 0 < optimizer.param_groups[0]["lr"] <= LR
+
+
+def test_plain_ddp_muon_leaves_conv1d_on_adamw():
+    from loongforge.embodied.optimizer.optimizer import build_optimizer
+
+    # A Conv1d weight is 3-D but not an expert stack, so it must not reach Muon.
+    model = nn.Sequential(nn.Linear(8, 8), nn.Conv1d(8, 8, kernel_size=3, groups=8))
+    muon_opt, adamw_opt = build_optimizer(model, _plain_muon_args()).optimizers
+    assert [p for g in muon_opt.param_groups for p in g["params"]] == [model[0].weight]
+    assert any(p is model[1].weight for g in adamw_opt.param_groups for p in g["params"])
+
+
+def _plain_state_dict(model, optimizer):
+    return optimizer.state_dict()
+
+
+def _plain_load_state_dict(model, optimizer, state):
+    optimizer.load_state_dict(state)
+
+
+def _dcp_state_dict(model, optimizer):
+    from torch.distributed.checkpoint.state_dict import StateDictOptions, get_state_dict
+
+    options = StateDictOptions(full_state_dict=False, cpu_offload=False)
+    return get_state_dict(model, optimizers=[optimizer], options=options)[1]
+
+
+def _dcp_load_state_dict(model, optimizer, state):
+    from torch.distributed.checkpoint.state_dict import StateDictOptions, set_state_dict
+
+    options = StateDictOptions(full_state_dict=False, cpu_offload=False)
+    set_state_dict(
+        model, optimizers=[optimizer], model_state_dict={},
+        optim_state_dict=state, options=options,
+    )
+
+
+@pytest.mark.parametrize(
+    "save, load",
+    [(_plain_state_dict, _plain_load_state_dict), (_dcp_state_dict, _dcp_load_state_dict)],
+    ids=["plain", "dcp"],
+)
+def test_plain_ddp_muon_state_round_trip_is_bitwise(save, load):
+    from loongforge.embodied.optimizer.optimizer import build_optimizer
+
+    model = _plain_muon_model()
+    optimizer = build_optimizer(model, _plain_muon_args())
+    _step_plain(model, optimizer, steps=2)
+    # state_dict() aliases the live state tensors, which later steps update in place.
+    saved_state = copy.deepcopy(save(model, optimizer))
+    saved_params = {n: p.detach().clone() for n, p in model.named_parameters()}
+    _step_plain(model, optimizer, steps=2, start=2)
+    uninterrupted = {n: p.detach().clone() for n, p in model.named_parameters()}
+
+    resumed = _plain_muon_model()
+    resumed.load_state_dict(saved_params)
+    resumed_opt = build_optimizer(resumed, _plain_muon_args())
+    load(resumed, resumed_opt, saved_state)
+    _step_plain(resumed, resumed_opt, steps=2, start=2)
+    for name, parameter in resumed.named_parameters():
+        assert torch.equal(parameter.detach(), uninterrupted[name]), name
+
+
 # -- rank-local checkpoint round trip ------------------------------------------
 
 
@@ -500,6 +723,7 @@ def _training_args(**overrides):
         zero_optimizer=False,
         fp8=False,
         init_on_meta=False,
+        lr_group=None,
         save_interval=0,
         save_training_state=False,
         use_lora=False,
@@ -516,7 +740,7 @@ def _training_args(**overrides):
         dict(),
         dict(optimizer="muon"),
         dict(save_interval=10, save_training_state=True),
-        # Other trainers are not checked beyond the Muon rule.
+        # Other trainers are not checked here.
         dict(trainer_type="FinetuneTrainer", distributed_strategy="fsdp", fp8=True),
     ],
 )
@@ -527,7 +751,6 @@ def test_validation_accepts_supported_combinations(overrides):
 @pytest.mark.parametrize(
     "overrides, match",
     [
-        (dict(trainer_type="FinetuneTrainer", optimizer="muon"), "requires a tensor_wise trainer"),
         (dict(distributed_strategy="fsdp"), "requires --distributed-strategy=ddp"),
         (dict(zero_optimizer=True), "incompatible with --zero-optimizer"),
         (dict(ddp_bucket_cap_mb=25), "remove: --ddp-bucket-cap-mb"),
@@ -541,6 +764,31 @@ def test_validation_accepts_supported_combinations(overrides):
 def test_validation_rejects_unsupported_combinations(overrides, match):
     with pytest.raises(ValueError, match=re.escape(match)):
         validation.validate_tensor_wise_args(_training_args(**overrides))
+
+
+@pytest.mark.parametrize("trainer_type", ["FinetuneTrainer", "LingbotVlaV2Trainer"])
+def test_muon_validation_accepts_ddp(trainer_type):
+    from loongforge.embodied.train.validators import validate_muon_args
+
+    validate_muon_args(_training_args(trainer_type=trainer_type, optimizer="muon"))
+    validate_muon_args(_training_args(trainer_type=trainer_type, distributed_strategy="fsdp"))
+
+
+@pytest.mark.parametrize("trainer_type", ["FinetuneTrainer", "LingbotVlaV2Trainer"])
+@pytest.mark.parametrize(
+    "overrides, match",
+    [
+        (dict(distributed_strategy="fsdp"), "add --distributed-strategy ddp"),
+        (dict(zero_optimizer=True), "incompatible with --zero-optimizer"),
+        (dict(lr_group="model.vlm=1e-5"), "--lr-group is not supported"),
+    ],
+)
+def test_muon_validation_rejects_unsupported_combinations(trainer_type, overrides, match):
+    from loongforge.embodied.train.validators import validate_muon_args
+
+    args = _training_args(trainer_type=trainer_type, optimizer="muon", **overrides)
+    with pytest.raises(ValueError, match=re.escape(match)):
+        validate_muon_args(args)
 
 
 # -- fp8 codec ------------------------------------------------------------------

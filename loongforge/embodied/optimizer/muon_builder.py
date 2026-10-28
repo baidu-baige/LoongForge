@@ -18,7 +18,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Muon plus AdamW fallback, exposed as one optimizer to the training loop."""
+"""Muon plus AdamW fallback, exposed as one optimizer to the training loop.
+
+Shared by both ``--optimizer muon`` paths: ``build_optimizer`` over the model
+parameters, and the tensor_wise trainers over their fp32 masters.
+"""
 
 from typing import Any, Dict, List, Sequence, Tuple
 
@@ -28,6 +32,29 @@ from torch.optim.optimizer import Optimizer
 
 from loongforge.embodied.optimizer.muon import DistributedMuon
 
+# Name substrings of 2-D weights that stay on AdamW under ``--optimizer muon``:
+# the token embedding and the output head, which Muon's recipe leaves out.
+MUON_ADAMW_MARKERS = ("embed", "lm_head")
+
+# Ranks routed to Muon unless a model opts more in. 3-D is left out: a generic
+# 3-D tensor may be a Conv1d weight rather than an expert stack.
+DEFAULT_MUON_NDIMS = (2,)
+
+
+def muon_route(
+    name: str,
+    parameter: torch.Tensor,
+    ndims: Sequence[int] = DEFAULT_MUON_NDIMS,
+    adamw_markers: Sequence[str] = MUON_ADAMW_MARKERS,
+) -> str:
+    """``"muon"`` for a tensor of one of ``ndims`` whose name has no marker, else ``"adamw"``."""
+    if parameter.ndim not in ndims:
+        return "adamw"
+    lowered = name.lower()
+    if any(marker in lowered for marker in adamw_markers):
+        return "adamw"
+    return "muon"
+
 
 class CombinedOptimizer(Optimizer):
     """Drive several inner optimizers as if they were a single one."""
@@ -36,7 +63,8 @@ class CombinedOptimizer(Optimizer):
         if not optimizers:
             raise ValueError("CombinedOptimizer needs at least one inner optimizer.")
         self.optimizers: List[Optimizer] = list(optimizers)
-        self.defaults = {}
+        # Read by LR schedulers, e.g. ``min_lr / optimizer.defaults["lr"]``.
+        self.defaults = dict(self.optimizers[0].defaults)
 
     @property
     def param_groups(self):
@@ -80,13 +108,42 @@ class CombinedOptimizer(Optimizer):
             opt.zero_grad(set_to_none=set_to_none)
 
     def state_dict(self):
-        """Return the inner optimizers' state dicts, in order."""
-        return {"optimizers": [opt.state_dict() for opt in self.optimizers]}
+        """One standard ``{"state", "param_groups"}`` dict, so torch DCP accepts it.
+
+        Each inner optimizer numbers its parameters from 0; they are offset here
+        so the indices stay unique across optimizers.
+        """
+        state, param_groups, offset = {}, [], 0
+        for opt in self.optimizers:
+            inner = opt.state_dict()
+            state.update({offset + index: value for index, value in inner["state"].items()})
+            for group in inner["param_groups"]:
+                param_groups.append({**group, "params": [offset + i for i in group["params"]]})
+            offset += sum(len(group["params"]) for group in opt.param_groups)
+        return {"state": state, "param_groups": param_groups}
 
     def load_state_dict(self, state_dict):
-        """Restore the inner optimizers' state dicts, in order."""
-        for opt, sd in zip(self.optimizers, state_dict["optimizers"]):
-            opt.load_state_dict(sd)
+        """Split ``state_dict`` back by group position.
+
+        The keys are not assumed to be ints: torch DCP hands them back as
+        parameter names. Keeps torch's ``state_dict`` argument name, which DCP
+        passes by keyword.
+        """
+        expected = sum(len(opt.param_groups) for opt in self.optimizers)
+        if len(state_dict["param_groups"]) != expected:
+            raise ValueError(
+                f"CombinedOptimizer expects {expected} param groups, "
+                f"got {len(state_dict['param_groups'])}."
+            )
+        start = 0
+        for opt in self.optimizers:
+            groups = state_dict["param_groups"][start:start + len(opt.param_groups)]
+            start += len(opt.param_groups)
+            keys = {key for group in groups for key in group["params"]}
+            opt.load_state_dict({
+                "state": {k: v for k, v in state_dict["state"].items() if k in keys},
+                "param_groups": groups,
+            })
 
 
 def _split_param_groups_by_scaled_lr(
@@ -135,7 +192,7 @@ def build_muon_optimizer(
 
     if not muon_groups:
         raise RuntimeError(
-            "build_muon_optimizer: no Muon-eligible (2D/3D) parameters were found. "
+            "build_muon_optimizer: no parameters were routed to Muon. "
             "Use --optimizer AdamW instead."
         )
 
@@ -166,3 +223,24 @@ def build_muon_optimizer(
         inner_opts.append(adamw_opt)
 
     return CombinedOptimizer(inner_opts)
+
+
+def build_muon_optimizer_from_args(
+    muon_parameters: Sequence[Tuple[str, torch.Tensor]],
+    adamw_parameters: Sequence[Tuple[str, torch.Tensor]],
+    training_args,
+    *,
+    lr_scale_for=None,
+) -> "torch.optim.Optimizer":
+    """``build_muon_optimizer`` with every hyperparameter read from ``training_args``."""
+    return build_muon_optimizer(
+        muon_parameters,
+        lr=training_args.lr_base,
+        adamw_parameters=adamw_parameters,
+        weight_decay=training_args.weight_decay,
+        momentum=training_args.muon_momentum,
+        nesterov=training_args.muon_nesterov,
+        ns_steps=training_args.muon_ns_steps,
+        adjust_lr_fn=training_args.muon_adjust_lr_fn,
+        lr_scale_for=lr_scale_for,
+    )

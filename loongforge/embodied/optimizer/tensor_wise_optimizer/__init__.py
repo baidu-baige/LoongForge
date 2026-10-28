@@ -21,7 +21,9 @@ ZeRO-1 and from Megatron's ``LayerWiseDistributedOptimizer`` is in
     gradient_reducer.py       reduce-to-owner, plus the bucket/buffer layout both paths share
     parameter_sync.py         owner-to-replica publication, including the fp8 delta path
     tensor_wise_optimizer.py  wires the above into one optimizer object
-    optimizer_builder.py      the inner Muon + AdamW optimizer built over the masters
+
+The inner Muon + AdamW optimizer built over the masters comes from
+``optimizer/muon_builder.py``, which plain DDP runs share.
 
 Import the modules directly; there are deliberately no re-exports.
 """

@@ -5,9 +5,10 @@
 
 ``LingbotVlaV2Trainer`` subclasses ``TensorWiseTrainer``
 (``trainers/custom/tensor_wise_trainer.py``) and adds what is specific to
-LingBot: the parameter policy, Muon, the model-side batch and compile helpers,
-and the teacher look-ahead (the teachers run a step early, and the queue of
-started batches and the dataloader position it hides live here).
+LingBot: the parameter policy, the Muon LR scaling and MoE load-balance hook,
+the model-side batch and compile helpers, and the teacher look-ahead (the
+teachers run a step early, and the queue of started batches and the dataloader
+position it hides live here).
 """
 
 import logging
@@ -28,9 +29,6 @@ from loongforge.embodied.model.lingbot_vla_v2.moe_load_balance import (
 )
 from loongforge.embodied.model.lingbot_vla_v2.parameter_policy import (
     LingbotVlaV2ParameterPolicy,
-)
-from loongforge.embodied.optimizer.tensor_wise_optimizer.optimizer_builder import (
-    build_muon_optimizer,
 )
 from loongforge.embodied.train.trainers.custom.tensor_wise_trainer import (
     TensorWiseTrainer,
@@ -72,30 +70,14 @@ class LingbotVlaV2Trainer(TensorWiseTrainer):
             )
         return module
 
-    def _create_inner_optimizer(self, tensor_wise):
-        """Add Muon over the masters the policy routes to it.
+    def _muon_lr_scale_for(self):
+        """MoE experts run at a scaled LR."""
+        return moe_expert_lr_scale_for(self.model_cfg)
 
-        Muon is built here rather than by the optimizer registry because it
-        needs the masters, which only exist inside ``TensorWiseOptimizer``.
-        """
-        args = self.training_args
-        if args.optimizer.lower() != "muon":
-            return super()._create_inner_optimizer(tensor_wise)
-        muon_parameters, adamw_parameters = (
-            tensor_wise.parameter_plan.split_masters_by_optimizer()
-        )
-        optimizer = build_muon_optimizer(
-            muon_parameters,
-            lr=args.lr_base,
-            adamw_parameters=adamw_parameters,
-            weight_decay=args.weight_decay,
-            momentum=args.muon_momentum,
-            nesterov=args.muon_nesterov,
-            ns_steps=args.muon_ns_steps,
-            adjust_lr_fn=args.muon_adjust_lr_fn,
-            lr_scale_for=moe_expert_lr_scale_for(self.model_cfg),
-        )
-        register_moe_load_balance_hook(optimizer, self.model, self.model_cfg)
+    def _create_inner_optimizer(self, tensor_wise):
+        optimizer = super()._create_inner_optimizer(tensor_wise)
+        if self.training_args.optimizer.lower() == "muon":
+            register_moe_load_balance_hook(optimizer, self.model, self.model_cfg)
         return optimizer
 
     def _after_optimizer_built(self) -> None:

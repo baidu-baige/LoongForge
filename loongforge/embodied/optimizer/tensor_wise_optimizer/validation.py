@@ -27,18 +27,10 @@ _DDP_ONLY_ARGS = (
 
 
 def validate_tensor_wise_args(training_args) -> None:
-    """Reject option combinations a tensor_wise trainer cannot honour; for other
-    trainers only check that ``--optimizer muon`` is not used."""
+    """Reject option combinations a tensor_wise trainer cannot honour; other
+    trainers are not checked here."""
     trainer = training_args.trainer_type
     if trainer not in TENSOR_WISE_TRAINERS:
-        # The Muon optimizer is built by the tensor_wise trainer, not by
-        # OPTIMIZER_REGISTRY, so without this check a wrong trainer surfaces as
-        # "Unknown optimizer 'muon'" from build_optimizer, which points nowhere.
-        if training_args.optimizer.lower() == "muon":
-            raise ValueError(
-                "--optimizer=muon requires a tensor_wise trainer: --trainer-type "
-                + " or ".join(TENSOR_WISE_TRAINERS) + "."
-            )
         return
 
     # Compute replicas are complete on every rank, i.e. data parallel; the

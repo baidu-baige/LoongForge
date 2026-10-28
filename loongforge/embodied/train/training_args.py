@@ -616,9 +616,12 @@ class _OptimizerArgs:
                     "TEFusedAdamW, ApexFusedAdamW, Adam, SGD, Dmuon, "
                     "muon. TEFusedAdamW requires TransformerEngine; "
                     "ApexFusedAdamW requires Apex. Dmuon is the third-party "
-                    "package's FSDP2 Muon; muon is LoongForge's own "
-                    "Muon, built by a tensor_wise trainer "
-                    "(--trainer-type LingbotVlaV2Trainer)."
+                    "package's FSDP2 Muon (--distributed-strategy fsdp). muon "
+                    "is LoongForge's Muon for --distributed-strategy ddp: "
+                    "2-D weights except embeddings and the output head "
+                    "use Muon, the rest (including 3-D tensors) AdamW; 3-D "
+                    "expert stacks on Muon need a tensor_wise trainer. "
+                    "Incompatible with --zero-optimizer and --lr-group."
         },
     )
     clip_grad: float = field(
@@ -733,9 +736,7 @@ class _OptimizerArgs:
     muon_momentum: float = field(
         default=0.95,
         metadata={
-            "help": "Muon momentum. Used by --optimizer=muon, which "
-                    "is built by the tensor_wise trainer rather than by "
-                    "the optimizer registry."
+            "help": "Muon momentum. Used by --optimizer=muon."
         },
     )
     muon_nesterov: bool = field(

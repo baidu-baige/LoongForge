@@ -7,8 +7,9 @@ Selecting a tensor_wise trainer is what enables tensor_wise: it always builds
 ``TensorWiseOptimizer`` under ``--distributed-strategy ddp``.
 ``--trainer-type TensorWiseTrainer`` runs any model that ``FinetuneTrainer``
 runs, with the parameters in ``--dtype`` and the ``--optimizer`` optimizer over
-the fp32 masters; a model that needs more (a precision policy, Muon, compile)
-subclasses it, as ``LingbotVlaV2Trainer`` does.
+the fp32 masters, including ``--optimizer muon``; a model that needs more (a
+precision policy, per-parameter LRs, compile) subclasses it, as
+``LingbotVlaV2Trainer`` does.
 
 The optimizer is built in ``_wrap_model_for_training``, not ``_build_optimizer``:
 its parameter plan has to capture the module tree before anything (e.g. regional
@@ -23,6 +24,10 @@ from loongforge.embodied.distributed.activation_checkpointing import (
 )
 from loongforge.embodied.distributed.utils import is_mixed_param_dtype
 from loongforge.embodied.optimizer import build_optimizer
+from loongforge.embodied.optimizer.muon_builder import (
+    DEFAULT_MUON_NDIMS,
+    build_muon_optimizer_from_args,
+)
 from loongforge.embodied.optimizer.tensor_wise_optimizer.precision_policy import (
     DefaultParameterPolicy,
 )
@@ -48,6 +53,7 @@ class TensorWiseTrainer(FinetuneTrainer):
                                       and optimizer route
         _prepare_module()             the module handed to the optimizer
         _create_inner_optimizer(tw)   the optimizer over the fp32 masters
+        _muon_lr_scale_for()          per-parameter LR multipliers for Muon
         _after_optimizer_built()      work that must follow the parameter plan,
                                       e.g. regional compile
 
@@ -59,7 +65,10 @@ class TensorWiseTrainer(FinetuneTrainer):
     # -- extension points -------------------------------------------------------
 
     def _build_parameter_policy(self):
-        return DefaultParameterPolicy()
+        """Keep every parameter's dtype; under ``--optimizer muon`` route 2-D weights to Muon."""
+        if self.training_args.optimizer.lower() != "muon":
+            return DefaultParameterPolicy()
+        return DefaultParameterPolicy(muon_ndims=DEFAULT_MUON_NDIMS)
 
     def _prepare_module(self):
         """Prepare the model as ``wrap_model`` does for DDP, minus the wrapper:
@@ -82,9 +91,24 @@ class TensorWiseTrainer(FinetuneTrainer):
 
         The replicas' ``.grad`` is consumed and cleared by the reduce-to-owner
         step, so an optimizer built on ``self.model`` would see no gradients and
-        silently leave the run untrained.
+        silently leave the run untrained. Muon is built here, not by the
+        optimizer registry, because it needs the masters, already split into the
+        Muon and AdamW routes by the parameter policy.
         """
-        return build_optimizer(tensor_wise.optimizer_view(), self.training_args)
+        args = self.training_args
+        if args.optimizer.lower() != "muon":
+            return build_optimizer(tensor_wise.optimizer_view(), args)
+        muon_parameters, adamw_parameters = (
+            tensor_wise.parameter_plan.split_masters_by_optimizer()
+        )
+        return build_muon_optimizer_from_args(
+            muon_parameters, adamw_parameters, args,
+            lr_scale_for=self._muon_lr_scale_for(),
+        )
+
+    def _muon_lr_scale_for(self):
+        """``name -> LR multiplier`` for Muon, or ``None`` for a uniform LR."""
+        return None
 
     def _after_optimizer_built(self) -> None:
         """Hook for work that has to run after the parameter plan is captured."""

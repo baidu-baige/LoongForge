@@ -9,9 +9,10 @@ from collections.abc import MutableMapping
 import torch
 import torch.nn as nn
 from torch.distributed.optim import ZeroRedundancyOptimizer
-from loongforge.embodied.distributed.utils import is_rank_zero
+from loongforge.embodied.distributed.utils import is_rank_zero, unwrap_model
 from loongforge.embodied.optimizer.lr_scheduler import build_param_groups
 from loongforge.embodied.optimizer.dmuon import build_dmuon_optimizer
+from loongforge.embodied.optimizer.muon_builder import build_muon_optimizer_from_args, muon_route
 
 try:
     from transformer_engine.pytorch.optimizers import FusedAdam as _TEFusedAdam
@@ -261,6 +262,38 @@ def _make_fp32_master_optimizer_class(optimizer_cls):
     return _FP32MasterOptimizer
 
 
+def _build_plain_muon_optimizer(model: nn.Module, training_args) -> torch.optim.Optimizer:
+    """Muon over the model's own parameters, for a plain (non tensor_wise) DDP run.
+
+    Every rank runs the same update on the full DDP-reduced gradients, so the
+    replicas stay equal without a collective; Newton-Schulz and the momentum are
+    replicated, not sharded, and there is no fp32 master.
+    """
+    muon_parameters, adamw_parameters = [], []
+    for name, parameter in unwrap_model(model).named_parameters():
+        if not parameter.requires_grad:
+            continue
+        route = muon_parameters if muon_route(name, parameter) == "muon" else adamw_parameters
+        route.append((name, parameter))
+
+    stacked = [name for name, parameter in adamw_parameters if parameter.ndim == 3]
+    if stacked and is_rank_zero():
+        logger.info(
+            "--optimizer muon: %d 3-D parameters stay on AdamW (e.g. %s); 3-D "
+            "expert stacks on Muon need a tensor_wise trainer.",
+            len(stacked), stacked[0],
+        )
+
+    dtypes = {parameter.dtype for _, parameter in muon_parameters + adamw_parameters}
+    if dtypes != {torch.float32} and is_rank_zero():
+        logger.warning(
+            "--optimizer muon updates the model parameters in place and keeps its "
+            "state in their dtype (%s); there is no fp32 master on this path.",
+            ", ".join(sorted(str(dtype) for dtype in dtypes)),
+        )
+    return build_muon_optimizer_from_args(muon_parameters, adamw_parameters, training_args)
+
+
 def build_optimizer(model: nn.Module, training_args) -> torch.optim.Optimizer:
     """Build the training optimizer.
 
@@ -268,9 +301,13 @@ def build_optimizer(model: nn.Module, training_args) -> torch.optim.Optimizer:
     - Select AdamW/Adam/SGD from ``training_args.optimizer``.
     - Use ZeRO-1 to shard optimizer states when ``--zero-optimizer`` is enabled with DDP.
     - Split mixed-dtype parameters into per-dtype ZeRO optimizers to satisfy ZeroRedundancyOptimizer dtype constraints.
+    - ``muon`` builds LoongForge Muon over the model parameters; the tensor_wise
+      trainers build their own over fp32 masters and do not come through here.
     """
 
     optimizer_name = training_args.optimizer
+    if optimizer_name.lower() == "muon":
+        return _build_plain_muon_optimizer(model, training_args)
     if optimizer_name.lower() == "dmuon":
         groups = build_param_groups(model, training_args) if training_args.lr_group else None
         return build_dmuon_optimizer(model, training_args, param_groups=groups)
