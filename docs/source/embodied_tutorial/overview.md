@@ -219,11 +219,22 @@ Select the optimizer with `--optimizer`. Standard AdamW, several fused accelerat
 | `ApexFusedAdamW` | Apex FusedAdam |
 | `Adam` | torch Adam |
 | `SGD` | torch SGD |
+| `muon` | LoongForge Muon for `--distributed-strategy ddp`, see below |
 
 Notes on fused Adam implementations:
 
 - **TEFusedAdamW**: fuses the parameter update into a single CUDA kernel, significantly reducing memory bandwidth pressure; requires `Transformer-engine`
 - **ApexFusedAdamW**: fuses updates across multiple parameter groups, lowering optimizer step latency for large models; requires `apex`
+
+`muon` runs Muon on 2-D weights and AdamW on everything else (biases, norms, 3-D tensors, and weights whose name contains `embed` or `lm_head`). It works with any DDP trainer, for example:
+
+```bash
+--trainer-type FinetuneTrainer \
+--distributed-strategy ddp \
+--optimizer muon
+```
+
+With `FinetuneTrainer` every rank updates its full replica in the parameters' own dtype; the Muon update matches `torch.optim.Muon` bit for bit. With a tensor_wise trainer (section 4.2.3) the same optimizer runs on the fp32 masters, and a model's parameter policy can also route 3-D expert stacks to Muon, as `lingbot_vla_v2` does. `--zero-optimizer`, `--lr-group` and FSDP are rejected; use `Dmuon` under FSDP. Hyperparameters: `--muon-momentum`, `--muon-nesterov`, `--muon-ns-steps`, `--muon-adjust-lr-fn`.
 
 #### 3.3.3 Module-level Parameter-group LR
 
@@ -439,11 +450,11 @@ The collective knobs are the `model.tensor_wise:` section of the model YAML, or 
 
 The `param_sync_fp8_*` and `param_sync_bf16_with_fp8` fields apply only to `fp8_e4m3_delta`.
 
-To bring another model onto tensor_wise, start with `--trainer-type TensorWiseTrainer` (`trainers/custom/tensor_wise_trainer.py`): it runs any model `FinetuneTrainer` runs, keeps every parameter in `--dtype` and uses the `--optimizer` optimizer over the fp32 masters. A model that needs its own precision classes, Muon or compile subclasses it the way `LingbotVlaV2Trainer` does, adds the new `--trainer-type` name to `TENSOR_WISE_TRAINERS` (`tensor_wise_optimizer/validation.py`), and returns a `ParameterClassPolicy` as its parameter policy. Either way, a `tensor_wise: TensorWiseConfig` field in the model config carries the knobs above; without it the defaults apply.
+To bring another model onto tensor_wise, start with `--trainer-type TensorWiseTrainer` (`trainers/custom/tensor_wise_trainer.py`). It needs no model-specific code and has been run end to end on FastWAM and Pi0.5; check the constraints below before using it on other models. It keeps every parameter in `--dtype` and runs the `--optimizer` optimizer on fp32 masters, so its loss differs from a `--dtype` DDP run, which updates the low-precision parameters in place. A model that needs its own precision classes, Muon on 3-D tensors (for example MoE expert stacks) or compile subclasses it the way `LingbotVlaV2Trainer` does, adds the new `--trainer-type` name to `TENSOR_WISE_TRAINERS` (`tensor_wise_optimizer/validation.py`), and returns a `ParameterClassPolicy` as its parameter policy. Either way, a `tensor_wise: TensorWiseConfig` field in the model config carries the knobs above; without it the defaults apply.
 
 Constraints:
 
-- Requires `--distributed-strategy ddp`; `--zero-optimizer`, `--fp8`, `--init-on-meta` and `--ddp-*` are rejected; `--optimizer muon` requires a tensor_wise trainer.
+- Requires `--distributed-strategy ddp`; `--zero-optimizer`, `--fp8`, `--init-on-meta` and `--ddp-*` are rejected.
 - Training-state checkpoints require `--save-format dcp` and cannot be combined with `--use-lora`; pass `--no-save-training-state` to export weights only.
 - Module buffers (for example BatchNorm statistics) are not synchronized. Check this before moving a model onto tensor_wise.
 

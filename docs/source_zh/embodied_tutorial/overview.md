@@ -218,11 +218,22 @@ global_batch_size = per_device_batch_size * world_size * gradient_accumulation_s
 | `ApexFusedAdamW` | Apex FusedAdam |
 | `Adam` | torch Adam |
 | `SGD` | torch SGD |
+| `muon` | LoongForge Muon，用于 `--distributed-strategy ddp`，见下文 |
 
 Fused Adam 加速实现说明：
 
 - **TEFusedAdamW**：将参数更新融合为单次 CUDA kernel，显著降低显存带宽压力，依赖 `Transformer-engine`
 - **ApexFusedAdamW**：多参数组融合更新，在大模型场景下优化器步骤耗时更低，依赖 `apex`
+
+`muon` 对 2-D 权重用 Muon，其余参数（bias、norm、3-D tensor，以及名字含 `embed` 或 `lm_head` 的权重）用 AdamW。任何 DDP trainer 都能用，例如：
+
+```bash
+--trainer-type FinetuneTrainer \
+--distributed-strategy ddp \
+--optimizer muon
+```
+
+在 `FinetuneTrainer` 下，每个 rank 用参数自身的 dtype 更新完整副本，Muon 的更新与 `torch.optim.Muon` 逐位一致。在 tensor_wise trainer（见 4.2.3）下，同一个优化器在 fp32 master 上运行，模型的参数策略还可以把 3-D 专家堆叠交给 Muon，`lingbot_vla_v2` 就是这样做的。`--zero-optimizer`、`--lr-group` 与 FSDP 会被拒绝；FSDP 下请用 `Dmuon`。超参数：`--muon-momentum`、`--muon-nesterov`、`--muon-ns-steps`、`--muon-adjust-lr-fn`。
 
 #### 3.3.3 模块级分组学习率
 
@@ -438,11 +449,11 @@ tensor_wise（`TensorWiseOptimizer`）是 DDP 下的一种分布式优化器：�
 
 `param_sync_fp8_*` 与 `param_sync_bf16_with_fp8` 只在 `fp8_e4m3_delta` 下生效。
 
-要让其他模型使用 tensor_wise，先用 `--trainer-type TensorWiseTrainer`（`trainers/custom/tensor_wise_trainer.py`）：凡是 `FinetuneTrainer` 能跑的模型它都能跑，参数保持 `--dtype`，在 fp32 master 上使用 `--optimizer` 指定的优化器。需要自定义精度分类、Muon 或 compile 的模型，参照 `LingbotVlaV2Trainer` 继承它，把新的 `--trainer-type` 名加入 `TENSOR_WISE_TRAINERS`（`tensor_wise_optimizer/validation.py`），并返回 `ParameterClassPolicy` 作为参数策略。两种方式下，模型 config 里的 `tensor_wise: TensorWiseConfig` 字段都承载上述参数；没有该字段时使用默认值。
+要让其他模型使用 tensor_wise，先用 `--trainer-type TensorWiseTrainer`（`trainers/custom/tensor_wise_trainer.py`）。它不需要模型专属代码，已在 FastWAM 和 Pi0.5 上端到端跑通；用于其他模型前，请先核对下方约束。参数保持 `--dtype`，`--optimizer` 指定的优化器在 fp32 master 上运行，因此 loss 与 `--dtype` 下的 DDP 不一致（后者直接更新低精度参数）。需要自定义精度分类、对 3-D tensor（如 MoE 专家堆叠）用 Muon 或 compile 的模型，参照 `LingbotVlaV2Trainer` 继承它，把新的 `--trainer-type` 名加入 `TENSOR_WISE_TRAINERS`（`tensor_wise_optimizer/validation.py`），并返回 `ParameterClassPolicy` 作为参数策略。两种方式下，模型 config 里的 `tensor_wise: TensorWiseConfig` 字段都承载上述参数；没有该字段时使用默认值。
 
 约束：
 
-- 要求 `--distributed-strategy ddp`；`--zero-optimizer`、`--fp8`、`--init-on-meta` 与 `--ddp-*` 会被拒绝；`--optimizer muon` 只能配合 tensor_wise trainer 使用。
+- 要求 `--distributed-strategy ddp`；`--zero-optimizer`、`--fp8`、`--init-on-meta` 与 `--ddp-*` 会被拒绝。
 - 训练状态 checkpoint 要求 `--save-format dcp`，且不能与 `--use-lora` 同用；只导出权重时加 `--no-save-training-state`。
 - 模块 buffer（如 BatchNorm 统计量）不会同步。迁移模型到 tensor_wise 前请先确认这一点。
 
