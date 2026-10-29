@@ -15,9 +15,9 @@ from torch.distributed.fsdp._fully_shard import _fsdp_collectives as _collective
 from torch.distributed.fsdp._fully_shard import _fsdp_param as _fsdp_param
 from torch.distributed.fsdp._fully_shard import _fsdp_param_group as _param_group
 
-from loongforge.engines.torch.quantization import delta_fp8_allgather as delta_mod
-from loongforge.engines.torch.quantization import delta_fp8_comm
-from loongforge.engines.torch.quantization.delta_fp8_comm import triton as delta_triton
+from loongforge.engines.torch.distributed import delta_fp8_allgather as delta_mod
+from loongforge.engines.torch.distributed import delta_fp8_comm
+from loongforge.engines.torch.distributed.delta_fp8_comm import triton as delta_triton
 from loongforge.training.torch_args import TrainingArgs, build_arg_parser, validate
 
 
@@ -424,7 +424,7 @@ def test_install_and_uninstall_patches_foreach_all_gather():
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="delta-FP8 kernels require CUDA")
 def test_quantize_dequantize_round_trip():
-    from loongforge.engines.torch.quantization.delta_fp8_comm import dequantize_add, quantize_delta
+    from loongforge.engines.torch.distributed.delta_fp8_comm import dequantize_add, quantize_delta
 
     torch.manual_seed(0)
     device = "cuda"
@@ -444,7 +444,7 @@ def test_quantize_dequantize_round_trip():
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="delta-FP8 kernels require CUDA")
 def test_error_feedback_does_not_drift():
-    from loongforge.engines.torch.quantization.delta_fp8_comm import dequantize_add, quantize_delta
+    from loongforge.engines.torch.distributed.delta_fp8_comm import dequantize_add, quantize_delta
 
     torch.manual_seed(42)
     device = "cuda"
@@ -483,7 +483,7 @@ def test_error_feedback_does_not_drift():
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="delta-FP8 kernels require CUDA")
 def test_param_major_error_feedback_updates_fused_fsdp_storage():
-    from loongforge.engines.torch.quantization.delta_fp8_comm import (
+    from loongforge.engines.torch.distributed.delta_fp8_comm import (
         dequantize_add_param_major,
         quantize_delta_param_major_into,
     )

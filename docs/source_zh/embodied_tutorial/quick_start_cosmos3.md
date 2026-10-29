@@ -51,7 +51,7 @@ DROID 数据不需要额外的离线预处理，训练时通过内建的 `cosmos
 
 ## 2. 启动训练
 
-启动脚本：`examples/cosmos3/finetuning/finetune_cosmos3_nano_droid_fsdp.sh`。默认为单机 8 卡 FSDP2 + bf16，训练 500 步、每卡 batch=2。
+启动脚本：`examples/cosmos3/finetuning/sft_cosmos3_nano_droid_fsdp.sh`。默认为单机 8 卡 FSDP2 + bf16，训练 500 步、每卡 batch=2。
 
 ### 2.1 环境变量
 
@@ -73,7 +73,7 @@ export OUTPUT_DIR=/workspace/outputs/cosmos3_nano_droid
 单机 8 卡 FSDP2 SFT：
 
 ```bash
-bash examples/cosmos3/finetuning/finetune_cosmos3_nano_droid_fsdp.sh
+bash examples/cosmos3/finetuning/sft_cosmos3_nano_droid_fsdp.sh
 ```
 
 ### 2.3 关键参数说明
@@ -144,7 +144,7 @@ Cosmos3-Nano 的动作头（`action2llm` / `llm2action` / `action_modality_embed
 
 ```bash
 # 增强 tail 放到模型 device 上执行，而不是在 dataloader worker 里
-bash examples/cosmos3/finetuning/finetune_cosmos3_nano_droid_fsdp.sh data.colorjitter_on_gpu=true
+bash examples/cosmos3/finetuning/sft_cosmos3_nano_droid_fsdp.sh data.colorjitter_on_gpu=true
 ```
 
 - `data.colorjitter_on_gpu`（默认 `false`）—— 打开后 worker 只做视频解码，ColorJitter 及其之后的处理都在 GPU 上执行。

@@ -58,7 +58,7 @@ export TENSORBOARD_PATH=/workspace/tensorboard-log/gr00t_n1_6
 Use this to validate the pipeline first. It disables CUDA Graph and DDP static graph, and uses the plain `AdamW` optimizer:
 
 ```bash
-bash /workspace/LoongForge/examples/gr00t_n1_6/finetuning/finetune_gr00t_n1_6_ddp.sh \
+bash /workspace/LoongForge/examples/gr00t_n1_6/finetuning/sft_gr00t_n1_6_ddp.sh \
     --optimizer AdamW \
     --cuda-graph-impl none \
     --cuda-graph-pad-length 0 \
@@ -68,7 +68,7 @@ bash /workspace/LoongForge/examples/gr00t_n1_6/finetuning/finetune_gr00t_n1_6_dd
 The default script already enables the main performance optimizations:
 
 ```bash
-bash /workspace/LoongForge/examples/gr00t_n1_6/finetuning/finetune_gr00t_n1_6_ddp.sh
+bash /workspace/LoongForge/examples/gr00t_n1_6/finetuning/sft_gr00t_n1_6_ddp.sh
 ```
 Key performance optimization switches:
 

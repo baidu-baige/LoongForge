@@ -53,16 +53,16 @@ from loongforge.data.vlm.dp_balance_layout import reorder_data_for_vlm, vlm_cumu
 from loongforge.engines.megatron.checkpointing import load_dataloader_state
 
 
-from loongforge.models.multimodal.multimodal_model_provider import (
-    multimodal_model_provider,
+from loongforge.models.omni_models.omni_model_provider import (
+    omni_model_provider,
 )
-from loongforge.engines.megatron.distributed import hetero_dp
-from loongforge.engines.megatron.distributed.dp_balance.rebalance.layout import (
+from loongforge.engines.megatron import full_hetero_cpu_offload
+from loongforge.engines.megatron.dp_balance.rebalance.layout import (
     BatchLayout,
     install_batch_layout,
 )
 from loongforge.engines.megatron.utils import get_batch_on_this_cp_rank
-from loongforge.engines.megatron.distributed.loss_reduction import default_loss_func
+from loongforge.engines.megatron.get_loss_func import default_loss_func
 from loongforge.engines.megatron.initialize import (
     change_parallel_state,
     get_encoder_dp_size,
@@ -227,7 +227,7 @@ def _reset_step_state():
 
 def build_multimodal_runtime(args):
     """Engine bindings the multimodal model needs; call after Megatron parallel state exists."""
-    from loongforge.models.multimodal.runtime import MultimodalRuntime
+    from loongforge.models.omni_models.runtime import MultimodalRuntime
     from loongforge.engines.megatron.initialize import (
         change_parallel_state,
         get_encoder_dp_size,
@@ -236,7 +236,7 @@ def build_multimodal_runtime(args):
 
     vit_balance = None
     if args.use_vit_dp_balance:
-        from loongforge.engines.megatron.distributed.dp_balance.vit_balance import (
+        from loongforge.engines.megatron.dp_balance.vit_balance import (
             dp_balance_vit_encoder,
         )
 
@@ -252,7 +252,7 @@ def build_multimodal_runtime(args):
 
 def build_hetero_step(args):
     """Create the full-hetero-DP step context; it carries the per-step encoder state."""
-    return hetero_dp.HeteroStepContext(
+    return full_hetero_cpu_offload.HeteroStepContext(
         get_batch=get_batch,
         create_mock_batch=_create_mock_batch,
         reset_step_state=_reset_step_state,
@@ -396,7 +396,7 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False, heter
 
 def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None, hetero_step=None):
     """Provides the datasets used by the trainer"""
-    import loongforge.engines.megatron.distributed.dp_balance.patches  # noqa: F401
+    import loongforge.engines.megatron.dp_balance.patches  # noqa: F401
     args = get_args()
     tokenizer = get_tokenizer()
     loader_config = SFTLoaderConfig.from_args(args)
@@ -439,7 +439,7 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None,
                 data_sharding=args.data_sharding,
                 data_parallel_rank=dpr,
                 data_parallel_size=dpw,
-                **hetero_dp.encoder_parallel_facts(),
+                **full_hetero_cpu_offload.encoder_parallel_facts(),
             )
             if hetero_step is None:
                 raise RuntimeError("full hetero DP needs the step context from the training method")
@@ -498,7 +498,7 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None,
                 encoder_dataset, collator, load_dataloader_state(args)
             )
             encoder_iter = build_full_hetero_encoder_energon_iterator(
-                encoder_dataloader, **hetero_dp.encoder_parallel_facts()
+                encoder_dataloader, **full_hetero_cpu_offload.encoder_parallel_facts()
             )
             if hetero_step is None:
                 raise RuntimeError("full hetero DP needs the step context from the training method")
@@ -523,7 +523,7 @@ def get_embedding_ranks(pp_ranks: List[int]):
 def model_provider(pre_process=True, post_process=True, vp_stage=None):
     """Build the multimodal model with this run's args and model config."""
     args = get_args()
-    return multimodal_model_provider(pre_process, post_process, vp_stage=vp_stage, args=args,
+    return omni_model_provider(pre_process, post_process, vp_stage=vp_stage, args=args,
                                model_config=get_model_config(), runtime=build_multimodal_runtime(args))
 
 

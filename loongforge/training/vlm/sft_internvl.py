@@ -5,7 +5,6 @@
 
 
 import os
-
 import torch
 import torch.distributed as dist
 from functools import partial
@@ -25,7 +24,7 @@ from loongforge.data.vlm.internvl.dp_balance_layout import (
     internvl_cumulative_lengths,
     reorder_data_for_internvl,
 )
-from loongforge.engines.megatron.distributed.dp_balance.rebalance.layout import (
+from loongforge.engines.megatron.dp_balance.rebalance.layout import (
     BatchLayout,
     install_batch_layout,
 )
@@ -44,15 +43,37 @@ from loongforge.data.vlm.dataloader_provider import (
     get_train_loader,
 )
 from loongforge.engines.megatron.checkpointing import load_dataloader_state
-from loongforge.models.multimodal.multimodal_model_provider import (
-    multimodal_model_provider,
+from loongforge.models.omni_models.omni_model_provider import (
+    omni_model_provider,
 )
 from loongforge.models.encoder.internvl_vision_models.internvl_config import IMG_CONTEXT_TOKEN
 
 stimer = StragglerDetector()
 
 
+def model_provider(pre_process=True, post_process=True, vp_stage: int = None):
+    """Builds the model.
+
+    Args:
+        pre_process (bool, optional): Set to true if you need to compute embedings. Defaults to True.
+        post_process (bool, optional): Set to true if you need to want to compute output logits/loss. Defaults to True.
+
+    Returns:
+        MCoreModel: The returned model
+    """
+    args = get_args()
+    return omni_model_provider(
+        pre_process,
+        post_process,
+        vp_stage=vp_stage,
+        args=args,
+        model_config=get_model_config(),
+        runtime=pretrain_vlm.build_multimodal_runtime(args),
+    )
+
+
 def get_packed_seq_params(attention_mask):
+    """Get packed seq params """
     packed_seq_params = PackedSeqParams()
     packed_seq_params.qkv_format = "thd"
     packed_seq_params.cu_seqlens_q = attention_mask
@@ -262,16 +283,26 @@ def forward_step(data_iterator, model):
             print("filter_ignore_data get True, skip current microbatch...")
             output_tensor = output_tensor * 0.0
 
+    # print(f"packed_seq_params:{packed_seq_params}")
     return output_tensor, partial(loss_func_internvl, loss_mask, loss_weights)
 
 
 def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None):
-    import loongforge.engines.megatron.distributed.dp_balance.patches  # noqa: F401
+    """Train_valid_test_datasets_provider """
+    import loongforge.engines.megatron.dp_balance.patches  # noqa: F401
     args = get_args()
     loader_config = SFTLoaderConfig.from_args(args)
     data_config = VLMDataConfig.from_args(args)
     if mpu.get_tensor_model_parallel_rank() != 0:
         return None, None, None
+
+    # Disable wandb if it causes issues
+    if not hasattr(args, 'wandb_project') or args.wandb_project is None:
+        print("Warning: Disabling wandb logging as wandb_project is not set")
+        args.wandb_project = ""
+        args.wandb_exp_name = ""
+        args.wandb_save = False
+        args.use_wandb = False
 
     # create dataloader
     if args.is_tokenized_data:
@@ -314,18 +345,6 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
         )
         train_dataloader = get_train_loader(train_dataset, state=load_dataloader_state(args))
         return train_dataloader, None, None
-
-
-def model_provider(pre_process=True, post_process=True, vp_stage=None):
-    """Build the multimodal model with this run's args and model config."""
-    return multimodal_model_provider(
-        pre_process,
-        post_process,
-        vp_stage=vp_stage,
-        args=get_args(),
-        model_config=get_model_config(),
-        runtime=pretrain_vlm.build_multimodal_runtime(get_args()),
-    )
 
 
 def _reorder_internvl_batch(data, ctx):

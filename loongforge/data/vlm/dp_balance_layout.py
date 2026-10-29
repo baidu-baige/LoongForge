@@ -5,7 +5,7 @@
 
 Depacks a packed VLM batch into samples, redistributes them with the context the
 engine passes in, and re-packs them. ``training/vlm`` installs it with
-``engines.megatron.distributed.dp_balance.rebalance.layout.install_batch_layout``.
+``engines.megatron.dp_balance.rebalance.layout.install_batch_layout``.
 """
 
 from functools import partial

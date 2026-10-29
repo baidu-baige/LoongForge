@@ -32,9 +32,9 @@ from megatron.core.transformer.enums import AttnMaskType
 from megatron.core.transformer.spec_utils import build_module
 
 from loongforge.models.common import BaseMegatronVisionModule
-from loongforge.models.common.layer_dispatch import multiacc_modules
+from loongforge.models.dispatch import multiacc_modules
 from loongforge.models.encoder.vision_transformer_block import TransformerBlock
-from loongforge.models.common.spec_utils import import_module
+from loongforge.models.utils import import_module
 
 from .minicpm_v_4_6_config import MiniCPMV46VisionConfig
 from .minicpm_v_4_6_layer_spec import MiniCPMV46TEDotProductAttention

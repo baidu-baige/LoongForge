@@ -14,7 +14,7 @@ from concurrent.futures import Future
 
 import pytest
 
-import loongforge.engines.torch.checkpointing as ck
+import loongforge.engines.torch.distributed.checkpoint as ck
 from loongforge.engines.torch.distributed import DistributedContext
 
 

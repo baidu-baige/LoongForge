@@ -12,7 +12,7 @@ import numpy as np
 from PIL import Image
 import torch
 
-from loongforge.data.embodied.shared.transforms.base import BaseTransform
+from loongforge.data.embodied.transforms.base import BaseTransform
 from loongforge.data.embodied.registry import (
     TransformBuilderContext,
     register_transform_builder,

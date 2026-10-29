@@ -14,7 +14,7 @@ from megatron.core.transformer.mlp import MLP, MLPSubmodules
 from megatron.core.transformer.spec_utils import ModuleSpec
 from megatron.core.transformer.transformer_layer import TransformerLayer, TransformerLayerSubmodules
 
-from loongforge.models.common.layer_dispatch import multiacc_modules
+from loongforge.models.dispatch import multiacc_modules
 
 
 class MiniCPMV46TEDotProductAttention(TEDotProductAttention):

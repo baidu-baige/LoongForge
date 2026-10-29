@@ -34,7 +34,7 @@ from typing import Any, Iterator
 from torch.utils.data import Sampler
 
 from loongforge.data.embodied.registry import register_sampler_builder
-from loongforge.data.embodied.shared.sampler_factory import (
+from loongforge.data.embodied.sampler_builder import (
     SamplerBuilderContext,
     default_sampler_builder,
 )

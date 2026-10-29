@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 
 import torch
 
-from loongforge.data.embodied.shared.collator_base import BaseCollator
+from loongforge.data.embodied.transforms.collator import BaseCollator
 from loongforge.data.embodied.registry import register_collator
 from loongforge.models.embodied.cosmos3.sequence_packing import SequencePlan
 
@@ -125,7 +125,7 @@ class DeferredVideoTail:
         device is irrelevant), so restoring that stream reproduces the in-worker draws
         exactly. fork_rng keeps the main process stream untouched.
         """
-        from loongforge.data.embodied.cosmos3.cosmos3_dataset import (
+        from loongforge.data.embodied.cosmos3.droid_lerobot_dataset import (
             build_image_augmentor,
         )
 
@@ -150,7 +150,7 @@ class DeferredVideoTail:
         ``ops`` is ``(target_t, target_w, target_h)`` as decided by the transform from
         shapes alone.
         """
-        from loongforge.data.embodied.cosmos3.cosmos3_dataset import (
+        from loongforge.data.embodied.cosmos3.droid_lerobot_dataset import (
             compose_concat_view,
             format_video_uint8,
         )

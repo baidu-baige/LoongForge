@@ -18,8 +18,8 @@ import tempfile
 import pytest
 import torch
 
-from loongforge.engines.torch.quantization import fp8_a2a_comm as mod
-from loongforge.engines.torch.distributed.ddp_comm_hook import resolve_comm_hook
+from loongforge.engines.torch.distributed.ddp_utils import fp8_a2a_comm as mod
+from loongforge.engines.torch.distributed.ddp_utils.ddp_comm_hook import resolve_comm_hook
 from loongforge.training.torch_args import TrainingArgs
 
 requires_cuda = pytest.mark.skipif(

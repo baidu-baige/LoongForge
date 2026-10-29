@@ -14,11 +14,11 @@ import numpy as np
 import torch
 from transformers.feature_extraction_utils import BatchFeature
 
-from loongforge.data.embodied.shared.collator_base import (
+from loongforge.data.embodied.transforms.collator import (
     BaseCollator,
     PreparedBatch,
 )
-from loongforge.data.embodied.gr00t_n1_7.data_configuration_gr00t_n1_7 import (
+from loongforge.data.embodied.gr00t_n1_7.transforms.data_configuration_gr00t_n1_7 import (
     Gr00tN1d7DataConfig,
 )
 from loongforge.data.embodied.registry import register_collator

@@ -25,7 +25,7 @@ hf download 2toINF/X-VLA-SoftFold --repo-type dataset --local-dir /workspace/dat
 ## 1. Data Configuration
 X-VLA uses the native HDF5 data pipeline aligned with the reference implementation, with **no extra offline preprocessing required**. X-VLA's per-sample transform (multi-view image encoding, language tokenization, resolving `domain_id` from `robot_type`) and batch collator are performed online during training.
 
-The dataset directory is described by `metadata.json`. Example (`examples/xvla/assets/xvla_soft_fold/metadata.json`):
+The dataset directory is described by `metadata.json`. Example (`examples/xvla/xvla_soft_fold/metadata.json`):
 
 ```json
 {
@@ -51,7 +51,7 @@ Field descriptions:
 - `language_instruction_key`: language instruction field name.
 
 ## 2. Launch Training
-First set up the paths uniformly (refer to `examples/xvla/finetuning/finetune_xvla_ddp.sh`):
+First set up the paths uniformly (refer to `examples/xvla/finetuning/sft_xvla_ddp.sh`):
 
 ```bash
 cd /workspace/LoongForge
@@ -66,7 +66,7 @@ export OUTPUT_DIR=/workspace/outputs/xvla_ddp
 Single-node 8-GPU DDP fine-tuning:
 
 ```bash
-bash examples/xvla/finetuning/finetune_xvla_ddp.sh
+bash examples/xvla/finetuning/sft_xvla_ddp.sh
 ```
 Optimizations are enabled by default, in `configs/models/xvla/xvla.yaml`:
 

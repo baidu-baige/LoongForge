@@ -25,7 +25,7 @@ hf download 2toINF/X-VLA-SoftFold --repo-type dataset --local-dir /workspace/dat
 ## 1. 数据配置
 X-VLA 采用与参考实现对齐的原生 HDF5 数据管道，**无需额外离线预处理**，训练时在线执行 X-VLA 的 per-sample transform（多视角图像编码、语言 tokenize、由 `robot_type` 解析 `domain_id`）与 batch collator。
 
-数据目录通过 `metadata.json` 描述，示例（`examples/xvla/assets/xvla_soft_fold/metadata.json`）：
+数据目录通过 `metadata.json` 描述，示例（`examples/xvla/xvla_soft_fold/metadata.json`）：
 
 ```json
 {
@@ -51,7 +51,7 @@ X-VLA 采用与参考实现对齐的原生 HDF5 数据管道，**无需额外离
 - `language_instruction_key`：语言指令字段名。
 
 ## 2. 启动训练
-先统一设置路径（参考 `examples/xvla/finetuning/finetune_xvla_ddp.sh`）：
+先统一设置路径（参考 `examples/xvla/finetuning/sft_xvla_ddp.sh`）：
 
 ```bash
 cd /workspace/LoongForge
@@ -66,7 +66,7 @@ export OUTPUT_DIR=/workspace/outputs/xvla_ddp
 单机 8 卡 DDP 微调：
 
 ```bash
-bash examples/xvla/finetuning/finetune_xvla_ddp.sh
+bash examples/xvla/finetuning/sft_xvla_ddp.sh
 ```
 默认已开启了优化，参数在 `configs/models/xvla/xvla.yaml`：
 

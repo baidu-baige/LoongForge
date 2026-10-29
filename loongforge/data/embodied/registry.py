@@ -25,12 +25,12 @@ from typing import Any, Callable, Dict, Iterable, Optional, Type, TYPE_CHECKING
 from loongforge.models.embodied.registry import MODEL_PACKAGES
 
 if TYPE_CHECKING:
-    from loongforge.data.embodied.shared.transforms.base import ComposedTransform
+    from loongforge.data.embodied.transforms.base import ComposedTransform
 
 # Data-only model types that map to a plain module under ``loongforge.data.embodied``.
 # Importing that module must register the model's builders.
 PLAIN_MODULES: Dict[str, str] = {
-    "dummy": "shared.collator_base",
+    "dummy": "transforms.collator",
 }
 
 _KNOWN_MODEL_TYPES = frozenset({*MODEL_PACKAGES, *PLAIN_MODULES})
@@ -40,22 +40,22 @@ _KNOWN_MODEL_TYPES = frozenset({*MODEL_PACKAGES, *PLAIN_MODULES})
 # ``"default"`` strategy is the stock lerobot build; model-specific strategies
 # plug custom multi-frame geometry into the same generic dataset classes.
 DATASET_STRATEGIES: Dict[str, str] = {
-    "default": "shared.formats.lerobot_dataset:build_default_lerobot_dataset",
+    "default": "lerobot_dataset:build_default_lerobot_dataset",
     "vlda": "vlda.vlda_dataset:build_vlda_dataset",
     "fastwam": "fastwam.fastwam_dataset:build_fastwam_lerobot_dataset",
-    "lingbot_va": "lingbot_va.lingbot_va_dataset:build_lingbot_dataset",
+    "lingbot_va": "lingbot_va.latent_lerobot_dataset:build_lingbot_dataset",
     "gr00t_n1_7": "gr00t_n1_7.gr00t_n1_7_dataset:build_gr00t_n1_7_lerobot_dataset",
-    "cosmos3_droid": "cosmos3.cosmos3_dataset:build_droid_dataset",
+    "cosmos3_droid": "cosmos3.droid_lerobot_dataset:build_droid_dataset",
     "dreamzero": "dreamzero.builder:build_dreamzero_dataset",
-    "wall_oss_0_5": "wall_oss_0_5.wall_oss_0_5_dataset:build_wall_oss_0_5_lerobot_dataset",
+    "wall_oss_0_5": "wall_oss_0_5.lerobot_dataset:build_wall_oss_0_5_lerobot_dataset",
 }
 
 # --dataset-format -> "module:callable" (relative to ``loongforge.data.embodied``).
 # "lerobot_datasets" further dispatches on --dataset-strategy through DATASET_STRATEGIES.
 DATASET_FORMATS: Dict[str, str] = {
     "lerobot_datasets": "registry:build_dataset_by_strategy",
-    "hdf5_datasets": "xvla.xvla_dataset:build_hdf5_dataset",
-    "dummy_datasets": "shared.formats.dummy_dataset:build_dummy_dataset",
+    "hdf5_datasets": "hdf5_dataset:build_hdf5_dataset",
+    "dummy_datasets": "dummy_dataset:build_dummy_dataset",
 }
 
 
@@ -191,7 +191,7 @@ def build_transforms_from_args(
     runtime: DataRuntime,
 ) -> Optional["ComposedTransform"]:
     """Build per-sample transforms for ``model_cfg.model_type``; None if there are none."""
-    from loongforge.data.embodied.shared.transforms.base import ComposedTransform
+    from loongforge.data.embodied.transforms.base import ComposedTransform
 
     model_type = model_cfg.model_type
     if not model_type:

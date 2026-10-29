@@ -12,7 +12,7 @@ from typing import Dict, Optional
 from packaging.version import Version as PkgVersion
 
 from loongforge.engines.megatron.global_vars import get_args
-from loongforge.models.common.context_parallel import get_inputs_on_this_cp_rank
+from loongforge.models.omni_models.utils import get_inputs_on_this_cp_rank
 
 _transformers_version = None
 

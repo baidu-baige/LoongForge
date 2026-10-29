@@ -38,8 +38,8 @@ FAMILY_GROUP[DiffusionModelFamilies.QWEN_IMAGE] = "qwen_image"
 
 # (group, phase) -> method module path
 METHOD_REGISTRY: Dict[Tuple[str, str], str] = {
-    ("llm", "pretrain"): "loongforge.training.llm.pretrain",
-    ("llm", "sft"): "loongforge.training.llm.sft",
+    ("llm", "pretrain"): "loongforge.training.llm.pretrain_llm",
+    ("llm", "sft"): "loongforge.training.llm.sft_llm",
     ("vlm", "pretrain"): "loongforge.training.vlm.pretrain_vlm",
     ("vlm", "sft"): "loongforge.training.vlm.sft_vlm",
     ("intern_vl", "sft"): "loongforge.training.vlm.sft_internvl",
@@ -57,10 +57,10 @@ TORCH_TRAINER_TYPES: Dict[str, Tuple[str, str | None]] = {
     "DreamZeroTrainer": ("loongforge.training.embodied.sft_dreamzero", None),
     "VLDAFinetuneTrainer": ("loongforge.training.embodied.custom.vlda.vlda_finetune_trainer", None),
     "Gr00tN1d6Trainer": (
-        "loongforge.training.embodied.sft", "loongforge.training.embodied.custom.gr00t_n1_6.factory",
+        "loongforge.training.embodied.sft", "loongforge.training.embodied.custom.gr00t_n1_6.gr00t_trainer",
     ),
     "Gr00tN1d7Trainer": (
-        "loongforge.training.embodied.sft", "loongforge.training.embodied.custom.gr00t_n1_7.factory",
+        "loongforge.training.embodied.sft", "loongforge.training.embodied.custom.gr00t_n1_7.gr00t_trainer",
     ),
     "LingBotFinetuneTrainer": (
         "loongforge.training.embodied.custom.lingbot_va.lingbot_finetune_trainer",

@@ -69,7 +69,7 @@ from loongforge.training.megatron_args import parse_megatron_train_args
 from tools.mcore_bridge.arguments import add_bridge_args
 from loongforge.engines.megatron.initialize import initialize_loongforge_megatron
 from loongforge.models.foundation.llm_model_provider import llm_model_provider
-from loongforge.models.multimodal.multimodal_model_provider import multimodal_model_provider
+from loongforge.models.omni_models.omni_model_provider import omni_model_provider
 from loongforge.engines.megatron import get_model_config
 
 from loongforge.engines.megatron.hf_bridge import (
@@ -410,7 +410,7 @@ def main():
         from loongforge.training.vlm.pretrain_vlm import build_multimodal_runtime
 
         provider = partial(
-            multimodal_model_provider, args=args, model_config=model_config,
+            omni_model_provider, args=args, model_config=model_config,
             runtime=build_multimodal_runtime(args),
         )
     else:

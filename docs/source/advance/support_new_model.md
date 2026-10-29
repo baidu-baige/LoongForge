@@ -67,7 +67,7 @@ image_size: [1344, 1344]
 ```
 
 ### 2.2 Projector Configuration
-The Projector implementation is interrelated with MultimodalEncoder. Each type of VLM model is equipped with a dedicated Projector. You need to select the Projector type, and its dimension information will be specified in the model combination configuration.
+The Projector implementation is interrelated with OmniEncoder. Each type of VLM model is equipped with a dedicated Projector. You need to select the Projector type, and its dimension information will be specified in the model combination configuration.
 
 * **Path**: configs/models/image_projector/<projector_name>.yaml
 * **Example**: configs/models/image_projector/qwen_mlp_adapter.yaml

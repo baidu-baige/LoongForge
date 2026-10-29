@@ -13,7 +13,7 @@ Extract and linearly interpolate the Action DiT head weights from the Wan2.2 vid
 ```bash
 LOCAL_MODEL_PATH=/data/models \
 OUTPUT=$LOONGFORGE_PATH/checkpoints/ActionDiT_linear_interp_Wan22_alphascale_1024hdim.pt \
-    bash examples/fastwam/preprocess/preprocess_action_dit_backbone.sh
+    bash examples/fastwam/finetuning/preprocess_action_dit_backbone.sh
 ```
 
 #### 0.1.2 Wan-AI/Wan2.2-TI2V-5B Weights
@@ -29,7 +29,7 @@ Encode all task instructions in the dataset into text embeds in one pass, then r
 ```bash
 DATASET_PATH=/data/libero \
 TEXT_EMBEDDING_CACHE_DIR=/data/cache/fastwam_text_embeds \
-    bash examples/fastwam/preprocess/precompute_text_embeds.sh
+    bash examples/fastwam/finetuning/precompute_text_embeds.sh
 ```
 
 ### 0.3 Dataset
@@ -71,7 +71,7 @@ export DIFFSYNTH_MODEL_BASE_PATH=/workspace/huggingface.co/Wan-AI/Wan2.2-TI2V-5B
 Single-node DDP training example:
 
 ```bash
-bash examples/fastwam/finetuning/finetune_fastwam_sft_ddp.sh
+bash examples/fastwam/finetuning/sft_fastwam_ddp.sh
 ```
 
 ### 2.2 Correctness Verification

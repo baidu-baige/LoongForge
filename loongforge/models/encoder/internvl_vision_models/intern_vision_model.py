@@ -23,7 +23,7 @@ from loongforge.models.encoder.vision_transformer_block import TransformerBlock
 from .internvl_config import InternVisionConfig
 from loongforge.models.common import BaseMegatronVisionModule
 from megatron.core import tensor_parallel
-from loongforge.models.common.spec_utils import import_module
+from loongforge.models.utils import import_module
 
 
 class InternVisionEmbeddings(nn.Module):

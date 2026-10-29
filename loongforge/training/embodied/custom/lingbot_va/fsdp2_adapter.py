@@ -17,7 +17,7 @@ from loongforge.engines.torch.distributed.fsdp_utils.builders import (
 from loongforge.engines.torch.distributed.fsdp_utils.optimizer_grads import (
     ensure_fsdp_param_compat,
 )
-from loongforge.engines.torch.quantization.fp8_utils import apply_fp8_linear_conversion
+from loongforge.engines.torch.distributed.fp8_utils import apply_fp8_linear_conversion
 from loongforge.models.embodied.lingbot_va.features import feature_enabled
 from loongforge.models.embodied.lingbot_va.modules.wan_model import WanTransformerBlock
 
@@ -38,7 +38,7 @@ def _configure_lingbot_checkpoint(model, training_args):
             "set_block_checkpoint_fn()."
         )
 
-    from loongforge.engines.torch.quantization.fp8_utils import te_checkpoint_fn
+    from loongforge.engines.torch.distributed.fp8_utils import te_checkpoint_fn
 
     set_checkpoint(te_checkpoint_fn())
 

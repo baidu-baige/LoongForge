@@ -16,8 +16,7 @@ from typing import Any
 import numpy as np
 from torch.utils.data import IterableDataset, get_worker_info
 
-from loongforge.data.embodied.shared.formats.lerobot_dataset import build_default_lerobot_dataset
-from loongforge.data.embodied.shared.sampler_factory import filter_schedule_for_worker
+from loongforge.data.embodied.lerobot_dataset import build_default_lerobot_dataset
 
 
 _GR00T_N1D7_SHARD_PREFETCH_DEPTH = 3
@@ -97,7 +96,7 @@ def prepare_gr00t_n1d7_lerobot_dataset(
 
 
 def _default_data_cfg():
-    from loongforge.data.embodied.gr00t_n1_7.data_configuration_gr00t_n1_7 import (
+    from loongforge.data.embodied.gr00t_n1_7.transforms.data_configuration_gr00t_n1_7 import (
         Gr00tN1d7DataConfig,
     )
 
@@ -263,6 +262,8 @@ class _Gr00tN1d7IsaacIterableDataset(IterableDataset):
             worker_id = int(worker_info.id)
             num_workers = int(worker_info.num_workers)
 
+        worker_slot = rank * num_workers + worker_id
+        global_worker_count = world_size * num_workers
         epoch = 0
         while True:
             shard_schedule = _build_isaac_shard_schedule(
@@ -270,13 +271,11 @@ class _Gr00tN1d7IsaacIterableDataset(IterableDataset):
                 num_shards_per_epoch=self._num_shards_per_epoch,
                 seed=self._seed + epoch,
             )
-            worker_schedule = filter_schedule_for_worker(
-                shard_schedule,
-                rank=rank,
-                world_size=world_size,
-                worker_id=worker_id,
-                num_workers=num_workers,
-            )
+            worker_schedule = [
+                shard_index
+                for schedule_index, shard_index in enumerate(shard_schedule)
+                if schedule_index % global_worker_count == worker_slot
+            ]
             rng = np.random.default_rng(self._seed + epoch)
             shard_iterator = (
                 self._iter_prefetched_shards(worker_schedule)

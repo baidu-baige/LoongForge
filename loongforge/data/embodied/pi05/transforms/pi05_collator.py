@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional
 import torch
 from transformers import AutoTokenizer
 
-from loongforge.data.embodied.shared.collator_base import BaseCollator, PreparedBatch
+from loongforge.data.embodied.transforms.collator import BaseCollator, PreparedBatch
 from loongforge.data.embodied.registry import register_collator
 
 def tokenize_prompts(

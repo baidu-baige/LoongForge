@@ -16,7 +16,7 @@ from loongforge.models.catalog import (
 from copy import deepcopy
 from omegaconf import OmegaConf
 from hydra.utils import instantiate, get_class
-from loongforge.models.multimodal.vlm_model_config import VLMModelConfig
+from loongforge.models.common.vlm_model_config import VLMModelConfig
 from collections.abc import Iterable
 from loongforge.engines.megatron.global_vars import get_args_dict, get_tokenizer
 

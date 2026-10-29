@@ -17,8 +17,8 @@ from megatron.training.checkpointing import load_args_from_checkpoint
 from omegaconf import DictConfig, OmegaConf
 
 from loongforge.engines.megatron.model_config import build_model_config
-from loongforge.engines.megatron.distributed.loss_reduction import default_loss_func
-from loongforge.models.multimodal.position_ids import POSITION_IDX_FUNCS
+from loongforge.engines.megatron.get_loss_func import default_loss_func
+from loongforge.models.omni_models.get_position_idx_func import POSITION_IDX_FUNCS
 from loongforge.engines.megatron.validators import (validate_loongforge_extra_args,
                                                 validate_custom_model_args,
                                                 validate_megatron_args)

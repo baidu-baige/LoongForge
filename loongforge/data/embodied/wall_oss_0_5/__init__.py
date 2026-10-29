@@ -1,12 +1,11 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Wall-OSS-0.5 transforms and collator."""
+"""Wall-OSS-0.5 dataset strategy."""
 
-from loongforge.data.embodied.wall_oss_0_5 import samplers
-from loongforge.data.embodied.wall_oss_0_5.transforms import (
-    wall_oss_0_5_collator,
-    wall_oss_0_5_transform,
+from loongforge.data.embodied.wall_oss_0_5.lerobot_dataset import (
+    build_wall_oss_0_5_lerobot_dataset,
 )
+from . import samplers, transforms
 
-__all__ = ["samplers", "wall_oss_0_5_collator", "wall_oss_0_5_transform"]
+__all__ = ["build_wall_oss_0_5_lerobot_dataset"]

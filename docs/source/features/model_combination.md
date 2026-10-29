@@ -11,7 +11,7 @@ This **configuration-driven assembly** dramatically lowers the cost of exploring
 
 ## 1. Core Components
 
-### MultimodalEncoderModel
+### OmniEncoderModel
 Abstract base class for all encoder components.  
 It converts image, video, audio or other modality data into embeddings that the LLM can understand.
 
@@ -20,8 +20,8 @@ It converts image, video, audio or other modality data into embeddings that the 
   * **Multimodal compatibility**: New modalities are added by simply inserting a new branch.
 
 ```python
-# loongforge/models/multimodal/encoder_model.py
-class MultimodalEncoderModel(torch.nn.Module):
+# loongforge/models/omni_models/omni_encoder_model.py
+class OmniEncoderModel(torch.nn.Module):
     def __init__(self, config, ...):
         # text modality
         self.text_encoder = LanguageModelEmbedding(...)
@@ -49,19 +49,19 @@ self.image_encoder.register_forward_hook(
 
 ---
 
-### MultimodalCombinationModel
+### OmniCombinationModel
 Core component for multimodal composition.  
 Defines **when and how** data flows among modality components; contains **no actual compute logic**.
 
 * **Logical decoupling**: Dynamically decides whether to load an encoder or a foundation model via external config, achieving component-level decoupling.
 
 ```python
-# loongforge/models/multimodal/combination_model.py
-class MultimodalCombinationModel(BaseMegatronModule):
+# loongforge/models/omni_models/omni_combination_model.py
+class OmniCombinationModel(BaseMegatronModule):
     def __init__(self, config, ...):
         # 1. Dynamically init Encoder Model
         if config.image_encoder is not None and add_encoder:
-            self.encoder_model = MultimodalEncoderModel(config, ...)
+            self.encoder_model = OmniEncoderModel(config, ...)
 
         # 2. Dynamically init LLM
         if config.foundation is not None and add_decoder:
@@ -70,23 +70,23 @@ class MultimodalCombinationModel(BaseMegatronModule):
 
 ---
 
-### MultimodalModelProvider
-Parses global arguments, handles distributed initialization (e.g., Pipeline-Parallel splitting), and finally instantiates `MultimodalCombinationModel`.
+### OmniModelProvider
+Parses global arguments, handles distributed initialization (e.g., Pipeline-Parallel splitting), and finally instantiates `OmniCombinationModel`.
 
 Key capabilities:
 
 * **Distributed Pipeline Parallel**: Detects the current Pipeline-Parallel stage and loads the encoder/foundation model on demand, enabling **cross-GPU pipelined deployment**.
 
 ```python
-# loongforge/models/multimodal/multimodal_model_provider.py
-def multimodal_model_provider(...):
+# loongforge/models/omni_models/omni_model_provider.py
+def omni_model_provider(...):
     # Auto-detect if current rank is the first PP stage; decide whether to load encoder
     # This is critical for placing encoder and decoder on different GPUs
     if args.encoder_pipeline_model_parallel_size in [0, None]:
         add_encoder = mpu.is_pipeline_first_stage()
 
     # Build the model with environment-aware flags
-    return MultimodalCombinationModel(..., add_encoder=add_encoder, ...)
+    return OmniCombinationModel(..., add_encoder=add_encoder, ...)
 ```
 
 * **Parameter bridging & adaptation**: Fetches both global training args and model-config, injects training-critical hyper-parameters (`language_vocab_size`, `language_max_sequence_length`, etc.) into the model initialization to guarantee consistency between model config and training environment.
@@ -95,7 +95,7 @@ def multimodal_model_provider(...):
 args = get_args()
 model_config = get_model_config()
 
-model = MultimodalCombinationModel(
+model = OmniCombinationModel(
     model_config,
     language_vocab_size=args.padded_vocab_size,
     language_max_sequence_length=args.max_position_embeddings,

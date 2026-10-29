@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 import torch
 import torchvision.transforms.functional as TF
 
-from loongforge.data.embodied.shared.transforms.base import BaseTransform
+from loongforge.data.embodied.transforms.base import BaseTransform
 from loongforge.data.embodied.registry import (
     TransformBuilderContext,
     register_transform_builder,
@@ -152,8 +152,8 @@ class FastWAMLinearNormalizeTransform(BaseTransform):
 @register_transform_builder("fastwam")
 def build_fastwam_transforms(ctx: TransformBuilderContext):
     """Build FastWAM-specific per-sample transforms."""
-    from loongforge.data.embodied.shared.transforms.action_transform import ActionTransform
-    from loongforge.data.embodied.shared.transforms.builders import convert_stats
+    from loongforge.data.embodied.transforms.utils.action_transform import ActionTransform
+    from loongforge.data.embodied.transforms.utils.builders import convert_stats
 
     transforms = []
 

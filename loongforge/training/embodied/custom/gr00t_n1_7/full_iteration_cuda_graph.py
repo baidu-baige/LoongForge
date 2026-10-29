@@ -783,7 +783,7 @@ class Gr00tN1d7FullIterationCudaGraphRunner:
         saved_fp8_tensors = save_fp8_tensors([module], self._fp8_recipe)
         set_capture_start()
         try:
-            from .factory import _gr00t_fp8_graph_capture_ctx
+            from .gr00t_trainer import _gr00t_fp8_graph_capture_ctx
 
             with _gr00t_fp8_graph_capture_ctx(self._fp8_recipe):
                 yield

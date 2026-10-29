@@ -10,7 +10,7 @@ external DreamZero source checkout.
 """
 
 from loongforge.data.embodied.registry import register_sampler_builder
-from loongforge.data.embodied.shared.sampler_factory import SamplerBuilderContext
+from loongforge.data.embodied.sampler_builder import SamplerBuilderContext
 
 from . import transforms
 

@@ -34,7 +34,7 @@ import torch
 import torchvision.transforms.functional as transforms_F
 from transformers import AutoTokenizer
 
-from loongforge.data.embodied.shared.transforms.base import BaseTransform
+from loongforge.data.embodied.transforms.base import BaseTransform
 from loongforge.models.embodied.cosmos3.modeling_configuration_cosmos3 import VIDEO_RES_SIZE_INFO
 from loongforge.models.embodied.cosmos3.sequence_packing import SequencePlan
 from loongforge.data.embodied.registry import (

@@ -10,7 +10,7 @@ import torch
 
 import torch.nn.functional as F
 
-from loongforge.data.embodied.shared.collator_base import (
+from loongforge.data.embodied.transforms.collator import (
     BaseCollator,
     PreparedBatch,
 )

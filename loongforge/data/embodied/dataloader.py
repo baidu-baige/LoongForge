@@ -13,7 +13,7 @@ import torch
 from torch.utils.data import Dataset, IterableDataset
 from torchdata.stateful_dataloader import StatefulDataLoader
 
-from loongforge.data.embodied.shared.sampler_factory import build_sampler
+from loongforge.data.embodied.sampler_builder import build_sampler
 from loongforge.data.embodied.registry import build_collator
 from loongforge.data.embodied.registry import build_dataset
 from loongforge.data.embodied.registry import build_transforms_from_args

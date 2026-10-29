@@ -357,10 +357,10 @@ bash tests/mcore_bridge_roundtrip/internvl2.5/all.sh
 
 ### 模型提供函数选择
 
-测试代码默认使用 `multimodal_model_provider`（兼容所有模型）。如需切换：
+测试代码默认使用 `omni_model_provider`（兼容所有模型）。如需切换：
 
 - **纯 LLM**（LLaMA、Qwen2.5、DeepSeek V2 等）：使用 `llm_model_provider`
-- **多模态**（Qwen2.5-VL、InternVL 等）：使用 `multimodal_model_provider`
+- **多模态**（Qwen2.5-VL、InternVL 等）：使用 `omni_model_provider`
 
 编辑 `tests/mcore_bridge_roundtrip/hf_roundtrip_test.py` 中的 `get_model()` 调用：
 
@@ -369,7 +369,7 @@ bash tests/mcore_bridge_roundtrip/internvl2.5/all.sh
 model = get_model(llm_model_provider, ModelType.encoder_or_decoder, wrap_with_ddp=False)
 
 # 多模态（默认）：
-model = get_model(multimodal_model_provider, ModelType.encoder_or_decoder, wrap_with_ddp=False)
+model = get_model(omni_model_provider, ModelType.encoder_or_decoder, wrap_with_ddp=False)
 ```
 
 ### 重要说明

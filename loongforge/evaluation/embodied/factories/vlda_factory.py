@@ -12,7 +12,7 @@ from pathlib import Path
 
 import torch
 
-from loongforge.data.embodied.vlda.data_configuration_vlda import VLDADataConfig
+from loongforge.data.embodied.vlda.transforms.data_configuration_vlda import VLDADataConfig
 from loongforge.data.embodied.vlda.vlda_dataset import load_norm_stats
 from loongforge.evaluation.embodied.factories.registry import register_factory
 from loongforge.evaluation.embodied.servers.loongforge_policy import PredictActionModelSpec
@@ -22,7 +22,7 @@ from loongforge.models.embodied.vlda.model_configuration_vlda import VLDAModelCo
 @torch.no_grad()
 def _predict_action(self, images, instructions, state=None, dataset_stats=None):
     """Return unnormalized environment actions with shape [B,H,action_dim]."""
-    from loongforge.data.embodied.vlda.data_configuration_vlda import VLDADataConfig
+    from loongforge.data.embodied.vlda.transforms.data_configuration_vlda import VLDADataConfig
     from loongforge.data.embodied.vlda.transforms.vlda_collator import VLDACollator
     from loongforge.data.embodied.vlda.transforms.vlda_transform import (
         VLDATransform,

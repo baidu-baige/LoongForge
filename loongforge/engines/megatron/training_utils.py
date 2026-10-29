@@ -132,7 +132,7 @@ from loongforge.data import TrainingPhase
 from loongforge.engines.megatron import get_args, global_vars
 from loongforge.engines.megatron.global_vars import get_model_config as get_loongforge_model_config
 from loongforge.engines.megatron.initialize import initialize_loongforge_megatron
-from loongforge.engines.megatron.distributed.dp_balance.train_hooks import (
+from loongforge.engines.megatron.dp_balance.train_hooks import (
     train_step_decorator,
     train_log_decorator
 )
@@ -1535,7 +1535,7 @@ def train_step(
 
         # Offload gathered embeddings to CPU (only rank 0 holds them)
         if args.full_hetero_dp_cpu_offload:
-            from loongforge.engines.megatron.distributed.hetero_dp import offload_list_items
+            from loongforge.engines.megatron.full_hetero_cpu_offload import offload_list_items
             _offload_mgr = hetero_step.offload
             _local_rank_for_offload = torch.distributed.get_rank(mpu.get_model_parallel_group())
             if _local_rank_for_offload == 0:

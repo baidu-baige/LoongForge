@@ -146,7 +146,7 @@ def train_fp8_ctx(step_ctx: StepContext):
     """
     if step_ctx.hooks.fp8_forward_context is not None:
         return step_ctx.hooks.fp8_forward_context(step_ctx.training_args)
-    from loongforge.engines.torch.quantization.fp8_utils import resolve_fp8_forward_ctx
+    from loongforge.engines.torch.distributed.fp8_utils import resolve_fp8_forward_ctx
 
     return resolve_fp8_forward_ctx(step_ctx.training_args)
 
@@ -386,7 +386,7 @@ class TorchRunner:
         from loongforge.engines.torch.distributed import DistributedContext
         from loongforge.engines.torch.utils.utils import set_seed, setup_logging, log_stage
         from loongforge.engines.torch.utils.logging import TrainingLogger, log_effective_config
-        from loongforge.engines.torch.checkpointing import (
+        from loongforge.engines.torch.distributed.checkpoint import (
             get_latest_checkpoint, resume_training_state,
         )
         from loongforge.engines.torch.distributed.parallel import wrap_model
@@ -671,7 +671,7 @@ class TorchRunner:
             # Commit the availability marker of an in-flight async save as soon
             # as its write lands, instead of waiting for the next save to start
             # (which would make resume fall back a whole save interval).
-            from loongforge.engines.torch.checkpointing import maybe_finalize_pending_save
+            from loongforge.engines.torch.distributed.checkpoint import maybe_finalize_pending_save
             maybe_finalize_pending_save(self.ctx, self.completed_steps)
 
             # Checkpoint
@@ -700,7 +700,7 @@ class TorchRunner:
 
     def _load_pretrained(self, path: str):
         """Load pretrained weights, preferring model.load_pretrained if available."""
-        from loongforge.engines.torch.checkpointing import load_pretrained
+        from loongforge.engines.torch.distributed.checkpoint import load_pretrained
         if hasattr(self.model, "load_pretrained"):
             self.model.load_pretrained(path, device=self.ctx.device)
         elif hasattr(self.model, "model") and hasattr(self.model.model, "load_pretrained"):
@@ -711,7 +711,7 @@ class TorchRunner:
 
     def _handle_resume(self, path: str, step: int, epoch: int):
         """Resume model weights from a discovered checkpoint."""
-        from loongforge.engines.torch.checkpointing import (
+        from loongforge.engines.torch.distributed.checkpoint import (
             detect_checkpoint_format,
             is_lora_adapter_checkpoint,
             load_pretrained,
@@ -778,7 +778,7 @@ class TorchRunner:
                 self.logger.log_freeze_not_found(dot_path, resolved_prefix, missing_attr)
 
     def _save_checkpoint(self):
-        from loongforge.engines.torch.checkpointing import save_checkpoint
+        from loongforge.engines.torch.distributed.checkpoint import save_checkpoint
         save_checkpoint(
             self.model, self.optimizer, self.lr_scheduler,
             self.completed_steps, self.checkpoint_dir, self.ctx, self.training_args,
@@ -854,7 +854,7 @@ class TorchRunner:
         """Restore per-rank RNG state exactly once."""
         if self._resume_rng_per_rank is None:
             return
-        from loongforge.engines.torch.checkpointing import restore_rank_rng_state
+        from loongforge.engines.torch.distributed.checkpoint import restore_rank_rng_state
         restore_rank_rng_state(self._resume_rng_per_rank, self.ctx)
         if self.ctx.is_main:
             logger.info("RNG state resumed successfully after dataloader iterator init")
@@ -952,7 +952,7 @@ class TorchRunner:
 
     def _finalize(self):
         """End of training: save final model, close W&B."""
-        from loongforge.engines.torch.checkpointing import flush_pending_save
+        from loongforge.engines.torch.distributed.checkpoint import flush_pending_save
         hooks = self.hooks
 
         # Trainer close hook (e.g. graph release, GC restore)

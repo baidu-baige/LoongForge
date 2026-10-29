@@ -1,9 +1,16 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""FastWAM model-specific data transforms and collator."""
+"""FastWAM multi-frame-observation dataset strategy: behaviour hook for the
+generic lerobot datasets."""
 
-from loongforge.data.embodied.fastwam import samplers
-from loongforge.data.embodied.fastwam.transforms import fastwam_collator, fastwam_transform
+from loongforge.data.embodied.fastwam.fastwam_dataset import (
+    build_fastwam_lerobot_dataset,
+    fastwam_delta_timestamps,
+)
+from . import samplers, transforms
 
-__all__ = ["fastwam_collator", "fastwam_transform", "samplers"]
+__all__ = [
+    "build_fastwam_lerobot_dataset",
+    "fastwam_delta_timestamps",
+]

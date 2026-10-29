@@ -76,7 +76,7 @@ pip install accelerate Pillow pandas tqdm
 #### Run Preprocessing
 
 ```bash
-cd examples/qwen_image
+cd examples/qwen_image/pretrain
 
 QWEN_IMAGE_MODEL_ROOT=/path/to/Qwen-Image-Edit-2511 \
 DATASET_BASE_PATH=/path/to/my_dataset \

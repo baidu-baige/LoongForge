@@ -27,7 +27,7 @@ from typing import Optional
 from megatron.core.packed_seq_params import PackedSeqParams
 from loongforge.models.common import BaseMegatronVisionModule
 from loongforge.models.encoder.vision_transformer_block import TransformerBlock
-from loongforge.models.common.spec_utils import import_module
+from loongforge.models.utils import import_module
 
 from .ernie_adapter import UniqueNameGuard
 from .ernie_image_preprocess import ErnieImagePreprocess
@@ -121,7 +121,7 @@ class VariableResolutionResamplerModel(nn.Module):
         )
 
         # using unique name space start with "mm_resampler_"
-        with UniqueNameGuard("mm_resampler_"):
+        with UniqueNameGuard("mm_resampler_") as guard:
 
             self.spatial_linear = nn.Sequential(
                 nn.Linear(self.spatial_dim, self.spatial_dim),
@@ -259,7 +259,7 @@ class ErnieVisionModel(BaseMegatronVisionModule):
         # post_process=False: no final layernorm inside the block (we keep self.ln).
         # Use a shallow copy with hidden_size=embed_dim (1280) for TransformerBlock,
         # since ErnieVisionConfig.hidden_size = 5120 is the resampler output size
-        # needed by MultimodalEncoderModel for the adapter.
+        # needed by OmniEncoderModel for the adapter.
         transformer_config = copy.copy(config)
         transformer_config.hidden_size = config.embed_dim
         transformer_layer_spec = import_module(config.model_spec, transformer_config)

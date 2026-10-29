@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 
 import torch
 
-from loongforge.data.embodied.shared.collator_base import (
+from loongforge.data.embodied.transforms.collator import (
     BaseCollator,
     PreparedBatch,
 )

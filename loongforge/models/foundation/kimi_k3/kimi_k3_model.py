@@ -10,7 +10,7 @@ import torch
 from megatron.core.process_groups_config import ProcessGroupCollection
 
 from loongforge.models.foundation.base import BaseGPTModel
-from loongforge.models.common.spec_utils import import_module
+from loongforge.models.utils import import_module
 
 from .kimi_k3_config import KimiK3Config
 

@@ -11,7 +11,7 @@
 
 ## 1. 核心组件
 
-### MultimodalEncoderModel
+### OmniEncoderModel
 所有编码器组件的抽象基类。
 它将图像、视频、音频或其他模态数据转换为 LLM 可理解的嵌入表示。
 
@@ -20,8 +20,8 @@
   * **多模态兼容性**：通过简单插入新分支即可添加新模态。
 
 ```python
-# loongforge/models/multimodal/encoder_model.py
-class MultimodalEncoderModel(torch.nn.Module):
+# loongforge/models/omni_models/omni_encoder_model.py
+class OmniEncoderModel(torch.nn.Module):
     def __init__(self, config, ...):
         # 文本模态
         self.text_encoder = LanguageModelEmbedding(...)
@@ -49,19 +49,19 @@ self.image_encoder.register_forward_hook(
 
 ---
 
-### MultimodalCombinationModel
+### OmniCombinationModel
 多模态组合的核心组件。
 定义数据**何时以及如何**在模态组件之间流动；**不包含实际计算逻辑**。
 
 * **逻辑解耦**：通过外部配置动态决定是否加载编码器或基座模型，实现组件级解耦。
 
 ```python
-# loongforge/models/multimodal/combination_model.py
-class MultimodalCombinationModel(BaseMegatronModule):
+# loongforge/models/omni_models/omni_combination_model.py
+class OmniCombinationModel(BaseMegatronModule):
     def __init__(self, config, ...):
         # 1. 动态初始化编码器模型
         if config.image_encoder is not None and add_encoder:
-            self.encoder_model = MultimodalEncoderModel(config, ...)
+            self.encoder_model = OmniEncoderModel(config, ...)
 
         # 2. 动态初始化 LLM
         if config.foundation is not None and add_decoder:
@@ -70,23 +70,23 @@ class MultimodalCombinationModel(BaseMegatronModule):
 
 ---
 
-### MultimodalModelProvider
-解析全局参数，处理分布式初始化（如流水线并行拆分），最终实例化 `MultimodalCombinationModel`。
+### OmniModelProvider
+解析全局参数，处理分布式初始化（如流水线并行拆分），最终实例化 `OmniCombinationModel`。
 
 关键能力：
 
 * **分布式流水线并行**：检测当前流水线并行阶段并按需加载编码器/基座模型，实现**跨 GPU 流水线部署**。
 
 ```python
-# loongforge/models/multimodal/multimodal_model_provider.py
-def multimodal_model_provider(...):
+# loongforge/models/omni_models/omni_model_provider.py
+def omni_model_provider(...):
     # 自动检测当前 rank 是否为第一个 PP 阶段；决定是否加载编码器
     # 这对于将编码器和解码器放置在不同 GPU 上至关重要
     if args.encoder_pipeline_model_parallel_size in [0, None]:
         add_encoder = mpu.is_pipeline_first_stage()
 
     # 使用环境感知标志构建模型
-    return MultimodalCombinationModel(..., add_encoder=add_encoder, ...)
+    return OmniCombinationModel(..., add_encoder=add_encoder, ...)
 ```
 
 * **参数桥接与适配**：获取全局训练参数和模型配置，将训练关键超参数（`language_vocab_size`、`language_max_sequence_length` 等）注入模型初始化，保证模型配置与训练环境的一致性。
@@ -95,7 +95,7 @@ def multimodal_model_provider(...):
 args = get_args()
 model_config = get_model_config()
 
-model = MultimodalCombinationModel(
+model = OmniCombinationModel(
     model_config,
     language_vocab_size=args.padded_vocab_size,
     language_max_sequence_length=args.max_position_embeddings,

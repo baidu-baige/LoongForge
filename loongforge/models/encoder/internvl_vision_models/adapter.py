@@ -9,7 +9,7 @@ import transformer_engine as te
 from megatron.core.transformer.spec_utils import build_module
 from .internvl_config import InternMLPAdapterConfig
 from loongforge.models.common import BaseMegatronModule
-from loongforge.models.common.spec_utils import import_module
+from loongforge.models.utils import import_module
 from megatron.core.transformer.transformer_config import TransformerConfig
 
 

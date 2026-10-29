@@ -17,7 +17,7 @@ import numpy as np
 from PIL import Image
 import torch
 
-from loongforge.data.embodied.shared.transforms.base import BaseTransform
+from loongforge.data.embodied.transforms.base import BaseTransform
 from loongforge.data.embodied.gr00t_n1_6.transforms.gr00t_n1_6_transform import (
     _as_size_list,
     _extract_frames,
@@ -48,7 +48,7 @@ from loongforge.data.embodied.gr00t_n1_7.transforms.image_augmentations import (
     build_image_transformations,
     build_image_transformations_albumentations,
 )
-from loongforge.data.embodied.gr00t_n1_7.data_configuration_gr00t_n1_7 import (
+from loongforge.data.embodied.gr00t_n1_7.transforms.data_configuration_gr00t_n1_7 import (
     Gr00tN1d7DataConfig,
 )
 from loongforge.data.embodied.gr00t_n1_7.gr00t_n1_7_dataset import (

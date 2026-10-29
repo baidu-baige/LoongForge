@@ -16,12 +16,12 @@ This chapter describes the directory layout and launch script convention under e
 | `loongforge/training/torch_args.py` | Definition file for the training recipe arguments; generates the shell CLI |
 | `loongforge/models/catalog.py` | Shared model routing table; binds `--model-name` to an engine, YAML, and (for Torch) typed config classes |
 | `loongforge/models/embodied/` | Torch embodied model architecture and model registration |
-| `loongforge/data/embodied/` | Embodied data pipeline: `dataloader.py` (DataLoader entry), `registry.py` (model-type registry), `shared/` (code used by every model: `formats/` dataset classes including `lerobot_dataset.py`, `dummy_dataset.py`, video backends and stats; `transforms/` per-sample transforms; `collator_base.py`; `sampler_factory.py`), and one directory per model with its `transforms/` subdirectory |
+| `loongforge/data/embodied/` | Embodied data pipeline: `dataloader.py` (DataLoader entry), `registry.py` (model-type registry), code used by every model (dataset classes `lerobot_dataset.py`, `dummy_dataset.py`, `hdf5_dataset.py`, video backends and stats; `sampler_builder.py`; `transforms/` with `base.py`, `collator.py` and per-sample transforms in `utils/`), and one directory per model with its `transforms/` subdirectory |
 
 The training pipeline is:
 
 ```text
-examples/<model>/finetune_*.sh
+examples/<model>/finetuning/sft_*.sh
     ↓
 loongforge/train.py
     ↓
@@ -51,7 +51,7 @@ torchrun "${DISTRIBUTED_ARGS[@]}" \
 Example:
 
 ```bash
-bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
+bash examples/pi05/finetuning/sft_pi05_ddp.sh \
     --train-iters 10000 \
     --per-device-batch-size 8 \
     model.action_horizon=64 \
@@ -234,7 +234,7 @@ Use `--lr-group` to assign independent learning rates to different modules. A co
 Example:
 
 ```bash
-bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
+bash examples/pi05/finetuning/sft_pi05_ddp.sh \
     --lr-base 1.0e-4 \
     --lr-group "model.backbone=1.0e-5,model.action_head=1.0e-4"
 ```
@@ -265,7 +265,7 @@ The checkpoint module offers:
 Resume example:
 
 ```bash
-bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
+bash examples/pi05/finetuning/sft_pi05_ddp.sh \
     --output-dir /path/to/previous_run \
     --resume
 ```
@@ -303,7 +303,7 @@ The Trainer module orchestrates the training lifecycle, including distributed co
 
 ### 4.1 Trainer Selection
 
-Select the trainer with `--trainer-type`. Valid values are the keys of `TORCH_TRAINER_TYPES` in `loongforge/train.py`; each maps to a training method module under `loongforge/training/embodied/` and an optional model-specific customization package under `loongforge/training/embodied/custom/`. The default `FinetuneTrainer` covers standard single-data-stream supervised fine-tuning. For multiple data streams or unusual loss combinations, add a method module under `loongforge/training/embodied/`. For non-standard step scheduling, add a `factory.py` under `loongforge/training/embodied/custom/<model>/` whose `build_hooks` returns `TrainerHooks`. Register the new trainer type in `TORCH_TRAINER_TYPES`.
+Select the trainer with `--trainer-type`. Valid values are the keys of `TORCH_TRAINER_TYPES` in `loongforge/train.py`; each maps to a training method module under `loongforge/training/embodied/` and an optional model-specific customization package under `loongforge/training/embodied/custom/`. The default `FinetuneTrainer` covers standard single-data-stream supervised fine-tuning. For multiple data streams or unusual loss combinations, add a method module under `loongforge/training/embodied/`. For non-standard step scheduling, add a module under `loongforge/training/embodied/custom/<model>/` whose `build_hooks` returns `TrainerHooks`. Register the new trainer type in `TORCH_TRAINER_TYPES`.
 
 ### 4.2 Distributed Strategy
 
@@ -324,7 +324,7 @@ Training precision supports `bfloat16` (default), `float16`, and `float32`.
 DDP example:
 
 ```bash
-bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
+bash examples/pi05/finetuning/sft_pi05_ddp.sh \
     --distributed-strategy ddp \
     --dtype bfloat16
 ```
@@ -332,7 +332,7 @@ bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
 FSDP example:
 
 ```bash
-bash examples/pi05/finetuning/finetune_pi05_fsdp.sh \
+bash examples/pi05/finetuning/sft_pi05_fsdp.sh \
     --distributed-strategy fsdp \
     --dtype bfloat16
 ```
@@ -340,7 +340,7 @@ bash examples/pi05/finetuning/finetune_pi05_fsdp.sh \
 DDP + ZeRO-1 example:
 
 ```bash
-bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
+bash examples/pi05/finetuning/sft_pi05_ddp.sh \
     --distributed-strategy ddp \
     --zero-optimizer
 ```
@@ -374,7 +374,7 @@ The following arguments give fine-grained control over DDP communication behavio
 Example:
 
 ```bash
-bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
+bash examples/pi05/finetuning/sft_pi05_ddp.sh \
     --distributed-strategy ddp \
     --no-ddp-find-unused-parameters \
     --ddp-static-graph

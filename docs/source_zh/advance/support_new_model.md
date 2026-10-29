@@ -67,7 +67,7 @@ image_size: [1344, 1344]
 ```
 
 ### 2.2 投影层配置
-Projector 的实现与 MultimodalEncoder 相互关联。每种 VLM 模型配备专用的 Projector。你需要选择 Projector 类型，其维度信息将在模型组合配置中指定。
+Projector 的实现与 OmniEncoder 相互关联。每种 VLM 模型配备专用的 Projector。你需要选择 Projector 类型，其维度信息将在模型组合配置中指定。
 
 * **路径**：configs/models/image_projector/<projector_name>.yaml
 * **示例**：configs/models/image_projector/qwen_mlp_adapter.yaml

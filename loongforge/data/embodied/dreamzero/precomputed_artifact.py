@@ -24,7 +24,7 @@ from typing import Any
 import numpy as np
 import torch
 
-from loongforge.models.embodied.dreamzero.precomputed_cache import DEFAULT_CACHE_TEMPLATE
+from loongforge.models.embodied.dreamzero.precomputed_cache.config import DEFAULT_CACHE_TEMPLATE
 
 DREAMZERO_PRECOMPUTED_FEATURES_KIND = "dreamzero_precomputed_features"
 TENSOR_SHARDS_FORMAT = "tensor_shards"

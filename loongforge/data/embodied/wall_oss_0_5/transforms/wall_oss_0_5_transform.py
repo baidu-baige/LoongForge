@@ -14,7 +14,7 @@ import torch
 from PIL import Image
 from qwen_vl_utils.vision_process import IMAGE_FACTOR, MAX_PIXELS, MIN_PIXELS, smart_resize
 
-from loongforge.data.embodied.shared.transforms.base import BaseTransform
+from loongforge.data.embodied.transforms.base import BaseTransform
 from loongforge.data.embodied.registry import (
     TransformBuilderContext,
     register_transform_builder,

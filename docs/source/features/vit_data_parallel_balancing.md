@@ -47,7 +47,7 @@ Add the flag in your training launcher:
 --use-vit-dp-balance
 \`\`\`
 
-This feature applies to **VLM models** using the \`MultimodalEncoderModel\` architecture (e.g., Qwen2-VL, Qwen3-VL, and other models with \`image_grid_thw\`-based ViT encoders).
+This feature applies to **VLM models** using the \`OmniEncoderModel\` architecture (e.g., Qwen2-VL, Qwen3-VL, and other models with \`image_grid_thw\`-based ViT encoders).
 
 It can be used **independently of or together with** VLM-level DP load-balancing (\`--use-vlm-dp-balance\`).
 
@@ -66,10 +66,10 @@ It can be used **independently of or together with** VLM-level DP load-balancing
 
 ### 4.1 Entry Point & Integration
 
-The ViT DP balance is invoked inside \`MultimodalEncoderModel.encode_images()\` via \`dp_balance_vit_encoder()\` (defined in \`vit_balance.py\`). The function wraps the ViT module call:
+The ViT DP balance is invoked inside \`OmniEncoderModel.encode_images()\` via \`dp_balance_vit_encoder()\` (defined in \`vit_balance.py\`). The function wraps the ViT module call:
 
 \`\`\`python
-### Inside MultimodalEncoderModel.encode_images():
+### Inside OmniEncoderModel.encode_images():
 if args.use_vit_dp_balance:
     pixel_embeds, window_index, deepstack = dp_balance_vit_encoder(
         vit_module, pixel_values, image_grid_thw
@@ -190,10 +190,10 @@ Both features can be **enabled simultaneously** for maximum throughput improveme
 ---
 
 ## 5. Supported Models
-The feature is integrated into \`MultimodalEncoderModel.encode_images()\` and supports all VLM models that use \`image_grid_thw\`-based ViT encoders, including:
+The feature is integrated into \`OmniEncoderModel.encode_images()\` and supports all VLM models that use \`image_grid_thw\`-based ViT encoders, including:
 
 * **Qwen2-VL** / **Qwen3-VL**
-* Other models built on the \`MultimodalEncoderModel\` architecture
+* Other models built on the \`OmniEncoderModel\` architecture
 
 ---
 

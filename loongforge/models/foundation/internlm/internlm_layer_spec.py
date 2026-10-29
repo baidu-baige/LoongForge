@@ -18,7 +18,7 @@ from megatron.core.transformer.attention import SelfAttention, SelfAttentionSubm
 from megatron.core.transformer.mlp import MLP, MLPSubmodules
 
 from megatron.core.utils import is_te_min_version
-from loongforge.models.common.layer_dispatch import multiacc_modules
+from loongforge.models.dispatch import multiacc_modules
 
 
 def get_internlm_layer_with_te_spec(config: TransformerConfig) -> ModuleSpec:

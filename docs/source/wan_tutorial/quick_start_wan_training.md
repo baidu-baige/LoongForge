@@ -72,7 +72,7 @@ pip install diffsynth==1.1.8
 MODEL_BASE=./Wan-AI/Wan2.2-I2V-A14B  # should match --local-dir in Section 0.1
 MODEL_T5=${MODEL_BASE}/models_t5_umt5-xxl-enc-bf16.pth
 MODEL_VAE=${MODEL_BASE}/Wan2.1_VAE.pth
-# Script location: examples/wan/preprocess/wan_preprocess.py in LoongForge repo
+# Script location: examples/wan/pretrain/wan_preprocess.py in LoongForge repo
 accelerate launch wan_preprocess.py \
   --dataset_base_path <your_dataset> \
   --dataset_metadata_path <your_dataset>/metadata.csv \

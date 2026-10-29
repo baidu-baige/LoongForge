@@ -28,7 +28,7 @@ from transformers import AutoTokenizer
 from transformers.data.data_collator import DataCollatorMixin
 from transformers.feature_extraction_utils import BatchFeature
 
-from loongforge.data.embodied.shared.collator_base import (
+from loongforge.data.embodied.transforms.collator import (
     _move_to_device,
     _pin_memory,
 )

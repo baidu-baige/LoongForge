@@ -1,12 +1,16 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Embodied (VLA) data.
+"""Dataset implementations."""
 
-``registry.py`` maps a model type to its transform builder, collator, sampler,
-and dataset strategy. ``dataloader.py`` builds the DataLoader. ``shared/`` holds
-everything used by more than one model: ``collator_base.py``,
-``sampler_factory.py``, ``formats/`` (generic dataset readers), and
-``transforms/`` (per-sample transforms). ``<model>/`` holds one package per
-model.
-"""
+from loongforge.data.embodied.lerobot_dataset import (
+    LeRobotV2Dataset,
+    LeRobotV3Dataset,
+    StreamingLeRobotV3Dataset,
+)
+
+__all__ = [
+    "LeRobotV2Dataset",
+    "LeRobotV3Dataset",
+    "StreamingLeRobotV3Dataset",
+]

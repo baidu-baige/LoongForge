@@ -54,7 +54,7 @@ Or for breaking changes:
 1. Look at `git diff origin/master..HEAD --stat` to identify which areas changed
 2. Map changed paths to modules:
    - `loongforge/models/foundation/` → `llm`
-   - `loongforge/models/encoder/`, `loongforge/models/multimodal/` → `vlm`
+   - `loongforge/models/encoder/`, `loongforge/models/omni_models/` → `vlm`
    - `loongforge/engines/`, `loongforge/training/` → `train`
    - `loongforge/data/` → `data`
    - `loongforge/train.py` → `train`
@@ -151,7 +151,7 @@ After PR is created:
 | Module | Paths |
 |--------|-------|
 | llm | `loongforge/models/foundation/`, `configs/models/<llm>/` |
-| vlm | `loongforge/models/encoder/`, `loongforge/models/multimodal/` |
+| vlm | `loongforge/models/encoder/`, `loongforge/models/omni_models/` |
 | vla | `loongforge/models/embodied/` (VLA models) |
 | diffusion | `loongforge/models/embodied/` (diffusion models) |
 | train | `loongforge/engines/`, `loongforge/training/`, `loongforge/train.py` |

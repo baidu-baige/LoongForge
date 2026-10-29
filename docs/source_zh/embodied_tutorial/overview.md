@@ -16,12 +16,12 @@
 | `loongforge/training/torch_args.py` | 训练流程参数定义文件，负责生成 shell CLI |
 | `loongforge/models/catalog.py` | 统一模型路由表，将 `--model-name` 绑定到引擎、YAML，以及 Torch 所需的配置类型 |
 | `loongforge/models/embodied/` | Torch 具身模型组网与模型注册 |
-| `loongforge/data/embodied/` | 具身数据流水线：`dataloader.py`（DataLoader 入口）、`registry.py`（模型类型注册表）、`shared/`（所有模型共用：`formats/` 数据集类，含 `lerobot_dataset.py`、`dummy_dataset.py`、视频后端与统计；`transforms/` 逐样本变换；`collator_base.py` 拼批；`sampler_factory.py` 采样），以及每个模型一个目录（模型目录下带 `transforms/`） |
+| `loongforge/data/embodied/` | 具身数据流水线：`dataloader.py`（DataLoader 入口）、`registry.py`（模型类型注册表）、所有模型共用的代码（数据集类 `lerobot_dataset.py`、`dummy_dataset.py`、`hdf5_dataset.py`，视频后端与统计；`sampler_builder.py` 采样；`transforms/` 下的 `base.py`、`collator.py` 拼批和 `utils/` 逐样本变换），以及每个模型一个目录（模型目录下带 `transforms/`） |
 
 训练链路如下：
 
 ```text
-examples/<model>/finetune_*.sh
+examples/<model>/finetuning/sft_*.sh
     ↓
 loongforge/train.py
     ↓
@@ -51,7 +51,7 @@ torchrun "${DISTRIBUTED_ARGS[@]}" \
 示例：
 
 ```bash
-bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
+bash examples/pi05/finetuning/sft_pi05_ddp.sh \
     --train-iters 10000 \
     --per-device-batch-size 8 \
     model.action_horizon=64 \
@@ -233,7 +233,7 @@ Fused Adam 加速实现说明：
 示例：
 
 ```bash
-bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
+bash examples/pi05/finetuning/sft_pi05_ddp.sh \
     --lr-base 1.0e-4 \
     --lr-group "model.backbone=1.0e-5,model.action_head=1.0e-4"
 ```
@@ -264,7 +264,7 @@ Checkpoint 模块提供以下能力：
 续训示例：
 
 ```bash
-bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
+bash examples/pi05/finetuning/sft_pi05_ddp.sh \
     --output-dir /path/to/previous_run \
     --resume
 ```
@@ -302,7 +302,7 @@ Trainer 模块负责训练生命周期编排，包括分布式上下文初始化
 
 ### 4.1 Trainer 选择
 
-通过 `--trainer-type` 选择训练器，可选值为 `loongforge/train.py` 中 `TORCH_TRAINER_TYPES` 的键，每个键对应 `loongforge/training/embodied/` 下的一个训练 method 模块，以及 `loongforge/training/embodied/custom/` 下可选的单模型定制包。默认的 `FinetuneTrainer` 适用于标准单数据流的监督微调。若涉及多数据流或特殊 loss 组合，可在 `loongforge/training/embodied/` 下新增 method 模块。若需要非标准 step 调度，可在 `loongforge/training/embodied/custom/<model>/` 下新增 `factory.py`，由其中的 `build_hooks` 返回 `TrainerHooks`。新的训练器类型需登记到 `TORCH_TRAINER_TYPES`。
+通过 `--trainer-type` 选择训练器，可选值为 `loongforge/train.py` 中 `TORCH_TRAINER_TYPES` 的键，每个键对应 `loongforge/training/embodied/` 下的一个训练 method 模块，以及 `loongforge/training/embodied/custom/` 下可选的单模型定制包。默认的 `FinetuneTrainer` 适用于标准单数据流的监督微调。若涉及多数据流或特殊 loss 组合，可在 `loongforge/training/embodied/` 下新增 method 模块。若需要非标准 step 调度，可在 `loongforge/training/embodied/custom/<model>/` 下新增模块，由其中的 `build_hooks` 返回 `TrainerHooks`。新的训练器类型需登记到 `TORCH_TRAINER_TYPES`。
 
 ### 4.2 分布式策略
 
@@ -323,7 +323,7 @@ Trainer 模块负责训练生命周期编排，包括分布式上下文初始化
 DDP 示例：
 
 ```bash
-bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
+bash examples/pi05/finetuning/sft_pi05_ddp.sh \
     --distributed-strategy ddp \
     --dtype bfloat16
 ```
@@ -331,7 +331,7 @@ bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
 FSDP 示例：
 
 ```bash
-bash examples/pi05/finetuning/finetune_pi05_fsdp.sh \
+bash examples/pi05/finetuning/sft_pi05_fsdp.sh \
     --distributed-strategy fsdp \
     --dtype bfloat16
 ```
@@ -339,7 +339,7 @@ bash examples/pi05/finetuning/finetune_pi05_fsdp.sh \
 DDP + ZeRO-1 示例：
 
 ```bash
-bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
+bash examples/pi05/finetuning/sft_pi05_ddp.sh \
     --distributed-strategy ddp \
     --zero-optimizer
 ```
@@ -373,7 +373,7 @@ bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
 示例：
 
 ```bash
-bash examples/pi05/finetuning/finetune_pi05_ddp.sh \
+bash examples/pi05/finetuning/sft_pi05_ddp.sh \
     --distributed-strategy ddp \
     --no-ddp-find-unused-parameters \
     --ddp-static-graph

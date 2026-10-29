@@ -30,8 +30,8 @@ encoder) named by the model config, so the corresponding checkpoints and
 tokenizer must be available (e.g. Wan2.2-TI2V-5B or Wan2.1-I2V-14B + UMT5).
 
 Ready-to-run wrappers live at
-`examples/dreamzero/preprocess/prepare_dreamzero_dataset.sh` and
-`examples/dreamzero/preprocess/precompute_dreamzero_cache.sh` — prefer them as the
+`examples/dreamzero/finetuning/prepare_dreamzero_dataset.sh` and
+`examples/dreamzero/finetuning/precompute_dreamzero_cache.sh` — prefer them as the
 entry points; they wire up paths, distributed launch, and post-run validation.
 
 ## 1. Prepare the dataset (required)

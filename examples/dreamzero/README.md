@@ -6,11 +6,11 @@ Run these scripts from the repository root.
 | --- | --- |
 | `prepare_dreamzero_dataset.sh` | Validate LeRobot data and generate required DreamZero metadata. |
 | `precompute_dreamzero_cache.sh` | Generate and validate DreamZero feature cache artifacts. |
-| `finetune_dreamzero_wan22_5b_full_fsdp.sh` | Run Wan2.2 5B full fine-tuning with FSDP. |
-| `finetune_dreamzero_wan22_5b_full_ddp_zero1.sh` | Run Wan2.2 5B full fine-tuning with DDP and ZeRO-1. |
-| `finetune_dreamzero_wan22_5b_lora_fsdp.sh` | Run Wan2.2 5B LoRA fine-tuning with FSDP. |
-| `finetune_dreamzero_wan21_14b_full_fsdp.sh` | Run Wan2.1 14B full fine-tuning with FSDP. |
-| `finetune_dreamzero_wan21_14b_lora_fsdp.sh` | Run Wan2.1 14B LoRA fine-tuning with FSDP. |
+| `sft_dreamzero_wan22_5b_full_fsdp.sh` | Run Wan2.2 5B full fine-tuning with FSDP. |
+| `sft_dreamzero_wan22_5b_full_ddp_zero1.sh` | Run Wan2.2 5B full fine-tuning with DDP and ZeRO-1. |
+| `sft_dreamzero_wan22_5b_lora_fsdp.sh` | Run Wan2.2 5B LoRA fine-tuning with FSDP. |
+| `sft_dreamzero_wan21_14b_full_fsdp.sh` | Run Wan2.1 14B full fine-tuning with FSDP. |
+| `sft_dreamzero_wan21_14b_lora_fsdp.sh` | Run Wan2.1 14B LoRA fine-tuning with FSDP. |
 
 The data-preparation wrappers are thin entry points: they wire up paths,
 `torchrun` launch, and post-run validation, then call the Python CLIs in
@@ -43,10 +43,10 @@ training.
 
 ```bash
 EMBODIMENT_TAG=oxe_droid DATA_PATH=/path/to/droid_lerobot \
-  bash examples/dreamzero/preprocess/prepare_dreamzero_dataset.sh
+  bash examples/dreamzero/finetuning/prepare_dreamzero_dataset.sh
 
 EMBODIMENT_TAG=libero_sim DATA_PATH=/path/to/libero_lerobot \
-  bash examples/dreamzero/preprocess/prepare_dreamzero_dataset.sh
+  bash examples/dreamzero/finetuning/prepare_dreamzero_dataset.sh
 ```
 
 Use `EMBODIMENT_TAG=agibot` or `EMBODIMENT_TAG=yam` for the corresponding
@@ -57,10 +57,10 @@ modify parquet files or images/videos.
 
 ```bash
 MODEL_NAME=dreamzero_full_wan22_5b GPUS_PER_NODE=8 \
-  bash examples/dreamzero/preprocess/precompute_dreamzero_cache.sh
+  bash examples/dreamzero/finetuning/precompute_dreamzero_cache.sh
 
 MODEL_NAME=dreamzero_full_wan21_14b GPUS_PER_NODE=8 \
-  bash examples/dreamzero/preprocess/precompute_dreamzero_cache.sh
+  bash examples/dreamzero/finetuning/precompute_dreamzero_cache.sh
 ```
 
 The generated cache defaults to `$DREAMZERO_CACHE_ROOT/$MODEL_NAME`, and the
@@ -74,15 +74,15 @@ Omit `CACHE_DIR` to compute features online.
 ```bash
 CACHE_DIR=/path/to/dreamzero/cache/dreamzero_full_wan22_5b \
 SAMPLE_TRANSFORM_SEED=0 \
-  bash examples/dreamzero/finetuning/finetune_dreamzero_wan22_5b_full_fsdp.sh
+  bash examples/dreamzero/finetuning/sft_dreamzero_wan22_5b_full_fsdp.sh
 
 CACHE_DIR=/path/to/dreamzero/cache/dreamzero_full_wan22_5b \
 SAMPLE_TRANSFORM_SEED=0 \
-  bash examples/dreamzero/finetuning/finetune_dreamzero_wan22_5b_full_ddp_zero1.sh
+  bash examples/dreamzero/finetuning/sft_dreamzero_wan22_5b_full_ddp_zero1.sh
 
 CACHE_DIR=/path/to/dreamzero/cache/dreamzero_full_wan21_14b \
 SAMPLE_TRANSFORM_SEED=0 \
-  bash examples/dreamzero/finetuning/finetune_dreamzero_wan21_14b_full_fsdp.sh
+  bash examples/dreamzero/finetuning/sft_dreamzero_wan21_14b_full_fsdp.sh
 ```
 
 For the end-to-end workflow (data → cache → training → eval) see the

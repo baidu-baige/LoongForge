@@ -12,7 +12,7 @@ from megatron.core import InferenceParams
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.process_groups_config import ProcessGroupCollection
 from megatron.core.inference.contexts import BaseInferenceContext
-from loongforge.models.common.spec_utils import import_module
+from loongforge.models.utils import import_module
 from loongforge.models.foundation.base import BaseGPTModel
 from .deepseek_config import DeepseekConfig
 

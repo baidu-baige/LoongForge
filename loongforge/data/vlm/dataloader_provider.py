@@ -19,7 +19,7 @@ from megatron.core.datasets.utils import get_blend_from_list
 from megatron.core.utils import log_single_rank
 from loongforge.data import IGNORE_INDEX, TrainingPhase
 from .base.task_encoder import print_error_handler
-from loongforge.models.multimodal.position_ids import get_position_ids
+from loongforge.models.omni_models.get_position_idx_func import get_position_ids
 
 logger = logging.getLogger(__name__)
 

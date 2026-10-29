@@ -1,8 +1,6 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Cosmos3 model-specific data transforms and collator."""
-
-from loongforge.data.embodied.cosmos3.transforms import cosmos3_collator, cosmos3_transform
-
-__all__ = ["cosmos3_collator", "cosmos3_transform"]
+"""Cosmos3 dataset package."""
+from .droid_lerobot_dataset import build_droid_dataset
+from .transforms import cosmos3_collator, cosmos3_transform

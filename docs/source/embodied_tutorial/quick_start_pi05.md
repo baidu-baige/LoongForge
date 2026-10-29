@@ -56,17 +56,17 @@ The DDP script already enables the main performance optimizations:
 **DDP:**
 
 ```bash
-bash examples/pi05/finetuning/finetune_pi05_ddp.sh
+bash examples/pi05/finetuning/sft_pi05_ddp.sh
 ```
 **DDP + ZeRO-1:**
 
 ```bash
-bash examples/pi05/finetuning/finetune_pi05_ddp_zero1.sh
+bash examples/pi05/finetuning/sft_pi05_ddp_zero1.sh
 ```
 **FSDP:**
 
 ```bash
-bash examples/pi05/finetuning/finetune_pi05_fsdp.sh
+bash examples/pi05/finetuning/sft_pi05_fsdp.sh
 ```
 ### 2.2 Correctness Verification
 To ensure training accuracy is not affected by the optimizations, we ran a step-by-step action loss comparison between LoongForge's Pi0.5 implementation and the official one under identical data, weights, and training configuration. The results show that LoongForge's performance optimizations are lossless with respect to training accuracy:

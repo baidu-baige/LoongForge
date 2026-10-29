@@ -59,7 +59,7 @@ def _ensure_sm80_ops_on_path() -> None:
     if _SM80_OPS_ADDED:
         return
     _SM80_OPS_ADDED = True
-    # dsa_kernel_backend.py -> experimental_attention_variant -> base -> models
+    # dsa_kernel_backend.py -> experimental_attention_variant -> common -> models
     # -> loongforge -> <repo root>
     repo_root = Path(__file__).resolve().parents[4]
     ops_dir = repo_root / "ops" / "cuda_source"

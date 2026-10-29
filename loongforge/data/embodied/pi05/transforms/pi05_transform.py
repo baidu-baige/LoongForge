@@ -10,17 +10,17 @@ import numpy as np
 import torch
 from transformers import AutoTokenizer
 
-from loongforge.data.embodied.shared.transforms.base import BaseTransform
+from loongforge.data.embodied.transforms.base import BaseTransform
 from loongforge.data.embodied.registry import (
     TransformBuilderContext,
     register_transform_builder,
 )
-from loongforge.data.embodied.shared.transforms import (
+from loongforge.data.embodied.transforms.utils import (
     build_action_transform,
     build_image_transform,
     convert_stats,
 )
-from loongforge.data.embodied.shared.transforms.normalizer import Normalizer
+from loongforge.data.embodied.transforms.utils.normalizer import Normalizer
 from loongforge.data.embodied.pi05.transforms.pi05_collator import tokenize_prompts
 
 

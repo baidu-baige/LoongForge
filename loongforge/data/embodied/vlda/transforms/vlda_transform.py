@@ -13,7 +13,7 @@ import torch.nn.functional as F
 from PIL import Image
 
 from loongforge.data.embodied.registry import register_transform_builder
-from loongforge.data.embodied.shared.transforms.normalizer import Normalizer
+from loongforge.data.embodied.transforms.utils.normalizer import Normalizer
 
 IMAGE_KEYS = ("base_0_rgb", "left_wrist_0_rgb", "right_wrist_0_rgb")
 JOINT_FLIP = np.asarray([1, -1, -1, 1, 1, 1, 1, 1, -1, -1, 1, 1, 1, 1])
