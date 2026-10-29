@@ -24,6 +24,7 @@ import os
 import random
 import shutil
 from collections.abc import Mapping
+from contextlib import contextmanager
 from dataclasses import fields, is_dataclass
 from enum import Enum
 from typing import Dict, Optional, Tuple
@@ -70,6 +71,94 @@ _VALID_FORMATS = ("safetensors", "pt", "dcp")
 # new one to avoid contending CPU-staging buffers and to prevent
 # ``get_latest_checkpoint`` from picking up an incomplete directory.
 _pending_async_save: Optional[dict] = None
+
+
+def build_alias_map(model: nn.Module) -> dict[str, str]:
+    """Map each alias state-dict key to the canonical key holding the same state.
+
+    ``nn.Module.state_dict()`` walks every registration path, so a submodule that
+    is also stored as ``self.alias = self.module`` (or a tied ``Parameter``) is
+    visited once per path. The first DFS path to a module matches
+    ``named_modules()`` and is treated as canonical.
+    """
+    state_dict = model.state_dict(keep_vars=True)
+
+    # Whole-module aliases, mapped by prefix so non-tensor entries such as
+    # TransformerEngine ``_extra_state`` are covered too.
+    prefixes = {}
+    seen = {id(model): ""}
+
+    def visit(module, prefix):
+        for name, child in module._modules.items():
+            if child is None:
+                continue
+            child_prefix = f"{prefix}{name}."
+            if id(child) in seen:
+                prefixes[child_prefix] = seen[id(child)]
+                continue
+            seen[id(child)] = child_prefix
+            visit(child, child_prefix)
+
+    visit(model, "")
+
+    alias_map = {}
+    for key in state_dict:
+        for alias_prefix, canonical_prefix in prefixes.items():
+            if key.startswith(alias_prefix):
+                alias_map[key] = canonical_prefix + key[len(alias_prefix):]
+                break
+
+    # Tied tensors: the same Parameter/buffer object under different modules.
+    # Object identity never merges distinct views that merely share storage.
+    canonical_by_tensor = {}
+    for key, value in state_dict.items():
+        if key in alias_map or not isinstance(value, torch.Tensor):
+            continue
+        canonical = canonical_by_tensor.setdefault(id(value), key)
+        if canonical != key:
+            alias_map[key] = canonical
+
+    # A target may itself pass through an aliased submodule (FastWAM:
+    # ``dit.mixtures.video`` -> ``mot.mixtures.video`` -> ``video_expert``).
+    for alias, canonical in alias_map.items():
+        while canonical in alias_map:
+            canonical = alias_map[canonical]
+        if canonical not in state_dict:
+            raise RuntimeError(f"Alias {alias!r} maps to missing state key {canonical!r}")
+        alias_map[alias] = canonical
+    return alias_map
+
+
+@contextmanager
+def canonical_state_dict(model: nn.Module):
+    """Temporarily expose a canonical-only ``state_dict`` on ``model``.
+
+    Yields the alias map. Pass the unwrapped module; wrappers such as DDP reach
+    it through normal ``state_dict`` recursion and supply the key prefix.
+    """
+    alias_map = build_alias_map(model)
+    if not alias_map:
+        yield alias_map
+        return
+
+    def drop_aliases(module, state_dict, prefix, local_metadata):
+        for alias in alias_map:
+            state_dict.pop(prefix + alias, None)
+
+    def restore_aliases(module, state_dict, prefix, *args):
+        for alias, canonical in alias_map.items():
+            if prefix + canonical in state_dict:
+                state_dict.setdefault(prefix + alias, state_dict[prefix + canonical])
+
+    handles = (
+        model.register_state_dict_post_hook(drop_aliases),
+        model.register_load_state_dict_pre_hook(restore_aliases),
+    )
+    try:
+        yield alias_map
+    finally:
+        for handle in handles:
+            handle.remove()
 
 
 def save_checkpoint(
@@ -123,17 +212,22 @@ def save_checkpoint(
         "use_lora": use_lora,
     }
 
-    if save_format == "dcp":
-        future = _save_dcp(
-            model, optimizer, scheduler, path, ctx, training_args,
-            dataloader_state, async_save=async_save,
-        )
-    else:
-        future = None
-        _save_legacy(
-            model, optimizer, scheduler, path, ctx, training_args, epoch,
-            dataloader_state, save_format, model_cfg=model_cfg,
-        )
+    # Aliased modules/tensors are written once under their canonical key; DCP
+    # async_save stages its snapshot before returning, so the view can close.
+    with canonical_state_dict(unwrap_model(model)) as alias_map:
+        if alias_map and ctx.is_main:
+            logger.info("Omitting %d aliased state-dict keys from checkpoint", len(alias_map))
+        if save_format == "dcp":
+            future = _save_dcp(
+                model, optimizer, scheduler, path, ctx, training_args,
+                dataloader_state, async_save=async_save,
+            )
+        else:
+            future = None
+            _save_legacy(
+                model, optimizer, scheduler, path, ctx, training_args, epoch,
+                dataloader_state, save_format, model_cfg=model_cfg,
+            )
 
     # Format-independent: the eval loader needs the data spec next to the weights
     # for dcp as much as for safetensors/pt. Tiny and synchronous, so an async dcp
@@ -769,32 +863,35 @@ def _resume_dcp(model, optimizer, scheduler, checkpoint_path, ctx, restore_rng):
     optimizers = [optimizer] if has_optim else []
 
     options = StateDictOptions(full_state_dict=False, cpu_offload=False)
-    model_sd, optim_sd = get_state_dict(model, optimizers=optimizers, options=options)
+    # Canonical load template: also reads legacy checkpoints, whose extra alias
+    # keys are simply not requested; aliases are refilled for the strict load.
+    with canonical_state_dict(unwrap_model(model)):
+        model_sd, optim_sd = get_state_dict(model, optimizers=optimizers, options=options)
 
-    # 1) Model — strict. Load the DCP tensors into the UNWRAPPED module directly.
-    # set_state_dict() mis-handles the DDP "module." prefix for this model's
-    # nesting: torch's _load_model_state_dict feeds the unprefixed DCP keys
-    # straight into DistributedDataParallel.load_state_dict, raising
-    #   "Missing key(s): module.core.* / Unexpected key(s): core.*".
-    # get_state_dict() already returns clean (unwrapped) FQNs, which match the
-    # raw module 1:1, so load there and skip the buggy re-wrap. (DDP replicates
-    # params — full_state_dict=False still yields full tensors per rank.)
-    model_state = {"model": model_sd}
-    try:
-        dcp.load(model_state, storage_reader=dcp.FileSystemReader(dcp_dir))
-    except Exception as exc:
-        # te.Linear contributes `_extra_state` keys that plain nn.Linear does
-        # not, so toggling --fp8 between the saving and resuming run changes the
-        # key set and trips the strict load with an opaque planner error.
-        if _has_te_module(model):
-            raise RuntimeError(
-                "Strict DCP model load failed for an FP8 (te.Linear) model. If "
-                "this checkpoint was saved without --fp8, its key set does not "
-                "match: resume with --fp8 off, or start from "
-                "--pretrained-checkpoint instead of --resume."
-            ) from exc
-        raise
-    unwrap_model(model).load_state_dict(model_state["model"], strict=True)
+        # 1) Model — strict. Load the DCP tensors into the UNWRAPPED module directly.
+        # set_state_dict() mis-handles the DDP "module." prefix for this model's
+        # nesting: torch's _load_model_state_dict feeds the unprefixed DCP keys
+        # straight into DistributedDataParallel.load_state_dict, raising
+        #   "Missing key(s): module.core.* / Unexpected key(s): core.*".
+        # get_state_dict() already returns clean (unwrapped) FQNs, which match the
+        # raw module 1:1, so load there and skip the buggy re-wrap. (DDP replicates
+        # params — full_state_dict=False still yields full tensors per rank.)
+        model_state = {"model": model_sd}
+        try:
+            dcp.load(model_state, storage_reader=dcp.FileSystemReader(dcp_dir))
+        except Exception as exc:
+            # te.Linear contributes `_extra_state` keys that plain nn.Linear does
+            # not, so toggling --fp8 between the saving and resuming run changes the
+            # key set and trips the strict load with an opaque planner error.
+            if _has_te_module(model):
+                raise RuntimeError(
+                    "Strict DCP model load failed for an FP8 (te.Linear) model. If "
+                    "this checkpoint was saved without --fp8, its key set does not "
+                    "match: resume with --fp8 off, or start from "
+                    "--pretrained-checkpoint instead of --resume."
+                ) from exc
+            raise
+        unwrap_model(model).load_state_dict(model_state["model"], strict=True)
     if ctx.is_main:
         logger.info("model resumed via DCP (strict, into unwrapped module)")
 
