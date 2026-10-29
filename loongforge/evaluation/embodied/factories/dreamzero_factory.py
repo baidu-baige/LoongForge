@@ -60,7 +60,7 @@ _LIBERO_PROMPT_TEMPLATE = (
 )
 
 # ``libero_sim`` -> WAN action-head projector id in the official multi-
-# embodiment mapping (loongforge/data/embodied/dreamzero/modality_configs.py). The
+# embodiment mapping (loongforge/data/embodied/dreamzero/dataset/modality_configs.py). The
 # released RLinf LIBERO-SFT checkpoints, however, train a SINGLE-category
 # projector (``state_encoder.layer1.W`` is ``(1, 64, 1024)``), so the runtime
 # ``embodiment_id`` tensor must be 0 — the model indexes W[cat_ids] directly.

@@ -27,31 +27,29 @@ from transformers import DataCollatorForSeq2Seq
 from loongforge.data import TrainingPhase
 from loongforge.engines.megatron import get_args, get_chat_template, get_model_config, get_tokenizer
 
-from loongforge.engines.megatron.train_step import dump_model_input_example_once
-from loongforge.engines.megatron.runner import pretrain
+from loongforge.engines.megatron.training_utils import dump_model_input_example_once
+from loongforge.engines.megatron.training_utils import pretrain
 from loongforge.engines.megatron.data_padding import (
     llm_pad_to_multiple_of,
     vlm_packed_padding,
 )
-from loongforge.data.llm.dataloader import (
+from loongforge.data.llm.sft_dataloader import (
     SFTLoaderConfig,
+    build_full_hetero_encoder_data_iterator,
     build_sft_cyclic_iterators,
+    build_sft_data_collator,
     load_pretokenized_dataset,
 )
-from loongforge.data.llm.sft.collator import build_sft_data_collator
-from loongforge.data.vlm.dataloader import (
+from loongforge.data.vlm.dataloader_provider import (
     VLMDataConfig,
     VLMPretrainCollator,
+    build_full_hetero_encoder_energon_iterator,
     get_train_dataset,
     get_val_dataset,
     get_train_loader,
 )
 from loongforge.data.vlm import build_task_encoder
 from loongforge.data.vlm.dp_balance_layout import reorder_data_for_vlm, vlm_cumulative_lengths
-from loongforge.data.vlm.samplers import (
-    build_encoder_data_iterator,
-    build_encoder_energon_iterator,
-)
 from loongforge.engines.megatron.checkpointing import load_dataloader_state
 
 
@@ -63,7 +61,7 @@ from loongforge.engines.megatron.distributed.dp_balance.rebalance.layout import 
     BatchLayout,
     install_batch_layout,
 )
-from loongforge.engines.megatron.distributed.context_parallel import get_batch_on_this_cp_rank
+from loongforge.engines.megatron.utils import get_batch_on_this_cp_rank
 from loongforge.engines.megatron.distributed.loss_reduction import default_loss_func
 from loongforge.engines.megatron.initialize import (
     change_parallel_state,
@@ -432,7 +430,7 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None,
 
         # Build encoder-specific iterator for full_hetero_dp
         if getattr(args, 'enable_full_hetero_dp', False):
-            encoder_iter = build_encoder_data_iterator(
+            encoder_iter = build_full_hetero_encoder_data_iterator(
                 train_ds,
                 args.consumed_train_samples,
                 collator,
@@ -499,7 +497,7 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None,
             encoder_dataloader = get_train_loader(
                 encoder_dataset, collator, load_dataloader_state(args)
             )
-            encoder_iter = build_encoder_energon_iterator(
+            encoder_iter = build_full_hetero_encoder_energon_iterator(
                 encoder_dataloader, **hetero_dp.encoder_parallel_facts()
             )
             if hetero_step is None:

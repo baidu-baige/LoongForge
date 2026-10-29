@@ -40,163 +40,23 @@ from loongforge.data.embodied.gr00t_n1_6.transforms.eagle3_model.processing_eagl
     Eagle3VLProcessor,
 )
 from loongforge.models.embodied.gr00t_n1_6.embodiment_configs import (
-    EMBODIMENT_STAT_CONFIGS,
     ActionRepresentation,
     ActionType,
     ModalityConfig,
+)
+from .utils import (
+    apply_sin_cos_encoding,
+    nested_dict_to_numpy,
+    normalize_values_meanstd,
+    normalize_values_minmax,
+    parse_modality_configs,
+    unnormalize_values_meanstd,
+    unnormalize_values_minmax,
 )
 
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="google.protobuf")
 
 logger = logging.getLogger(__name__)
-
-
-def apply_sin_cos_encoding(values: np.ndarray) -> np.ndarray:
-    """Apply sin-cos encoding to input values."""
-    sin_values = np.sin(values)
-    cos_values = np.cos(values)
-    return np.concatenate([sin_values, cos_values], axis=-1)
-
-
-def nested_dict_to_numpy(data):
-    """Convert nested dictionary to numpy arrays recursively."""
-    if isinstance(data, dict):
-        return {key: nested_dict_to_numpy(value) for key, value in data.items()}
-    if isinstance(data, list):
-        return np.array(data)
-    return data
-
-
-def normalize_values_minmax(values: np.ndarray, params: dict) -> np.ndarray:
-    """Normalize values using min-max normalization."""
-    min_vals = params["min"]
-    max_vals = params["max"]
-    normalized = np.zeros_like(values)
-    mask = ~np.isclose(max_vals, min_vals)
-    normalized[..., mask] = (values[..., mask] - min_vals[..., mask]) / (
-        max_vals[..., mask] - min_vals[..., mask]
-    )
-    normalized[..., mask] = 2 * normalized[..., mask] - 1
-    return normalized
-
-
-def unnormalize_values_minmax(normalized_values: np.ndarray, params: dict) -> np.ndarray:
-    """Unnormalize values using min-max parameters."""
-    min_vals = params["min"]
-    max_vals = params["max"]
-    range_vals = max_vals - min_vals
-    return (np.clip(normalized_values, -1.0, 1.0) + 1.0) / 2.0 * range_vals + min_vals
-
-
-def normalize_values_meanstd(values: np.ndarray, params: dict) -> np.ndarray:
-    """Normalize values using mean-std normalization."""
-    mean_vals = params["mean"]
-    std_vals = params["std"]
-    mask = std_vals != 0
-    normalized = np.zeros_like(values)
-    normalized[..., mask] = (values[..., mask] - mean_vals[..., mask]) / std_vals[..., mask]
-    normalized[..., ~mask] = values[..., ~mask]
-    return normalized
-
-
-def unnormalize_values_meanstd(normalized_values: np.ndarray, params: dict) -> np.ndarray:
-    """Unnormalize values using mean-std parameters."""
-    mean_vals = params["mean"]
-    std_vals = params["std"]
-    mask = std_vals != 0
-    unnormalized = np.zeros_like(normalized_values)
-    unnormalized[..., mask] = normalized_values[..., mask] * std_vals[..., mask] + mean_vals[..., mask]
-    unnormalized[..., ~mask] = normalized_values[..., ~mask]
-    return unnormalized
-
-
-def parse_modality_configs(
-    modality_configs: dict[str, dict[str, ModalityConfig | dict]],
-) -> dict[str, dict[str, ModalityConfig]]:
-    """Parse modality configurations from dictionary format."""
-    parsed_modality_configs: dict[str, dict[str, ModalityConfig]] = {}
-    for embodiment_tag, modality_config in modality_configs.items():
-        parsed_modality_configs[embodiment_tag] = {}
-        for modality, config in modality_config.items():
-            if isinstance(config, dict):
-                parsed_modality_configs[embodiment_tag][modality] = ModalityConfig(**config)
-            else:
-                parsed_modality_configs[embodiment_tag][modality] = config
-    return parsed_modality_configs
-
-
-def compute_relative_action_stats(dataset, embodiment_tag: str) -> dict[str, dict[str, list]]:
-    """Compute per-joint relative-action statistics from dataset episodes."""
-    if embodiment_tag not in EMBODIMENT_STAT_CONFIGS:
-        raise ValueError(f"Unknown embodiment: {embodiment_tag}")
-
-    config = EMBODIMENT_STAT_CONFIGS[embodiment_tag]
-    modality_meta = config["modality_meta"]
-    action_modality = config["modality_config"]["action"]
-    state_modality = config["modality_config"]["state"]
-    action_configs = action_modality.action_configs
-
-    action_delta_indices = np.array(action_modality.delta_indices)
-    state_delta_indices = state_modality.delta_indices
-
-    relative_joint_groups = [
-        joint_group
-        for joint_group, action_config in zip(action_modality.modality_keys, action_configs or [], strict=False)
-        if action_config.rep == ActionRepresentation.RELATIVE
-    ]
-
-    if not relative_joint_groups:
-        return {}
-
-    all_relative_chunks = {jg: [] for jg in relative_joint_groups}
-
-    episode_data_dict = (
-        dataset.hf_dataset.to_pandas()
-        if hasattr(dataset.hf_dataset, "to_pandas")
-        else dataset.hf_dataset
-    )
-    unique_episodes = episode_data_dict["episode_index"].unique()
-    for episode_idx in unique_episodes:
-        episode_mask = episode_data_dict["episode_index"] == episode_idx
-        episode_frames = episode_data_dict[episode_mask]
-
-        states_list = episode_frames["observation.state"].tolist()
-        actions_list = episode_frames["action"].tolist()
-        states = np.array([s.numpy() if isinstance(s, torch.Tensor) else np.array(s) for s in states_list])
-        actions = np.array([a.numpy() if isinstance(a, torch.Tensor) else np.array(a) for a in actions_list])
-
-        usable_length = len(episode_frames) - action_delta_indices[-1]
-
-        for joint_group in relative_joint_groups:
-            start_idx = modality_meta["action"][joint_group]["start"]
-            end_idx = modality_meta["action"][joint_group]["end"]
-
-            state_slice = states[:, start_idx:end_idx]
-            action_slice = actions[:, start_idx:end_idx]
-
-            for i in range(usable_length):
-                state_ind = state_delta_indices[-1] + i
-                last_state = state_slice[state_ind]
-
-                action_inds = action_delta_indices + i
-                action_chunk = action_slice[action_inds]
-
-                relative_chunk = action_chunk - last_state
-                all_relative_chunks[joint_group].append(relative_chunk)
-
-    relative_stats = {}
-    for joint_group, chunks in all_relative_chunks.items():
-        chunks_array = np.stack(chunks, axis=0)
-        relative_stats[joint_group] = {
-            "min": np.min(chunks_array, axis=0).tolist(),
-            "max": np.max(chunks_array, axis=0).tolist(),
-            "mean": np.mean(chunks_array, axis=0).tolist(),
-            "std": np.std(chunks_array, axis=0).tolist(),
-            "q01": np.quantile(chunks_array, 0.01, axis=0).tolist(),
-            "q99": np.quantile(chunks_array, 0.99, axis=0).tolist(),
-        }
-
-    return relative_stats
 
 
 _PROCESSOR_CACHE: dict[tuple[str, tuple[tuple[str, object], ...]], ProcessorMixin] = {}

@@ -18,7 +18,7 @@ from loongforge.data import TrainingPhase
 if TYPE_CHECKING:
     from megatron.core.datasets.megatron_tokenizer import MegatronLegacyTokenizer
 
-    from loongforge.data.chat_templates.base import ChatTemplate
+    from loongforge.data.chat_templates.template import ChatTemplate
 
 
 _GLOBAL_CHAT_TEMPLATE: Optional["ChatTemplate"] = None
@@ -74,8 +74,11 @@ def set_loongforge_extra_global_vars(args) -> None:
 def _build_chat_template(args) -> Optional["ChatTemplate"]:
     """Build the chat template."""
     # Lazy import: the registry reads the Jinja resources, so load it only when SFT builds a template.
-    from loongforge.data.chat_templates.base import ChatTemplate
-    from loongforge.data.chat_templates.hf import HFChatTemplate, load_chat_template_kwargs
+    from loongforge.data.chat_templates.template import (
+        ChatTemplate,
+        HFChatTemplate,
+        load_chat_template_kwargs,
+    )
 
     if args.training_phase == TrainingPhase.SFT and args.chat_template is not None:
         global _GLOBAL_CHAT_TEMPLATE

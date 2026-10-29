@@ -131,7 +131,7 @@ def on_after_train_batch_fetch(model, batch, *, training_args, completed_steps, 
     """Reset the training RNG once after the first batch fetch."""
     global _train_rng_reset_after_first_batch_done
     from loongforge.engines.torch.distributed.utils import unwrap_model
-    from loongforge.engines.torch.initialize import set_seed
+    from loongforge.engines.torch.utils.utils import set_seed
 
     raw = unwrap_model(model)
     if _train_rng_reset_after_first_batch_done:

@@ -14,7 +14,7 @@ from typing import Any
 
 import yaml
 
-from loongforge.data.embodied.dreamzero.data_configuration_dreamzero import (
+from loongforge.data.embodied.dreamzero.transforms.data_configuration_dreamzero import (
     DreamZeroDataConfig,
 )
 from loongforge.models.embodied.dreamzero.model_configuration_dreamzero import DreamZeroConfig

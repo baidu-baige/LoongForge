@@ -16,10 +16,10 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms import v2
 
-from loongforge.data.embodied.dreamzero.dreamzero_dataset import (
+from loongforge.data.embodied.dreamzero.dataset.datasets import (
     DreamZeroLeRobotDataset,
 )
-from loongforge.data.embodied.dreamzero.modality_configs import (
+from loongforge.data.embodied.dreamzero.dataset.modality_configs import (
     EMBODIMENT_BUILDERS,
     EMBODIMENT_TAG_TO_ID,
 )
@@ -40,8 +40,10 @@ from loongforge.data.embodied.dreamzero.transforms.video import (
     VideoToNumpy,
     VideoToTensor,
 )
-from loongforge.data.embodied.dreamzero.transforms.dreamzero_collator import HuggingfaceTokenizer
-from loongforge.data.embodied.dreamzero.transforms.dreamzero_transform import DreamTransform
+from loongforge.data.embodied.dreamzero.transforms.dreamzero_collator import (
+    DreamTransform,
+    HuggingfaceTokenizer,
+)
 from loongforge.data.embodied.dreamzero.transforms.dreamzero_collator import (
     collate as dreamzero_collate,
 )

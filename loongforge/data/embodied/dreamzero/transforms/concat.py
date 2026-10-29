@@ -11,7 +11,7 @@ import numpy as np
 from pydantic import Field, PrivateAttr
 import torch
 
-from loongforge.data.embodied.dreamzero.schema import DatasetMetadata, StateActionMetadata
+from ..schema import DatasetMetadata, StateActionMetadata
 from .base import InvertibleModalityTransform, ModalityTransform
 
 

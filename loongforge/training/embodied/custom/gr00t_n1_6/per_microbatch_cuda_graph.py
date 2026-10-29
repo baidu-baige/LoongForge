@@ -18,7 +18,7 @@ import torch
 import torch.distributed as dist
 
 from loongforge.engines.torch.distributed.utils import unwrap_model
-from loongforge.engines.torch.train_step import forward, move_batch
+from loongforge.engines.torch.runner import forward, move_batch
 
 logger = logging.getLogger(__name__)
 

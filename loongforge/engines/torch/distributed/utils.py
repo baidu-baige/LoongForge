@@ -39,7 +39,7 @@ def is_dmuon_model(model: nn.Module) -> bool:
     ``_dedicated_comm_ctx`` onto the model after ``dmuon.dedicate_params`` claims
     the Muon-route parameters, so its presence is what distinguishes a
     DMuon-wrapped model from a plain FSDP2 one. Checkpoint code and
-    ``train_step.grad_sync_ctx`` key off this to route state dict access and
+    ``runner.grad_sync_ctx`` key off this to route state dict access and
     gradient-sync suppression through ``dmuon.*``.
     """
     return getattr(model, "_dedicated_comm_ctx", None) is not None

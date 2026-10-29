@@ -29,7 +29,7 @@ from loongforge.data.diffusion.packed_dataset import (
 from loongforge.models.diffusion.wan.wan_flow_match import FlowMatchScheduler
 from megatron.core.packed_seq_params import PackedSeqParams
 
-from loongforge.engines.megatron.runner import pretrain
+from loongforge.engines.megatron.training_utils import pretrain
 from megatron.core import parallel_state
 import numpy as np
 
@@ -42,10 +42,6 @@ from loongforge.models.diffusion.wan.gaussian_diffusion import (
 )
 
 from loongforge.models.diffusion.wan.wan_provider import wan_i2v_model_provider
-from loongforge.engines.megatron.distributed.batch_broadcast import (
-    broadcast_optional_tensor,
-    broadcast_tensor,
-)
 
 SUPPORTED_MODELS = [
     DiffusionModelFamilies.WAN2_1_I2V,
@@ -57,33 +53,127 @@ WAN_PATCH_SIZE = (1, 2, 2)
 stimer = StragglerDetector()
 
 
-def broadcast_on_cp_group(batch):
-    """Broadcast the batch from CP rank 0 to the other CP ranks.
+def send_batch(batch, broadcast):
+    """send batch"""
+    args = get_args()
+    video_shape = torch.tensor(batch["latents"].shape, dtype=torch.int64).cuda(
+        non_blocking=True
+    )
+    contxt_shape = torch.tensor(
+        batch["prompt_emb"]["context"].shape, dtype=torch.int64
+    ).cuda(non_blocking=True)
+    broadcast(video_shape)
+    broadcast(batch["latents"])
+    broadcast(batch["training_target"])
+    broadcast(batch["timestep"])
+    broadcast(batch["scale"])
 
-    CP rank 0 keeps its own batch. The other ranks get the six fields the step reads:
-    ``latents``, ``training_target``, ``timestep``, ``scale``, ``prompt_emb["context"]``
-    and the optional ``image_emb`` entries ``clip_feature`` and ``y``.
-    """
-    src = mpu.get_context_parallel_src_rank()
-    group = mpu.get_context_parallel_group()
-    is_src = mpu.get_context_parallel_rank() == 0
+    broadcast(contxt_shape)
+    broadcast(batch["prompt_emb"]["context"])
 
-    def tensor(value):
-        return broadcast_tensor(value if is_src else None, src, group)
+    image_emb = batch["image_emb"]
+    image_info = torch.tensor([0, 0], dtype=torch.int64).cuda(non_blocking=True)
 
-    def optional(key):
-        return broadcast_optional_tensor(batch["image_emb"].get(key) if is_src else None, src, group)
+    if "clip_feature" in image_emb:
+        image_info[0] = 1
+    if "y" in image_emb:
+        image_info[1] = 1
 
-    received = {key: tensor(batch[key] if is_src else None)
-                for key in ("latents", "training_target", "timestep", "scale")}
-    received["prompt_emb"] = {"context": tensor(batch["prompt_emb"]["context"] if is_src else None)}
+    broadcast(image_info)
+    if image_info[0] == 1:
+        clip_feature_shape = torch.tensor(
+            image_emb["clip_feature"].shape, dtype=torch.int64
+        ).cuda(non_blocking=True)
+        broadcast(clip_feature_shape)
+        broadcast(image_emb["clip_feature"])
+    if image_info[1] == 1:
+        y_shape = torch.tensor(image_emb["y"].shape, dtype=torch.int64).cuda(
+            non_blocking=True
+        )
+        broadcast(y_shape)
+        broadcast(image_emb["y"])
+
+    args.micro_batch_size = video_shape.tolist()[0]
+
+    return batch
+
+
+def receive_batch(broadcast):
+    """receive batch"""
+    args = get_args()
+    device = torch.cuda.current_device()
+    # receive video
+    video_shape = torch.empty(5, dtype=torch.int64, device=device)
+    broadcast(video_shape)
+    args.micro_batch_size = video_shape.tolist()[0]
+    video = torch.empty(video_shape.tolist(), dtype=torch.bfloat16, device=device)
+    training_target = torch.empty(
+        video_shape.tolist(), dtype=torch.bfloat16, device=device
+    )
+    broadcast(video)
+    broadcast(training_target)
+
+    # receive timestep
+    timestep = torch.empty([1], dtype=torch.bfloat16, device=device)
+    broadcast(timestep)
+
+    # scale
+    scale = torch.empty([1], dtype=torch.float32, device=device)
+    broadcast(scale)
+
+    # receive context
+    prompt_shape = torch.empty(4, dtype=torch.int64, device=device)
+    broadcast(prompt_shape)
+    prompt = torch.empty(prompt_shape.tolist(), dtype=torch.bfloat16, device=device)
+    broadcast(prompt)
+    # receive image
+    image_info = torch.empty(2, dtype=torch.int64, device=device)
+    broadcast(image_info)
     image_emb = {}
-    for key in ("clip_feature", "y"):
-        value = optional(key)
-        if value is not None:
-            image_emb[key] = value
-    received["image_emb"] = image_emb
-    return batch if is_src else received
+    if image_info[0].item() == 1:
+        clip_shape = torch.empty(4, dtype=torch.int64, device=device)
+        broadcast(clip_shape)
+        clip_feature = torch.empty(
+            clip_shape.tolist(), dtype=prompt.dtype, device=device
+        )
+        broadcast(clip_feature)
+        image_emb["clip_feature"] = clip_feature
+
+    if image_info[1].item() == 1:
+        y_shape = torch.empty(6, dtype=torch.int64, device=device)
+        broadcast(y_shape)
+        y = torch.empty(y_shape.tolist(), dtype=video.dtype, device=device)
+        broadcast(y)
+        image_emb["y"] = y
+
+    prompt_emb = {"context": prompt}
+    batch = {
+        "latents": video,
+        "training_target": training_target,
+        "timestep": timestep,
+        "prompt_emb": prompt_emb,
+        "image_emb": image_emb,
+        "scale": scale,
+    }
+
+    return batch
+
+
+def broadcast_on_cp_group(batch):
+    """broadcast_on_cp_group,"""
+
+    def _broadcast(item):
+        if item is not None:
+            torch.distributed.broadcast(
+                item,
+                mpu.get_context_parallel_src_rank(),
+                group=mpu.get_context_parallel_group(),
+            )
+
+    if mpu.get_context_parallel_rank() == 0:
+        return send_batch(batch, _broadcast)
+    else:
+        return receive_batch(_broadcast)
 
 
 def model_provider(pre_process=True, post_process=True, vp_stage: int = None):

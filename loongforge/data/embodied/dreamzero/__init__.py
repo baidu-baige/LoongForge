@@ -9,7 +9,33 @@ Runtime imports stay inside this package so training does not depend on an
 external DreamZero source checkout.
 """
 
-from loongforge.data.embodied.dreamzero import samplers
-from loongforge.data.embodied.dreamzero.transforms import dreamzero_collator, dreamzero_transform
+from loongforge.data.embodied.registry import register_sampler_builder
+from loongforge.data.embodied.shared.sampler_factory import SamplerBuilderContext
 
-__all__ = ["dreamzero_collator", "dreamzero_transform", "samplers"]
+from . import transforms
+
+
+@register_sampler_builder("dreamzero")
+def build_dreamzero_registered_sampler(context: SamplerBuilderContext):
+    """Adapt DreamZero sampler modes to the framework sampler registry."""
+    data_cfg = context.dataset._dreamzero_sampler_cfg
+
+    from .builder import build_dreamzero_sampler
+
+    base_dataset = context.dataset._dreamzero_base_dataset
+    sampler_seed = (
+        context.seed
+        if data_cfg.sampler_seed is None
+        else int(data_cfg.sampler_seed)
+    )
+    sampler, _ = build_dreamzero_sampler(
+        train_dataset=context.dataset,
+        base_dataset=base_dataset,
+        sampler_type=data_cfg.sampler_type,
+        runtime=context.runtime,
+        batch_size=context.batch_size,
+        num_workers=context.training_args.num_workers,
+        sampler_seed=sampler_seed,
+        data_cfg=data_cfg,
+    )
+    return sampler

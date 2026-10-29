@@ -17,14 +17,14 @@ from loongforge.data.embodied.registry import (
     TransformBuilderContext,
     register_transform_builder,
 )
-from loongforge.data.embodied.gr00t_n1_6.transforms.image_augmentations import (
+from loongforge.data.embodied.gr00t_n1_6.transforms.gr00t_n1_6_processor import (
+    StateActionProcessor,
+)
+from loongforge.data.embodied.gr00t_n1_6.transforms.utils import (
     ALBUMENTATIONS_AVAILABLE,
     apply_with_replay,
     build_image_transformations,
     build_image_transformations_albumentations,
-)
-from loongforge.data.embodied.gr00t_n1_6.transforms.gr00t_n1_6_processor import (
-    StateActionProcessor,
     compute_relative_action_stats,
 )
 from loongforge.models.embodied.gr00t_n1_6.embodiment_configs import (

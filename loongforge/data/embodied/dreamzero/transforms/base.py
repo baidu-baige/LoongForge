@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
-from loongforge.data.embodied.dreamzero.schema import DatasetMetadata
+from ..schema import DatasetMetadata
 
 
 class ModalityTransform(BaseModel, ABC):

@@ -21,8 +21,8 @@ from loongforge.models.embodied.gr00t_n1_7.modules.cuda_graph_flash_attention im
     maybe_install_graph_safe_fa2_patches,
     prime_graph_safe_fa2_buffers,
 )
-from loongforge.engines.torch.initialize import resolve_dtype
-from loongforge.engines.torch.train_step import (
+from loongforge.engines.torch.utils.utils import resolve_dtype
+from loongforge.engines.torch.runner import (
     StepResult, before_microbatch, forward, move_batch, train_autocast,
 )
 

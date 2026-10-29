@@ -4,7 +4,7 @@
 """LoongForge Megatron engine -- public API surface.
 
 Only the global-state accessors, which many callers in training/ use, are re-exported here.
-Everything else should be imported from its canonical module (e.g. engines.megatron.model_setup).
+Everything else should be imported from its canonical module (e.g. engines.megatron.training_utils).
 """
 
 from . import global_vars

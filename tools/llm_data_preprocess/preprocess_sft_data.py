@@ -8,11 +8,13 @@ from datasets import DatasetDict
 
 from megatron.core.datasets.utils import get_blend_from_list, Split
 
-from loongforge.data.llm.sft.dataset import SFTDataset
-from loongforge.data.llm.sft.dataset_config import SFTDatasetConfig
-from loongforge.data.chat_templates.base import ChatTemplate
-from loongforge.data.chat_templates.hf import HFChatTemplate, load_chat_template_kwargs
-from loongforge.data.chat_templates.registry import get_support_templates
+from loongforge.data.llm.sft_dataset import SFTDatasetConfig, SFTDataset
+from loongforge.data.chat_templates.template import (
+    ChatTemplate,
+    HFChatTemplate,
+    get_support_templates,
+    load_chat_template_kwargs,
+)
 from loongforge.engines.megatron.tokenizer import build_tokenizer
 from loongforge.data import IGNORE_INDEX, TrainingPhase
 from loongforge.training.megatron_args import get_default_sft_dataset_config

@@ -13,8 +13,8 @@ from megatron.training import get_timers
 
 from megatron.training.utils import print_rank_0
 from loongforge.engines.megatron import get_args, get_tokenizer
-from loongforge.data.vlm.encoders.ernie.utils.data_utils import ErnieTensorDataset
-from loongforge.engines.megatron.runner import pretrain
+from loongforge.data.vlm.ernie.data_utils import ErnieTensorDataset
+from loongforge.engines.megatron.training_utils import pretrain
 from megatron.core import parallel_state
 from megatron.core import mpu, tensor_parallel
 from megatron.core.packed_seq_params import PackedSeqParams
@@ -192,7 +192,7 @@ def train_valid_test_datasets_provider_energon(train_val_test_num_samples):
     Activated when ``--task-encoder ErnieTaskEncoder`` is set.
     """
     from loongforge.data.vlm import build_task_encoder
-    from loongforge.data.vlm.dataloader import (
+    from loongforge.data.vlm.dataloader_provider import (
         VLMDataConfig,
         get_train_dataset,
         get_train_loader,

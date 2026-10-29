@@ -15,12 +15,8 @@ from megatron.training import get_timers
 from loongforge.data.diffusion.dataloader import build_latent_dataloader
 from megatron.training.utils import print_rank_0
 from loongforge.engines.megatron import get_args, get_model_config
-from loongforge.engines.megatron.distributed.batch_broadcast import (
-    broadcast_optional_tensor,
-    broadcast_tensor,
-)
 from loongforge.models.diffusion.qwen_image.qwen_image_provider import qwen_image_model_provider
-from loongforge.engines.megatron.runner import pretrain
+from loongforge.engines.megatron.training_utils import pretrain
 
 from loongforge.models.diffusion.qwen_image.qwen_image_flow_match import QwenImageFlowMatchScheduler
 
@@ -118,6 +114,29 @@ def _move_tensor(x, dtype=None):
     return x.to(dtype=dtype) if dtype is not None else x
 
 
+def _broadcast_tensor(tensor, src_rank, group):
+    """Broadcast one CUDA tensor with small Python metadata."""
+    is_src = torch.distributed.get_rank() == src_rank
+    meta = [(tuple(tensor.shape), str(tensor.dtype).replace("torch.", ""))] if is_src else [None]
+    torch.distributed.broadcast_object_list(meta, src=src_rank, group=group)
+    shape, dtype_name = meta[0]
+    if not is_src:
+        tensor = torch.empty(shape, dtype=getattr(torch, dtype_name), device=torch.cuda.current_device())
+    torch.distributed.broadcast(tensor, src=src_rank, group=group)
+    return tensor
+
+
+def _broadcast_optional_tensor(tensor, src_rank, group):
+    """Broadcast ``tensor`` if not None on the source rank; otherwise return None everywhere."""
+    is_src = torch.distributed.get_rank() == src_rank
+    has_tensor = tensor is not None if is_src else None
+    obj = [has_tensor]
+    torch.distributed.broadcast_object_list(obj, src=src_rank, group=group)
+    if not obj[0]:
+        return None
+    return _broadcast_tensor(tensor, src_rank, group)
+
+
 def _broadcast_edit_latents(edit_latents, src_rank, group):
     """Broadcast an optional list of edit-latent tensors from ``src_rank``."""
     is_src = torch.distributed.get_rank() == src_rank
@@ -139,7 +158,7 @@ def _broadcast_edit_latents(edit_latents, src_rank, group):
     result = []
     for idx in range(count):
         local = edit_latents[idx] if is_src else None
-        result.append(broadcast_tensor(local, src_rank, group))
+        result.append(_broadcast_tensor(local, src_rank, group))
     return result[0] if count == 1 else result
 
 
@@ -153,8 +172,8 @@ def broadcast_qwen_image_batch_on_tp_group(batch):
     if not is_src:
         batch = {"height": meta[0]["height"], "width": meta[0]["width"]}
     for key in ("latents", "timestep", "prompt_emb", "training_target", "scale"):
-        batch[key] = broadcast_tensor(batch.get(key) if is_src else None, src_rank, group)
-    batch["prompt_emb_mask"] = broadcast_optional_tensor(
+        batch[key] = _broadcast_tensor(batch.get(key) if is_src else None, src_rank, group)
+    batch["prompt_emb_mask"] = _broadcast_optional_tensor(
         batch.get("prompt_emb_mask") if is_src else None, src_rank, group
     )
     batch["edit_latents"] = _broadcast_edit_latents(

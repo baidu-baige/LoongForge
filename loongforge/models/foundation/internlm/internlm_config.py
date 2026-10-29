@@ -37,8 +37,6 @@ class InternLMConfig(BaseModelConfig):
     untie_embeddings_and_output_weights: bool = True
     rotary_base: int = 1000000
     rotary_emb_func: str = "RotaryEmbedding"
-    # HF ``rope_scaling.factor``; DynamicRotaryEmbedding uses it above max_position_embeddings.
-    rope_scaling_factor: float = 8.0
     model_spec = [
         "loongforge.models.foundation.internlm.internlm_layer_spec",
         "get_internlm_layer_with_te_spec",

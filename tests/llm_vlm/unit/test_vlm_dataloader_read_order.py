@@ -56,7 +56,7 @@ def _load_functions(relative_path, names, namespace=None):
 )
 def test_energon_read_order_kwargs(args, expected):
     namespace = _load_functions(
-        "loongforge/data/vlm/dataloader.py",
+        "loongforge/data/vlm/dataloader_provider.py",
         {"_energon_read_order_kwargs"},
     )
     assert namespace["_energon_read_order_kwargs"](args) == expected
@@ -95,10 +95,9 @@ def test_get_train_dataset_forwards_read_order_kwargs(data_path, expected_path):
         "log_single_rank": Mock(),
         "logger": object(),
         "logging": logging,
-        "ENERGON_LT_7": False,
     }
     namespace = _load_functions(
-        "loongforge/data/vlm/dataloader.py",
+        "loongforge/data/vlm/dataloader_provider.py",
         {
             "_energon_read_order_kwargs",
             "_validate_energon_data_paths",

@@ -55,7 +55,7 @@ METHOD_REGISTRY: Dict[Tuple[str, str], str] = {
 TORCH_TRAINER_TYPES: Dict[str, Tuple[str, str | None]] = {
     "FinetuneTrainer": ("loongforge.training.embodied.sft", None),
     "DreamZeroTrainer": ("loongforge.training.embodied.sft_dreamzero", None),
-    "VLDAFinetuneTrainer": ("loongforge.training.embodied.sft_vlda", None),
+    "VLDAFinetuneTrainer": ("loongforge.training.embodied.custom.vlda.vlda_finetune_trainer", None),
     "Gr00tN1d6Trainer": (
         "loongforge.training.embodied.sft", "loongforge.training.embodied.custom.gr00t_n1_6.factory",
     ),
@@ -63,7 +63,8 @@ TORCH_TRAINER_TYPES: Dict[str, Tuple[str, str | None]] = {
         "loongforge.training.embodied.sft", "loongforge.training.embodied.custom.gr00t_n1_7.factory",
     ),
     "LingBotFinetuneTrainer": (
-        "loongforge.training.embodied.sft_lingbot_va", "loongforge.training.embodied.custom.lingbot_va.factory",
+        "loongforge.training.embodied.custom.lingbot_va.lingbot_finetune_trainer",
+        "loongforge.training.embodied.custom.lingbot_va.lingbot_finetune_trainer",
     ),
     "WallOss05Trainer": (
         "loongforge.training.embodied.sft", "loongforge.training.embodied.custom.wall_oss_0_5.factory",
@@ -103,7 +104,7 @@ def resolve_torch_trainer(trainer_type: str):
     method_path, factory_path = entry
     method = importlib.import_module(method_path)
     if factory_path is None:
-        from loongforge.engines.torch.train_step import TrainerHooks
+        from loongforge.engines.torch.runner import TrainerHooks
         return method, lambda _args: TrainerHooks()
     return method, importlib.import_module(factory_path).build_hooks
 
@@ -111,8 +112,8 @@ def resolve_torch_trainer(trainer_type: str):
 def resolve_torch_runner(trainer_type: str):
     """Select the lifecycle for the recipe's checkpoint contract."""
     if trainer_type == "VLDAFinetuneTrainer":
-        from loongforge.training.embodied.custom.vlda.runner import VLDARunner
-        return VLDARunner
+        from loongforge.training.embodied.custom.vlda.vlda_finetune_trainer import VLDAFinetuneTrainer
+        return VLDAFinetuneTrainer
     from loongforge.engines.torch.runner import TorchRunner
     return TorchRunner
 

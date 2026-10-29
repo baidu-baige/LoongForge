@@ -236,7 +236,7 @@ def _gr00t_fp8_graph_capture_ctx(recipe):
 def build_hooks(training_args):
     """Return the TrainerHooks for GR00T-N1.7."""
     import torch
-    from loongforge.engines.torch.train_step import TrainerHooks
+    from loongforge.engines.torch.runner import TrainerHooks
     from loongforge.training.embodied.custom.gr00t_n1_7.full_iteration_cuda_graph import (
         Gr00tN1d7FullIterationCudaGraphRunner,
     )
@@ -276,7 +276,7 @@ def build_hooks(training_args):
 
     if not graph_mode:
         # Eager mode: only override optimizer and after_setup
-        from loongforge.engines.torch.initialize import set_seed
+        from loongforge.engines.torch.utils.utils import set_seed
 
         def _on_step_end_eager(metrics, completed_steps, model):
             for key, value in list(metrics.items()):
@@ -354,7 +354,7 @@ def build_hooks(training_args):
         if state.runner is not None:
             state.runner.close()
 
-    from loongforge.engines.torch.initialize import set_seed
+    from loongforge.engines.torch.utils.utils import set_seed
 
     return TrainerHooks(
         wrap_model=wrap_model,

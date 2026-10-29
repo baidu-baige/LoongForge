@@ -19,9 +19,9 @@ from megatron.core import parallel_state
 from megatron.core.utils import StragglerDetector
 from loongforge.engines.megatron import (get_args, get_tokenizer, get_model_config)
 from megatron.core.enums import ModelType
-from loongforge.engines.megatron.runner import pretrain
-from loongforge.data.vlm.encoders.internvl.task_encoder import InternVLTaskEncoder
-from loongforge.data.vlm.encoders.internvl.dp_balance_layout import (
+from loongforge.engines.megatron.training_utils import pretrain
+from loongforge.data.vlm.internvl.internvl_task_encoder import InternVLTaskEncoder
+from loongforge.data.vlm.internvl.dp_balance_layout import (
     internvl_cumulative_lengths,
     reorder_data_for_internvl,
 )
@@ -32,13 +32,13 @@ from loongforge.engines.megatron.distributed.dp_balance.rebalance.layout import 
 from loongforge.engines.megatron.data_padding import (
     llm_pad_to_multiple_of,
 )
-from loongforge.data.llm.dataloader import (
+from loongforge.data.llm.sft_dataloader import (
     SFTLoaderConfig,
     build_sft_cyclic_iterators,
+    build_sft_data_collator,
     load_pretokenized_dataset,
 )
-from loongforge.data.llm.sft.collator import build_sft_data_collator
-from loongforge.data.vlm.dataloader import (
+from loongforge.data.vlm.dataloader_provider import (
     VLMDataConfig,
     get_train_dataset,
     get_train_loader,

@@ -14,7 +14,7 @@ from __future__ import annotations
 def build_hooks(training_args):
     """Return the TrainerHooks that supply the DMuon FSDP2 wrap."""
     from loongforge.engines.torch.distributed import wrap_model
-    from loongforge.engines.torch.train_step import TrainerHooks
+    from loongforge.engines.torch.runner import TrainerHooks
     from loongforge.training.embodied.custom.wall_oss_0_5.fsdp2_adapter import shard_wall_oss_dmuon
 
     def wrap(model, args, ctx):

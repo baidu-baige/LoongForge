@@ -46,7 +46,7 @@ DATASET_STRATEGIES: Dict[str, str] = {
     "lingbot_va": "lingbot_va.lingbot_va_dataset:build_lingbot_dataset",
     "gr00t_n1_7": "gr00t_n1_7.gr00t_n1_7_dataset:build_gr00t_n1_7_lerobot_dataset",
     "cosmos3_droid": "cosmos3.cosmos3_dataset:build_droid_dataset",
-    "dreamzero": "dreamzero.dreamzero_dataset:build_dreamzero_dataset",
+    "dreamzero": "dreamzero.builder:build_dreamzero_dataset",
     "wall_oss_0_5": "wall_oss_0_5.wall_oss_0_5_dataset:build_wall_oss_0_5_lerobot_dataset",
 }
 

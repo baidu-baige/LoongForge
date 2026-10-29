@@ -29,26 +29,22 @@ from loongforge.engines.megatron import (
 )
 from megatron.training.utils import print_rank_0
 
-from loongforge.data.llm.sft.dataset import SFTDataset
-from loongforge.data.llm.sft.dataset_config import SFTDatasetConfig
+from loongforge.data.llm.sft_dataset import SFTDataset, SFTDatasetConfig
 from loongforge.data.llm.blended_hf_dataset_builder import BlendedHuggingFaceDatasetBuilder
-from loongforge.data.llm.sft.collator import (
-    DataCollatorForSupervisedDataset,
-    build_sft_data_collator,
-)
+from loongforge.data.llm.sft_data_collator import DataCollatorForSupervisedDataset
 
 from loongforge.data import IGNORE_INDEX
 
-from loongforge.engines.megatron.runner import pretrain
+from loongforge.engines.megatron.training_utils import pretrain
 
-from loongforge.engines.megatron.distributed.batch_broadcast import broadcast_from_tp_src
-from loongforge.engines.megatron.distributed.context_parallel import get_batch_on_this_cp_rank
+from loongforge.engines.megatron.utils import get_batch_on_this_cp_rank
 from loongforge.engines.megatron.data_padding import llm_pad_to_multiple_of
 from loongforge.data.llm.blended_hf_dataset_config import get_dataset_blend_from_list
 from loongforge.engines.megatron.checkpointing import load_dataloader_state
-from loongforge.data.llm.dataloader import (
+from loongforge.data.llm.sft_dataloader import (
     SFTLoaderConfig,
     build_sft_cyclic_iterators,
+    build_sft_data_collator,
 )
 from loongforge.training.llm.pretrain import get_embedding_ranks, model_provider
 
@@ -145,7 +141,11 @@ def _broadcast_chunkpipe_metadata(step_num_groups, component_sizes):
         dtype=torch.long,
         device=torch.cuda.current_device(),
     )
-    broadcast_from_tp_src(meta)
+    torch.distributed.broadcast(
+        meta,
+        mpu.get_tensor_model_parallel_src_rank(),
+        group=mpu.get_tensor_model_parallel_group(),
+    )
     n_comp = int(meta[1].item())
     if n_comp > 0:
         if mpu.get_tensor_model_parallel_rank() == 0:
@@ -156,7 +156,11 @@ def _broadcast_chunkpipe_metadata(step_num_groups, component_sizes):
             comp_tensor = torch.zeros(
                 n_comp, dtype=torch.long, device=torch.cuda.current_device()
             )
-        broadcast_from_tp_src(comp_tensor)
+        torch.distributed.broadcast(
+            comp_tensor,
+            mpu.get_tensor_model_parallel_src_rank(),
+            group=mpu.get_tensor_model_parallel_group(),
+        )
         component_sizes = comp_tensor.tolist()
     else:
         component_sizes = []
@@ -477,7 +481,7 @@ def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor):
     #
     # The D pre-compensation symmetrically applies to the reporting tensor so
     # that the post-aggregation report (sum-across-mbs → all-reduce-sum →
-    # divide-by-DPxCP-world-size in engines/megatron/train_step.py) recovers the same
+    # divide-by-DPxCP-world-size in engines/megatron/training_utils.py) recovers the same
     # (1/G_total) sum_g (1/N_g) sum_k S_{g,k} value. Using G_total instead of
     # G_local also fixes a latent precision bug in the equal-DP case where
     # LPT did not strictly guarantee G_local = G_total / D across ranks.
@@ -492,7 +496,7 @@ def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor):
 
         denom = N_g * G_total * cp
         scaled = loss * (D * M_raw / denom)
-        # Pre-compensate D*cp for the all_reduce + divide by (D*cp) in engines/megatron/train_step.py.
+        # Pre-compensate D*cp for the all_reduce + divide by (D*cp) in engines/megatron/training_utils.py.
         # Without cp factor, the logged loss would be 1/cp times smaller than correct value.
         reporting = (D * cp * loss / (N_g * G_total)).detach()
         loss_reduced_dict = {'lm loss': reporting}

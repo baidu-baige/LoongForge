@@ -1,32 +1,30 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Multimodal (Energon) data pipeline and task encoder registry.
-
-Pipeline: ``samples.py`` (sample types) -> ``cookers.py`` (raw WebDataset to
-samples) -> ``encoders/`` (samples to model inputs) -> ``dataloader.py``
-(collation and Energon iterators). ``packer.py`` and
-``length_sort_dataset.py`` control packing and batch order; ``samplers.py``
-holds the encoder samplers of full heterogeneous DP; ``dp_balance_layout.py``
-depacks and re-packs a packed batch for DP load balancing.
-``task_encoder_base.py`` holds the base sample types and ``BaseTaskEncoder``.
-"""
+"""Multimodal data utilities and task encoder registry."""
 
 import importlib
 
-# Sample types live in ``samples``; importing them here would pull in
-# megatron.energon for every import of this package.
+from loongforge.data.vlm.flavors import (
+    PackedCaptioningSample,
+    PackedVQASample,
+    PackedMultiMixQASample,
+    PackedChatMixSample,
+    MultiVidQASample,
+    MultiMixQASample,
+    ChatMixSample,
+)
 
 # Registry for multimodal task encoders so configs can swap them without
 # touching individual encoder modules.
 TASK_ENCODER_REGISTRY = {
-    "vlmtaskencoder": "loongforge.data.vlm.encoders.vlm.VLMTaskEncoder",
-    "internvltaskencoder": "loongforge.data.vlm.encoders.internvl.task_encoder.InternVLTaskEncoder",
-    "llavaov15taskencoder": "loongforge.data.vlm.encoders.llava_ov.LLaVAOv15TaskEncoder",
-    "ernietaskencoder": "loongforge.data.vlm.encoders.ernie.task_encoder.ErnieTaskEncoder",
-    "kimitaskencoder": "loongforge.data.vlm.encoders.kimi.KimiTaskEncoder",
+    "vlmtaskencoder": "loongforge.data.vlm.vlm_task_encoder.VLMTaskEncoder",
+    "internvltaskencoder": "loongforge.data.vlm.internvl.internvl_task_encoder.InternVLTaskEncoder",
+    "llavaov15taskencoder": "loongforge.data.vlm.llava_ov_task_encoder.LLavaOv15TaskEncoder",
+    "ernietaskencoder": "loongforge.data.vlm.ernie_task_encoder.ErnieTaskEncoder",
+    "kimitaskencoder": "loongforge.data.vlm.kimi_task_encoder.KimiTaskEncoder",
     "minicpmv46taskencoder": (
-        "loongforge.data.vlm.encoders.minicpm_v_4_6.MiniCPMV46TaskEncoder"
+        "loongforge.data.vlm.minicpm_v_4_6_task_encoder.MiniCPMV46TaskEncoder"
     ),
 }
 
@@ -42,19 +40,26 @@ def resolve_task_encoder(name: str):
     return getattr(module, cls_name)
 
 
-def build_task_encoder(config, tokenizer, chat_template=None):
+def build_task_encoder(args, *encoder_args, **encoder_kwargs):
     """
-    Factory that builds a task encoder instance based on config.task_encoder.
+    Factory that builds a task encoder instance based on args.task_encoder.
 
     Defaults to VLMTaskEncoder when unspecified, while keeping registry-based
     extensibility for other encoder classes.
     """
-    encoder_name = getattr(config, "task_encoder", None) or "VLMTaskEncoder"
+    encoder_name = getattr(args, "task_encoder", None) or "VLMTaskEncoder"
     encoder_cls = resolve_task_encoder(encoder_name)
-    return encoder_cls(config, tokenizer, chat_template)
+    return encoder_cls(args, *encoder_args, **encoder_kwargs)
 
 
 __all__ = [
+    "PackedCaptioningSample",
+    "PackedVQASample",
+    "PackedMultiMixQASample",
+    "PackedChatMixSample",
+    "MultiVidQASample",
+    "MultiMixQASample",
+    "ChatMixSample",
     "TASK_ENCODER_REGISTRY",
     "resolve_task_encoder",
     "build_task_encoder",

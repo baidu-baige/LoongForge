@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .video_utils import get_frames_by_timestamps
+from ..utils.video_utils import get_frames_by_timestamps
 
 
 @dataclass

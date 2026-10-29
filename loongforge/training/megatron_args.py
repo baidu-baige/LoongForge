@@ -21,7 +21,7 @@ from typing import Optional
 from megatron.training.utils import print_rank_0
 
 from loongforge.data import TrainingPhase
-from loongforge.data.chat_templates.registry import get_support_templates
+from loongforge.data.chat_templates.template import get_support_templates
 from loongforge.models.catalog import VisionLanguageModelFamilies
 from loongforge.training.diffusion.args import add_diffusion_args
 from loongforge.training.llm.args import add_llm_args

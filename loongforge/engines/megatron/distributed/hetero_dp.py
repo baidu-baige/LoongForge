@@ -9,7 +9,7 @@ encoder path and the EP-overlap callables share the state kept here:
 
 - embedding / grad / visual-pos-mask / deepstack lists of the current step;
 - the CPU offload manager (``--full-hetero-dp-cpu-offload``);
-- the encoder data iterator, which the training method builds with ``data/vlm/samplers.py``
+- the encoder data iterator, which the training method builds with ``data/vlm/encoder_strided_sampler.py``
   from the sizes ``encoder_parallel_facts`` returns;
 - the method's batch functions.
 
@@ -220,7 +220,7 @@ def reload_list_item(
 
 
 # ---------------------------------------------------------------------------
-# Parallel sizes for the strided encoder samplers in ``data/vlm/samplers.py``
+# Parallel sizes for the strided encoder samplers in ``data/vlm/encoder_strided_sampler.py``
 # ---------------------------------------------------------------------------
 
 def encoder_parallel_facts():

@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 def build_hooks(training_args):
     """Return the TrainerHooks for GR00T-N1.6."""
-    from loongforge.engines.torch.train_step import TrainerHooks, LossHealth
+    from loongforge.engines.torch.runner import TrainerHooks, LossHealth
     from loongforge.models.embodied.gr00t_n1_6.eagle3_model import modeling_eagle3_vl
 
     # Eagle picks its loader and attention paths when it is built; this factory runs before that.
@@ -40,7 +40,7 @@ def build_hooks(training_args):
         import torch
         import torch.distributed as dist
         from loongforge.engines.torch.distributed.parallel import wrap_model as _wrap
-        from loongforge.engines.torch.initialize import resolve_dtype
+        from loongforge.engines.torch.utils.utils import resolve_dtype
 
         if (
             ctx.is_distributed

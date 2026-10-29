@@ -5,7 +5,7 @@
 
 Owns the setup sequence, training loop, epoch/
 iterator management, logging, save/restore timing, GC, and finalize.
-All forward/backward/optimizer logic lives in ``train_step``.
+All forward/backward/optimizer logic lives in ``train_step()`` below.
 """
 
 from __future__ import annotations
@@ -14,18 +14,318 @@ import gc
 import logging
 import os
 import time
+from contextlib import contextmanager, nullcontext
+from dataclasses import dataclass
 from functools import partial
 from types import ModuleType
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Tuple
 
-from loongforge.engines.torch.initialize import apply_runtime_args, resolve_dtype
-from loongforge.engines.torch.train_step import (
-    StepContext,
-    TrainerHooks,
-    train_step,
-)
+from loongforge.engines.torch.distributed.utils import is_dmuon_model
+from loongforge.engines.torch.utils.utils import resolve_dtype, set_deterministic, set_precision
 
 logger = logging.getLogger(__name__)
+
+
+def apply_runtime_args(training_args: Any) -> None:
+    """Apply the backend runtime switches (determinism, cuDNN autotune, TF32).
+
+    Seeds are not set here: seeding is a training concern and stays with the
+    runner. The caller validates conflicting switches via
+    ``validate_engine_args`` before training starts.
+    """
+    import torch as _torch
+
+    if training_args.deterministic_mode:
+        set_deterministic()
+    if training_args.cudnn_benchmark:
+        _torch.backends.cudnn.benchmark = True
+    if training_args.disable_tf32:
+        set_precision(allow_tf32=False)
+
+
+def cfg_bool(cfg: Any, key: str, default: bool = False) -> bool:
+    """Read a boolean flag from a config namespace, accepting string truthy values."""
+    value = getattr(cfg, key, default)
+    if isinstance(value, str):
+        return value.lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def set_backend_precision(model_cfg: Any) -> None:
+    """Apply optional CUDA backend precision policy from model config."""
+    import torch as _torch
+
+    if not cfg_bool(model_cfg, "disable_reduced_precision_reduction", False):
+        return
+    matmul = _torch.backends.cuda.matmul
+    if hasattr(matmul, "allow_bf16_reduced_precision_reduction"):
+        matmul.allow_bf16_reduced_precision_reduction = False
+    if hasattr(matmul, "allow_fp16_reduced_precision_reduction"):
+        matmul.allow_fp16_reduced_precision_reduction = False
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Dataclasses
+# ═══════════════════════════════════════════════════════════════════
+
+
+@dataclass
+class LossHealth:
+    nan: bool = False
+    spiked: bool = False
+
+
+@dataclass
+class StepResult:
+    log_dict: Dict[str, Any]
+    grad_norm: float
+    updated: bool
+    nan: bool
+    skipped: bool
+
+
+@dataclass
+class StepContext:
+    """Explicit runtime state for one training run.
+
+    Built once by the runner; ``iteration`` is updated every step.
+    """
+    model: Any  # nn.Module
+    optimizer: Any  # torch.optim.Optimizer
+    lr_scheduler: Any
+    training_args: Any
+    model_cfg: Any
+    ctx: Any  # DistributedContext
+    timers: Any  # StageTimers
+    method: ModuleType
+    hooks: "TrainerHooks"
+    fetch_cpu_batch: Callable[[], Any]
+    log_loss_spike: Callable[[int, float], None]
+    iteration: int = 0
+    static_graph_bootstrapped: bool = False
+
+
+@dataclass(frozen=True)
+class TrainerHooks:
+    # consulted by engines/torch/runner.py
+    prepare_args: Optional[Callable] = None
+    configure_gc: Optional[Callable] = None
+    wrap_model: Optional[Callable] = None
+    build_optimizer: Optional[Callable] = None
+    after_setup: Optional[Callable] = None
+    on_step_end: Optional[Callable] = None
+    close: Optional[Callable] = None
+    # consulted by train_step
+    fp8_forward_context: Optional[Callable] = None
+    move_batch_to_device: Optional[Callable] = None
+    forward_backward: Optional[Callable] = None
+    clean_nan_gradients: Optional[Callable] = None
+    clip_gradients: Optional[Callable] = None
+    run_step: Optional[Callable] = None
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Module-level functions
+# ═══════════════════════════════════════════════════════════════════
+
+
+def train_autocast(step_ctx: StepContext):
+    """Return the autocast context for training forward passes."""
+    import torch as _torch
+    if cfg_bool(step_ctx.model_cfg, "disable_train_autocast", False):
+        return nullcontext()
+    dtype = resolve_dtype(step_ctx.training_args.dtype)
+    return _torch.autocast("cuda", dtype=dtype)
+
+
+def train_fp8_ctx(step_ctx: StepContext):
+    """Return the FP8 forward context, or a no-op when ``--fp8`` is off.
+
+    ``te.fp8_autocast`` has to enclose the whole model call, so both the
+    standard forward and the CUDA-graph capture go through this.
+    """
+    if step_ctx.hooks.fp8_forward_context is not None:
+        return step_ctx.hooks.fp8_forward_context(step_ctx.training_args)
+    from loongforge.engines.torch.quantization.fp8_utils import resolve_fp8_forward_ctx
+
+    return resolve_fp8_forward_ctx(step_ctx.training_args)
+
+
+def forward(step_ctx: StepContext, batch):
+    """Forward pass with autocast: delegates to method.forward."""
+    with train_fp8_ctx(step_ctx), train_autocast(step_ctx):
+        loss, log_loss_dict = step_ctx.method.forward(
+            step_ctx.model, batch,
+            iteration=step_ctx.iteration,
+            training_args=step_ctx.training_args,
+        )
+    return loss, log_loss_dict
+
+
+def move_batch(step_ctx: StepContext, batch):
+    """Move a fetched batch to the model device."""
+    hooks = step_ctx.hooks
+    if hooks.move_batch_to_device is not None:
+        return hooks.move_batch_to_device(batch, step_ctx.model)
+    return _move_batch_to_device(batch, step_ctx.model)
+
+
+def _move_batch_to_device(batch, model):
+    """Default batch-to-device transfer."""
+    device = next(model.parameters()).device
+    if hasattr(batch, "to"):
+        batch = batch.to(device)
+    return batch
+
+
+def prepare_model_for_train_step(model) -> None:
+    """Put model in train mode and let policies re-freeze eval-only modules."""
+    from loongforge.engines.torch.distributed.utils import unwrap_model
+    model.train()
+    raw = unwrap_model(model)
+    if hasattr(raw, "set_frozen_modules_to_eval_mode"):
+        raw.set_frozen_modules_to_eval_mode()
+
+
+def before_microbatch(step_ctx: StepContext, batch, micro_step: int) -> None:
+    """Per-microbatch hook: model callbacks then train-mode setup."""
+    step_ctx.method.on_after_train_batch_fetch(
+        step_ctx.model, batch,
+        training_args=step_ctx.training_args,
+        completed_steps=step_ctx.iteration,
+        micro_step=micro_step,
+    )
+    prepare_model_for_train_step(step_ctx.model)
+
+
+@contextmanager
+def grad_sync_ctx(step_ctx: StepContext, sync_grads: bool):
+    """Gate cross-rank gradient sync for one micro-step.
+
+    Must wrap the forward as well as the backward.
+    """
+    if sync_grads or not step_ctx.ctx.is_distributed:
+        yield
+    elif is_dmuon_model(step_ctx.model):
+        import dmuon
+
+        with dmuon.no_sync(step_ctx.model):
+            yield
+    elif hasattr(step_ctx.model, "no_sync"):
+        if getattr(step_ctx.model, "static_graph", False) and not step_ctx.static_graph_bootstrapped:
+            yield
+            step_ctx.static_graph_bootstrapped = True
+        else:
+            with step_ctx.model.no_sync():
+                yield
+    else:
+        # FSDP2 (fully_shard)
+        step_ctx.model.set_requires_gradient_sync(False)
+        yield
+        step_ctx.model.set_requires_gradient_sync(True)
+
+
+def backward_loss(
+    step_ctx: StepContext,
+    loss,
+    log_loss_dict: dict,
+    log_dict: dict,
+    health: LossHealth,
+) -> None:
+    """Scale + spike-guard + backward, accumulating losses into log_dict."""
+    import torch as _torch
+    grad_accum = step_ctx.training_args.gradient_accumulation_steps
+    threshold = step_ctx.training_args.loss_spike_threshold
+    with step_ctx.timers("backward-compute"):
+        raw_loss = loss
+        loss = raw_loss / grad_accum
+        loss_val = loss.detach().item()
+        is_nan = bool(_torch.isnan(loss) or _torch.isinf(loss))
+        if is_nan or loss_val > threshold:
+            step_ctx.log_loss_spike(step_ctx.iteration, loss_val)
+            if is_nan:
+                health.nan = True
+            health.spiked = True
+            loss = loss * 0.0
+
+        loss.backward()
+
+    for key, value in log_loss_dict.items():
+        import torch as _torch2
+        v = value.detach().item() if isinstance(value, _torch2.Tensor) else float(value)
+        log_dict[key] = log_dict.get(key, 0.0) + v / grad_accum
+
+
+def forward_backward(step_ctx: StepContext, backward=None) -> Tuple[dict, LossHealth]:
+    """Zero-grad + gradient-accumulation loop.
+
+    Returns (log_dict, LossHealth).
+    """
+    if backward is None:
+        backward = backward_loss
+    st = step_ctx.timers
+    args = step_ctx.training_args
+    grad_accum = args.gradient_accumulation_steps
+    log_dict: Dict[str, float] = {}
+    health = LossHealth()
+    with st("forward-backward"):
+        for micro in range(grad_accum):
+            with st("batch-generator"):
+                cpu_batch = step_ctx.fetch_cpu_batch()
+                batch = move_batch(step_ctx, cpu_batch)
+            before_microbatch(step_ctx, batch, micro)
+            sync_grads = micro == grad_accum - 1
+            with grad_sync_ctx(step_ctx, sync_grads):
+                with st("forward-compute"):
+                    loss, log_loss_dict = forward(step_ctx, batch)
+                backward(step_ctx, loss, log_loss_dict, log_dict, health)
+    return log_dict, health
+
+
+def _clip_gradients(model, optimizer, max_norm: float) -> float:
+    """Gradient clipping. Returns the pre-clip global gradient norm."""
+    if hasattr(optimizer, "clip_grad_norm"):
+        return optimizer.clip_grad_norm(max_norm)
+    from loongforge.engines.torch.optimizer import clip_gradients
+    return clip_gradients(model, max_norm)
+
+
+def _clean_nan_gradients(model, optimizer) -> None:
+    """Replace NaN/Inf gradients with 0."""
+    from loongforge.engines.torch.optimizer import clean_nan_gradients
+    clean_nan_gradients(model)
+
+
+def train_step(step_ctx: StepContext) -> StepResult:
+    """One optimizer step. Returns StepResult."""
+    hooks = step_ctx.hooks
+    if hooks.run_step is not None:
+        return hooks.run_step(step_ctx)
+    args, st = step_ctx.training_args, step_ctx.timers
+
+    with st("optimizer-zero-grad"):
+        step_ctx.optimizer.zero_grad()
+
+    log_dict, health = (hooks.forward_backward or forward_backward)(step_ctx)
+
+    if args.check_for_nan_in_loss_and_grad:
+        with st("nan-grad-cleanup"):
+            (hooks.clean_nan_gradients or _clean_nan_gradients)(step_ctx.model, step_ctx.optimizer)
+
+    with st("grad-clip"):
+        if args.clip_grad > 0:
+            grad_norm = (hooks.clip_gradients or _clip_gradients)(step_ctx.model, step_ctx.optimizer, args.clip_grad)
+        else:
+            from loongforge.engines.torch.optimizer import get_grad_norm
+            grad_norm = get_grad_norm(step_ctx.model)
+
+    with st("optimizer"):
+        with st("optimizer-inner-step"):
+            step_ctx.optimizer.step()
+        with st("optimizer-scheduler-step"):
+            step_ctx.lr_scheduler.step()
+
+    return StepResult(log_dict, grad_norm, True, health.nan, health.spiked)
 
 
 class TorchRunner:
@@ -84,12 +384,8 @@ class TorchRunner:
     def _setup(self):
         """One-shot initialization of all training resources."""
         from loongforge.engines.torch.distributed import DistributedContext
-        from loongforge.engines.torch.initialize import (
-            set_seed, set_backend_precision,
-        )
-        from loongforge.engines.torch.logging import (
-            TrainingLogger, log_effective_config, setup_logging, log_stage,
-        )
+        from loongforge.engines.torch.utils.utils import set_seed, setup_logging, log_stage
+        from loongforge.engines.torch.utils.logging import TrainingLogger, log_effective_config
         from loongforge.engines.torch.checkpointing import (
             get_latest_checkpoint, resume_training_state,
         )
@@ -120,7 +416,7 @@ class TorchRunner:
             os.makedirs(self.checkpoint_dir, exist_ok=True)
         self.ctx.barrier()
         setup_logging(self.output_dir, self.ctx.rank)
-        set_backend_precision(self.model_cfg)
+        self._configure_backend_precision()
 
         log_effective_config(training_args, self.model_cfg, self.data_cfg)
 
@@ -260,8 +556,8 @@ class TorchRunner:
     # ═══════════════════════════════════════════════
 
     def _training_loop(self):
-        from loongforge.engines.torch.profiling import Profiler
-        from loongforge.engines.torch.logging import StageTimers
+        from loongforge.engines.torch.utils.utils import Profiler
+        from loongforge.engines.torch.utils.logging import StageTimers
 
         training_args = self.training_args
         hooks = self.hooks
@@ -398,6 +694,10 @@ class TorchRunner:
     # Infrastructure helpers
     # ═══════════════════════════════════════════════
 
+    def _configure_backend_precision(self):
+        """Hook for model-specific backend precision controls."""
+        set_backend_precision(self.model_cfg)
+
     def _load_pretrained(self, path: str):
         """Load pretrained weights, preferring model.load_pretrained if available."""
         from loongforge.engines.torch.checkpointing import load_pretrained
@@ -490,7 +790,7 @@ class TorchRunner:
     def _apply_lora_before_wrap(self, model):
         """Apply generic LoRA injection before distributed wrapping."""
         from loongforge.engines.torch.lora import apply_lora, is_lora_enabled, load_adapter_into_model
-        from loongforge.engines.torch.logging import log_stage
+        from loongforge.engines.torch.utils.utils import log_stage
         if not is_lora_enabled(self.training_args):
             return model
         resuming_adapter = self._lora_resume_adapter_path is not None

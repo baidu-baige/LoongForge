@@ -16,7 +16,7 @@ from pydantic import Field, PrivateAttr, field_validator
 import torch
 import torchvision.transforms.v2 as T
 
-from loongforge.data.embodied.dreamzero.schema import DatasetMetadata
+from ..schema import DatasetMetadata
 from .base import ModalityTransform
 
 

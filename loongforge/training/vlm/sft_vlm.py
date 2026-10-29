@@ -9,7 +9,7 @@ from functools import partial
 from megatron.core.enums import ModelType
 
 from loongforge.training.vlm import pretrain_vlm
-from loongforge.engines.megatron.runner import pretrain
+from loongforge.engines.megatron.training_utils import pretrain
 
 
 def train(args):

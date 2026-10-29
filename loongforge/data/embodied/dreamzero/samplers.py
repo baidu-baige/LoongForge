@@ -41,21 +41,50 @@ from typing import TYPE_CHECKING, Any, Iterator
 
 import numpy as np
 from torch.utils.data import Sampler
-from torchdata.stateful_dataloader.sampler import StatefulDistributedSampler
-
-from loongforge.data.embodied.registry import register_sampler_builder
-from loongforge.data.embodied.shared.sampler_factory import GlobalBatchShardSampler, _StatefulIndexIterator
 
 if TYPE_CHECKING:
-    from loongforge.data.embodied.shared.sampler_factory import SamplerBuilderContext
-    from loongforge.data.embodied.registry import DataRuntime
-
-    from .dreamzero_dataset import DreamZeroLeRobotDataset
+    from .dataset.datasets import DreamZeroLeRobotDataset
 
 logger = logging.getLogger(__name__)
 _PRECOMPUTE_INDEX_LIMIT = 5_000_000
 _WORKER_BATCHING_NONE = "none"
 _WORKER_BATCHING_UPSTREAM_ITERABLE = "upstream_iterable"
+
+
+class _StatefulIndexIterator(Iterator[int]):
+    """Iterator state used by torchdata's StatefulDataLoader."""
+
+    _YIELDED = "yielded"
+
+    def __init__(self, sampler) -> None:
+        self._sampler = sampler
+        self._yielded = 0
+
+    def __iter__(self) -> "_StatefulIndexIterator":
+        return self
+
+    def __next__(self) -> int:
+        if self._yielded >= len(self._sampler._indices):
+            raise StopIteration
+        value = self._sampler._indices[self._yielded]
+        self._yielded += 1
+        return value
+
+    def state_dict(self) -> dict[str, int]:
+        """Return the iterator state for checkpointing."""
+        return {self._YIELDED: self._yielded}
+
+    def load_state_dict(self, state_dict: dict[str, Any]) -> None:
+        """Restore the iterator position from a checkpoint."""
+        yielded = int(state_dict.get(self._YIELDED, 0))
+        if yielded < 0:
+            raise ValueError(f"Cannot restore sampler iterator with negative yielded={yielded}")
+        if yielded > len(self._sampler._indices):
+            raise ValueError(
+                f"Cannot restore sampler iterator yielded={yielded}; "
+                f"current sampler only has {len(self._sampler._indices)} indices"
+            )
+        self._yielded = yielded
 
 
 class _LazyShardIndexIterator(Iterator[int]):
@@ -458,124 +487,3 @@ class DreamZeroShardedSampler(Sampler[int]):
     def load_state_dict(self, state_dict: dict[str, Any]) -> None:
         """Restore sampler state from a checkpoint."""
         self.set_epoch(int(state_dict.get("epoch", 0)))
-
-
-def build_dreamzero_sampler(
-    *,
-    train_dataset,
-    base_dataset,
-    sampler_type: str,
-    runtime: DataRuntime,
-    batch_size: int,
-    num_workers: int,
-    sampler_seed: int,
-    data_cfg,
-) -> tuple[Sampler | None, bool]:
-    """Select the DreamZero sampler for ``sampler_type``.
-
-    This is the model-specific implementation behind the framework sampler
-    registry. It returns ``(sampler, shuffle)`` for compatibility with the
-    original DreamZero sampler semantics.
-
-    Naming convention (aligned with the generic framework samplers):
-    * ``<Descriptor>Sampler`` PascalCase; model prefix only when the sampler is
-      genuinely model-specific.
-    * ``global_batch_shard`` -> ``GlobalBatchShardSampler`` (dataset-agnostic DP
-      index layout; no prefix, defined in ``embodied/shared/sampler_factory.py``).
-    * ``sharded`` -> ``DreamZeroShardedSampler`` (LeRobot-trajectory specific, so
-      it keeps the ``DreamZero`` prefix).
-    * ``distributed`` -> torchdata ``StatefulDistributedSampler``.
-
-    Cross-axis note: DreamZero ``sampler_type`` values map onto the generic
-    ``distributed_sampler_mode`` vocabulary as ``distributed`` == ``cyclic`` and
-    ``global_batch_shard`` ~= ``block`` (near-equivalent; differs only at the
-    tail/remainder and resume-state handling).
-    """
-    ddp_active = runtime.is_distributed and runtime.world_size > 1
-    replicas = runtime.world_size if ddp_active else 1
-    rank = runtime.rank if ddp_active else 0
-    sampler_type = str(sampler_type or "distributed").strip().lower()
-    require_full_language_chunks = bool(data_cfg.require_full_language_chunks)
-    sampler_worker_batching = str(data_cfg.sampler_worker_batching or "none").strip().lower()
-    sampler_num_workers = (
-        num_workers
-        if data_cfg.sampler_num_workers is None
-        else int(data_cfg.sampler_num_workers)
-    )
-
-    if sampler_type == "global_batch_shard":
-        sampler = GlobalBatchShardSampler(
-            train_dataset,
-            batch_size=batch_size,
-            num_replicas=replicas,
-            rank=rank,
-            seed=sampler_seed,
-            shuffle=True,
-            drop_last=False,
-        )
-        if rank == 0:
-            logger.info(
-                "[dreamzero-data] using global batch-shard sampler "
-                "seed=%s micro_batch=%s replicas=%s dataset_len=%s",
-                sampler_seed,
-                batch_size,
-                replicas,
-                len(train_dataset),
-            )
-        return sampler, False
-    if sampler_type == "sharded":
-        sampler = DreamZeroShardedSampler(
-            base_dataset,
-            num_replicas=replicas,
-            rank=rank,
-            seed=sampler_seed,
-            shard_sampling_rate=float(data_cfg.shard_sampling_rate),
-            num_steps_per_shard=int(data_cfg.num_steps_per_shard),
-            num_shards_to_sample=int(data_cfg.num_shards_to_sample),
-            training=True,
-            allow_padding_at_end=bool(data_cfg.allow_padding_at_end),
-            require_full_language_chunks=require_full_language_chunks,
-            worker_batching_mode=sampler_worker_batching,
-            dataloader_num_workers=sampler_num_workers,
-            micro_batch_size=batch_size,
-        )
-        return sampler, False
-    if sampler_type == "distributed":
-        if ddp_active:
-            sampler = StatefulDistributedSampler(
-                train_dataset,
-                num_replicas=replicas,
-                rank=rank,
-                shuffle=True,
-                seed=sampler_seed,
-                drop_last=False,
-            )
-            return sampler, False
-        return None, True
-    raise ValueError(
-        "Unknown DreamZero sampler_type="
-        f"{sampler_type!r}; expected distributed, sharded, or global_batch_shard"
-    )
-
-
-@register_sampler_builder("dreamzero")
-def build_dreamzero_registered_sampler(context: SamplerBuilderContext):
-    """Adapt DreamZero sampler modes to the framework sampler registry."""
-    data_cfg = context.dataset._dreamzero_sampler_cfg
-    base_dataset = context.dataset._dreamzero_base_dataset
-    sampler_seed = (
-        context.seed
-        if data_cfg.sampler_seed is None
-        else int(data_cfg.sampler_seed)
-    )
-    sampler, _ = build_dreamzero_sampler(
-        train_dataset=context.dataset,
-        base_dataset=base_dataset,
-        sampler_type=data_cfg.sampler_type,
-        runtime=context.runtime,
-        batch_size=context.batch_size,
-        num_workers=context.training_args.num_workers,
-        sampler_seed=sampler_seed,
-        data_cfg=data_cfg,
-    )
-    return sampler

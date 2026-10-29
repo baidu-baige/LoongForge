@@ -13,7 +13,7 @@ import numpy as np
 from pydantic import Field, PrivateAttr, field_validator, model_validator
 import torch
 
-from loongforge.data.embodied.dreamzero.schema import DatasetMetadata, RotationType, StateActionMetadata
+from ..schema import DatasetMetadata, RotationType, StateActionMetadata
 from .base import InvertibleModalityTransform
 
 logger = logging.getLogger(__name__)
