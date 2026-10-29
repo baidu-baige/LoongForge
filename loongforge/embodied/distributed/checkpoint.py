@@ -17,13 +17,16 @@ Supports three formats selected via ``--save-format``:
 keep working unchanged.
 """
 
+import concurrent.futures
 import gc
 import json
 import logging
 import os
 import random
 import shutil
+import threading
 from collections.abc import Mapping
+from concurrent.futures import CancelledError, Future, ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import fields, is_dataclass
 from enum import Enum
@@ -290,7 +293,7 @@ def flush_pending_save(
         local_ok = False
         local_err = e
         logger.exception(
-            "Async DCP save failed on rank %d for %s",
+            "Async checkpoint save failed on rank %d for %s",
             pending["rank"], pending["path"],
         )
 
@@ -785,9 +788,10 @@ def _save_dcp(
 ):
     """Sharded save: each rank writes its own DCP shard.
 
-    When ``async_save`` is True, returns the future from ``dcp.async_save``;
-    the caller is responsible for waiting on it before the next save or
-    process exit (handled by ``save_checkpoint`` / ``flush_pending_save``).
+    When ``async_save`` is True, returns a future that resolves once the DCP
+    shards — and, for a ZeRO optimizer, the rank-local optimizer state — are
+    durable. The caller is responsible for waiting on it before the next save
+    or process exit (handled by ``save_checkpoint`` / ``flush_pending_save``).
     """
     save_training_state = training_args.save_training_state
     save_local_zero_state = save_training_state and _is_zero_optimizer(optimizer)
@@ -809,20 +813,38 @@ def _save_dcp(
     # Aux files (scheduler / per-rank RNG / per-rank dataloader) are tiny and
     # written synchronously regardless of ``async_save`` — they must be on
     # disk before we return, since training will mutate the RNG and
-    # dataloader state immediately after.
+    # dataloader state immediately after. The rank-local ZeRO optimizer state
+    # is not part of the DCP state dict, so it is written separately; when
+    # ``async_save`` is True that write is also done in the background.
+    zero_future = None
     if save_training_state:
         if ctx.is_main and scheduler is not None:
             torch.save(scheduler.state_dict(), os.path.join(path, "scheduler.pt"))
         _save_aux_per_rank(path, ctx, dataloader_state)
         if save_local_zero_state:
-            _save_zero_optimizer_state(path, optimizer, ctx)
+            zero_future = _save_zero_optimizer_state(
+                path, optimizer, ctx, async_save=async_save
+            )
 
     writer = dcp.FileSystemWriter(dcp_dir)
     if async_save:
         # ``dcp.async_save`` stages a CPU snapshot of ``state`` synchronously,
         # then writes shards in a background thread and returns a future.
         # After return, training is free to modify the live tensors.
-        return dcp.async_save(state, storage_writer=writer)
+        try:
+            dcp_future = dcp.async_save(state, storage_writer=writer)
+        except Exception:
+            # A synchronous failure during DCP staging must not leave the
+            # ZeRO writer racing a doomed save into the step dir.
+            if zero_future is not None:
+                concurrent.futures.wait([zero_future])
+            raise
+        if zero_future is None:
+            return dcp_future
+        # Only the "written" side matters for the commit marker. If an async
+        # stager is enabled later, ``staging_completion`` must be kept too.
+        dcp_completion = getattr(dcp_future, "upload_completion", None) or dcp_future
+        return _merge_futures([dcp_completion, zero_future])
 
     dcp.save(state, storage_writer=writer)
     return None
@@ -1129,8 +1151,69 @@ def _load_local_optimizer_state_dict(optimizer, state_dict: dict) -> None:
         optimizer.load_state_dict(state_dict)
 
 
-def _save_zero_optimizer_state(path, optimizer, ctx) -> None:
-    """Save each ZeRO rank's local optimizer shard without consolidation."""
+# Module-level single-worker executor for async (non-DCP) torch.save writes.
+# At most one ZeRO save is in flight at a time (enforced by
+# ``_pending_async_save``), so a single worker suffices.
+_async_save_executor: Optional[ThreadPoolExecutor] = None
+
+
+def _submit_async_save(fn, *args) -> Future:
+    """Run a blocking save on the shared background worker."""
+    global _async_save_executor
+    if _async_save_executor is None:
+        _async_save_executor = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="ckpt-async-save"
+        )
+    return _async_save_executor.submit(fn, *args)
+
+
+def _cpu_snapshot(obj):
+    """Copy tensors to CPU so a background ``torch.save`` can't race training.
+
+    Assumes the ZeRO local state holds no aliased tensors: each reference is
+    copied independently, so shared storage would be written twice.
+    """
+    if isinstance(obj, torch.Tensor):
+        return obj.detach().to("cpu", copy=True)
+    if isinstance(obj, Mapping):
+        return {k: _cpu_snapshot(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return type(obj)(_cpu_snapshot(v) for v in obj)
+    return obj
+
+
+def _merge_futures(futures) -> Future:
+    """Resolve only after every input future settles; propagate first error."""
+    merged = Future()
+    progress = {"remaining": len(futures), "error": None}
+    lock = threading.Lock()
+
+    def _on_done(src):
+        # ``Future.exception()`` raises on a cancelled future; inside a done
+        # callback that would be swallowed and ``merged`` would never resolve.
+        err = CancelledError() if src.cancelled() else src.exception()
+        with lock:
+            if err is not None and progress["error"] is None:
+                progress["error"] = err
+            progress["remaining"] -= 1
+            if progress["remaining"] == 0 and not merged.done():
+                if progress["error"] is not None:
+                    merged.set_exception(progress["error"])
+                else:
+                    merged.set_result(None)
+
+    for f in futures:
+        f.add_done_callback(_on_done)
+    return merged
+
+
+def _save_zero_optimizer_state(path, optimizer, ctx, async_save: bool = False):
+    """Save each ZeRO rank's local optimizer shard without consolidation.
+
+    When ``async_save`` is True, the per-rank ``torch.save`` runs on a CPU
+    snapshot in a background thread (mirroring ``dcp.async_save``) and the
+    returned future resolves once the file is durable.
+    """
     state_dir = os.path.join(path, _ZERO_OPTIMIZER_DIR)
     if ctx.is_main:
         os.makedirs(state_dir, exist_ok=True)
@@ -1144,10 +1227,13 @@ def _save_zero_optimizer_state(path, optimizer, ctx) -> None:
         # checkpoint the public options that the next update will consume.
         _copy_param_group_options(child.param_groups, child.optim.param_groups)
         local_state.append(_local_optimizer_state_dict(child.optim))
-    torch.save(
-        local_state,
-        os.path.join(state_dir, f"rank_{ctx.rank}.pt"),
-    )
+
+    rank_path = os.path.join(state_dir, f"rank_{ctx.rank}.pt")
+    future = None
+    if async_save:
+        future = _submit_async_save(torch.save, _cpu_snapshot(local_state), rank_path)
+    else:
+        torch.save(local_state, rank_path)
     ctx.barrier()
 
     if ctx.is_main:
@@ -1166,6 +1252,8 @@ def _save_zero_optimizer_state(path, optimizer, ctx) -> None:
                 indent=2,
             )
     ctx.barrier()
+
+    return future
 
 
 def _load_zero_optimizer_state(checkpoint_path, optimizer, ctx) -> None:
