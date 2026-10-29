@@ -3,7 +3,6 @@
 
 """Checkpoints write aliased modules and tied tensors once (issue #314)."""
 
-import json
 import os
 from types import SimpleNamespace
 
@@ -15,7 +14,6 @@ from safetensors.torch import load_file
 import loongforge.embodied.distributed.checkpoint as ck
 from loongforge.embodied.distributed import DistributedContext
 from loongforge.embodied.distributed.checkpoint import (
-    MODEL_STATE_SCHEMA,
     build_alias_map,
     canonical_state_dict,
 )
@@ -93,8 +91,6 @@ def test_dcp_checkpoint_is_canonical_and_resumes(tmp_path):
 
     keys = dcp.FileSystemReader(os.path.join(path, "dcp")).read_metadata().state_dict_metadata
     assert {k[len("model."):] for k in keys if k.startswith("model.")} == CANONICAL
-    with open(os.path.join(path, "resume_meta.json")) as f:
-        assert json.load(f)["model_state_schema"] == MODEL_STATE_SCHEMA
 
     target = _Model()
     ck.resume_training_state(

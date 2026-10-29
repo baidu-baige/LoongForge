@@ -73,10 +73,6 @@ _VALID_FORMATS = ("safetensors", "pt", "dcp")
 _pending_async_save: Optional[dict] = None
 
 
-# Recorded in ``resume_meta.json``; checkpoints without it may contain alias keys.
-MODEL_STATE_SCHEMA = "canonical_aliases_v1"
-
-
 def build_alias_map(model: nn.Module) -> dict[str, str]:
     """Map each alias state-dict key to the canonical key holding the same state.
 
@@ -214,7 +210,6 @@ def save_checkpoint(
         "ckpt_format": save_format,
         "world_size": ctx.world_size,
         "use_lora": use_lora,
-        "model_state_schema": MODEL_STATE_SCHEMA,
     }
 
     # Aliased modules/tensors are written once under their canonical key; DCP
