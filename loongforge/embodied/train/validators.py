@@ -68,6 +68,42 @@ def validate(training_args, model_cfg, data_cfg):
 
     Raises ValueError on hard errors, logs warnings for soft issues.
     """
+    if training_args.distributed_strategy == "deepspeed":
+        if not training_args.deepspeed_config:
+            raise ValueError(
+                "--distributed-strategy=deepspeed requires --deepspeed-config"
+            )
+        if not os.path.isfile(training_args.deepspeed_config):
+            raise FileNotFoundError(
+                f"DeepSpeed config not found: {training_args.deepspeed_config}"
+            )
+        if training_args.check_for_nan_in_loss_and_grad:
+            raise ValueError(
+                "DeepSpeed owns partitioned gradients; disable the unsupported "
+                "host cleanup with --no-check-for-nan-in-loss-and-grad."
+            )
+        if training_args.init_on_meta:
+            raise ValueError(
+                "DeepSpeed embodied initialization currently requires an eagerly "
+                "materialized model; disable --init-on-meta."
+            )
+        if training_args.zero_optimizer:
+            raise ValueError(
+                "--zero-optimizer is the PyTorch ZeRO-1 path and cannot be combined "
+                "with --distributed-strategy=deepspeed."
+            )
+        if training_args.async_save:
+            raise ValueError(
+                "DeepSpeed checkpointing is synchronous; disable --async-save."
+            )
+        if training_args.use_lora:
+            raise ValueError(
+                "DeepSpeed embodied checkpoint/resume has not been validated with LoRA."
+            )
+    elif training_args.deepspeed_config:
+        logger.warning(
+            "--deepspeed-config is ignored unless --distributed-strategy=deepspeed."
+        )
     # ── Learning rate ──
     if training_args.lr_base <= 0:
         raise ValueError(f"--lr-base must be positive, got {training_args.lr_base}")

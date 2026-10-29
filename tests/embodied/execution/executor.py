@@ -156,6 +156,7 @@ def run_script(model_name, script_path, args, log_dir, logger):
         accuracy_tol=args.accuracy_relative_tolerance,
         performance_tol=args.performance_relative_tolerance,
         check_loss_only=args.check_loss_only,
+        loss_mae_tolerance=getattr(args, "loss_mae_tolerances", {}).get(model_name),
     )
     result["failed_metrics"] = failed
     result["warnings"] = warnings

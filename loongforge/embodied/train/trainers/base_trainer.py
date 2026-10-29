@@ -75,6 +75,7 @@ class BaseTrainer(ABC):
         self.model: Optional[nn.Module] = None
         self.optimizer: Optional[torch.optim.Optimizer] = None
         self.lr_scheduler = None
+        self._deepspeed_config = None
         self.dataloaders: Dict[str, DataLoader] = {}
         self.logger: Optional[TrainingLogger] = None
 
@@ -186,7 +187,18 @@ class BaseTrainer(ABC):
         # 5. Pretrained weights / Resume (before wrapping)
         latest_path = None
         if training_args.resume:
-            latest_path, latest_step, latest_epoch = get_latest_checkpoint(self.checkpoint_dir)
+            if training_args.distributed_strategy == "deepspeed":
+                from loongforge.embodied.distributed.deepspeed import (
+                    get_latest_deepspeed_checkpoint,
+                )
+
+                latest_path, latest_step, latest_epoch = (
+                    get_latest_deepspeed_checkpoint(self.checkpoint_dir)
+                )
+            else:
+                latest_path, latest_step, latest_epoch = get_latest_checkpoint(
+                    self.checkpoint_dir
+                )
             assert latest_path, (
                 f"--resume set but no checkpoint was found in {self.checkpoint_dir}. "
                 f"Point --output-dir to a run whose checkpoints/ directory contains "
@@ -214,15 +226,14 @@ class BaseTrainer(ABC):
         # 6. Freeze modules
         self._freeze_modules(training_args.freeze_modules)
 
-        with log_stage(
-            "wrap_model",
-            start_msg=f"wrap_model: strategy={training_args.distributed_strategy}, dtype={training_args.dtype}",
-            end_msg="done in {elapsed}",
-        ):
-            # 7. Parallel wrapping (DDP/FSDP + mixed precision via policy).
-            # Subclasses may override _wrap_model_for_training to take over the
-            # wrapping step (e.g. to install a CUDA graph runner instead).
-            self._wrap_model_for_training()
+        if training_args.distributed_strategy != "deepspeed":
+            with log_stage(
+                "wrap_model",
+                start_msg=f"wrap_model: strategy={training_args.distributed_strategy}, dtype={training_args.dtype}",
+                end_msg="done in {elapsed}",
+            ):
+                # 7. Parallel wrapping (DDP/FSDP + mixed precision via policy).
+                self._wrap_model_for_training()
 
         # 7.5 Deferred materialize + load_pretrained
         if training_args.init_on_meta and not training_args.resume:
@@ -244,9 +255,33 @@ class BaseTrainer(ABC):
             "optimizer",
             start_msg="building optimizer", end_msg="optimizer built in {elapsed}"
         ):
-            # 8. Optimizer + Scheduler (after wrapping; FSDP use_orig_params=True)
+            # 8. Optimizer + scheduler. DDP/FSDP build after wrapping;
+            # DeepSpeed needs the client optimizer before engine initialization.
             self.optimizer = self._build_optimizer()
             self.lr_scheduler = self._build_scheduler()
+
+        if training_args.distributed_strategy == "deepspeed":
+            with log_stage(
+                "wrap_model",
+                start_msg="initializing DeepSpeed engine",
+                end_msg="DeepSpeed engine initialized in {elapsed}",
+            ):
+                from loongforge.embodied.distributed.deepspeed import (
+                    initialize_deepspeed,
+                )
+
+                (
+                    self.model,
+                    self.optimizer,
+                    self.lr_scheduler,
+                    self._deepspeed_config,
+                ) = initialize_deepspeed(
+                    self.model,
+                    self.optimizer,
+                    self.lr_scheduler,
+                    training_args,
+                    self.ctx,
+                )
 
         # 9. Resume optimizer/scheduler/RNG state (after wrapping + optimizer creation).
         # Gate on `training_args.resume` only — step==0 is a valid resume point and must
@@ -258,10 +293,19 @@ class BaseTrainer(ABC):
                 start_msg=f"restoring optimizer/scheduler/RNG state from {latest_path}",
                 end_msg="optimizer/scheduler/RNG state restored in {elapsed}",
             ):
-                saved_epoch, dataloader_state, rng_per_rank = resume_training_state(
-                    self.model, self.optimizer, self.lr_scheduler, latest_path, self.ctx,
-                    restore_rng=False,
-                )
+                if training_args.distributed_strategy == "deepspeed":
+                    from loongforge.embodied.distributed.deepspeed import (
+                        resume_deepspeed_checkpoint,
+                    )
+
+                    saved_epoch, dataloader_state, rng_per_rank = (
+                        resume_deepspeed_checkpoint(self.model, latest_path, self.ctx)
+                    )
+                else:
+                    saved_epoch, dataloader_state, rng_per_rank = resume_training_state(
+                        self.model, self.optimizer, self.lr_scheduler, latest_path, self.ctx,
+                        restore_rng=False,
+                    )
                 # Trust the epoch from training_state.pt over resume_meta.json
                 # when present (training_state is the freshest source). Use
                 # `is not None` so a legitimate saved_epoch=0 still overrides.
@@ -449,24 +493,38 @@ class BaseTrainer(ABC):
         if self._step_loss_spiked:
             self.skipped_iterations += 1
 
+        uses_deepspeed = self.training_args.distributed_strategy == "deepspeed"
+
         # ── NaN gradient cleanup ──
-        if self.training_args.check_for_nan_in_loss_and_grad:
+        if self.training_args.check_for_nan_in_loss_and_grad and not uses_deepspeed:
             with st("nan-grad-cleanup"):
                 self._clean_nan_gradients()
 
         # ── Gradient clipping (returns pre-clip global grad norm) ──
-        with st("grad-clip"):
-            if grad_clip > 0:
-                grad_norm = self._clip_gradients(grad_clip)
-            else:
-                grad_norm = get_grad_norm(self.model)
+        if uses_deepspeed:
+            # ZeRO-2 owns partitioned gradients. Its norm becomes available
+            # during engine.step(), exactly as in Accelerate's DeepSpeed path.
+            grad_norm = 0.0
+        else:
+            with st("grad-clip"):
+                if grad_clip > 0:
+                    grad_norm = self._clip_gradients(grad_clip)
+                else:
+                    grad_norm = get_grad_norm(self.model)
 
         # ── Optimizer step ──
-        with st("optimizer"):
-            with st("optimizer-inner-step"):
-                self.optimizer.step()
-            with st("optimizer-scheduler-step"):
-                self.lr_scheduler.step()
+        if uses_deepspeed:
+            with st("optimizer"):
+                # DeepSpeed owns gradient norm, clipping, the AdamW update, LR
+                # scheduler stepping, zero_grad, and overflow bookkeeping.
+                self.model.step()
+            grad_norm = float(self.model.get_global_grad_norm())
+        else:
+            with st("optimizer"):
+                with st("optimizer-inner-step"):
+                    self.optimizer.step()
+                with st("optimizer-scheduler-step"):
+                    self.lr_scheduler.step()
 
         return log_dict, grad_norm
 
@@ -493,7 +551,10 @@ class BaseTrainer(ABC):
         instead of once per optimizer step. The
         ``DistributedDataParallel.no_sync`` docs say the same thing.
         """
-        if sync_grads or not self.ctx.is_distributed:
+        if self.training_args.distributed_strategy == "deepspeed":
+            self.model.set_gradient_accumulation_boundary(sync_grads)
+            yield
+        elif sync_grads or not self.ctx.is_distributed:
             yield
         elif hasattr(self.model, "no_sync"):
             # DDP. static_graph=True does a one-off setup in the job's first
@@ -661,7 +722,8 @@ class BaseTrainer(ABC):
         and returns the same ``log_dict`` shape).
         """
         with self._stage_timers("optimizer-zero-grad"):
-            self.optimizer.zero_grad()
+            if self.training_args.distributed_strategy != "deepspeed":
+                self.optimizer.zero_grad()
         return self._forward_backward()
 
     def _configure_backend_precision(self):
@@ -833,4 +895,9 @@ class BaseTrainer(ABC):
             gc.enable()
 
         self.ctx.barrier()
+        if self.training_args.distributed_strategy == "deepspeed":
+            self.model.destroy()
+            # DeepSpeedEngine.__del__ calls destroy() again; clear the optimizer
+            # after the explicit, collective-safe teardown to make it idempotent.
+            self.model.optimizer = None
         self.ctx.destroy()

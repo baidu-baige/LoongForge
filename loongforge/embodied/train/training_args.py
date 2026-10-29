@@ -1340,7 +1340,7 @@ class _FP8Args:
     )
 @dataclass(frozen=True)
 class _DistributedArgs:
-    """Parallelism strategy (FSDP/DDP), dtype, ZeRO, and meta-device init."""
+    """Parallelism strategy (FSDP/DDP/DeepSpeed), dtype, ZeRO, and meta init."""
 
     init_on_meta: bool = field(
         default=False,
@@ -1352,9 +1352,17 @@ class _DistributedArgs:
     distributed_strategy: str = field(
         default="fsdp",
         metadata={
-            "choices": ["ddp", "fsdp"],
-            "help": "Parallelism strategy: DDP (replicate) or FSDP2 "
-                    "(fully sharded).",
+            "choices": ["ddp", "fsdp", "deepspeed"],
+            "help": "Parallelism strategy: DDP (replicate), FSDP2 "
+                    "(fully sharded), or DeepSpeed (configured by "
+                    "--deepspeed-config).",
+        },
+    )
+    deepspeed_config: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "DeepSpeed JSON configuration path. Required when "
+                    "--distributed-strategy=deepspeed.",
         },
     )
     hsdp_shard_size: Optional[int] = field(

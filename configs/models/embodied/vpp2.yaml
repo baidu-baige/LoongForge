@@ -1,0 +1,27 @@
+# VPP2 Wan2.1-I2V-14B + ActionDiT MoT (LIBERO action stage).
+model:
+  model_type: vpp2
+  model_id: ${oc.env:VPP2_ASSETS_ROOT,./vpp2_assets}/Wan2.1-I2V-14B-480P
+  video_checkpoint_path: ${oc.env:VPP2_VIDEO_CHECKPOINT,${oc.env:VPP2_ASSETS_ROOT,./vpp2_assets}/libero_video_step010000.pt}
+  action_dit_pretrained_path: ${oc.env:VPP2_ASSETS_ROOT,./vpp2_assets}/libero/action_init.pt
+  # The standard DDP launcher eagerly materializes and strictly loads at build
+  # time. Probe scripts can request init_on_meta=True explicitly.
+  init_on_meta: false
+  load_text_encoder: false
+  load_clip_encoder: true
+  action_dim: 7
+  action_horizon: 32
+  proprio_dim: 8
+  action_chunk_size: 1
+  action_visible_video_frames: 3
+  action_only_first_frame_fast_path: true
+  mot_checkpoint_mixed_attn: true
+
+data:
+  num_frames: 65
+  action_video_freq_ratio: 4
+  image_size: 224
+  context_len: 128
+  text_embedding_cache_dir: ${oc.env:VPP2_ASSETS_ROOT,./vpp2_assets}/text_cache_real
+  text_embedding_cache_tag: wan21i2v14b480p
+  norm_stats_path: ${oc.env:VPP2_ASSETS_ROOT,./vpp2_assets}/libero/dataset_stats.json

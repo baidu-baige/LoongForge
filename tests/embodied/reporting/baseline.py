@@ -25,6 +25,8 @@ parameter is kept as an extension point for coexisting multiple training forms l
 
 Comparison strategy (aligned with the main framework's tests):
 - loss-type metrics: per-iteration relative-error hard check (failure if it exceeds accuracy_relative_tolerance)
+- optional loss MAE: the mean absolute error across aligned iterations is a
+  second hard check when ``loss_mae_tolerance`` is configured
 - grad_norm: hard check when check_loss_only=False
 - elapsed_time_ms / throughput: soft check (only warn, no failure, if it exceeds performance_relative_tolerance)
 - when the regression passes and performance overall improves beyond tolerance,
@@ -118,8 +120,15 @@ def _rel_diff(actual, expected):
     return abs(actual - expected) / max(abs(expected), 1e-12)
 
 
-def compare(actual_records, baseline_records, accuracy_tol, performance_tol,
-            check_loss_only=False, max_report=10):
+def compare(
+    actual_records,
+    baseline_records,
+    accuracy_tol,
+    performance_tol,
+    check_loss_only=False,
+    max_report=10,
+    loss_mae_tolerance=None,
+):
     """Return (failed_metrics, warnings). A non-empty failed_metrics means failure."""
     failed, warnings = [], []
 
@@ -140,6 +149,7 @@ def compare(actual_records, baseline_records, accuracy_tol, performance_tol,
          for k in r if _is_loss_key(k) or (not check_loss_only and k == "grad_norm")}
     )
     for key in hard_keys:
+        absolute_errors = []
         for it in common_iters:
             expected = base_by_iter[it].get(key)
             actual = act_by_iter[it].get(key)
@@ -153,11 +163,25 @@ def compare(actual_records, baseline_records, accuracy_tol, performance_tol,
             elif not math.isfinite(expected):
                 failed.append(f"{key}@iter{it}: baseline is non-finite ({expected!r})")
             else:
+                absolute_errors.append(abs(actual - expected))
                 rel = _rel_diff(actual, expected)
                 if rel > accuracy_tol:
                     failed.append(
                         f"{key}@iter{it}: actual={actual:.6g} expected={expected:.6g} "
                         f"rel_diff={rel:.4f} > {accuracy_tol}"
+                    )
+            if len(failed) >= max_report:
+                failed.append("... (more failures omitted)")
+                return failed, warnings
+        if _is_loss_key(key) and loss_mae_tolerance is not None:
+            if not absolute_errors:
+                failed.append(f"{key}: no finite aligned values available for MAE")
+            else:
+                mae = sum(absolute_errors) / len(absolute_errors)
+                if mae > loss_mae_tolerance:
+                    failed.append(
+                        f"{key}: MAE={mae:.6g} > {loss_mae_tolerance} "
+                        f"over {len(absolute_errors)} aligned iterations"
                     )
             if len(failed) >= max_report:
                 failed.append("... (more failures omitted)")

@@ -64,7 +64,7 @@ _ADAPTER_CONFIG_FILE = "adapter_config.json"
 _ADAPTER_META_FILE = "adapter_meta.json"
 _ZERO_OPTIMIZER_DIR = "zero_optimizer"
 _ZERO_OPTIMIZER_METADATA_FILE = f"{_ZERO_OPTIMIZER_DIR}/metadata.json"
-_VALID_FORMATS = ("safetensors", "pt", "dcp")
+_VALID_FORMATS = ("safetensors", "pt", "dcp", "deepspeed")
 
 # Module-level state for async DCP save. At most one in-flight save at a time;
 # subsequent saves (or shutdown) wait on the previous future before launching a
@@ -547,7 +547,7 @@ def restore_rank_rng_state(rng_per_rank, ctx: DistributedContext, source: str = 
 def detect_checkpoint_format(path: str) -> str:
     """Identify checkpoint format by metadata, falling back to directory sniff.
 
-    Returns one of ``"safetensors"``, ``"pt"``, ``"dcp"``.
+    Returns one of ``"safetensors"``, ``"pt"``, ``"dcp"``, or ``"deepspeed"``.
     """
     meta_path = os.path.join(path, "resume_meta.json")
     if os.path.exists(meta_path):
@@ -1026,6 +1026,11 @@ def _capture_rank_rng(ctx) -> dict:
     }
 
 
+def capture_rank_rng_state(ctx) -> dict:
+    """Public backend hook for capturing this rank's exact RNG state."""
+    return _capture_rank_rng(ctx)
+
+
 def _set_rank_rng(rng: dict, ctx):
     random.setstate(rng["python"])
     np.random.set_state(rng["numpy"])
@@ -1057,6 +1062,11 @@ def _gather_rng_for_deferred(rng_local, ctx):
     out = [None] * ctx.world_size
     dist.all_gather_object(out, rng_local)
     return out
+
+
+def gather_rng_for_deferred_restore(rng_local, ctx):
+    """Public backend hook for assembling deferred per-rank RNG state."""
+    return _gather_rng_for_deferred(rng_local, ctx)
 
 
 def _get_full_state_dict(

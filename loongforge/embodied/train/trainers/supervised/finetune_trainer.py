@@ -173,9 +173,12 @@ class FinetuneTrainer(BaseTrainer):
                 self._step_loss_spiked = True
                 loss = loss * 0.0
 
-            # Gradient sync is gated by the caller's _grad_sync_ctx, so the
-            # all-reduce happens once per optimizer step.
-            loss.backward()
+            # DeepSpeed owns partitioned-gradient reduction and BF16 master
+            # gradients; DDP/FSDP use the native autograd path.
+            if self.training_args.distributed_strategy == "deepspeed":
+                self.model.backward(loss, scale_wrt_gas=False)
+            else:
+                loss.backward()
 
         # Print-only losses (summed across micro-steps).
         for key, value in log_loss_dict.items():
@@ -256,6 +259,11 @@ class FinetuneTrainer(BaseTrainer):
 
     def _clean_nan_gradients(self):
         """Replace NaN/Inf gradients with 0."""
+        if self.training_args.distributed_strategy == "deepspeed":
+            raise RuntimeError(
+                "NaN gradient cleanup cannot safely rewrite ZeRO-2 partitions. "
+                "Use DeepSpeed overflow handling or disable the host-side check."
+            )
         clean_nan_gradients(self.model)
 
     def _load_pretrained(self, path: str):
@@ -303,11 +311,12 @@ class FinetuneTrainer(BaseTrainer):
             return
 
         fmt = detect_checkpoint_format(path)
-        if fmt == "dcp":
+        if fmt in {"dcp", "deepspeed"}:
             if self.ctx.is_main:
                 logger.info(
-                    "resume: detected DCP checkpoint at %s — deferring weight "
-                    "load until after wrap_model.", path,
+                    "resume: detected %s checkpoint at %s — deferring weight "
+                    "load until after wrap_model.",
+                    fmt, path,
                 )
         else:
             load_pretrained(self.model, path, self.ctx)
@@ -338,6 +347,20 @@ class FinetuneTrainer(BaseTrainer):
                 self.logger.log_freeze_not_found(dot_path, resolved_prefix, missing_attr)
 
     def _save_checkpoint(self):
+        if self.training_args.distributed_strategy == "deepspeed":
+            from loongforge.embodied.distributed.deepspeed import (
+                save_deepspeed_checkpoint,
+            )
+
+            save_deepspeed_checkpoint(
+                self.model,
+                checkpoint_dir=self.checkpoint_dir,
+                step=self.completed_steps,
+                epoch=self.current_epoch,
+                dataloader_state=self._get_dataloader_state(),
+                ctx=self.ctx,
+            )
+            return
         save_checkpoint(
             self.model, self.optimizer, self.lr_scheduler,
             self.completed_steps, self.checkpoint_dir, self.ctx, self.training_args,

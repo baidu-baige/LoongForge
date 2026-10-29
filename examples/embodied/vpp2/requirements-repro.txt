@@ -1,0 +1,2 @@
+# Isolated A/B reproduction environment; both sides must use this version.
+deepspeed==0.18.9

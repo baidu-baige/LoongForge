@@ -187,6 +187,8 @@ Exit codes: `0` all passed, `1` run completed with failures, `2` the executor it
 - Non-zero script exit code -> FAIL
 - No iteration metrics parsed, or fewer iterations than the baseline -> FAIL
 - Loss-type metric per-iteration relative error exceeds `accuracy_relative_tolerance` (default 0.02) -> FAIL
+- Loss MAE exceeds its model-specific tolerance, when configured -> FAIL. VPP2
+  DDP regression uses `0.001` over its 100-step baseline.
   (grad_norm is hard-checked as well when `check_loss_only=false`)
 - Numerical anomalies -> **FAIL** (hard check, independent of tolerance):
   - any hard-checked metric (loss / grad_norm) with a non-finite value (NaN / Inf) in either the actual run or the baseline
