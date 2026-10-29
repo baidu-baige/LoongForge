@@ -30,14 +30,18 @@ def apply_runtime_args(training_args: Any) -> None:
     """Apply the backend runtime switches (determinism, cuDNN autotune, TF32).
 
     Seeds are not set here: seeding is a training concern and stays with the
-    runner. The caller validates conflicting switches via
-    ``validate_engine_args`` before training starts.
+    runner.
     """
     import torch as _torch
 
     if training_args.deterministic_mode:
         set_deterministic()
     if training_args.cudnn_benchmark:
+        if training_args.deterministic_mode:
+            raise ValueError(
+                "--cudnn-benchmark and --deterministic-mode conflict: autotuning "
+                "picks algorithms per shape and is not reproducible."
+            )
         _torch.backends.cudnn.benchmark = True
     if training_args.disable_tf32:
         set_precision(allow_tf32=False)

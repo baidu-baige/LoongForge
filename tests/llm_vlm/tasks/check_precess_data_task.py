@@ -6,7 +6,8 @@
 from tasks.base_task import BaseTask, TaskResut
 from tools.color_logger import create_color_logger
 import os
-import json, yaml
+import json
+import yaml
 import sys
 import shutil
 from typing import Dict, List, Any

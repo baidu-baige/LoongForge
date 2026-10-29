@@ -441,8 +441,6 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None,
                 data_parallel_size=dpw,
                 **full_hetero_cpu_offload.encoder_parallel_facts(),
             )
-            if hetero_step is None:
-                raise RuntimeError("full hetero DP needs the step context from the training method")
             hetero_step.encoder_data_iterator = encoder_iter
 
         return train_data_iterator, None, None
@@ -500,8 +498,6 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None,
             encoder_iter = build_full_hetero_encoder_energon_iterator(
                 encoder_dataloader, **full_hetero_cpu_offload.encoder_parallel_facts()
             )
-            if hetero_step is None:
-                raise RuntimeError("full hetero DP needs the step context from the training method")
             hetero_step.encoder_data_iterator = encoder_iter
 
         return train_dataloader, valid_dataloader, None

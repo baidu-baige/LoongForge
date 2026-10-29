@@ -13,7 +13,7 @@ project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(o
 sys.path.insert(0, project_root)
 sys.path.insert(0, os.path.join(project_root, 'tools'))
 
-from tools.mcore_bridge.config.parallel_config import ParallelConfig
+from mcore_bridge.config.parallel_config import ParallelConfig
 from loongforge.models.catalog import get_config_from_model_name
 
 
@@ -252,9 +252,8 @@ if __name__ == "__main__":
     ]
 
     from loongforge.training.megatron_args import parse_megatron_train_args
-    from tools.mcore_bridge.arguments import add_bridge_args
 
-    args = parse_megatron_train_args(extra_args_providers=[add_bridge_args])
+    args = parse_megatron_train_args()
     parser = Parser(args)
 
     print("=" * 50)

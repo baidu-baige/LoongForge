@@ -1074,8 +1074,6 @@ class Gr00tN1d7Policy(nn.Module):
         )
 
     def _build_state_action_processor(self, statistics: Dict[str, Any]) -> StateActionProcessor:
-        if self._predict_action_processor_cls is None:
-            raise RuntimeError("Call configure_predict_action(...) before predict_action.")
         processor = self._predict_action_processor_cls(
             modality_configs={self.embodiment_tag: self.modality_config},
             statistics=statistics,
@@ -1105,8 +1103,6 @@ class Gr00tN1d7Policy(nn.Module):
     def _ensure_predict_action_collator(self) -> None:
         if self.collator is not None:
             return
-        if self._predict_action_collator_cls is None:
-            raise RuntimeError("Call configure_predict_action(...) before predict_action.")
         self.collator = self._predict_action_collator_cls(
             model_name=self.config.model_name,
             model_type=self.config.backbone_model_type,

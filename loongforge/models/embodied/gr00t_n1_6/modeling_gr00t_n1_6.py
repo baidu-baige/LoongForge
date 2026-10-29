@@ -1375,8 +1375,6 @@ class Gr00tN1d6Policy(nn.Module):
         )
 
     def _build_state_action_processor(self, statistics: Dict[str, Any]) -> "StateActionProcessor":
-        if self._predict_action_processor_cls is None:
-            raise RuntimeError("Call configure_predict_action(...) before predict_action.")
         processor = self._predict_action_processor_cls(
             modality_configs={self.embodiment_tag: self.modality_config},
             statistics=statistics,
@@ -1409,7 +1407,7 @@ class Gr00tN1d6Policy(nn.Module):
         if self.model.collator is not None:
             return
         eagle_assets_path = self._predict_action_eagle_assets_path
-        if not eagle_assets_path or self._predict_action_collator_cls is None:
+        if not eagle_assets_path:
             raise RuntimeError(
                 "GR00T-N1.6 predict_action requires Eagle processor assets. "
                 "Call configure_predict_action(...) with a valid eagle_assets_path."

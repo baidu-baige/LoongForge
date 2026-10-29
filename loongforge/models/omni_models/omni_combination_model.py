@@ -534,8 +534,6 @@ class OmniCombinationModel(BaseMegatronModule):
                     deepstack_visual_embeds.append(tmp_deepstack_visual_embeds)
 
         if self.add_encoder and mpu.is_pipeline_first_stage() and enable_full_hetero_dp:
-            if hetero_step is None:
-                raise RuntimeError("full hetero DP needs the step context created by the training method")
             group = mpu.get_tensor_model_parallel_group()
             src_rank = torch.distributed.get_global_rank(group, 0)
             local_rank = torch.distributed.get_rank()

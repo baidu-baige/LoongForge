@@ -186,17 +186,6 @@ def initialize_loongforge_megatron(
     Returns a function to finalize distributed env initialization
     (optionally, only when args.lazy_mpu_init == True)
     """
-    # Init Megatron Core XPU plugin if enabled.
-    if os.getenv("XMLIR_MEGATRON_CORE_XPU_PLUGIN") in ("true", "1", "True"):
-        try:
-            from xpu_plugin import init_megatron_core_xpu_plugin
-
-            init_megatron_core_xpu_plugin()
-        except ImportError:
-            print(
-                "xpu_plugin module not installed, skip Megatron Core LoongForge Plugin initialization"
-            )
-
     if not allow_no_cuda:
         # Make sure cuda is available.
         assert torch.cuda.is_available(), "Megatron requires CUDA."

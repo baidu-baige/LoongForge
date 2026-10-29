@@ -1,11 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Bridge-only command-line arguments.
-
-The bridge tool registers these on the training parser. They are not part of
-the training CLI.
-"""
+"""HF bridge arguments shared by training and checkpoint conversion."""
 
 import argparse
 

@@ -44,13 +44,6 @@ def add_vlm_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
              "Examples: 'VLMTaskEncoder', 'KimiTaskEncoder'. Default: None",
     )
     group.add_argument(
-        "--ernie-chat-template",
-        type=str,
-        default="ernie_vl",
-        choices=["ernie_vl", "ernie_vl_thinking"],
-        help="Chat template used by ErnieTaskEncoder. Default: ernie_vl",
-    )
-    group.add_argument(
         "--data-shuffle-buffer-size",
         type=int,
         default=0,
@@ -231,16 +224,12 @@ def add_vlm_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
         help="Maximum number of dynamic patches per image. Default: 12",
     )
     group.add_argument(
-        "--use-thumbnail",
         "--use_thumbnail",
-        dest="use_thumbnail",
         action="store_true",
         help="Add thumbnail image alongside dynamic patches. Default: False",
     )
     group.add_argument(
-        "--normalize-type",
         "--normalize_type",
-        dest="normalize_type",
         type=str,
         default="imagenet",
         help="Image normalization preset. Options: 'imagenet', 'clip', etc. Default: imagenet",

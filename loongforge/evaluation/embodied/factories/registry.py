@@ -60,8 +60,8 @@ def _auto_import_factory_modules() -> None:
     import importlib
 
     _FACTORY_MODULES = [
-        "loongforge.evaluation.embodied.factories.vlda_factory",
         "loongforge.evaluation.embodied.factories.pi05_factory",
+        "loongforge.evaluation.embodied.factories.vlda_factory",
         "loongforge.evaluation.embodied.factories.xvla_factory",
         "loongforge.evaluation.embodied.factories.gr00t_n1_6_factory",
         "loongforge.evaluation.embodied.factories.gr00t_n1_7_factory",

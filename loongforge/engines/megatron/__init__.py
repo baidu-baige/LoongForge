@@ -7,6 +7,7 @@ Only the global-state accessors, which many callers in training/ use, are re-exp
 Everything else should be imported from its canonical module (e.g. engines.megatron.training_utils).
 """
 
+from . import xpu_init
 from . import global_vars
 from .global_vars import (
     get_args,

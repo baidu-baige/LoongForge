@@ -992,15 +992,12 @@ def validate_training_args(args):
 # Entry point
 # =============================================================================
 
-def parse_megatron_train_args(extra_args_providers=()):
-    """Parse Megatron training arguments from the CLI and the model config.
-
-    ``extra_args_providers`` lets tools register their own flags on the same
-    parser. The bridge tool uses it; the training entrypoint passes nothing.
-    """
+def parse_megatron_train_args():
+    """Parse Megatron training arguments from the CLI and the model config."""
+    from loongforge.engines.megatron.hf_bridge import add_bridge_args
     from loongforge.engines.megatron.parser import parse_train_args
 
     return parse_train_args(
-        args_providers=[add_training_args, *extra_args_providers],
+        args_providers=[add_training_args, add_bridge_args],
         extra_validator=validate_training_args,
     )

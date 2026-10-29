@@ -5,8 +5,8 @@
 
 HF checkpoint loading and export are engine checkpoint capabilities, but the
 bridge is still an offline tool: it is not part of the installed package and it
-imports the ``tools.mcore_checkpoint_convert`` tree.  Resolve it only when a run
-actually loads HF weights or exports with ``--save-hf``.
+imports the ``tools.mcore_checkpoint_convert`` tree. Only the argument definitions
+are loaded during CLI parsing; checkpoint modules load when needed.
 """
 
 from __future__ import annotations
@@ -22,6 +22,13 @@ def _ensure_tools_on_path() -> None:
     for path in (repo_root, os.path.join(repo_root, "tools")):
         if path not in sys.path:
             sys.path.insert(0, path)
+
+
+def add_bridge_args(parser):
+    _ensure_tools_on_path()
+    from mcore_bridge.arguments import add_bridge_args as _add
+
+    return _add(parser)
 
 
 def load_hf_checkpoint_online(*args, **kwargs):

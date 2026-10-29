@@ -270,8 +270,6 @@ class PreProcessNode(ScheduleNode):
             elif model.add_encoder and mpu.is_pipeline_first_stage()  and self.enable_full_hetero_dp:
                 if mpu.is_pipeline_first_stage():
                     step = self.hetero_step
-                    if step is None:
-                        raise RuntimeError("full hetero DP needs the step context passed to the schedule plan")
 
                     group = mpu.get_tensor_model_parallel_group()
                     src_rank = torch.distributed.get_global_rank(group, 0)

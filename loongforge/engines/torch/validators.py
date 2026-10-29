@@ -67,13 +67,6 @@ def validate_engine_args(training_args, model_cfg):
 
     Raises ValueError on hard errors, logs warnings for soft issues.
     """
-    # ── Runtime switches ──
-    if training_args.cudnn_benchmark and training_args.deterministic_mode:
-        raise ValueError(
-            "--cudnn-benchmark and --deterministic-mode conflict: autotuning "
-            "picks algorithms per shape and is not reproducible."
-        )
-
     if training_args.cuda_graph_warmup_steps <= 0:
         raise ValueError(
             f"--cuda-graph-warmup-steps must be positive, got {training_args.cuda_graph_warmup_steps}"

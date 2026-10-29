@@ -338,8 +338,6 @@ class OmniEncoderModel(torch.nn.Module):
         if self.use_vit_dp_balance:
             if self.enable_encoder_hetero_dp or self.enable_full_hetero_dp:
                 self.parallel_state_switch("image_encoder")
-            if self.vit_balance is None:
-                raise RuntimeError("use_vit_dp_balance is set but the training method passed no vit_balance callable")
             image_embeddings, window_index, deepstack_image_embeds = self.vit_balance(
                 self.image_encoder, images, image_grid_thw
             )

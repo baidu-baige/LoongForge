@@ -53,7 +53,6 @@ class VLMDataConfig:
     dynamic_image_size: bool = False
     enable_discard_sample: bool = False
     energon_pack_algo: str = "balanced"
-    ernie_chat_template: str = "ernie_vl"
     force_image_size: int = 448
     fps: float = 2.0
     fps_max_frames: int = 768

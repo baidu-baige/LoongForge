@@ -11,7 +11,7 @@ export LD_LIBRARY_PATH=/home/opt/nvidia_lib:$LD_LIBRARY_PATH
 
 MEGATRON_PATH=${MEGATRON_PATH:-"/workspace/wan2.2/Loong-Megatron/"}
 LOONGFORGE_PATH=${LOONGFORGE_PATH:-"/workspace/wan2.2/LoongForge/"}
-DATASET_PATH=${DATASET_PATH:-"./data/preprocessed_wan2.2/"}
+DATASET_PATH=${DATASET_PATH:-"/workspace/wan2.2/LoongForge/examples/wan/data/preprocessed/"}
 # High-noise and low-noise checkpoint paths.
 HIGH_NOISE_CHECKPOINT_PATH=${HIGH_NOISE_CHECKPOINT_PATH:-"/mnt/cluster/LoongForge/wan2.2/hg2mcore/high_noise/Megatron_Release/"}
 LOW_NOISE_CHECKPOINT_PATH=${LOW_NOISE_CHECKPOINT_PATH:-"/mnt/cluster/LoongForge/wan2.2/hg2mcore/low_noise/Megatron_Release/"}

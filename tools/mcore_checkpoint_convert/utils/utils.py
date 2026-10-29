@@ -7,10 +7,11 @@ import os
 import re
 import json
 import torch
+from typing import List
 from bisect import bisect_left
 from math import floor, ceil
 
-from typing import List, Tuple, Literal
+from typing import Tuple, Literal
 
 
 import logging
@@ -470,8 +471,8 @@ def get_layer_ids(c_config, args, p):
     # Get model layer count related parameters
     num_layers = cargs["num_layers"]  # Total number of model layers
     mtp_num_layers = args.mtp_num_layers if args.mtp_num_layers is not None else cargs.get("mtp_num_layers", 0)  # MTP additional layers, default 0
-    pp = args.pipeline_model_parallel_size  # Pipeline parallel size
     num_layers_per_stage = args.num_layers_per_virtual_pipeline_stage
+    pp = args.pipeline_model_parallel_size  # Pipeline parallel size
     # Calculate number of virtual pipeline stages
     if num_layers_per_stage:
         stage = num_layers // pp // num_layers_per_stage
