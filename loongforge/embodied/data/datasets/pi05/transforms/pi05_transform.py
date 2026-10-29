@@ -21,6 +21,7 @@ from loongforge.embodied.data.datasets.transforms.utils import (
     convert_stats,
 )
 from loongforge.embodied.data.datasets.transforms.utils.normalizer import Normalizer
+from loongforge.embodied.data.datasets.pi05.transforms.aloha_pi_delta import AlohaPiDeltaActionTransform
 from loongforge.embodied.data.datasets.pi05.transforms.pi05_collator import tokenize_prompts
 
 
@@ -239,6 +240,12 @@ def build_pi05_transforms(ctx: TransformBuilderContext):
     image_transform = build_image_transform(data_cfg, image_keys, image_size)
     if image_transform is not None:
         transforms.append(image_transform)
+
+    # RoboTwin pi0.5: env-space absolute joints -> pi-space delta (inverse of the
+    # eval decoder pi05_aloha_robotwin). MUST precede ActionTransform so the
+    # normalization stats apply to the delta target. See aloha_pi_delta.py.
+    if data_cfg.use_aloha_pi_delta_actions:
+        transforms.append(AlohaPiDeltaActionTransform())
 
     action_transform = build_action_transform(
         data_cfg,
