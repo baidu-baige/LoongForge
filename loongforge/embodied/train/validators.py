@@ -91,6 +91,10 @@ def validate(training_args, model_cfg, data_cfg):
     lr_schedule_steps = int(training_args.lr_decay_iters or training_args.train_iters)
     if training_args.lr_decay_start_iters < 0:
         raise ValueError("--lr-decay-start-iters must be non-negative")
+    if training_args.lr_decay_style == "cosine_decay_with_warmup" and training_args.custom_lr_lambda:
+        raise ValueError(
+            "--custom-lr-lambda does not apply to --lr-decay-style=cosine_decay_with_warmup"
+        )
     if training_args.lr_decay_start_iters:
         if not training_args.custom_lr_lambda or training_args.lr_decay_style not in {
             "cosine_with_min_lr", "cosine_warmup_with_min_lr"
