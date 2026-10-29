@@ -47,7 +47,7 @@ DROID data requires no extra offline preprocessing. Frame stitching, image augme
 --dataset-strategy cosmos3_droid     # Official Cosmos3 DROID data-processing strategy
 ```
 
-Remaining settings like action chunk length and CFG dropout are already set in the data section of `configs/models/cosmos3/nano.yaml` (defaults: `action_chunk_length=32`, `action_fps=15.0`), and generally don't need overriding. The transform resolves video resolution to the 480 tier.
+Remaining settings like action chunk length and CFG dropout are already set in the data section of `configs/models/cosmos3/nano.yaml` (defaults: `action_chunk_length=32`, `action_fps=15.0`), and generally don't need overriding.
 
 ## 2. Launch Training
 
@@ -83,7 +83,7 @@ Arguments in the script are grouped by purpose as follows:
 **Model and Distributed:**
 
 ```bash
---model-name cosmos3_nano            # Mapped to the engine and Cosmos3-Nano YAML via models/catalog.py
+--model-name cosmos3_nano            # Mapped to the Cosmos3-Nano DROID recipe via models/catalog.py
 --distributed-strategy fsdp          # Distributed strategy: FSDP2 full shard
 --dtype bfloat16                     # Training precision: bf16
 --fsdp-reduce-dtype bf16             # Reduce-scatter gradients in bf16

@@ -101,9 +101,9 @@ Edit `examples/wan/checkpoint_convert/convert_wan2.2.sh` (section `hg2mcore`):
 - `--save_path` → target Megatron checkpoint folder
 - `--num_layers`, `--num_checkpoints` → match your conversion setup
 
-Run from `examples/wan` because the script invokes conversion utilities with relative paths:
+Run from `examples/wan/checkpoint_convert` because the script invokes conversion utilities with relative paths:
 ```bash
-cd examples/wan
+cd examples/wan/checkpoint_convert
 bash convert_wan2.2.sh hg2mcore
 ```
 
@@ -150,12 +150,12 @@ CP_RING_DEGREE = CP_SIZE / CP_ULYSSES_DEGREE
 
 ### 4. Export Checkpoints (Megatron → HF)
 
-Edit `examples/wan/checkpoint_convert/convert_wan2.2.sh` (section `mcore2hg`):  
+Edit `examples/wan/checkpoint_convert/convert_wan2.2.sh` (section `mcore2hg`):
 - `--load_path` → Megatron checkpoint after training  
 - `--save_path` → target HF folder  
 
 Run  
 ```bash
-bash examples/wan/checkpoint_convert/convert_wan2.2.sh mcore2hg
+cd examples/wan/checkpoint_convert
+bash convert_wan2.2.sh mcore2hg
 ```
-

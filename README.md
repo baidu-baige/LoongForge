@@ -389,21 +389,23 @@ LoongForge/
 │   │   ├── catalog.py            # Model names, engines, default YAMLs
 │   │   ├── foundation/           #   LLM backbones (LLaMA, Qwen, DeepSeek, ...)
 │   │   ├── encoder/              #   Vision encoders (ViT, Qwen-VL, InternVL, ...)
-│   │   ├── multimodal/           #   Multi-modal composition
+│   │   ├── omni_models/          #   Multi-modal composition
 │   │   ├── diffusion/            #   Diffusion models (WAN, Qwen-Image)
 │   │   ├── common/               #   Shared layers and utilities
 │   │   └── embodied/             #   Embodied model implementations
 │   ├── data/                     # Data pipelines and chat templates
 │   │   ├── llm/ vlm/ embodied/ diffusion/
-│   │   └── chat_templates/       #   Chat templates, registry, multimodal plugins
+│   │   └── chat_templates/       #   Chat template registry (template.py), plugins/, jinja/
 │   └── evaluation/embodied/      # Embodied evaluation
-├── third_party/Loong-Megatron/   # Patched Megatron-LM (git submodule)
+├── third_party/                  # Third-party dependencies and patches
+│   ├── Loong-Megatron/            # Patched Megatron-LM (git submodule)
+│   └── patches/                  # TransformerEngine patches
 ├── configs/                      # Hydra YAML configs (models, data)
 ├── examples/                     # Launch scripts for NVIDIA GPUs
 ├── examples_xpu/                 # Launch scripts for Kunlun XPUs
+├── cookbook/                     # End-to-end project recipes built on LoongForge
 ├── tools/                        # Standalone dev tools: checkpoint conversion, data preprocessing, etc. (see tools/README.md)
 ├── ops/                          # Custom fused operators (incl. open-sourced TileLang)
-├── third_party/patches/                      # TransformerEngine patches
 ├── docker/                       # Dockerfiles (GPU & XPU)
 ├── tests/                        # Test suites (E2E, regression, unit)
 └── docs/                         # Documentation

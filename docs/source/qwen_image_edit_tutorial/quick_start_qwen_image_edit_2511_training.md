@@ -125,7 +125,7 @@ Each `.pth` file contains the following keys:
 Convert HuggingFace DiT weights to Megatron DCP (fsdp_dtensor) format:
 
 ```bash
-cd examples/qwen_image
+cd examples/qwen_image/checkpoint_convert
 
 HF_CKPT=/path/to/Qwen-Image-Edit-2511/transformer \
 MCORE_CKPT=/path/to/qwen_image_edit_2511_mcore \
@@ -182,7 +182,7 @@ Key training parameters (overridable via environment variables):
 After training, convert Megatron weights back to HuggingFace format:
 
 ```bash
-cd examples/qwen_image
+cd examples/qwen_image/checkpoint_convert
 
 MCORE_CKPT=/path/to/trained_mcore_ckpt \
 HF_OUT=/path/to/output_hf_transformer \

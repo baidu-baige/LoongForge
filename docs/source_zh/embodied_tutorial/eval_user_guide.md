@@ -1,6 +1,6 @@
 # 离线评测
 
-LoongForge 在 `loongforge.evaluation.embodied` 下提供了离线评测模块，通过 WebSocket / msgpack-numpy RPC 将基准测试客户端和模型策略服务器作为两个独立进程连接。目前支持 LoongForge **pi0.5**、**X-VLA** 和 **GR00T-N1.6** 作为策略后端，覆盖五个基准测试：**LIBERO**、**CALVIN**、**SimplerEnv**、**RoboTwin (2.0)** 和 **ManiSkill**。用户侧只需要一个 YAML 配置文件和一个启动脚本，无需修改 Python 入口代码。本指南涵盖支持范围、运行方法、各基准测试的配置方式，以及如何扩展新模型。
+LoongForge 在 `loongforge/evaluation/embodied` 下提供了离线评测模块，通过 WebSocket / msgpack-numpy RPC 将基准测试客户端和模型策略服务器作为两个独立进程连接。目前支持 LoongForge **pi0.5**、**X-VLA** 和 **GR00T-N1.6** 作为策略后端，覆盖五个基准测试：**LIBERO**、**CALVIN**、**SimplerEnv**、**RoboTwin (2.0)** 和 **ManiSkill**。用户侧只需要一个 YAML 配置文件和一个启动脚本，无需修改 Python 入口代码。本指南涵盖支持范围、运行方法、各基准测试的配置方式，以及如何扩展新模型。
 
 ---
 
@@ -375,7 +375,7 @@ vulkaninfo
 上游 `simpler-env/SimplerEnv` 默认不提供绝对 EE 控制，但 X-VLA 输出绝对 EE 位姿。两种解决方案：
 
 - 使用 [`255isWhite/SimplerEnv`](https://github.com/255isWhite/SimplerEnv) fork（官方 X-VLA SIMPLER 评测使用的 fork），或
-- 应用 `docs/source/embodied_tutorial/eval_docs/patches/simplerenv/xvla.md` 中记录的本地补丁。
+- 应用 `docs/source/embodied_tutorial/eval_docs/patches/simplerenv/xvla.md` 中记录的两个本地补丁。
 
 若两者都未应用，环境要么在构造时因缺少控制模式报错，要么静默地将绝对动作当作增量动作应用从而永远无法成功。
 

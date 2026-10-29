@@ -43,7 +43,7 @@ pre-commit run --files <file>                                      # SPDX header
 | `loongforge/training/` | What one run does: shared args (`megatron_args.py`, `torch_args.py`), per-family recipes (`llm/`, `vlm/`, `diffusion/`, `embodied/`) that combine data, model, and engine, and single-model training flows (`embodied/custom/`) |
 | `loongforge/engines/` | How training runs for any model: Megatron and torch wrappers for the parallel runtime, precision, model wrapping, optimizer, step loop, and checkpoint I/O (`megatron/`, `torch/`) |
 | `loongforge/models/` | What the network computes (`foundation/`, `encoder/`, `omni_models/`, `diffusion/`, `embodied/`, `common/`), including the model-specific part of engine features such as EP-overlap callables and FSDP/LoRA/FP8 targets; `catalog.py` maps `--model-name` to engine and config |
-| `loongforge/data/` | How samples become batches: per-family datasets, transforms, collators, samplers, and `chat_templates/`; the tokenizer and parallel sizes come in as arguments |
+| `loongforge/data/` | How samples become batches: per-family datasets, transforms, collators, samplers, and chat templates (`chat_templates/`: the registry in `template.py`, multimodal plugins in `plugins/`, Jinja files in `jinja/`); the tokenizer and parallel sizes come in as arguments |
 | `loongforge/evaluation/` | Evaluation (`embodied/`) |
 | `configs/` | YAML model configs (`configs/models/`) and data configs (`configs/data/`) |
 | `examples/` | Per-model training, checkpoint conversion, and evaluation scripts |

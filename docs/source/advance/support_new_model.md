@@ -1,6 +1,6 @@
 # Support New Model
 
-This document describes how to support new models in LoongForge, covering **LLM models**, **VLM models**, and **diffusion models** (using Wan as an example). A new specification of an existing architecture only needs configuration files and a catalog entry; a new architecture also needs the registrations listed in section 5.
+This document describes how to support new models in LoongForge, covering **LLM models**, **VLM models**, and **diffusion models** (using Wan model as an example). Typically, you only need to add corresponding configuration files and complete registration without modifying core code.
 
 ## 1. Supporting LLM Models
 ### 1.1 Adding New LLM Configuration
@@ -162,17 +162,7 @@ MODEL_CONFIG_REGISTRY = {
 }
 ```
 
-## 4. Adding Example Scripts
-
-Keep `examples/` and `examples_xpu/` consistent with the rules below.
-
-- **One directory per model.** The directory name must match a model directory under `configs/models/`, or name a version of one (`llama3.1` extends `llama3`). Do not add grouping directories such as a `family.x/` wildcard.
-- **Five phase directories.** A model directory contains only `pretrain/`, `finetuning/`, `checkpoint_convert/`, `eval/`, and `preprocess/`, plus `assets/` for dataset fixtures and `README.md`. Launch scripts never sit at the model root, and a model only needs the directories it actually uses.
-- **Keep helpers next to their caller.** Put a helper `.py` in the same phase directory as the `.sh` that invokes it. Offline tool packages that run standalone belong in `tools/` (for example `tools/dreamzero_data_preprocess/`) with the model's launch wrappers staying in `examples/`.
-- **Read the repo root three levels up.** A script in `examples/<model>/<phase>/` computes the repository root with `SCRIPT_DIR/../../..`; two levels up resolves to `examples/`.
-- **SFT script prefixes.** Language and vision-language models use `sft_<model>_<spec>.sh` under `finetuning/`, matching the `pretrain/` counterpart; embodied models use `finetune_<model>_<strategy>.sh`.
-
-## 5. Adding a New Architecture
+## 4. Adding a New Architecture
 
 A new architecture needs code registration in addition to the steps above:
 

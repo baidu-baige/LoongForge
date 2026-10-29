@@ -250,7 +250,6 @@ LoongForge = "loongforge.train:main"
 test = [
     "pytest",
     "mock",
-    "pyflakes==4.0.3",
 ]
 dev = [
     "pre-commit>=3.2",

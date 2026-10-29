@@ -47,7 +47,7 @@ DROID 数据不需要额外的离线预处理，训练时通过内建的 `cosmos
 --dataset-strategy cosmos3_droid     # Cosmos3 官方 DROID 数据处理策略
 ```
 
-其余动作 chunk 长度、CFG dropout 等已经写在 `configs/models/cosmos3/nano.yaml` 的 `data` 段（默认 `action_chunk_length=32`、`action_fps=15.0`），通常不需要覆盖。视频分辨率由 transform 固定解析到 480 档。
+其余动作 chunk 长度、CFG dropout 等已经写在 `configs/models/cosmos3/nano.yaml` 的 `data` 段（默认 `action_chunk_length=32`、`action_fps=15.0`），通常不需要覆盖。
 
 ## 2. 启动训练
 
@@ -83,7 +83,7 @@ bash examples/cosmos3/finetuning/sft_cosmos3_nano_droid_fsdp.sh
 **模型与分布式：**
 
 ```bash
---model-name cosmos3_nano            # 通过 models/catalog.py 映射到引擎和 Cosmos3-Nano YAML
+--model-name cosmos3_nano            # 通过 models/catalog.py 映射到 Cosmos3-Nano DROID 配方
 --distributed-strategy fsdp          # 分布式策略：FSDP2 全分片
 --dtype bfloat16                     # 训练精度：bf16
 --fsdp-reduce-dtype bf16             # 梯度 reduce-scatter 用 bf16

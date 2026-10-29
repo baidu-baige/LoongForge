@@ -389,21 +389,23 @@ LoongForge/
 │   │   ├── catalog.py            # 模型名、引擎与默认 YAML
 │   │   ├── foundation/           #   LLM 主干（LLaMA、Qwen、DeepSeek、...）
 │   │   ├── encoder/              #   视觉编码器（ViT、Qwen-VL、InternVL、...）
-│   │   ├── multimodal/           #   多模态组合
+│   │   ├── omni_models/          #   多模态组合
 │   │   ├── diffusion/            #   Diffusion 模型（WAN、Qwen-Image）
 │   │   ├── common/               #   公共 Layer 与工具
 │   │   └── embodied/             #   具身模型实现
 │   ├── data/                     # 数据流水线与对话模板
 │   │   ├── llm/ vlm/ embodied/ diffusion/
-│   │   └── chat_templates/       #   对话模板、注册表与多模态插件
+│   │   └── chat_templates/       #   对话模板注册表（template.py）、plugins/、jinja/
 │   └── evaluation/embodied/      # 具身评测
-├── third_party/Loong-Megatron/   # Patched Megatron-LM（git submodule）
+├── third_party/                  # 第三方依赖与补丁
+│   ├── Loong-Megatron/            # Patched Megatron-LM（git submodule）
+│   └── patches/                  # TransformerEngine 补丁
 ├── configs/                      # Hydra YAML 配置（模型、数据）
 ├── examples/                     # NVIDIA GPU 启动脚本
 ├── examples_xpu/                 # 昆仑芯 XPU 启动脚本
+├── cookbook/                     # 基于 LoongForge 的端到端项目复现方案
 ├── tools/                        # 独立开发工具：Checkpoint 转换、数据预处理等（详见 tools/README.md）
 ├── ops/                          # 自定义融合算子（含开源的 TileLang 版本）
-├── third_party/patches/                      # TransformerEngine 补丁
 ├── docker/                       # Dockerfile（GPU & XPU）
 ├── tests/                        # 测试套件（端到端、回归、单元）
 └── docs/                         # 文档

@@ -718,7 +718,8 @@ def build_transformer_layer_callables(layer: TransformerLayer):
         if enable_deepep or enable_hybridep:
             # update token_probs to be the detached version, prevents
             # backward graph from connecting to attn submodule.
-            # NOTE: DeepEP/HybridEP managers read probs from `metadata`,
+            # NOTE: DeepEP/HybridEP managers now read probs from `metadata`
+            # (moved off `_comm_manager` by the MoE load-balance refactor),
             # so the detached probs must be written onto `metadata`.
             metadata.token_probs = probs
 

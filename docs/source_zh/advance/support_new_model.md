@@ -1,6 +1,6 @@
 # 支持新模型
 
-本文档介绍如何在 LoongForge 中支持新模型，涵盖 **LLM 模型**、**VLM 模型**和**扩散模型**（以 Wan 为例）。已有架构的新规格只需添加配置文件并在 catalog 中注册；新增架构还需要第 5 节列出的注册项。
+本文档介绍如何在 LoongForge 中支持新模型，涵盖 **LLM 模型**、**VLM 模型**和**扩散模型**（以 Wan 模型为例）。通常，你只需添加相应的配置文件并完成注册，无需修改核心代码。
 
 ## 1. 支持 LLM 模型
 ### 1.1 添加新 LLM 配置
@@ -162,17 +162,7 @@ MODEL_CONFIG_REGISTRY = {
 }
 ```
 
-## 4. 添加 example 脚本
-
-`examples/` 与 `examples_xpu/` 的目录结构请遵循以下约定：
-
-- **一个模型一个目录。** 目录名必须是 `configs/models/` 下已有的模型目录，或是它的某个版本（如 `llama3.1` 属于 `llama3` 系列）。不要再新增 `family.x/` 这类分组目录。
-- **二层层级固定为阶段目录。** 模型目录下只允许 `pretrain/`、`finetuning/`、`checkpoint_convert/`、`eval/`、`preprocess/` 五个阶段目录，以及存放数据集夹具的 `assets/` 和 `README.md`；启动脚本不要放在模型根目录。用不到的阶段目录不必创建。
-- **辅助文件与调用方同级。** 被 `.sh` 调用的 `.py` 放在同一个阶段目录里。可独立运行的离线工具包放 `tools/`（如 `tools/dreamzero_data_preprocess/`），`examples/` 只保留模型侧的入口包装脚本。
-- **仓库根取上三级。** `examples/<model>/<phase>/` 下的脚本用 `SCRIPT_DIR/../../..` 计算仓库根；只上溯两级会落到 `examples/`。
-- **SFT 脚本前缀。** LLM/VLM 的 `finetuning/` 下用 `sft_<model>_<规格>.sh`，与 `pretrain/` 对应；embodied 模型用 `finetune_<model>_<策略>.sh`。
-
-## 5. 新增模型架构
+## 4. 新增模型架构
 
 新增架构时，除上述步骤外还需要在代码中注册：
 
