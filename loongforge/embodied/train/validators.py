@@ -12,7 +12,28 @@ data_cfg (DataConfig).
 import logging
 import os
 
+from loongforge.embodied.optimizer.tensor_wise_optimizer.validation import validate_tensor_wise_args
+
 logger = logging.getLogger(__name__)
+
+
+def validate_muon_args(training_args):
+    """Reject what ``--optimizer muon`` cannot honour, under any trainer."""
+    if training_args.optimizer.lower() != "muon":
+        return
+    # Muon needs whole local tensors: no FSDP shards, no ZeRO partition.
+    if training_args.distributed_strategy != "ddp":
+        raise ValueError(
+            "--optimizer=muon needs --distributed-strategy ddp, and the default is "
+            "fsdp: add --distributed-strategy ddp to the launch command, or use "
+            "--optimizer Dmuon under fsdp."
+        )
+    if training_args.zero_optimizer:
+        raise ValueError("--optimizer=muon is incompatible with --zero-optimizer.")
+    # Muon groups by --lr-base (plus a model-supplied scale), so per-module rates
+    # would be dropped without a word.
+    if training_args.lr_group:
+        raise ValueError("--lr-group is not supported with --optimizer=muon.")
 
 
 def _validate_fsdp_ignored_frozen_args(training_args):
@@ -241,6 +262,12 @@ def validate(training_args, model_cfg, data_cfg):
             raise ValueError(
                 "--dmuon-ns-coefficients=wallx_muon requires --dmuon-ns-backend=direct."
             )
+
+    # ── Muon optimizer options ──
+    validate_muon_args(training_args)
+
+    # ── tensor_wise ──
+    validate_tensor_wise_args(training_args)
 
     # ── Profiler mutual exclusion ──
     if training_args.use_pytorch_profiler and training_args.use_nsys_profiler:

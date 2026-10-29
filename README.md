@@ -87,6 +87,7 @@ Since optimal training strategies differ across model families and scales, Loong
 
 ## 🔥 Latest News
 
+- **[2026/10]** 🤖 Added VLA training support for **[LingBot-VLA-v2](./examples/embodied/lingbot_vla_v2/)**, built on the new tensor_wise distributed optimizer with Muon. `--optimizer muon` also runs under plain DDP for any model.
 - **[2026/10]** 🤖 Introducing **[LoongForge-VLDA](./cookbook/loongforge-vlda/)**, a Vision-Language-Delta-Action model trained with LoongForge: **98.5%** on LIBERO, **84.5%** zero-shot on LIBERO-Plus, and **+17–18 points** over π0.5 on real robots. [[project page](https://baidu-baige.github.io/LoongForge/projects/vlda.html)] [[paper](https://arxiv.org/abs/2610.25874)]
 - **[2026/10]** 🦾 Open-sourced **[ego2robot](./tools/ego2robot/)** — a pipeline that converts first-person videos of human manipulation into dual-arm robot training data, outputting **LeRobot v3.0** format across **16 robot morphologies**.
 - **[2026/09]** ✨ Added training support for **[GLM-5.3-flash](./examples/glm5_next/)**.
@@ -283,6 +284,7 @@ Click any model for its training examples; see [`configs/models/`](./configs/mod
 <li><a href="examples/embodied/wall_oss_0_5/">Wall-OSS-0.5</a></li>
 <li><a href="examples/embodied/fastwam/">FastWAM</a></li>
 <li><a href="examples/embodied/lingbot_va/">LingBot-VA</a></li>
+<li><a href="examples/embodied/lingbot_vla_v2/">LingBot-VLA-v2</a></li>
 <li><a href="examples/embodied/cosmos3/">Cosmos3</a></li>
 <li><a href="examples/embodied/dreamzero/">DreamZero</a></li>
 <li><a href="cookbook/loongforge-vlda/">LoongForge-VLDA</a></li>

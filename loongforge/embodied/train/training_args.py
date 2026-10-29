@@ -613,8 +613,15 @@ class _OptimizerArgs:
         default="AdamW",
         metadata={
             "help": "Optimizer name. Supported: AdamW, TorchFusedAdamW, "
-                    "TEFusedAdamW, ApexFusedAdamW, Adam, SGD, Dmuon. TEFusedAdamW "
-                    "requires TransformerEngine; ApexFusedAdamW requires Apex."
+                    "TEFusedAdamW, ApexFusedAdamW, Adam, SGD, Dmuon, "
+                    "muon. TEFusedAdamW requires TransformerEngine; "
+                    "ApexFusedAdamW requires Apex. Dmuon is the third-party "
+                    "package's FSDP2 Muon (--distributed-strategy fsdp). muon "
+                    "is LoongForge's Muon for --distributed-strategy ddp: "
+                    "2-D weights except embeddings and the output head "
+                    "use Muon, the rest (including 3-D tensors) AdamW; 3-D "
+                    "expert stacks on Muon need a tensor_wise trainer. "
+                    "Incompatible with --zero-optimizer and --lr-group."
         },
     )
     clip_grad: float = field(
@@ -726,6 +733,28 @@ class _OptimizerArgs:
                     "--dmuon-adamw-foreach."
         },
     )
+    muon_momentum: float = field(
+        default=0.95,
+        metadata={
+            "help": "Muon momentum. Used by --optimizer=muon."
+        },
+    )
+    muon_nesterov: bool = field(
+        default=True,
+        metadata={"help": "Enable Muon Nesterov momentum."},
+    )
+    muon_ns_steps: int = field(
+        default=5,
+        metadata={"help": "Number of Newton-Schulz iterations used by Muon."},
+    )
+    muon_adjust_lr_fn: str = field(
+        default="match_rms_adamw",
+        metadata={
+            "help": "Muon learning-rate adjustment function; see "
+                    "torch.optim.Muon for the accepted values."
+        },
+    )
+
 
 @dataclass(frozen=True)
 class _DataArgs:
