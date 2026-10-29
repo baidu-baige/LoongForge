@@ -2,7 +2,7 @@
 
 LIBERO is a tabletop robot manipulation benchmark with 4 task suites (Spatial, Object, Goal, Long Horizon), totaling 40 tasks, evaluated on a Franka arm. This page is a step-by-step reproduction guide for running LIBERO evaluation through the LoongForge eval module.
 
-Four models are verified on LIBERO: **pi05**, **xvla**, **GR00T-N1.6** (public weights), and **LingBot-VA** (weights trained with LoongForge from `lingbot-va-base`).
+Five models are verified on LIBERO: **pi05**, **xvla**, **GR00T-N1.6** (public weights), **LingBot-VA** (weights trained with LoongForge from `lingbot-va-base`), and **FastWAM** (weights trained with LoongForge).
 
 ## Step 0: Download weights
 
@@ -12,6 +12,7 @@ Four models are verified on LIBERO: **pi05**, **xvla**, **GR00T-N1.6** (public w
 | xvla | [2toINF/X-VLA-LIBERO](https://huggingface.co/2toINF/X-VLA-LIBERO) |
 | GR00T-N1.6 | [0xAnkitSingh/GR00T-N1.6-LIBERO](https://huggingface.co/0xAnkitSingh/GR00T-N1.6-LIBERO) (weight dir + Eagle3 processor + `libero_panda` stats) |
 | LingBot-VA | [robbyant/lingbot-va-posttrain-libero-long](https://huggingface.co/robbyant/lingbot-va-posttrain-libero-long) (one root with `transformer/` + `vae/` + `text_encoder/` + `tokenizer/`; libero_10 only) |
+| FastWAM | [yuantianyuan01/FastWAM](https://github.com/yuantianyuan01/FastWAM#inference-with-released-checkpoints) checkpoint + [Wan-AI/Wan2.2-TI2V-5B](https://huggingface.co/Wan-AI/Wan2.2-TI2V-5B) (T5/VAE + `google/umt5-xxl` tokenizer) |
 
 ## Step 1: Environment setup
 
@@ -50,6 +51,9 @@ examples/embodied/gr00t_n1_6/eval/run_libero_eval.sh
 
 # LingBot-VA (default config: libero_10_full.yaml, 10 tasks x 50 episodes)
 examples/embodied/lingbot_va/eval/run_libero_eval.sh
+
+# FastWAM (default config: libero_spatial.yaml; set CONFIG for another suite)
+examples/embodied/fastwam/eval/run_libero_eval.sh
 ```
 
 Environment variables:
@@ -73,6 +77,7 @@ Key config fields (see `examples/embodied/<model>/eval/configs/libero/*.yaml`):
 - xvla: `model.domain_id: 3` (or omit to auto-resolve), `server.chunk_execute_steps: 10`, recommended `benchmark.max_steps: 800`
 - LingBot-VA: use `libero_10_full.yaml` as shipped (official LIBERO client protocol: seed 7, `max_steps: 800`, `num_steps_wait: 5`, native 128 rendering); see [LingBot-VA quick start](../../quick_start_lingbot_va.md)
 - GR00T-N1.6: `model.model_type: Gr00tN1d6`, `benchmark.control_mode: delta`, `server.embodiment_tag: libero_panda`, plus `model.base_model_path` / `model.model_name` (Eagle3 processor)
+- FastWAM: one YAML per suite; `model.variant: uncond` for LoongForge-trained checkpoints, `benchmark.episodes_per_task: 50`, `benchmark.controller_force_update: false`; set `DIFFSYNTH_MODEL_BASE_PATH` to the directory containing `Wan-AI/Wan2.2-TI2V-5B`
 
 ## Verification
 
@@ -84,6 +89,7 @@ Task-success status:
 | xvla | ✅ task success | libero_object 94/100 (10 tasks × 10 eps); per-task spread 8/10 … 10/10 |
 | GR00T-N1.6 | ✅ task success | 10 tasks × 10 eps per suite: object 100/100, spatial 95/100, goal 95/100, libero_10 89/100 |
 | LingBot-VA | ✅ task success | libero_10, 10 tasks × 50 eps: 423/500 (84.6%) with LoongForge-trained 5000-step weights |
+| FastWAM | ✅ task success | 4 suites × 500 eps with LoongForge-trained 20k weights: spatial 97.00%, object 99.60%, goal 97.20%, libero_10 94.20% (total 1940/2000 = 97.00%) |
 
 Report rates as successes/episodes over a full suite; single-episode smoke runs are
 not success rates and are not listed here.
