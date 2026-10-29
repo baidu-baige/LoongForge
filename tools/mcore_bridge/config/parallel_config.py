@@ -1,6 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
+""" Parallel config """
 from dataclasses import dataclass
 from typing import Optional
 

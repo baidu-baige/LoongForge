@@ -1,6 +1,8 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Wan transformer block."""
+
 from contextlib import nullcontext
 
 from megatron.core import tensor_parallel

@@ -36,6 +36,10 @@ logging.basicConfig(level=logging.INFO)
 
 
 class McoreCheckpoint(AbstractCheckpoint):
+    """
+        McoreCheckpoint
+    """
+
     def __init__(self, c_config, args, model_id=None):
         super().__init__(c_config)
         self.args = args
@@ -604,6 +608,7 @@ class McoreCheckpoint(AbstractCheckpoint):
         return c_ckpt
 
     def get_transformer_name(self, stage_index):
+        """ get transformer name """
         if self.model_id is not None:
             return self.name_map[TRANSFORMER_TPL] % self.model_id
         elif self.num_stages > 1:

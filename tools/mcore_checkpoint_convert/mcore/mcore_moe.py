@@ -23,6 +23,10 @@ from mcore_checkpoint_convert.common.common_checkpoint import (
 
 
 class McoreMoe(McoreBase):
+    """
+        McoreMoe
+    """
+
     def __init__(self, c_config, args):
         super().__init__(c_config, args)
 

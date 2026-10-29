@@ -339,6 +339,9 @@ LAYER_NEED_TRANSPOSE = "need_transpose"
 LAYER_DTYPE = "dtype"
 
 class CommonCheckpoint(AbstractCheckpoint):
+    """
+       CommonCheckpoint
+    """
     def __init__(self, c_config):
         super().__init__(c_config)
         self.other_args = {}

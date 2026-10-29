@@ -24,7 +24,7 @@ from megatron.core.extensions.transformer_engine import TEDotProductAttention
 from megatron.core.process_groups_config import ProcessGroupCollection
 
 try:
-    import transformer_engine  # noqa: F401 (availability probe)
+    import transformer_engine
 
     HAVE_TE = True
     from megatron.core.extensions.transformer_engine import SplitAlongDim

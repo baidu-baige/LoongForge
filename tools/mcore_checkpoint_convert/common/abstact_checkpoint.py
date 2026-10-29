@@ -7,6 +7,10 @@ from abc import ABC, abstractmethod
 
 
 class AbstractCheckpoint(ABC):
+    """
+       AbstractCheckpoint 
+    """
+    
     def __init__(self, c_config):
         self.c_config = c_config
 

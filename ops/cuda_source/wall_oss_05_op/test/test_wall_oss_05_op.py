@@ -179,7 +179,7 @@ def test_permute_unpermute_topk(ext):
 
 
 # ---------------------------------------------------------------------------
-# Extended correctness tests
+# Extended correctness tests (ops refactored to use package-level imports)
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("interleave", [False, True])

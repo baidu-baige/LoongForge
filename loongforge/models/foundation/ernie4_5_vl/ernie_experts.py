@@ -37,7 +37,7 @@ from megatron.core.transformer.moe.experts import SequentialMLP as MegaSequentia
 from megatron.core.process_groups_config import ProcessGroupCollection
 
 try:
-    import transformer_engine  # noqa: F401  # pylint: disable=unused-import
+    import transformer_engine  # pylint: disable=unused-import
 
     HAVE_TE = True
 except ImportError:

@@ -130,6 +130,7 @@ class Qwen35VisionModel(BaseVisionModel):
         return embeddings
 
     def forward(self, x: torch.Tensor, image_grid_thw: torch.Tensor) -> torch.Tensor:
+        """Forward."""
         x = self.patch_embed(x)
 
         pos_embeds = self.fast_pos_embed_interpolate(image_grid_thw)

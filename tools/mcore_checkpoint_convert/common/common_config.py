@@ -12,6 +12,10 @@ from mcore_checkpoint_convert.common.abstact_config import AbstractConfig
 
 
 class CommonConfig(AbstractConfig):
+    """
+       CommonConfig 
+    """
+
     def __init__(self):
         super().__init__()
 

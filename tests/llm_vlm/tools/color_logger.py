@@ -1,6 +1,8 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
+"""color logger"""
+
 import os
 import sys
 import logging
@@ -8,6 +10,7 @@ import logging
 fmt = '[%(asctime)s %(name)s] (%(filename)s %(lineno)d) %(levelname)s : %(message)s'
 GLOBAL_LOG_LEVEL=logging._nameToLevel[os.getenv("FLYAGAIN_LOG_LEVEL", "INFO").upper()]
 class CustomFormatter(logging.Formatter):
+    """CustomFormatter."""
     grey = "\x1b[38;20m"
     green = "\x1b[40;32m"
     blue = "\x1b[40;34m"
@@ -30,6 +33,7 @@ class CustomFormatter(logging.Formatter):
         return formatter.format(record)
         
 def create_color_logger(output_dir = "./", dist_rank=0, name=__name__, logfile_name = None, level=GLOBAL_LOG_LEVEL):
+    """create_color_logger."""
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
         

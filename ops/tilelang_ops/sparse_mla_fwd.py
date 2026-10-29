@@ -28,6 +28,7 @@ def sparse_mla_fwd(
     num_stages=2,
     threads=128,
 ):
+    """sparse mla fwd."""
     assert dim == tilelang.math.next_power_of_2(dim), f"haven't check padding correctness yet, dim={dim}"
     assert tail_dim == tilelang.math.next_power_of_2(tail_dim), f"haven't check padding correctness yet, dim={tail_dim}"
     assert is_causal == True, "non-casual is not supported"
@@ -184,6 +185,7 @@ def sparse_mla_fwd_interface(
     q, kv, indices, offsets, chunk_offset=0, sm_scale=None, return_p_sum: bool = False, \
     d_v=512, block_I=32, num_stages=2, threads=128
 ):
+    """sparse mla fwd interface."""
     is_casual = True
     assert return_p_sum == False, "This kernel file is for fwd only"
     assert q.is_contiguous() and kv.is_contiguous() and indices.is_contiguous()
@@ -279,6 +281,7 @@ def test_sparse_mla_fwd(
     num_stages=2,
     threads=256,
 ):
+    """test sparse mla fwd."""  
     torch.random.manual_seed(0)
     q = torch.randn((S, H, DQK), dtype=dtype, device="cuda").requires_grad_(True)
     kv = torch.randn((SKV, HKV, DQK), dtype=dtype, device="cuda").requires_grad_(True)

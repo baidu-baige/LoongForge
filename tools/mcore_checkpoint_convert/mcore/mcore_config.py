@@ -13,6 +13,10 @@ from mcore_checkpoint_convert.arguments import parse_args
 
 
 class McoreConfig(AbstractConfig):
+    """
+        McoreConfig
+    """
+
     def __init__(self):
         super().__init__()
 

@@ -73,7 +73,7 @@ class McorePathInfo:
     mcore_lora_in_path: Optional[str] = None
     mcore_lora_out_path: Optional[str] = None
 
-    # Fields shared by common_to_mcore and mcore_to_common
+    # Additional fields moved from common_to_mcore and mcore_to_common
     common_key: Optional[str] = None  # The common checkpoint key
     need_emb_padding: bool = False  # Whether to cut embedding padding
 
