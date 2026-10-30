@@ -7,6 +7,7 @@ import logging
 
 from loongforge.embodied.train.trainers.custom.gr00t_n1_6 import GrootN1d6Trainer
 from loongforge.embodied.train.trainers.custom.lingbot_va import LingBotFinetuneTrainer
+from loongforge.embodied.train.trainers.custom.giga_brain07 import GigaBrain07Trainer
 from loongforge.embodied.train.trainers.custom.gr00t_n1_7 import GrootN1d7Trainer
 from loongforge.embodied.train.trainers.custom.lingbot_vla_v2 import LingbotVlaV2Trainer
 from loongforge.embodied.train.trainers.supervised.finetune_trainer import FinetuneTrainer
@@ -22,6 +23,7 @@ _TRAINER_CLASSES = {
     "GrootN1d6Trainer": GrootN1d6Trainer,
     "LingBotFinetuneTrainer": LingBotFinetuneTrainer,
     "GrootN1d7Trainer": GrootN1d7Trainer,
+    "GigaBrain07Trainer": GigaBrain07Trainer,
     "LingbotVlaV2Trainer": LingbotVlaV2Trainer,
 }
 
