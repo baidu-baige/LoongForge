@@ -113,7 +113,7 @@ bash examples/embodied/fastwam/run_fastwam_sft_ddp_zero1_finetune.sh \
 
 ## 4. 评测
 
-环境准备与协议说明见 [LIBERO 评测文档](../../source/embodied_tutorial/eval_docs/benchmarks/libero.md)。运行前先把 suite YAML 里的 `/path/to/...` 占位符（checkpoint、Wan2.2 路径、`dataset_stats.json`）填好：
+环境准备与协议说明见 [LIBERO 评测文档](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/embodied_tutorial/eval_docs/benchmarks/libero.md)。运行前先把 suite YAML 里的 `/path/to/...` 占位符（checkpoint、Wan2.2 路径、`dataset_stats.json`）填好：
 
 ```bash
 CONFIG=examples/embodied/fastwam/eval/configs/libero/libero_10.yaml \

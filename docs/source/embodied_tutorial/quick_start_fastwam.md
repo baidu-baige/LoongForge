@@ -118,7 +118,7 @@ Notes:
 
 ## 4. Evaluation
 
-See the [LIBERO benchmark page](../eval_docs/benchmarks/libero.md) for environment setup and protocol notes. Fill the `/path/to/...` placeholders in the suite YAML (checkpoint, Wan2.2 root, `dataset_stats.json`) first:
+See the [LIBERO benchmark page](eval_docs/benchmarks/libero.md) for environment setup and protocol notes. Fill the `/path/to/...` placeholders in the suite YAML (checkpoint, Wan2.2 root, `dataset_stats.json`) first:
 
 ```bash
 CONFIG=examples/embodied/fastwam/eval/configs/libero/libero_10.yaml \
