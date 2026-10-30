@@ -217,6 +217,9 @@ LOGGING_ARGS=(
 MODEL_DATA_OVERRIDES=(
     model.skip_init_weights=false
     data.require_full_language_chunks="$REQUIRE_FULL_LANGUAGE_CHUNKS"
+    # Whole-block compile targets fixed-length full fine-tuning; with variable-length samples
+    # its dynamic-shape recompile fails in Inductor, so LoRA keeps it off.
+    model.compile_causal_attention_block=false
 )
 
 # ── Launch ────────────────────────────────────────────────────
