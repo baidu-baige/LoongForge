@@ -30,14 +30,13 @@ from torch.utils.data import BatchSampler, DataLoader
 # ── Make the vendored giga packages importable (mirror train_giga_brain07.py) ──
 _EMB = Path(__file__).resolve().parents[4]            # .../loongforge/embodied
 _MODEL_GB = _EMB / "model" / "giga_brain07"
-_SHIMS = _MODEL_GB / "_shims"
 _DATA_GB = _EMB / "data" / "datasets" / "giga_brain07"
-for _p in (str(_SHIMS), str(_MODEL_GB), str(_DATA_GB)):
+for _p in (str(_MODEL_GB), str(_DATA_GB)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 _pp = [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p]
 os.environ["PYTHONPATH"] = os.pathsep.join(
-    dict.fromkeys([str(_SHIMS), str(_MODEL_GB), str(_DATA_GB), *_pp])
+    dict.fromkeys([str(_MODEL_GB), str(_DATA_GB), *_pp])
 )
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
@@ -103,6 +102,8 @@ class GigaBrain07Trainer(FinetuneTrainer):
         m = self.model_cfg
         if self.ctx.world_size > 1:
             super()._wrap_model_for_training()
+            self._maybe_apply_kv_slice()  # [compile] no-op unless model.decoder_kv_slice
+            self._maybe_apply_compile()  # [compile] no-op unless model.compile_model
             return
         if m.activation_checkpointing and m.activation_class_names:
             from giga_train.strategies import module_auto_wrap_policy
@@ -126,6 +127,180 @@ class GigaBrain07Trainer(FinetuneTrainer):
                     "GigaBrain07: activation checkpointing wrapped %d modules", n_ckpt
                 )
         self.model = self.model.to(self.ctx.device)
+        self._maybe_apply_kv_slice()  # [compile] no-op unless model.decoder_kv_slice
+        self._maybe_apply_compile()  # [compile] no-op unless model.compile_model
+
+    # ───────────────────────── [compile] opt-in per-layer KV slice ─────────────────
+    def _maybe_apply_kv_slice(self) -> None:
+        """Hand each decoder layer only its own past_key_values entry.
+
+        Registered as a forward-pre-hook with prepend=True AFTER FSDP2 wrapping,
+        so it runs before FSDP2's ``_pre_forward`` input cast. The layer only
+        ever reads ``past_key_values[self.layer_idx]``, so the sliced dict is
+        semantically identical; it just stops FSDP from casting (and AC from
+        retaining) fp32 copies of all 26 layers' KV at every layer.
+        """
+        if not bool(getattr(self.model_cfg, "decoder_kv_slice", False)):
+            return
+        import logging as _lg
+        import re as _re
+        from giga_models.models.vla.giga_brain_0.paligemma2_with_expert import (
+            Gemma2DecoderLayerWithExpert,
+        )
+
+        pat = _re.compile(r"(^|\.)paligemma_with_expert\.layers\.(\d+)$")
+        n = 0
+        for name, mod in self.model.named_modules():
+            if not pat.search(name):
+                continue
+            inner = mod
+            while not isinstance(inner, Gemma2DecoderLayerWithExpert):
+                inner = getattr(inner, "_checkpoint_wrapped_module", None)
+                if inner is None:
+                    break
+            if inner is None:
+                continue
+            idx = int(inner.self_attn.layer_idx)
+
+            def _hook(module, args, kwargs, idx=idx):
+                pkv = kwargs.get("past_key_values")
+                if isinstance(pkv, dict) and idx in pkv and len(pkv) > 1:
+                    kwargs = dict(kwargs)
+                    kwargs["past_key_values"] = {idx: pkv[idx]}
+                    return args, kwargs
+                return None
+
+            mod.register_forward_pre_hook(_hook, prepend=True, with_kwargs=True)
+            n += 1
+        if self.ctx.is_main:
+            _lg.getLogger(__name__).info("GigaBrain07 decoder_kv_slice ENABLED on %d layers", n)
+        if n == 0:
+            raise RuntimeError("model.decoder_kv_slice=true but no decoder layer matched")
+
+    # ───────────────────────── [compile] opt-in regional torch.compile ──────────────
+    def _maybe_apply_compile(self) -> None:
+        """Regionally torch.compile inner compute modules (default OFF).
+
+        Runs after AC + FSDP2 wrapping. Only the *inner* module's instance
+        ``forward`` is replaced by a compiled callable, so the FSDP2 pre/post
+        forward hooks and the non-reentrant AC CheckpointWrapper stay eager
+        around each compiled region (the AC recompute re-enters the same
+        compiled graph). All layers of one class share one code object, so
+        Dynamo compiles one graph per region class (params are graph inputs
+        with inline_inbuilt_nn_modules) instead of one per layer.
+        """
+        m = self.model_cfg
+        if not bool(getattr(m, "compile_model", False)):
+            return
+        import logging as _lg
+        log = _lg.getLogger(__name__)
+        from giga_models.models.vla.giga_brain_0.paligemma2_with_expert import (
+            Gemma2AttentionWithExpert,
+            Gemma2DecoderLayerWithExpert,
+            Gemma2MLP,
+            SiglipEncoderLayer,
+        )
+
+        scope = {s.strip() for s in str(m.compile_scope).split(",") if s.strip()}
+        known = {"decoder", "vision", "decoder_mlp", "decoder_attn"}
+        if not scope or scope - known:
+            raise ValueError(f"model.compile_scope={m.compile_scope!r}; allowed {sorted(known)}")
+        mode = str(m.compile_mode) if m.compile_mode not in (None, "", "default") else None
+        kw = dict(
+            backend="inductor",
+            mode=mode,
+            dynamic=getattr(m, "compile_dynamic", None),
+            fullgraph=bool(getattr(m, "compile_fullgraph", False)),
+        )
+
+        def _in_decoder(name: str) -> bool:
+            return "paligemma_with_expert.layers." in name
+
+        def _decoder_kv_shim(layer, compiled):
+            # The 2-stage train forward (prefix fill_kv_cache -> suffix reading
+            # past_key_values[self.layer_idx]) makes Dynamo guard on the int
+            # ``self_attn.layer_idx`` -> one recompile per layer, and after
+            # recompile_limit(8) the remaining layers silently run EAGER. For
+            # the cache-read call we hand the layer a 1-entry view {0: kv} and
+            # present layer_idx=0 for the duration of the call, so all 26
+            # layers share ONE graph. Same tensors -> numerics unchanged; the
+            # AC recompute re-enters this shim with the same args.
+            attn = layer.self_attn if hasattr(layer, "self_attn") else layer
+            real_idx = int(attn.layer_idx)
+            import inspect
+            sig = inspect.signature(layer.forward)
+
+            def fwd(*args, **kwargs):
+                ba = sig.bind(*args, **kwargs)
+                ba.apply_defaults()
+                a = ba.arguments
+                pkv = a.get("past_key_values")
+                if (a.get("use_cache") and not a.get("fill_kv_cache")
+                        and isinstance(pkv, dict) and real_idx in pkv):
+                    a["past_key_values"] = {0: pkv[real_idx]}
+                    attn.layer_idx = 0
+                    try:
+                        return compiled(*ba.args, **ba.kwargs)
+                    finally:
+                        attn.layer_idx = real_idx
+                return compiled(*ba.args, **ba.kwargs)
+
+            return fwd
+
+        counts: Dict[str, int] = {}
+        for name, mod in self.model.named_modules():
+            tag = None
+            if "decoder" in scope and isinstance(mod, Gemma2DecoderLayerWithExpert):
+                tag = "decoder"
+            elif "vision" in scope and isinstance(mod, SiglipEncoderLayer):
+                tag = "vision"
+            elif ("decoder_mlp" in scope and "decoder" not in scope
+                  and isinstance(mod, Gemma2MLP) and _in_decoder(name)):
+                tag = "decoder_mlp"
+            elif ("decoder_attn" in scope and "decoder" not in scope
+                  and isinstance(mod, Gemma2AttentionWithExpert) and _in_decoder(name)):
+                tag = "decoder_attn"
+            if tag is None or getattr(mod, "_gb0_compiled", False):
+                continue
+            compiled = torch.compile(mod.forward, **kw)
+            if tag in ("decoder", "decoder_attn"):
+                compiled = _decoder_kv_shim(mod, compiled)
+            mod.forward = compiled
+            mod._gb0_compiled = True
+            counts[tag] = counts.get(tag, 0) + 1
+        if self.ctx.is_main:
+            log.info(
+                "GigaBrain07 torch.compile ENABLED: scope=%s compiled=%s kwargs=%s",
+                sorted(scope), counts, kw,
+            )
+        if not counts:
+            raise RuntimeError("model.compile_model=true but no module matched compile_scope")
+        if self.ctx.is_main:
+            import atexit
+
+            def _report_dynamo():
+                try:
+                    from torch._dynamo.utils import counters
+                    gb = dict(counters.get("graph_break", {}))
+                    st = dict(counters.get("stats", {}))
+                    fr = dict(counters.get("frames", {}))
+                    print("[gb0-compile-health] frames=%s stats=%s graph_breaks=%d %s"
+                          % (fr, st, sum(gb.values()), list(gb.items())[:10]), flush=True)
+                except Exception as e:  # pragma: no cover
+                    print("[gb0-compile-health] unavailable: %r" % (e,), flush=True)
+
+            atexit.register(_report_dynamo)
+
+    # ───────────────────────── [compile] opt-in per-step peak-memory log ─────────────
+    def _on_step_end(self, metrics):
+        super()._on_step_end(metrics)
+        if os.environ.get("GB0_MEM_LOG", "0") == "1" and torch.cuda.is_available():
+            alloc = torch.cuda.max_memory_allocated() / 2**30
+            resv = torch.cuda.max_memory_reserved() / 2**30
+            if self.ctx.is_main:
+                print("[gb0-mem] peak_allocated_GB=%.2f peak_reserved_GB=%.2f" % (alloc, resv),
+                      flush=True)
+            torch.cuda.reset_peak_memory_stats()
 
     # ───────────────────────── optimizer (giga AdamW, single group) ───────────
     def _build_optimizer(self) -> torch.optim.Optimizer:
@@ -288,6 +463,90 @@ class GigaBrain07Trainer(FinetuneTrainer):
 
     # ───────────────────────── forward + loss (giga forward_step/parse) ───────
     def _train_forward(self, batch) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+        # [compile] opt-in one-shot saved-activation census (GB0_MEM_DIAG=1);
+        # default path is a plain delegation (no behavior change).
+        if os.environ.get("GB0_MEM_DIAG", "0") != "1":
+            return self._train_forward_impl(batch)
+        self._gb0_diag_calls = getattr(self, "_gb0_diag_calls", 0) + 1
+        if self._gb0_diag_calls != 2 or not self.ctx.is_main:
+            return self._train_forward_impl(batch)
+        import collections
+        stack, hooks, seen = [], [], {}
+
+        def _post(m, a, o, n):
+            if stack and stack[-1] == n:
+                stack.pop()
+            return None  # never replace the module output
+
+        for name, mod in self.model.named_modules():
+            hooks.append(mod.register_forward_pre_hook(lambda m, a, n=name: stack.append(n)))
+            hooks.append(mod.register_forward_hook(lambda m, a, o, n=name: _post(m, a, o, n)))
+
+        def pack(t):
+            try:
+                if t.is_cuda:
+                    st = t.untyped_storage()
+                    k = st.data_ptr()
+                    if k not in seen:
+                        seen[k] = (st.nbytes(), stack[-1] if stack else "<top>",
+                                   tuple(t.shape), str(t.dtype))
+            except Exception:
+                pass
+            return t
+
+        torch.cuda.synchronize()
+        m0 = torch.cuda.memory_allocated()
+        # per-module allocated-memory delta (post - pre), synchronized
+        curve = []
+        pre_mem = {}
+
+        def _mpre(m, a, n):
+            torch.cuda.synchronize()
+            pre_mem.setdefault(n, []).append(torch.cuda.memory_allocated())
+
+        def _mpost(m, a, o, n):
+            torch.cuda.synchronize()
+            now = torch.cuda.memory_allocated()
+            p = pre_mem[n].pop() if pre_mem.get(n) else now
+            curve.append((n, (now - p) / 2**30, (now - m0) / 2**30))
+            return None
+
+        for name, mod in self.model.named_modules():
+            short = name.replace("._checkpoint_wrapped_module", "")
+            depth = short.count(".")
+            if (short.startswith("paligemma_with_expert.layers.") and depth == 2) or \
+               (short.startswith("paligemma_with_expert.vision_tower.encoder.layers.") and depth == 4) or \
+               (depth <= 1 and short):
+                if short != name:
+                    continue  # hook the CheckpointWrapper (outer) only
+                hooks.append(mod.register_forward_pre_hook(lambda m, a, n=short: _mpre(m, a, n)))
+                hooks.append(mod.register_forward_hook(lambda m, a, o, n=short: _mpost(m, a, o, n)))
+        with torch.autograd.graph.saved_tensors_hooks(pack, lambda t: t):
+            if os.environ.get("GB0_MEM_SNAP"):
+                torch.cuda.memory._record_memory_history(max_entries=400000)
+            out = self._train_forward_impl(batch)
+            if os.environ.get("GB0_MEM_SNAP"):
+                torch.cuda.memory._dump_snapshot(os.environ["GB0_MEM_SNAP"])
+                torch.cuda.memory._record_memory_history(enabled=None)
+        torch.cuda.synchronize()
+        m1 = torch.cuda.memory_allocated()
+        for h in hooks:
+            h.remove()
+        for n, d, c in curve:
+            print("[gb0-memcurve] %-60s delta=%.3f GB cum=%.2f GB" % (n, d, c), flush=True)
+        agg = collections.Counter()
+        for nb, name, _, _ in seen.values():
+            agg[".".join(name.split(".")[:5])] += nb
+        tot = sum(v[0] for v in seen.values())
+        print("[gb0-memdiag] fwd_alloc_growth_GB=%.2f saved_outside_AC_GB=%.2f n=%d"
+              % ((m1 - m0) / 2**30, tot / 2**30, len(seen)), flush=True)
+        for k, v in agg.most_common(25):
+            print("[gb0-memdiag]   %-70s %.3f GB" % (k, v / 2**30), flush=True)
+        for nb, name, shp, dt in sorted(seen.values(), key=lambda x: -x[0])[:15]:
+            print("[gb0-memdiag]   big %.3f GB %s %s %s" % (nb / 2**30, name, shp, dt), flush=True)
+        return out
+
+    def _train_forward_impl(self, batch) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         from giga_brain_0.giga_brain_0_trainer import (
             _apply_skip_loss_mask,
             _get_flow_action_horizon,

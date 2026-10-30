@@ -16,7 +16,7 @@ YAML ``model:`` section.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 
 @dataclass(frozen=True)
@@ -61,6 +61,27 @@ class GigaBrain07ModelConfig:
     # flow-matching multi-sample (giga default: off -> batch_mul=1)
     enable_multi_flow_samples: bool = False
     flow_matching_batch_mul: int = 4
+
+    # ── [compile] Opt-in regional torch.compile (default OFF = eager, unchanged) ──
+    # Applied by GigaBrain07Trainer AFTER AC + FSDP2 wrapping by replacing the
+    # *inner* module's instance ``forward`` (so FSDP2 hooks and the AC
+    # CheckpointWrapper stay eager around the compiled region).
+    # compile_scope: comma list of regions:
+    #   decoder      -> each Gemma2DecoderLayerWithExpert (26)
+    #   vision       -> each SigLIP encoder layer (27)
+    #   decoder_mlp  -> only Gemma2MLP submodules inside the decoder
+    #   decoder_attn -> only Gemma2AttentionWithExpert submodules
+    compile_model: bool = False
+    compile_scope: str = "decoder,vision"
+    compile_mode: str = "default"
+    compile_dynamic: Optional[bool] = False
+    compile_fullgraph: bool = False
+    # [compile] Opt-in (default OFF): give each decoder layer only ITS OWN
+    # past_key_values entry in the 2-stage (prefix-KV -> suffix) train forward.
+    # Without it FSDP2's forward-input cast (fp32) copies the WHOLE 26-layer
+    # bf16 KV dict at every layer and AC keeps those copies alive until
+    # backward -> O(L^2) memory (~45.8GB at bs10). Values unchanged.
+    decoder_kv_slice: bool = False
 
     def adam_betas(self) -> Tuple[float, float]:
         return (self.adam_beta1, self.adam_beta2)
