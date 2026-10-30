@@ -4,7 +4,7 @@
 """InternVL packed-batch layout for DP load balancing.
 
 ``training/vlm/sft_internvl.py`` binds the image size and the image-context token
-id, and installs the layout for the engine's DP load balancing.
+id, and installs the layout for ``data/dp_balance``.
 """
 
 from __future__ import annotations

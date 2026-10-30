@@ -495,6 +495,16 @@ def _patch_qwen3vl_skip_unused_lm_head() -> bool:
                 **kwargs,
             )
 
+        # Collect the per-layer (pre-final-RMSNorm) hidden states. The GR00T
+        # backbone consumes the last decoder layer's PRE-norm output as
+        # ``backbone_features`` (matching the official Isaac-GR00T backbone,
+        # which reads ``output_hidden_states=True`` -> ``hidden_states[-1]``).
+        # NOTE: this skip-lm-head branch is only used when the caller passes
+        # ``loongforge_skip_lm_head=True``; the eval backbone forward no longer
+        # takes this path (see Qwen3VLBackbone.forward), because in transformers
+        # 4.57.3 ``self.model(...)`` here does not populate ``hidden_states`` and
+        # would leave only the post-norm ``last_hidden_state``.
+        kwargs.pop("output_hidden_states", None)
         outputs = self.model(
             input_ids=input_ids,
             pixel_values=pixel_values,
@@ -511,11 +521,12 @@ def _patch_qwen3vl_skip_unused_lm_head() -> bool:
         )
         hidden_states = outputs[0]
         logits = hidden_states.new_empty((*hidden_states.shape[:-1], 0))
+        hidden_states_seq = getattr(outputs, "hidden_states", None) or (hidden_states,)
         return output_cls(
             loss=None,
             logits=logits,
             past_key_values=getattr(outputs, "past_key_values", None),
-            hidden_states=(hidden_states,),
+            hidden_states=hidden_states_seq,
             attentions=getattr(outputs, "attentions", None),
             rope_deltas=getattr(outputs, "rope_deltas", None),
         )
@@ -1324,12 +1335,17 @@ class Qwen3Backbone(torch.nn.Module):
             self.language_model.layers.pop(-1)
 
         self._selected_layer_features = None
-        if self._uses_transformers_5_compat:
-            # Transformers 5.x packages the post-norm tensor as the final hidden
-            # state, so capture the configured decoder block output explicitly.
-            self.language_model.layers[-1].register_forward_hook(
-                self._capture_selected_layer_features
-            )
+        # Capture the LAST (post-truncation) decoder layer's PRE-final-RMSNorm
+        # output as backbone_features, for BOTH transformers 4.x and 5.x. This
+        # matches the official Isaac-GR00T backbone (output_hidden_states=True ->
+        # hidden_states[-1], i.e. pre-norm). Relying on the model's own
+        # hidden_states/last_hidden_state is unsafe here: the skip-lm-head path
+        # returns the text model's post-``self.norm`` last_hidden_state, which
+        # applies one extra final RMSNorm to the DiT conditioning (std ~33 -> ~2,
+        # first-token norm-sink erased) and corrupts every predicted action.
+        self.language_model.layers[-1].register_forward_hook(
+            self._capture_selected_layer_features
+        )
 
         self.select_layer = select_layer
         self.set_trainable_parameters(tune_llm, tune_visual, tune_top_llm_layers)
@@ -1904,12 +1920,9 @@ class Qwen3Backbone(torch.nn.Module):
                 **model_input,
                 output_hidden_states=not self._uses_transformers_5_compat,
             )
-        if self._uses_transformers_5_compat:
-            if self._selected_layer_features is None:
-                raise RuntimeError("Qwen3-VL selected decoder layer did not produce features.")
-            outputs = self._selected_layer_features.to(torch.float32)
-        else:
-            outputs = model_outputs.hidden_states[-1].to(torch.float32)
+        if self._selected_layer_features is None:
+            raise RuntimeError("Qwen3-VL selected decoder layer did not produce features.")
+        outputs = self._selected_layer_features.to(torch.float32)
         image_mask = vl_input["input_ids"] == self.model.config.image_token_id
         attention_mask = vl_input["attention_mask"] == 1
         return BatchFeature(

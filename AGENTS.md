@@ -21,9 +21,10 @@ bash examples/qwen2.5/pretrain/pretrain_qwen2.5_7b.sh              # LLM/VLM/dif
 bash examples/pi05/finetuning/sft_pi05_fsdp.sh                # embodied (Torch)
 
 # Test. Details for each suite are in tests/README.md.
-python -m pytest tests/test_*.py                                   # CI and release contract tests
+python -m pytest tests/test_*.py                                   # CI contracts and model/data unit tests
 python -m pytest tests/llm_vlm/unit                                # Megatron-side unit tests
-python -m pytest tests/embodied/unit tests/embodied/evaluation     # Torch-side unit tests and embodied evaluation
+python -m pytest tests/embodied/unit                               # Torch-side unit tests
+python -m pytest loongforge/evaluation/embodied/unit_tests          # Embodied evaluation
 bash tests/llm_vlm/main_start.sh                                   # LLM/VLM E2E
 bash tests/embodied/run.sh --chip a --list_models                  # list embodied regression targets
 bash tests/embodied/run.sh --chip a --models <name> --dry_run      # validate setup, then drop --dry_run
@@ -31,7 +32,7 @@ bash tests/mcore_bridge_roundtrip/qwen3/8b_bridge_roundtrip.sh     # HF <-> Mcor
 
 # Check
 ruff check <file>
-python3 ci/sensitive_scan.py --paths <path>                        # secrets and internal-info scan
+python3 .github/scripts/sensitive_scan.py --paths <path>            # secrets and internal-info scan
 pre-commit run --files <file>                                      # SPDX headers, gitleaks, sensitive scan
 ```
 

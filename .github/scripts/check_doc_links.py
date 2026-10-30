@@ -10,8 +10,8 @@ validator catches stale ``examples/`` and ``configs/`` paths in CI.
 
 Usage::
 
-    python3 ci/check_doc_links.py            # scan repository Markdown
-    python3 ci/check_doc_links.py README.md  # scan selected files
+    python3 .github/scripts/check_doc_links.py            # scan repository Markdown
+    python3 .github/scripts/check_doc_links.py README.md  # scan selected files
 """
 
 from __future__ import annotations
@@ -169,8 +169,13 @@ def scan_documents(repo: Path, documents: list[Path]):
     return findings, scanned
 
 
+def repo_root() -> Path:
+    """Return the repository root for this script's location."""
+    return Path(__file__).resolve().parents[2]
+
+
 def main(arguments: list[str]) -> int:
-    repo = Path(__file__).resolve().parents[1]
+    repo = repo_root()
     changed_since = None
     paths = arguments
     if arguments[:1] == ["--changed-since"]:

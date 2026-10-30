@@ -13,7 +13,7 @@ This directory contains the CI/CD workflows for LoongForge.
 | `doc-links.yml` | Reusable workflow | Check Markdown references to repository `examples/` and `configs/` paths |
 | `secrets.yml` | Reusable workflow | Scan PR commits for leaked secrets via gitleaks |
 | `lint.yml` | Reusable workflow | Run Ruff on changed Python files |
-| `sensitive.yml` | Reusable workflow | Scan tracked files for internal identifiers via `ci/sensitive_scan.py` |
+| `sensitive.yml` | Reusable workflow | Scan tracked files for internal identifiers via `.github/scripts/sensitive_scan.py` |
 | `build.yml` | Reusable workflow | Build sdist + wheel and run Python 3.12 import smoke |
 | `submodule-sync.yml` | repository dispatch / workflow dispatch + manual | Sync `third_party/Loong-Megatron` to its tracked branch and push the submodule pointer update |
 | `auto-label.yml` | Issue/PR open/edit | Auto-label issues and PRs by keyword matching |
@@ -107,6 +107,11 @@ the published manifest's image configuration against the pulled image and
 its registry digest against the digest returned by push. Each stage reports
 progress and elapsed time. The publisher does not run a GitHub runner.
 Passwords are sent to Docker over stdin using a temporary Docker configuration.
+Post-push verification uses Python 3 and the authenticated Registry API on the
+publisher, independently of its Docker CLI version. It checks the tag's manifest
+hash and image configuration, retrying transient HTTP or network failures up to
+four times with bounded timeouts; authentication and content mismatches fail
+immediately. Verification retries do not repeat the pull or push.
 Registry login retries temporary network failures up to three times, waiting
 two and four seconds between attempts; authentication failures stop immediately.
 Reports distinguish `login_iregistry` from `login_dockerhub`. A redacted
@@ -203,11 +208,25 @@ because runner filesystem roots may differ.
 The protected release runner must set
 `LOONGFORGE_ALLOW_RELEASE_IMAGE_BUILD=true` in that config.
 
-GitHub prints self-hosted runner metadata before the first workflow step, so a
-workflow cannot mask `Runner name`, `Machine name`, or the runner proxy line.
+GitHub prints self-hosted runner metadata before the first workflow step.
 Register the production runner with a non-sensitive name and run it on a host
-or container whose hostname is also non-sensitive. If those automatic lines
-must never be public, use a private runner repository for the execution job.
+or container whose hostname is also non-sensitive.
+Before running a self-hosted release or GPU regression job, configure the
+repository-level `RUNNER_PRIVATE_LOG_MASKS` secret in both the upstream and
+fork repositories.
+Store the exact private proxy URL and its hostname on separate lines, without
+adding these values to source files or repository variables. Every self-hosted
+release or GPU regression job references this secret in its job environment,
+including debug cleanup, which does not use a deployment environment. The runner
+registers
+secret values and their individual lines before printing `Set up job`, so the
+startup proxy endpoint is masked too. A workflow step or job-started hook runs
+too late to protect these messages; the existing metadata-mask step still
+protects values loaded by later steps.
+Update the secret before changing a runner's proxy, and validate a small
+self-hosted job's startup log before running a release. Release dry-run skips
+self-hosted execution and cannot validate startup masking. Existing public
+logs retain their original content and need separate cleanup.
 
 Hooks must return nonzero on failure and must not print credentials, signed
 source URLs, runner-local filesystem paths, or physical accelerator details to

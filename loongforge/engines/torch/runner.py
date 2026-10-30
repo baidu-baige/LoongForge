@@ -811,6 +811,7 @@ class TorchRunner:
             epoch=self.current_epoch,
             dataloader_state=self._get_dataloader_state(),
             model_cfg=self.model_cfg,
+            data_cfg=self.data_cfg,
         )
 
     def _apply_lora_before_wrap(self, model):

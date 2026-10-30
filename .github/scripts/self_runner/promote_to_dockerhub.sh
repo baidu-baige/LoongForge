@@ -17,7 +17,7 @@ source "$script_dir/load_release_config.sh"
 source "$script_dir/load_release_credentials.sh" iregistry
 source "$script_dir/load_release_credentials.sh" dockerhub
 
-redactor="$script_dir/../../../ci/redact_ci_artifact.py"
+redactor="$script_dir/../redact_ci_artifact.py"
 ssh_options=(-o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=3)
 remote_config=""
 destination_created=false
@@ -148,22 +148,21 @@ push_digest="$(sed -nE 's/.*digest: (sha256:[a-f0-9]{64}).*/\1/p' "$push_log" | 
 stage=verify
 verify_started=$SECONDS
 printf 'dockerhub-promotion: verify started\n' | tee -a "$promotion_log"
-manifest="$(remote "$(docker_command manifest inspect --verbose "$dockerhub_ref")" \
-  2> >(tee -a "$promotion_log" >&2))"
-registry_digest="$(printf '%s' "$manifest" | python3 -c '
-import json, sys
-data = json.load(sys.stdin)
-entries = data if isinstance(data, list) else [data]
-for entry in entries:
-    manifest = entry.get("SchemaV2Manifest") or entry.get("OCIManifest") or {}
-    if manifest.get("config", {}).get("digest") == sys.argv[1]:
-        digest = entry.get("Descriptor", {}).get("digest", "")
-        if digest == sys.argv[2]:
-            print(digest)
-            break
-else:
-    sys.exit("publisher: remote image content or digest does not match")
-' "$source_id" "$push_digest" 2> >(tee -a "$promotion_log" >&2))"
+# Read the tag through the authenticated Registry API. Older Docker clients can
+# fail manifest inspection even after their daemon successfully pushes an image.
+# Credentials stay in the private configuration created by this promotion.
+verify_script="$script_dir/verify_dockerhub_manifest.py"
+[[ -f "$verify_script" ]] || {
+  echo 'publisher: verifier script is unavailable' >&2
+  exit 2
+}
+printf -v verify_command \
+  'HTTPS_PROXY=%q NO_PROXY=%q timeout --kill-after=10s 180s python3 - %q %q %q %q' \
+  "$LOONGFORGE_DOCKERHUB_PROXY" "$LOONGFORGE_DOCKERHUB_NO_PROXY" \
+  "$remote_config" "$dockerhub_ref" "$source_id" "$push_digest"
+registry_digest="$(ssh "${ssh_options[@]}" "$LOONGFORGE_RELEASE_PUBLISHER_ALIAS" "$verify_command" \
+  2> >(python3 "$redactor" --stream | tee -a "$promotion_log" >&2) < "$verify_script")"
+[[ "$registry_digest" == "$push_digest" ]]
 printf 'dockerhub-promotion: source image content and published digest verified\n' | tee -a "$promotion_log"
 printf 'dockerhub-promotion: verify finished in %ss\n' "$((SECONDS - verify_started))" | tee -a "$promotion_log"
 if [[ -n "${GITHUB_OUTPUT:-}" ]]; then

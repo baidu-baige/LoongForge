@@ -10,13 +10,13 @@ RFC1918 addresses, and pre-rename internal project names. Rules live in
 ``sensitive_rules.py`` next to this file.
 
 Usage:
-    python3 ci/sensitive_scan.py                  # tracked + staged files
-    python3 ci/sensitive_scan.py --history        # also git metadata
-    python3 ci/sensitive_scan.py --strict         # warnings also fail
-    python3 ci/sensitive_scan.py --strict --ci-summary  # CI-safe aggregate
-    python3 ci/sensitive_scan.py --format json
-    python3 ci/sensitive_scan.py --rule corp-email --rule internal-domain
-    python3 ci/sensitive_scan.py --paths docker/ tests/
+    python3 .github/scripts/sensitive_scan.py                  # tracked + staged files
+    python3 .github/scripts/sensitive_scan.py --history        # also git metadata
+    python3 .github/scripts/sensitive_scan.py --strict         # warnings also fail
+    python3 .github/scripts/sensitive_scan.py --strict --ci-summary  # CI-safe aggregate
+    python3 .github/scripts/sensitive_scan.py --format json
+    python3 .github/scripts/sensitive_scan.py --rule corp-email --rule internal-domain
+    python3 .github/scripts/sensitive_scan.py --paths docker/ tests/
 
 Exit codes:
     0  no blocking findings

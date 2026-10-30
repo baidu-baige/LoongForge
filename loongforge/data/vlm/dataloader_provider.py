@@ -617,7 +617,7 @@ def build_full_hetero_encoder_energon_iterator(
 ):
     """Build encoder iterator for full_hetero_dp with Energon dataloader.
 
-    Creates a separate EnergonDataloader (same dataset config as decoder) and
+    Receives a separate EnergonDataloader (same dataset config as decoder) and
     wraps it with EncoderStridedIterator to yield only microbatches assigned
     to this PP rank.
     """

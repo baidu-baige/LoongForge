@@ -631,6 +631,7 @@ class Gr00tN1d7Policy(nn.Module):
         image_crop_size = list(pk.get("image_crop_size") or [230, 230])
         crop_fraction = pk.get("crop_fraction", 0.95)
         shortest_image_edge = pk.get("shortest_image_edge", 256)
+        letter_box_transform = bool(pk.get("letter_box_transform", False))
         _, self._predict_action_eval_image_transform = build_image_transforms(
             image_target_size,
             image_crop_size,
@@ -638,19 +639,16 @@ class Gr00tN1d7Policy(nn.Module):
             None,  # color_jitter_params: train-only augmentation
             shortest_image_edge,
             crop_fraction,
-            # Not read from processor_config.json: the checkpoint stores
-            # letter_box_transform=false, but official Gr00tN1d7Processor marks
-            # that field "stored but not actively used" and builds LetterBoxPad
-            # unconditionally. Padding is a no-op on already-square frames.
-            letter_box_transform=True,
+            letter_box_transform=letter_box_transform,
         )
         logger.info(
             "GR00T-N1.7 eval image pipeline: target=%s crop=%s crop_fraction=%s "
-            "shortest_edge=%s letterbox=True; state/action norm: percentiles=%s clip=%s",
+            "shortest_edge=%s letterbox=%s; state/action norm: percentiles=%s clip=%s",
             image_target_size,
             image_crop_size,
             crop_fraction,
             shortest_image_edge,
+            letter_box_transform,
             self._predict_action_use_percentiles,
             self._predict_action_clip_outliers,
         )

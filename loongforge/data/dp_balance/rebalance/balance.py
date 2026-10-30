@@ -12,8 +12,8 @@ Main functions:
 - gather_sample_info_across_dp: Gather sample information across DP ranks
 - solve_sample_dp_reorder_plan: Compute optimal redistribution plan
 - redistribute_tensors: Execute tensor redistribution
-- reorder_data_for_internvl: Reorder InternVL model data
-- reorder_data_for_vlm: Reorder VLM data
+- data.vlm.internvl.dp_balance_layout.reorder_data_for_internvl: Reorder InternVL model data
+- data.vlm.dp_balance_layout.reorder_data_for_vlm: Reorder VLM data
 - reorder_data_across_dp: Main entry point for data reordering
 """
 
@@ -96,7 +96,7 @@ _load_tracker = _MicroBatchLoadTracker()
 class RebalanceContext:
     """Helpers a batch layout uses to reorder one micro-batch.
 
-    Bundles the engine's gather, plan, and redistribution primitives so a
+    Bundles dp_balance's gather, plan, and redistribution primitives so a
     layout owns only its packed-batch format, not the process groups.
     """
 
