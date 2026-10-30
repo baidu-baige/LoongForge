@@ -69,6 +69,14 @@ _ZERO_OPTIMIZER_DIR = "zero_optimizer"
 _ZERO_OPTIMIZER_METADATA_FILE = f"{_ZERO_OPTIMIZER_DIR}/metadata.json"
 _VALID_FORMATS = ("safetensors", "pt", "dcp")
 
+# Upper bound (seconds) for draining an in-flight ZeRO optimizer write after a
+# failed DCP save. The write normally completes in seconds; this only guards
+# against a stuck filesystem so the staging error isn't masked by a hang.
+# Overridable via the LOONGFORGE_ZERO_SAVE_DRAIN_TIMEOUT env var (seconds).
+_ZERO_SAVE_DRAIN_TIMEOUT_SECONDS = int(
+    os.environ.get("LOONGFORGE_ZERO_SAVE_DRAIN_TIMEOUT", "600")
+)
+
 # Module-level state for async DCP save. At most one in-flight save at a time;
 # subsequent saves (or shutdown) wait on the previous future before launching a
 # new one to avoid contending CPU-staging buffers and to prevent
@@ -835,9 +843,19 @@ def _save_dcp(
             dcp_future = dcp.async_save(state, storage_writer=writer)
         except Exception:
             # A synchronous failure during DCP staging must not leave the
-            # ZeRO writer racing a doomed save into the step dir.
+            # ZeRO writer racing a doomed save into the step dir. The drain is
+            # bounded so a stuck filesystem can't mask the staging error below.
             if zero_future is not None:
-                concurrent.futures.wait([zero_future])
+                _, not_done = concurrent.futures.wait(
+                    [zero_future], timeout=_ZERO_SAVE_DRAIN_TIMEOUT_SECONDS
+                )
+                if not_done:
+                    logger.warning(
+                        "Timed out after %ds waiting for the background ZeRO "
+                        "optimizer write to drain after a failed DCP save; "
+                        "proceeding to raise the staging error.",
+                        _ZERO_SAVE_DRAIN_TIMEOUT_SECONDS,
+                    )
             raise
         if zero_future is None:
             return dcp_future
