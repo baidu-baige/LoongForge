@@ -13,7 +13,7 @@ from typing import List
 from megatron.core.transformer.multi_token_prediction import get_mtp_ranks
 
 from loongforge.training.vlm import pretrain_vlm
-from loongforge.engines.megatron.training_utils import pretrain
+from loongforge.engines.megatron.runner import pretrain
 
 from loongforge.engines.megatron import get_args, get_model_config
 

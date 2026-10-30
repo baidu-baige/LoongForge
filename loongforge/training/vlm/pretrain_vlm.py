@@ -27,17 +27,14 @@ from transformers import DataCollatorForSeq2Seq
 from loongforge.data import TrainingPhase
 from loongforge.engines.megatron import get_args, get_chat_template, get_model_config, get_tokenizer
 
-from loongforge.engines.megatron.training_utils import dump_model_input_example_once
-from loongforge.engines.megatron.training_utils import pretrain
-from loongforge.engines.megatron.data_padding import (
-    llm_pad_to_multiple_of,
-    vlm_packed_padding,
-)
+from loongforge.engines.megatron.runner import dump_model_input_example_once
+from loongforge.engines.megatron.runner import pretrain
 from loongforge.data.llm.sft_dataloader import (
     SFTLoaderConfig,
     build_full_hetero_encoder_data_iterator,
     build_sft_cyclic_iterators,
     build_sft_data_collator,
+    llm_pad_to_multiple_of,
     load_pretokenized_dataset,
 )
 from loongforge.data.vlm.dataloader_provider import (
@@ -61,7 +58,7 @@ from loongforge.engines.megatron.dp_balance.rebalance.layout import (
     BatchLayout,
     install_batch_layout,
 )
-from loongforge.engines.megatron.utils import get_batch_on_this_cp_rank
+from loongforge.engines.megatron.runner import get_batch_on_this_cp_rank
 from loongforge.engines.megatron.get_loss_func import default_loss_func
 from loongforge.engines.megatron.initialize import (
     change_parallel_state,
@@ -461,7 +458,11 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None,
         collator = build_sft_data_collator(
             partial(
                 VLMPretrainCollator,
-                packed_padding=vlm_packed_padding(args),
+                tp_size=args.tensor_model_parallel_size,
+                cp_size=args.context_parallel_size,
+                has_sp=args.sequence_parallel,
+                fp8_enabled=bool(getattr(args, "fp8", None)),
+                fp8_recipe=getattr(args, "fp8_recipe", None),
                 packing_sft_data=args.packing_sft_data,
                 model_config=get_model_config(),
             ),

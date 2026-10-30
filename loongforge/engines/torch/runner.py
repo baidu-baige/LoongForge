@@ -388,8 +388,10 @@ class TorchRunner:
     def _setup(self):
         """One-shot initialization of all training resources."""
         from loongforge.engines.torch.distributed import DistributedContext
-        from loongforge.engines.torch.utils.utils import set_seed, setup_logging, log_stage
-        from loongforge.engines.torch.utils.logging import TrainingLogger, log_effective_config
+        from loongforge.engines.torch.utils.utils import set_seed
+        from loongforge.engines.torch.utils.logging import (
+            TrainingLogger, log_effective_config, setup_logging, log_stage,
+        )
         from loongforge.engines.torch.distributed.checkpoint import (
             get_latest_checkpoint, resume_training_state,
         )
@@ -794,7 +796,7 @@ class TorchRunner:
     def _apply_lora_before_wrap(self, model):
         """Apply generic LoRA injection before distributed wrapping."""
         from loongforge.engines.torch.lora import apply_lora, is_lora_enabled, load_adapter_into_model
-        from loongforge.engines.torch.utils.utils import log_stage
+        from loongforge.engines.torch.utils.logging import log_stage
         if not is_lora_enabled(self.training_args):
             return model
         resuming_adapter = self._lora_resume_adapter_path is not None

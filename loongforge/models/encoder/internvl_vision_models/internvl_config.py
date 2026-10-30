@@ -50,7 +50,7 @@ class InternVisionConfig(BaseModelConfig):
     model_spec = None
     image_token_id: int = None
     # Unlike the other vision towers, the id of this token depends on the tokenizer in use;
-    # model_config.py resolves image_token_id from it when image_token_id is None.
+    # parser.py resolves image_token_id from it when image_token_id is None.
     image_token: str = IMG_CONTEXT_TOKEN
     model_type: str = "intern_vit"
 

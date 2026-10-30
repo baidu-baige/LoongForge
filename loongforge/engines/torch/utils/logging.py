@@ -3,17 +3,20 @@
 
 """Training logging utilities for metrics, W&B, and progress tracking."""
 
+import contextlib
 import json
 import logging
 import os
 import time
 from contextlib import contextmanager
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 import torch
 import wandb
 from torch.utils.tensorboard import SummaryWriter
 
+from loongforge.engines.torch.distributed.utils import is_rank_zero
 from loongforge.engines.torch.optimizer import get_grad_norm
 
 
@@ -23,6 +26,71 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════════════════
 # Logging setup and stage helpers
 # ═══════════════════════════════════════════════════════════════════
+
+
+def setup_logging(output_dir: str, rank: int):
+    """Configure logging: rank0 gets INFO + file handler, others get WARNING only.
+
+    All handlers are registered in a single ``basicConfig(force=True)`` call
+    so re-invocations (or prior implicit StreamHandlers) do not stack up and
+    cause duplicate output.
+    """
+    level = logging.INFO if rank == 0 else logging.WARNING
+
+    sh = logging.StreamHandler()
+    sh.setLevel(level)
+    sh.setFormatter(
+        logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    )
+    handlers = [sh]
+
+    if rank == 0 and output_dir:
+        log_dir = os.path.join(output_dir, "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        log_file = os.path.join(log_dir, f"train_{datetime.now():%Y%m%d_%H%M%S}.log")
+        fh = logging.FileHandler(log_file, encoding="utf-8")
+        fh.setLevel(logging.INFO)
+        fh.setFormatter(
+            logging.Formatter("[%(asctime)s][%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+        )
+        handlers.append(fh)
+
+    logging.basicConfig(level=level, handlers=handlers, force=True)
+
+
+@contextlib.contextmanager
+def log_stage(
+    tag: str,
+    start_msg: str = "",
+    end_msg: str = "done in {elapsed}",
+    log: Optional[logging.Logger] = None,
+):
+    """Context manager that wraps a setup stage with start/end logs + timing.
+
+    Emits ``[tag] start_msg`` before entering the block and
+    ``[tag] end_msg`` after leaving (the ``{elapsed}`` placeholder is
+    interpolated with the formatted duration, e.g. ``"3.21s"``).
+
+    Rank-0 gating is built in: when ``torch.distributed`` is initialized and
+    the current rank is not 0, the context manager runs silently.
+
+    Example
+    -------
+    >>> with log_stage("model", "building", "built in {elapsed}"):
+    ...     model = build_model()
+    """
+    out = log or logger
+    is_main = is_rank_zero()
+
+    if is_main and start_msg:
+        out.info(f"[{tag}] {start_msg}")
+    t0 = time.perf_counter()
+    try:
+        yield
+    finally:
+        if is_main and end_msg:
+            elapsed = f"{time.perf_counter() - t0:.2f}s"
+            out.info(f"[{tag}] {end_msg.format(elapsed=elapsed)}")
 
 
 # ═══════════════════════════════════════════════════════════════════

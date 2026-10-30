@@ -18,7 +18,7 @@ def resolve_linear_selection(
     raw_skip_modules: str | list[str] | None,
 ) -> tuple[list[str], set[str]]:
     """Resolve FP8 subtree and skip patterns against exact ``nn.Linear`` keys."""
-    from loongforge.engines.torch.arg_types import parse_module_key_patterns
+    from loongforge.engines.torch.utils.utils import parse_module_key_patterns
 
     module_patterns = parse_module_key_patterns(
         raw_module_patterns,

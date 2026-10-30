@@ -7,6 +7,7 @@ import logging
 import os
 import tempfile
 from dataclasses import dataclass
+from math import gcd
 from typing import Any, Dict, List, Optional
 
 import torch
@@ -16,6 +17,7 @@ from transformers.utils import PaddingStrategy
 
 from megatron import energon
 from megatron.core.datasets.utils import get_blend_from_list
+from megatron.core.models.multimodal import context_parallel
 from megatron.core.utils import log_single_rank
 from loongforge.data import IGNORE_INDEX, TrainingPhase
 from .base.task_encoder import print_error_handler
@@ -124,6 +126,28 @@ class VLMDataConfig:
         )
 
 
+def _lcm(lhs, rhs):
+    return lhs * rhs // gcd(lhs, rhs)
+
+
+def _sequence_padding_factor(tp_size=1, cp_size=1, has_sp=False):
+    if has_sp and cp_size > 1:
+        return tp_size * cp_size * 2
+    if cp_size > 1:
+        return cp_size * 2
+    if has_sp:
+        return tp_size
+    return 1
+
+
+def _fp8_padding_factor(fp8_recipe=None):
+    if fp8_recipe == "mxfp8":
+        return 32
+    if fp8_recipe == "blockwise":
+        return 128
+    return 16
+
+
 def _has_packed_cu_lengths(batch: Dict[str, Any]) -> bool:
     """Return whether a collated batch carries real packed sequence boundaries."""
     cu_lengths = batch.get("cu_lengths")
@@ -134,13 +158,24 @@ def _has_packed_cu_lengths(batch: Dict[str, Any]) -> bool:
     return cu_lengths.ndim >= 2 and cu_lengths.shape[-1] > 1
 
 
-def seq_padding_for_cp(data, padding, pad_token_id=PAD_TOKEN_ID):
-    """Pad every packed segment, then the packed total, as ``padding`` prescribes.
+def seq_padding_for_cp(
+    data,
+    tp_size=1,
+    cp_size=1,
+    has_sp=False,
+    fp8_enabled=False,
+    fp8_recipe=None,
+    pad_token_id=PAD_TOKEN_ID,
+):
+    """Sequence padding for CP and/or SP
 
     Args:
         data (dict): Data from dataloader.
-        padding: ``segment_padding(length)`` and ``total_multiple`` from the training
-            method (``engines/megatron/data_padding.VlmPackedPadding``).
+        tp_size (int): Tensor parallel size.
+        cp_size (int): Context parallel size.
+        has_sp (bool): Model uses sequence parallelism.
+        fp8_enabled (bool): Model uses FP8 execution.
+        fp8_recipe (str): FP8 recipe. Affects required padding.
         pad_token_id (int): Token id used to pad token slots that the
             attention mask will mark as padded. Defaults to the module-level
             ``PAD_TOKEN_ID`` when the caller cannot resolve a tokenizer-aware
@@ -168,7 +203,9 @@ def seq_padding_for_cp(data, padding, pad_token_id=PAD_TOKEN_ID):
         label = labels[0, start : start + length]
         mask = attn_mask[0, start : start + length]
 
-        mp_padding_needed = padding.segment_padding(length)
+        mp_padding_needed = context_parallel.get_padding(
+            length, cp_size, tp_size, has_sp
+        )
 
         input_ids = F.pad(token, (0, mp_padding_needed), "constant", pad_token_id)
         label = F.pad(label, (0, mp_padding_needed), "constant", IGNORE_INDEX)
@@ -184,7 +221,12 @@ def seq_padding_for_cp(data, padding, pad_token_id=PAD_TOKEN_ID):
 
         start += length
 
-    final_padding_factor = padding.total_multiple
+    final_padding_factor = _sequence_padding_factor(tp_size, cp_size, has_sp)
+    if fp8_enabled:
+        fp8_padding_factor = _fp8_padding_factor(fp8_recipe)
+        if has_sp:
+            fp8_padding_factor *= tp_size
+        final_padding_factor = _lcm(final_padding_factor, fp8_padding_factor)
 
     final_padding_needed = (
         int(
@@ -229,8 +271,11 @@ class VLMPretrainCollator:
 
     tokenizer: Any
     model_config: Any
-    # Set by the training method from parallelism and precision; None means no alignment.
-    packed_padding: Optional[Any]
+    tp_size: int
+    cp_size: int
+    has_sp: bool
+    fp8_enabled: bool
+    fp8_recipe: Optional[str]
     packing_sft_data: bool
     model: Optional[Any] = None
     padding: Optional[PaddingStrategy] = None
@@ -248,8 +293,20 @@ class VLMPretrainCollator:
         batch = self._ensure_tensor(batch)
         self._pad_sequences(batch)
         is_packed = self.packing_sft_data or _has_packed_cu_lengths(batch)
-        if self.packed_padding is not None and is_packed:
-            seq_padding_for_cp(batch, self.packed_padding, pad_token_id=self._resolve_pad_token_id())
+        if is_packed and (
+            self.cp_size > 1
+            or self.has_sp
+            or (self.fp8_enabled and self.fp8_recipe == "blockwise")
+        ):
+            seq_padding_for_cp(
+                batch,
+                tp_size=self.tp_size,
+                cp_size=self.cp_size,
+                has_sp=self.has_sp,
+                fp8_enabled=self.fp8_enabled,
+                fp8_recipe=self.fp8_recipe,
+                pad_token_id=self._resolve_pad_token_id(),
+            )
         self._build_masks_and_positions(batch)
         return batch
 

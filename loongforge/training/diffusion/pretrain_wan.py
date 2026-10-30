@@ -29,7 +29,7 @@ from loongforge.data.diffusion.packed_dataset import (
 from loongforge.models.diffusion.wan.wan_flow_match import FlowMatchScheduler
 from megatron.core.packed_seq_params import PackedSeqParams
 
-from loongforge.engines.megatron.training_utils import pretrain
+from loongforge.engines.megatron.runner import pretrain
 from megatron.core import parallel_state
 import numpy as np
 

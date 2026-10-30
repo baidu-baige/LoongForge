@@ -6,7 +6,7 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
-from loongforge.engines.torch.arg_types import parse_positive_int
+from loongforge.training.cli_utils import parse_positive_int
 
 
 @dataclass(frozen=True)

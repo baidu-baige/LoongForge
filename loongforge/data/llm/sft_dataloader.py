@@ -50,6 +50,20 @@ def _cyclic_iter(iter):
             yield x
 
 
+def llm_pad_to_multiple_of(args) -> int:
+    """Sequence multiple an LLM SFT batch is padded to before the model sees it."""
+    if args.enable_chunkpipe and getattr(args, "sft_chunkpipe_mode", False):
+        return args.chunksize
+    factor = args.tensor_model_parallel_size if args.sequence_parallel else 1
+    if args.context_parallel_size > 1:
+        factor *= 2 * args.context_parallel_size
+    # TransformerEngine FP8 GEMMs want a multiple of 128.
+    # https://github.com/NVIDIA/TransformerEngine/blob/main/transformer_engine/common/gemm/cublaslt_gemm.cu#L151
+    if args.fp8:
+        factor *= 128
+    return factor
+
+
 def build_sft_data_collator(
     cls: Type[DataCollatorForSupervisedDataset],
     config: "SFTLoaderConfig",
@@ -59,8 +73,8 @@ def build_sft_data_collator(
 ) -> DataCollatorForSupervisedDataset:
     """build data collator for sft
 
-    ``pad_to_multiple_of`` is computed by the training method from parallelism and
-    precision (``engines/megatron/data_padding.py``); the data layer does not derive it.
+    The training method passes ``pad_to_multiple_of`` from
+    ``llm_pad_to_multiple_of(args)``.
     """
     assert hasattr(
         tokenizer, "tokenizer"

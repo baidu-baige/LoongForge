@@ -40,9 +40,7 @@ def wrap_model(model: nn.Module, training_args, ctx: DistributedContext, *, dmuo
     extension owns the group layout. The engine still prepares storage dtype,
     mesh, and mixed precision policy.
     """
-    # Imported here, not at module scope: train/__init__ pulls in trainers, which
-    # import this module, so a top-level import would be circular.
-    from loongforge.engines.torch.arg_types import parse_dtype_from_str
+    from loongforge.engines.torch.utils.utils import parse_dtype_from_str
 
     dtype = parse_dtype_from_str(training_args.dtype)
     # FP8 conversion must precede activation checkpointing: the checkpoint
@@ -111,7 +109,7 @@ def _wrap_fsdp(
     # defaulting the all-gather dtype to ``--dtype`` for uniform-dtype models.
     storage_dtype = dtype
     if training_args.fsdp_original_param_dtype is not None:
-        from loongforge.engines.torch.arg_types import parse_dtype_from_str
+        from loongforge.engines.torch.utils.utils import parse_dtype_from_str
 
         storage_dtype = parse_dtype_from_str(training_args.fsdp_original_param_dtype)
 
@@ -177,8 +175,7 @@ def _wrap_dmuon_fsdp(
             "Register a hooks factory in TORCH_TRAINER_TYPES (loongforge/train.py)."
         )
 
-    # Local import to break the train/__init__ -> trainers -> this module cycle.
-    from loongforge.engines.torch.arg_types import parse_dtype_from_str
+    from loongforge.engines.torch.utils.utils import parse_dtype_from_str
 
     storage_dtype = (
         parse_dtype_from_str(training_args.fsdp_original_param_dtype)

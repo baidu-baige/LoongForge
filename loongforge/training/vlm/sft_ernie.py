@@ -14,7 +14,7 @@ from megatron.training import get_timers
 from megatron.training.utils import print_rank_0
 from loongforge.engines.megatron import get_args, get_tokenizer
 from loongforge.data.vlm.ernie.data_utils import ErnieTensorDataset
-from loongforge.engines.megatron.training_utils import pretrain
+from loongforge.engines.megatron.runner import pretrain
 from megatron.core import parallel_state
 from megatron.core import mpu, tensor_parallel
 from megatron.core.packed_seq_params import PackedSeqParams

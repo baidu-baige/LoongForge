@@ -1,17 +1,15 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Megatron-side training arguments: run, recipe, and data semantics.
+"""CLI entry point for Megatron training arguments.
 
-These arguments select the run (model, config, phase), describe the training
-recipe (freeze, EMA, HF export path, batch and data pipeline), and control
-loop logging and tensor debugging. They say nothing about how the backend
-executes a step, so they live with the training loop and are registered on the
-same parser as the engine arguments.
+This module registers shared run and backend options and adds the LLM, VLM,
+and diffusion argument providers. Upstream Megatron and the checkpoint bridge
+register their own options on the same parser.
 
-``parse_megatron_train_args`` is the single entry point used by the training
-entrypoint, tools, and tests. Registering both providers on one parser keeps the CLI, the
-parsed namespace, and the checkpointed args identical to the engine-only setup.
+Training checks live here; backend capability checks and execution live in
+``engines.megatron``. ``parse_megatron_train_args`` connects these providers
+and checks to the engine parser and model config loading.
 """
 
 import argparse

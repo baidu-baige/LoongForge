@@ -42,9 +42,9 @@ from loongforge.engines.megatron import get_args, get_tokenizer
 
 
 from loongforge.models.foundation.llm_model_provider import llm_model_provider
-from loongforge.engines.megatron.training_utils import pretrain
+from loongforge.engines.megatron.runner import pretrain
 
-from loongforge.engines.megatron.global_vars import get_model_config
+from loongforge.engines.megatron.utils.global_vars import get_model_config
 
 
 stimer = StragglerDetector()

@@ -1,19 +1,15 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Training arguments for the Torch engine (recipe, CLI, and parsing).
+"""CLI entry point for Torch training arguments.
 
-This module owns the parameters that describe *how* to train: model routing, run
-length, output location, and initialization source (pretrained weights or
-resume), the learning-rate schedule, the data loader, logging, profiling, and
-freezing. All Torch CLI definitions live here; ``loongforge.engines.torch.arg_types``
-keeps only value parsers. :class:`TrainingArgs` combines the mixins into one
-flat frozen dataclass, so attribute access, the CLI, and the
-YAML schema are unchanged.
+This module registers run and backend options. Family-specific fields come
+from ``training.embodied.args``; ``TrainingArgs`` combines them into one frozen
+dataclass. Training checks run here; backend capability checks and execution
+live in ``engines.torch``.
 
-``parse_train_args`` also lives here: it reflects the dataclasses into an
-argparse CLI, routes ``--model-name`` through the model catalog, and merges the
-YAML config. None of that depends on the backend.
+``parse_train_args`` builds training arguments from defaults and CLI values,
+then merges YAML and dotlist overrides for the model and data configs.
 """
 
 import argparse
@@ -26,20 +22,68 @@ from typing import Any, List, Optional, Union, get_args, get_origin
 
 from omegaconf import OmegaConf
 
-from loongforge.engines.torch.arg_types import (
+from loongforge.engines.torch.utils.utils import parse_module_key_patterns
+from loongforge.engines.torch.validators import validate_engine_args
+from loongforge.models.catalog import get_config_path, get_config_types
+from loongforge.training.cli_utils import (
     parse_class_names,
-    parse_module_key_patterns,
     parse_non_negative_int,
     parse_optional_int_list,
     parse_positive_int,
-    parse_reshard_after_forward,
-    parse_reshard_after_forward_map,
 )
-from loongforge.engines.torch.validators import validate_engine_args
-from loongforge.models.catalog import get_config_path, get_config_types
 from loongforge.training.embodied.args import _EmbodiedDataArgs, _EmbodiedRoutingArgs
 
 logger = logging.getLogger(__name__)
+
+
+def parse_reshard_after_forward(value: str):
+    """Parse FSDP2 reshard_after_forward from CLI text: true|false|none|int>1."""
+    normalized = value.strip().lower()
+    if normalized in {"true", "t"}:
+        return True
+    if normalized in {"false", "f"}:
+        return False
+    if normalized in {"none", "null"}:
+        return None
+    try:
+        int_value = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            "expected one of: true, false, none, or an integer greater than 1"
+        ) from exc
+    if int_value <= 1:
+        raise argparse.ArgumentTypeError(
+            "integer reshard_after_forward must be greater than 1"
+        )
+    return int_value
+
+
+def parse_reshard_after_forward_map(raw_map: str):
+    """Parse comma-separated ClassName=value pairs for per-module FSDP reshard_after_forward.
+
+    Each pair maps a module class name to a reshard strategy accepted by
+    ``parse_reshard_after_forward``.  Unknown keys are passed through as-is.
+
+    Example::
+
+        "TransformerLayer=True,EmbeddingLayer=False"
+        # -> {"TransformerLayer": True, "EmbeddingLayer": False}
+    """
+    class_to_reshard = {}
+    for pair in raw_map.split(","):
+        pair = pair.strip()
+        if not pair:
+            continue
+        if "=" not in pair:
+            raise argparse.ArgumentTypeError(
+                "expected comma-separated ClassName=value pairs"
+            )
+        class_name, reshard_value = pair.split("=", 1)
+        class_name = class_name.strip()
+        if not class_name:
+            raise argparse.ArgumentTypeError("empty class name in reshard map")
+        class_to_reshard[class_name] = parse_reshard_after_forward(reshard_value)
+    return class_to_reshard
 
 
 # ---------------------------------------------------------------------------
@@ -1654,6 +1698,10 @@ def validate(training_args, model_cfg, data_cfg):
         raise ValueError("ModelConfig.model_type must be set (from YAML model.model_type).")
 
     validate_engine_args(training_args, model_cfg)
+    if training_args.use_lora and training_args.save_interval == 0:
+        logger.warning(
+            "--save-interval=0 disables both checkpoints and LoRA adapter saving."
+        )
 
 
 def parse_train_args():

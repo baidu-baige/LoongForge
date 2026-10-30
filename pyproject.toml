@@ -290,7 +290,7 @@ ignore = ["E402", "E501", "E731", "F841"]
 [tool.ruff.lint.per-file-ignores]
 "**/__init__.py" = ["F401", "F403"]
 # availability-probe and re-export imports that must not be deleted
-"loongforge/engines/megatron/training_utils.py" = ["F401"]
+"loongforge/engines/megatron/runner.py" = ["F401"]
 "loongforge/models/common/base_model_mixins.py" = ["F401"]
 "loongforge/models/common/experimental_attention_variant/dsa_fused_kernels.py" = ["F401"]
 "loongforge/models/diffusion/wan/wan_attention.py" = ["F401"]

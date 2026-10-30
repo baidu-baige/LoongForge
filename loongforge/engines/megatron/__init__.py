@@ -4,12 +4,12 @@
 """LoongForge Megatron engine -- public API surface.
 
 Only the global-state accessors, which many callers in training/ use, are re-exported here.
-Everything else should be imported from its canonical module (e.g. engines.megatron.training_utils).
+Everything else should be imported from its canonical module (e.g. engines.megatron.runner).
 """
 
-from . import xpu_init
-from . import global_vars
-from .global_vars import (
+from .utils import xpu_init
+from .utils import global_vars
+from .utils.global_vars import (
     get_args,
     get_chat_template,
     get_model_config,

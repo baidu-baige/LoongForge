@@ -35,16 +35,16 @@ from loongforge.data.llm.sft_data_collator import DataCollatorForSupervisedDatas
 
 from loongforge.data import IGNORE_INDEX
 
-from loongforge.engines.megatron.training_utils import pretrain
+from loongforge.engines.megatron.runner import pretrain
 
-from loongforge.engines.megatron.utils import get_batch_on_this_cp_rank
-from loongforge.engines.megatron.data_padding import llm_pad_to_multiple_of
+from loongforge.engines.megatron.runner import get_batch_on_this_cp_rank
 from loongforge.data.llm.blended_hf_dataset_config import get_dataset_blend_from_list
 from loongforge.engines.megatron.checkpointing import load_dataloader_state
 from loongforge.data.llm.sft_dataloader import (
     SFTLoaderConfig,
     build_sft_cyclic_iterators,
     build_sft_data_collator,
+    llm_pad_to_multiple_of,
 )
 from loongforge.training.llm.pretrain_llm import get_embedding_ranks, model_provider
 
@@ -513,7 +513,7 @@ def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor):
     #
     # The D pre-compensation symmetrically applies to the reporting tensor so
     # that the post-aggregation report (sum-across-mbs → all-reduce-sum →
-    # divide-by-DPxCP-world-size in training_utils) recovers the same
+    # divide-by-DPxCP-world-size in runner) recovers the same
     # (1/G_total) sum_g (1/N_g) sum_k S_{g,k} value. Using G_total instead of
     # G_local also fixes a latent precision bug in the equal-DP case where
     # LPT did not strictly guarantee G_local = G_total / D across ranks.
@@ -528,7 +528,7 @@ def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor):
 
         denom = N_g * G_total * cp
         scaled = loss * (D * M_raw / denom)
-        # Pre-compensate D*cp for the all_reduce + divide by (D*cp) in training_utils.py.
+        # Pre-compensate D*cp for the all_reduce + divide by (D*cp) in runner.py.
         # Without cp factor, the logged loss would be 1/cp times smaller than correct value.
         reporting = (D * cp * loss / (N_g * G_total)).detach()
         loss_reduced_dict = {'lm loss': reporting}
@@ -539,7 +539,7 @@ def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor):
     # With context parallelism each CP rank only sees a shard of every sample,
     # and a contiguous-CP shard can contain zero valid tokens (all supervised
     # tokens live on the other rank). Reporting the local [S, n] pair would
-    # then make training_utils compute S/n = 0/0 = NaN and silently drop
+    # then make runner compute S/n = 0/0 = NaN and silently drop
     # 'lm loss' from the log line. Aggregate the reporting pair across the CP
     # group first (same as Megatron-LM's loss_func) so downstream reporting
     # always divides whole-sample sums. The backward `loss` and the returned

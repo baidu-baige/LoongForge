@@ -3,19 +3,58 @@
 
 """Misc training utilities."""
 
-import contextlib
 import logging
 import os
 import random
-import time
-from datetime import datetime
-from typing import Optional
 
 import numpy as np
 import torch
 
 
-from loongforge.engines.torch.distributed.utils import is_rank_zero
+def parse_dtype_from_str(dtype_name: str) -> torch.dtype:
+    """Map a canonical FSDP CLI dtype name to ``torch.dtype``."""
+    DTYPE_MAP_BY_STR = {
+        "fp32": torch.float32,
+        "float32": torch.float32,
+        "bf16": torch.bfloat16,
+        "bfloat16": torch.bfloat16,
+        "fp16": torch.float16,
+        "float16": torch.float16,
+    }
+
+    try:
+        return DTYPE_MAP_BY_STR[dtype_name]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported FSDP dtype {dtype_name!r}") from exc
+
+
+def parse_module_key_patterns(
+    value: str | list[str] | None,
+    *,
+    option_name: str,
+) -> list[str]:
+    """Parse comma-separated qualified module-key patterns.
+
+    Accepts a raw CLI string or an already-split list so the same helper can
+    serve both argparse ``type=`` and the later wrap-time re-parse.
+    """
+    if isinstance(value, (list, tuple)):
+        value = ",".join(value)
+    normalized_patterns = (value or "").strip()
+    if not normalized_patterns:
+        return []
+
+    patterns = [
+        pattern.strip()
+        for pattern in normalized_patterns.split(",")
+        if pattern.strip()
+    ]
+    if any(
+        any(not segment for segment in pattern.split("."))
+        for pattern in patterns
+    ):
+        raise ValueError(f"{option_name} cannot contain empty segments")
+    return patterns
 
 
 def resolve_dtype(dtype_str: str) -> torch.dtype:
@@ -67,70 +106,6 @@ def set_deterministic():
     torch.backends.cudnn.benchmark = False
     torch.use_deterministic_algorithms(True)
 
-
-def setup_logging(output_dir: str, rank: int):
-    """Configure logging: rank0 gets INFO + file handler, others get WARNING only.
-
-    All handlers are registered in a single ``basicConfig(force=True)`` call
-    so re-invocations (or prior implicit StreamHandlers) do not stack up and
-    cause duplicate output.
-    """
-    level = logging.INFO if rank == 0 else logging.WARNING
-
-    sh = logging.StreamHandler()
-    sh.setLevel(level)
-    sh.setFormatter(
-        logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
-    )
-    handlers = [sh]
-
-    if rank == 0 and output_dir:
-        log_dir = os.path.join(output_dir, "logs")
-        os.makedirs(log_dir, exist_ok=True)
-        log_file = os.path.join(log_dir, f"train_{datetime.now():%Y%m%d_%H%M%S}.log")
-        fh = logging.FileHandler(log_file, encoding="utf-8")
-        fh.setLevel(logging.INFO)
-        fh.setFormatter(
-            logging.Formatter("[%(asctime)s][%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
-        )
-        handlers.append(fh)
-
-    logging.basicConfig(level=level, handlers=handlers, force=True)
-
-
-@contextlib.contextmanager
-def log_stage(
-    tag: str,
-    start_msg: str = "",
-    end_msg: str = "done in {elapsed}",
-    log: Optional[logging.Logger] = None,
-):
-    """Context manager that wraps a setup stage with start/end logs + timing.
-
-    Emits ``[tag] start_msg`` before entering the block and
-    ``[tag] end_msg`` after leaving (the ``{elapsed}`` placeholder is
-    interpolated with the formatted duration, e.g. ``"3.21s"``).
-
-    Rank-0 gating is built in: when ``torch.distributed`` is initialized and
-    the current rank is not 0, the context manager runs silently.
-
-    Example
-    -------
-    >>> with log_stage("model", "building", "built in {elapsed}"):
-    ...     model = build_model()
-    """
-    out = log or logger
-    is_main = is_rank_zero()
-
-    if is_main and start_msg:
-        out.info(f"[{tag}] {start_msg}")
-    t0 = time.perf_counter()
-    try:
-        yield
-    finally:
-        if is_main and end_msg:
-            elapsed = f"{time.perf_counter() - t0:.2f}s"
-            out.info(f"[{tag}] {end_msg.format(elapsed=elapsed)}")
 
 # ═══════════════════════════════════════════════
 # Profiler (torch.profiler or nsys profiler, unified class)

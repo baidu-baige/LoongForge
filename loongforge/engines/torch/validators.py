@@ -205,10 +205,6 @@ def validate_engine_args(training_args, model_cfg):
     if training_args.use_lora:
         if training_args.init_on_meta:
             raise ValueError("--use-lora does not currently support --init-on-meta")
-        if training_args.save_interval == 0:
-            logger.warning(
-                "--save-interval=0 disables both checkpoints and LoRA adapter saving."
-            )
 
     # ── FP8 ──
     if training_args.fp8:

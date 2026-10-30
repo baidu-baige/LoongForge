@@ -16,7 +16,7 @@ from loongforge.data.diffusion.dataloader import build_latent_dataloader
 from megatron.training.utils import print_rank_0
 from loongforge.engines.megatron import get_args, get_model_config
 from loongforge.models.diffusion.qwen_image.qwen_image_provider import qwen_image_model_provider
-from loongforge.engines.megatron.training_utils import pretrain
+from loongforge.engines.megatron.runner import pretrain
 
 from loongforge.models.diffusion.qwen_image.qwen_image_flow_match import QwenImageFlowMatchScheduler
 

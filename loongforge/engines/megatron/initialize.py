@@ -34,7 +34,7 @@ from megatron.training.initialize import (
 )
 from megatron.core.parallel_state import initialize_model_parallel
 
-from loongforge.engines.megatron.global_vars import set_loongforge_extra_global_vars
+from loongforge.engines.megatron.utils.global_vars import set_loongforge_extra_global_vars
 from loongforge.engines.megatron import get_model_config
 
 import inspect
