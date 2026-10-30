@@ -26,8 +26,9 @@ class GigaBrain07ModelConfig:
     model_type: str = "giga_brain07"
 
     # ── Checkpoint (arch comes straight from its config.json) ──
-    # Local known-good 0.7 base ckpt; overridable from YAML (oc.env GB0_PRETRAINED).
-    pretrained: str = "/mnt/cfs/pxy/ckpt/open-gigaai/GigaBrain-0.7-3.5B-Base"
+    # Relative to the run CWD / loongforge_root; the launcher script passes the
+    # absolute machine path in (examples/.../run_giga_brain07_torchrun.sh).
+    pretrained: str = "ckpt/open-gigaai/GigaBrain-0.7-3.5B-Base"
 
     # ── Semantic switches (mirror giga train/transform config) ──
     vlm_type: str = "paligemma2"

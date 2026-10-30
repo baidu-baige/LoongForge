@@ -1,6 +1,6 @@
 model:
   model_type: giga_brain07
-  pretrained: /mnt/cfs/pxy/ckpt/open-gigaai/GigaBrain-0.7-3.5B-Base
+  pretrained: ckpt/open-gigaai/GigaBrain-0.7-3.5B-Base
   vlm_type: paligemma2
   state_input_mode: proprio_anchor
   observation_memory_size: 1
@@ -21,10 +21,10 @@ model:
   enable_multi_flow_samples: false
   flow_matching_batch_mul: 4
 data:
-  data_path: /mnt/cfs/pxy/data/agibot-world/AgiBotWorldLerobot_v30/agibotworld/task_327
-  norm_stats_path: /mnt/cfs/pxy/data/agibot-world/AgiBotWorldLerobot/agibot_a2d_norm_stats.json
-  tokenizer_model_path: /mnt/cfs/pxy/ckpt/paligemma-3b-pt-224
-  fast_tokenizer_path: /mnt/cfs/pxy/ckpt/physical-intelligence/fast
+  data_path: data/agibot-world/AgiBotWorldLerobot_v30/agibotworld/task_327
+  norm_stats_path: data/agibot-world/AgiBotWorldLerobot/agibot_a2d_norm_stats.json
+  tokenizer_model_path: ckpt/paligemma-3b-pt-224
+  fast_tokenizer_path: ckpt/physical-intelligence/fast
   camera_keys:
   - observation.images.top_head
   - observation.images.hand_left

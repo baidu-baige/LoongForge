@@ -343,6 +343,23 @@ class GigaBrain07Policy(ModelMixin, ConfigMixin):
             self.traj_decoder = nn.GRU(input_size=self.vlm_hidden_size, hidden_size=self.traj_hidden_dim, batch_first=True)
             self.traj_out_proj = nn.Linear(self.traj_hidden_dim, self.max_traj_dim, dtype=torch.float32)
 
+        # ───────────────────────────── eval / inference entry ─────────────────────────────
+        # Runtime configuration consumed by ``predict_action`` (the shared eval
+        # entry point). These are plain attributes, deliberately NOT
+        # @register_to_config fields, mirroring how ``XVLAPolicy`` keeps
+        # ``_processor_path`` / ``_num_image_views`` off the serialized config.
+        # An eval factory wires them after build via ``configure_eval``; the
+        # defaults keep a freshly built model importable and introspectable
+        # without any eval wiring.
+        self._processor_path: str = ''
+        self._eval_prompt_cfg: dict | None = None
+        self._eval_resize_imgs_with_padding: tuple[int, int] | None = None
+        self._eval_present_img_keys: list[str] | None = None
+        self._eval_max_length: int = 256
+        self._eval_discrete_state_input: bool = True
+        self._image_transform = None
+        self._prompt_tokenizer_transform = None
+
     def _embed_proprio_state_tokens(
         self,
         state_memory: Tensor | None,
@@ -1316,6 +1333,372 @@ class GigaBrain07Policy(ModelMixin, ConfigMixin):
             return x_t, traj_pred
 
         return x_t
+
+    # ======================================================================
+    #                        Eval / inference entry
+    # ======================================================================
+    def configure_eval(
+        self,
+        *,
+        processor_path: str,
+        resize_imgs_with_padding: tuple[int, int] | list[int] | None = None,
+        present_img_keys: list[str] | None = None,
+        max_length: int | None = None,
+        discrete_state_input: bool | None = None,
+        prompt_cfg: dict | None = None,
+    ) -> 'GigaBrain07Policy':
+        """Configure the preprocessing used by :meth:`predict_action`.
+
+        An eval factory calls this once after building / loading the model so
+        ``predict_action`` can lazily build the image + prompt transforms that
+        mirror training preprocessing. Resetting the cached transforms lets a
+        caller reconfigure (e.g. a different camera layout) between runs.
+
+        Args:
+            processor_path: Directory of the PaliGemma2 tokenizer / processor
+                (same checkpoint the model was trained against).
+            resize_imgs_with_padding: ``(width, height)`` resize-with-pad target
+                for every camera view. Defaults to ``(224, 224)``.
+            present_img_keys: Ordered camera keys. Eval views are mapped onto
+                these in order; missing views become masked zero images, exactly
+                as in training. Defaults to the GigaBrain 3-camera layout.
+            max_length: Prompt token budget (padding length). Defaults to 256.
+            discrete_state_input: Whether the ``prompt`` state mode folds the
+                discretized state into the text prompt. Defaults to True.
+            prompt_cfg: Optional explicit override dict forwarded verbatim to
+                ``PromptTokenizerTransform`` (wins over the derived defaults).
+        """
+        self._processor_path = str(processor_path)
+        if resize_imgs_with_padding is not None:
+            self._eval_resize_imgs_with_padding = tuple(int(v) for v in resize_imgs_with_padding)
+        if present_img_keys is not None:
+            self._eval_present_img_keys = list(present_img_keys)
+        if max_length is not None:
+            self._eval_max_length = int(max_length)
+        if discrete_state_input is not None:
+            self._eval_discrete_state_input = bool(discrete_state_input)
+        if prompt_cfg is not None:
+            self._eval_prompt_cfg = dict(prompt_cfg)
+        # Invalidate caches so the next predict_action rebuilds with new config.
+        self._image_transform = None
+        self._prompt_tokenizer_transform = None
+        return self
+
+    def _get_eval_image_transform(self):
+        """Lazily build (and cache) the GigaBrain image preprocessing core.
+
+        Uses ``ImageTransform`` from the vendored ``giga_models`` package (the
+        same class the training transform wraps), so ``predict_action`` reuses
+        the exact resize-with-pad + ``[-1, 1]`` SigLIP normalization without
+        pulling in the LoongForge training-side data stack.
+        """
+        cached = getattr(self, '_image_transform', None)
+        if cached is None:
+            from giga_models.pipelines.vla.giga_brain_0.giga_brain_0_utils import ImageTransform
+
+            size = self._eval_resize_imgs_with_padding or (224, 224)
+            cached = ImageTransform(
+                is_train=False,
+                resize_imgs_with_padding=tuple(size),
+                present_img_keys=self._eval_present_img_keys,
+                enable_image_aug=False,
+                vlm_type=self.vlm_type,
+            )
+            self._image_transform = cached
+        return cached
+
+    def _get_eval_prompt_tokenizer(self):
+        """Lazily build (and cache) the GigaBrain prompt tokenizer core.
+
+        Mirrors the training ``PromptTokenizerTransform`` but fixed to the
+        inference regime (``is_train=False``, no FAST-action / subtask targets),
+        so the emitted ``lang_tokens`` / ``lang_masks`` / ``lang_att_masks``
+        match the training prefix layout the flow-matching backbone expects.
+        """
+        cached = getattr(self, '_prompt_tokenizer_transform', None)
+        if cached is None:
+            if not self._processor_path:
+                raise RuntimeError(
+                    'predict_action requires a tokenizer/processor path; set it via '
+                    'configure_eval(processor_path=...) or assign model._processor_path.'
+                )
+            from giga_models.pipelines.vla.giga_brain_0.giga_brain_0_utils import PromptTokenizerTransform
+
+            cfg = dict(self._eval_prompt_cfg or {})
+            cfg.setdefault('is_train', False)
+            cfg.setdefault('tokenizer_model_path', self._processor_path)
+            # fast_tokenizer_path is only touched when FAST actions are encoded;
+            # flow-matching inference never triggers that lazy load.
+            cfg.setdefault('fast_tokenizer_path', '')
+            cfg.setdefault('max_length', self._eval_max_length)
+            cfg.setdefault('discrete_state_input', self._eval_discrete_state_input)
+            cfg.setdefault('encode_action_input', False)
+            cfg.setdefault('encode_sub_task_input', False)
+            cfg.setdefault('autoregressive_inference_mode', False)
+            cfg.setdefault('vlm_type', self.vlm_type)
+            cfg.setdefault('state_input_mode', self.state_input_mode)
+            cached = PromptTokenizerTransform(**cfg)
+            self._prompt_tokenizer_transform = cached
+        return cached
+
+    @staticmethod
+    def _coerce_eval_view_to_chw(view) -> Tensor:
+        """Coerce one eval image view to a ``[C, H, W]`` tensor for ImageTransform.
+
+        Accepts a CHW/HWC torch tensor, a HWC ndarray, or a PIL image. ``uint8``
+        / ``[0, 255]`` pixels are kept as ``uint8`` (ImageTransform divides by
+        255 then rescales to ``[-1, 1]``); already-float ``[0, 1]`` pixels are
+        passed through unchanged.
+        """
+        import numpy as np
+
+        if 'PIL' in str(type(view)):
+            view = np.asarray(view)
+        if isinstance(view, np.ndarray):
+            view = torch.as_tensor(view)
+        elif not isinstance(view, torch.Tensor):
+            view = torch.as_tensor(np.asarray(view))
+
+        if view.ndim == 2:  # grayscale H,W -> H,W,3
+            view = view.unsqueeze(-1).expand(-1, -1, 3)
+        if view.ndim != 3:
+            raise ValueError(f'predict_action: each image view must be 2D/3D, got shape {tuple(view.shape)}')
+
+        # HWC -> CHW when the trailing axis is the channel axis.
+        if view.shape[0] not in (1, 3, 4) and view.shape[-1] in (1, 3, 4):
+            view = view.permute(2, 0, 1)
+        view = view.contiguous()
+
+        if view.is_floating_point():
+            # Values clearly outside [0, 1] are byte-range floats: hand them to
+            # ImageTransform as uint8 so its /255 branch does the right thing.
+            if torch.isfinite(view).any() and float(view.max()) > 1.5:
+                view = view.round().clamp_(0, 255).to(torch.uint8)
+        elif view.dtype != torch.uint8:
+            view = view.clamp_(0, 255).to(torch.uint8)
+        return view
+
+    def _resolve_eval_stats(self, dataset_stats, field: str, emb_key: int):
+        """Resolve normalization stats for ``field`` into a Normalize-ready dict.
+
+        ``dataset_stats[field]`` may be either a flat ``{'q01':.., 'q99':..}`` /
+        ``{'mean':.., 'std':..}`` block (single dataset) or an already
+        embodiment-keyed ``{emb_id: {...}}`` mapping. Returns
+        ``(stats_by_key, use_quantiles)`` or ``(None, False)`` when unavailable.
+        """
+        if not dataset_stats:
+            return None, False
+        # LoongForge norm-stats files wrap the per-field blocks under a top-level
+        # ``norm_stats`` key (e.g. agibot_a2d_norm_stats.json); unwrap it so the
+        # dataset_statistics_path file feeds normalization directly.
+        if 'norm_stats' in dataset_stats and isinstance(dataset_stats['norm_stats'], dict):
+            dataset_stats = dataset_stats['norm_stats']
+        raw = dataset_stats.get(field)
+        if not isinstance(raw, dict) or not raw:
+            return None, False
+        if 'q01' in raw or 'mean' in raw:
+            stats = {emb_key: raw}
+        else:
+            stats = raw
+        sample = next(iter(stats.values()))
+        if not isinstance(sample, dict):
+            return None, False
+        use_quantiles = 'q01' in sample and 'q99' in sample
+        if not use_quantiles and not ('mean' in sample and 'std' in sample):
+            return None, False
+        return stats, use_quantiles
+
+    @torch.no_grad()
+    def predict_action(
+        self,
+        images,
+        instructions,
+        state=None,
+        dataset_stats=None,
+        emb_id=None,
+        **kwargs,
+    ):
+        """Eval-facing entry point matching the shared ``predict_action`` interface.
+
+        Mirrors ``XVLAPolicy`` / ``PI05Policy``: it owns model-specific
+        preprocessing (image resize+normalize, prompt tokenization), state
+        normalization, flow-matching action sampling, and action
+        unnormalization. Dataset-specific action repacking (delta / quaternion→
+        6D) stays in the eval-side ActionDecoder, not here.
+
+        Args:
+            images: Batched images. Either a length-``B`` list of per-sample view
+                lists (each view a CHW/HWC tensor, HWC ndarray, or PIL image), or
+                a flat length-``B`` list of single-view images (auto-wrapped).
+            instructions: ``List[str]`` of language instructions (length ``B``).
+            state: Optional proprio state: ``None``, a 1-D vector, or a
+                ``[B, D_state]`` tensor / ndarray / list.
+            dataset_stats: Optional normalization stats. ``dataset_stats['action']``
+                (and ``['observation.state']``) may be a flat q01/q99 or mean/std
+                block, or an embodiment-keyed mapping. When action stats are
+                present the sampled actions are unnormalized; otherwise the raw
+                model-space actions are returned.
+            emb_id: Embodiment id (int, or ``[B]`` ids). Defaults to 0.
+
+        Returns:
+            ``np.ndarray`` of shape ``[B, n_action_steps, max_action_dim]``.
+        """
+        import numpy as np
+
+        del kwargs  # extra eval payload keys (unnorm_key, cfg_scale, ...) are ignored
+        self.eval()
+        device = next(self.parameters()).device
+
+        if not isinstance(images, (list, tuple)) or len(images) == 0:
+            raise ValueError('predict_action: images must be a non-empty list.')
+        if not isinstance(images[0], (list, tuple)):
+            images = [[img] for img in images]
+        batch_size = len(images)
+
+        if isinstance(instructions, str):
+            instructions = [instructions]
+        if not isinstance(instructions, (list, tuple)) or len(instructions) != batch_size:
+            raise ValueError(
+                f'predict_action: got {batch_size} image samples but '
+                f'{len(instructions) if hasattr(instructions, "__len__") else "?"} instructions.'
+            )
+
+        # Embodiment ids → [B] long tensor.
+        if emb_id is None:
+            emb_ids = torch.zeros(batch_size, dtype=torch.long, device=device)
+        elif isinstance(emb_id, torch.Tensor):
+            emb_ids = emb_id.reshape(-1).to(device=device, dtype=torch.long)
+            if emb_ids.numel() == 1:
+                emb_ids = emb_ids.expand(batch_size).contiguous()
+        else:
+            emb_ids = torch.full((batch_size,), int(emb_id), dtype=torch.long, device=device)
+        emb_key = int(emb_ids[0].item())
+
+        image_tf = self._get_eval_image_transform()
+        prompt_tf = self._get_eval_prompt_tokenizer()
+        present_keys = list(image_tf.present_img_keys)
+
+        # Optional state normalization (shared across the prompt + proprio paths).
+        state_stats, state_use_q = self._resolve_eval_stats(dataset_stats, 'observation.state', emb_key)
+        state_normalize = None
+        if state_stats is not None:
+            from giga_models.pipelines.vla.giga_brain_0.giga_brain_0_utils import Normalize
+
+            state_normalize = Normalize(state_stats, use_quantiles=state_use_q)
+
+        def _prep_state_vec(idx: int) -> Tensor | None:
+            if state is None:
+                return None
+            s = state
+            if not isinstance(s, torch.Tensor):
+                s = torch.as_tensor(np.asarray(s), dtype=torch.float32)
+            s = s.to(dtype=torch.float32)
+            if s.dim() == 1:
+                s = s.unsqueeze(0).expand(batch_size, -1)
+            if s.shape[0] != batch_size:
+                raise ValueError(f'predict_action: state batch {s.shape[0]} != image batch {batch_size}.')
+            vec = s[idx]
+            if state_normalize is not None:
+                vec = state_normalize(vec, embodiment_id=emb_key)
+            if vec.shape[-1] < self.max_state_dim:
+                vec = F.pad(vec, (0, self.max_state_dim - vec.shape[-1]))
+            elif vec.shape[-1] > self.max_state_dim:
+                vec = vec[..., : self.max_state_dim]
+            return vec
+
+        # Per-sample preprocessing, then stack to batched model inputs.
+        per_sample_imgs: list[list[Tensor]] = []
+        per_sample_masks: list[list[Tensor]] = []
+        lang_tokens_rows: list[Tensor] = []
+        lang_masks_rows: list[Tensor] = []
+        lang_att_rows: list[Tensor] = []
+        proprio_rows: list[Tensor] = []
+
+        for i in range(batch_size):
+            views = images[i]
+            if len(views) > len(present_keys):
+                raise ValueError(
+                    f'predict_action: sample {i} has {len(views)} views but the configured '
+                    f'camera layout only defines {len(present_keys)} keys ({present_keys}).'
+                )
+            data: dict = {}
+            for v, view in enumerate(views):
+                data[present_keys[v]] = self._coerce_eval_view_to_chw(view)
+
+            state_vec = _prep_state_vec(i)
+            if state_vec is not None:
+                data['observation.state'] = state_vec
+            data['task'] = str(instructions[i])
+            data['embodiment_id'] = emb_key
+
+            imgs_i, masks_i, _ = image_tf(data)
+            per_sample_imgs.append([t.to(device) for t in imgs_i])
+            per_sample_masks.append([m.to(device) for m in masks_i])
+
+            lang_ids, lang_mask, lang_att, _loss_mask, _fast, _subtask, _subtask_only = prompt_tf(data)
+            lang_tokens_rows.append(lang_ids)
+            lang_masks_rows.append(lang_mask)
+            lang_att_rows.append(lang_att)
+            if self.state_input_mode == 'proprio_anchor':
+                proprio_rows.append(state_vec if state_vec is not None else torch.zeros(self.max_state_dim))
+
+        num_cameras = len(per_sample_imgs[0])
+        images_list = [
+            torch.stack([per_sample_imgs[b][c] for b in range(batch_size)], dim=0)
+            for c in range(num_cameras)
+        ]
+        img_masks = [
+            torch.stack([per_sample_masks[b][c].reshape(()) for b in range(batch_size)], dim=0).to(torch.bool)
+            for c in range(num_cameras)
+        ]
+
+        lang_tokens = torch.stack(lang_tokens_rows, dim=0).to(device=device, dtype=torch.long)
+        lang_masks = torch.stack(lang_masks_rows, dim=0).to(device=device, dtype=torch.bool)
+        lang_att_masks = torch.stack(lang_att_rows, dim=0).to(device=device, dtype=torch.bool)
+
+        sample_kwargs: dict = {
+            'images': images_list,
+            'img_masks': img_masks,
+            'lang_tokens': lang_tokens,
+            'lang_masks': lang_masks,
+            'emb_ids': emb_ids,
+            'lang_att_masks': lang_att_masks,
+        }
+
+        # Wire the continuous-state paths when the model expects them. The
+        # 'prompt' mode already folded the discretized state into lang_tokens.
+        if self.state_input_mode == 'proprio_memory' and state is not None:
+            state_mem = torch.stack(
+                [(_prep_state_vec(i)) for i in range(batch_size)], dim=0
+            ).to(device=device, dtype=torch.float32)
+            # [B, D] -> [B, K, D] with K = observation_memory_size (repeat current frame).
+            state_mem = state_mem[:, None, :].expand(batch_size, self.observation_memory_size, self.max_state_dim).contiguous()
+            sample_kwargs['state_memory'] = state_mem
+            sample_kwargs['state_memory_masks'] = torch.ones(
+                batch_size, self.observation_memory_size, dtype=torch.bool, device=device
+            )
+        elif self.state_input_mode == 'proprio_anchor':
+            propri = torch.stack(proprio_rows, dim=0).to(device=device, dtype=torch.float32)
+            propri = propri[..., : self.propri_dim]
+            sample_kwargs['proprioception'] = propri[:, None, :]
+            sample_kwargs['agent_pos_mask'] = torch.ones(
+                batch_size, 1, self.propri_dim, dtype=torch.float32, device=device
+            )
+            sample_kwargs['proprioception_present'] = torch.ones(batch_size, dtype=torch.bool, device=device)
+
+        actions = self.sample_actions(**sample_kwargs)
+        if isinstance(actions, tuple):
+            actions = actions[0]
+        actions = actions.to(dtype=torch.float32)
+
+        action_stats, action_use_q = self._resolve_eval_stats(dataset_stats, 'action', emb_key)
+        if action_stats is not None:
+            from giga_models.pipelines.vla.giga_brain_0.giga_brain_0_utils import Unnormalize
+
+            unnormalize = Unnormalize(action_stats, use_quantiles=action_use_q).to(actions.device)
+            actions = unnormalize(actions, embodiment_id=emb_key)
+
+        return actions.cpu().numpy()
 
     def denoise_step(
         self,

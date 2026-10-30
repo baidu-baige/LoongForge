@@ -48,6 +48,7 @@ def _auto_import_payload_builder_modules() -> None:
         "loongforge.embodied.eval.payload_builders.lingbot_va",
         "loongforge.embodied.eval.payload_builders.dreamzero",
         "loongforge.embodied.eval.payload_builders.fastwam",
+        "loongforge.embodied.eval.payload_builders.giga_brain07",
     ]
     for mod in _MODULES:
         try:

@@ -24,15 +24,17 @@ from typing import Dict, List
 class GigaBrain07DataConfig:
     """GigaBrain07 data config (maps 1:1 to YAML ``data:`` section)."""
 
-    # ── Paths (known-good local A2D v3.0 paths; overridable via oc.env) ──
+    # ── Paths (relative to the run CWD / loongforge_root; the launcher script
+    # passes the absolute machine paths in via CLI, see
+    # examples/.../run_giga_brain07_torchrun.sh) ──
     data_path: str = (
-        "/mnt/cfs/pxy/data/agibot-world/AgiBotWorldLerobot_v30/agibotworld/task_327"
+        "data/agibot-world/AgiBotWorldLerobot_v30/agibotworld/task_327"
     )
     norm_stats_path: str = (
-        "/mnt/cfs/pxy/data/agibot-world/AgiBotWorldLerobot/agibot_a2d_norm_stats.json"
+        "data/agibot-world/AgiBotWorldLerobot/agibot_a2d_norm_stats.json"
     )
-    tokenizer_model_path: str = "/mnt/cfs/pxy/ckpt/paligemma-3b-pt-224"
-    fast_tokenizer_path: str = "/mnt/cfs/pxy/ckpt/physical-intelligence/fast"
+    tokenizer_model_path: str = "ckpt/paligemma-3b-pt-224"
+    fast_tokenizer_path: str = "ckpt/physical-intelligence/fast"
 
     # ── LeRobotDataset layout ──
     camera_keys: List[str] = field(
