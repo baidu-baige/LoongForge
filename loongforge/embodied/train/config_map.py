@@ -41,6 +41,7 @@ from loongforge.embodied.model.giga_brain07.model_configuration_giga_brain07 imp
 )
 from loongforge.embodied.data.datasets.giga_brain07.transforms.data_configuration_giga_brain07 import (
     GigaBrain07DataConfig,
+)
 from loongforge.embodied.model.lingbot_vla_v2.model_configuration_lingbot_vla_v2 import (
     LingbotVLAV2ModelConfig,
 )
