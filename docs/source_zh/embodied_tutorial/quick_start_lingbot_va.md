@@ -145,8 +145,8 @@ checkpoint 以 DCP 格式保存在 `$OUTPUT_DIR/checkpoints/steps_<N>`；中断�
 
 评测采用 server / client 架构：LoongForge policy server 加载 checkpoint 进行推理，仿真器作为 client 与其交互，两者可以使用不同的 Python 环境。server 使用训练所用的 LoongForge 环境；client 环境按各 benchmark 的说明安装：
 
-- RoboTwin-2.0：见 [RoboTwin 评测](../../source/embodied_tutorial/eval_docs/benchmarks/robotwin.md)（SAPIEN / Vulkan 环境）。
-- LIBERO：见 [LIBERO 评测](../../source/embodied_tutorial/eval_docs/benchmarks/libero.md)；无显示环境可使用 `osmesa` 渲染。
+- RoboTwin-2.0：见 [RoboTwin 评测](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/embodied_tutorial/eval_docs/benchmarks/robotwin.md)（SAPIEN / Vulkan 环境）。
+- LIBERO：见 [LIBERO 评测](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/embodied_tutorial/eval_docs/benchmarks/libero.md)；无显示环境可使用 `osmesa` 渲染。
 
 ### 3.2 导出评测 checkpoint
 
