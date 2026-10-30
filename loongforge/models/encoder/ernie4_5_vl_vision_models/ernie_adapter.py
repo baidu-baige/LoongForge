@@ -94,11 +94,11 @@ class ErnieAdapter(BaseMegatronVisionModule):
     VariableResolutionResamplerModel, support variable resolution
     """
 
-    def __init__(self, config, input_size, output_size, bf16=False):
+    def __init__(self, config, input_size, output_size):
         super().__init__(config)
         self.in_dim = input_size
         self.out_dim = output_size
-        self.out_dtype = torch.bfloat16 if bf16 else torch.float16
+        self.out_dtype = torch.bfloat16 if config.bf16 else torch.float16
         # using unique name space start with "mm_resampler_"
         with UniqueNameGuard("mm_resampler_"):
             self.mlp = nn.Linear(self.in_dim, self.out_dim)

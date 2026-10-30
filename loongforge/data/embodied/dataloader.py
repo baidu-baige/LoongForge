@@ -13,11 +13,13 @@ import torch
 from torch.utils.data import Dataset, IterableDataset
 from torchdata.stateful_dataloader import StatefulDataLoader
 
+from loongforge.data.embodied.registry import (
+    DataRuntime,
+    build_collator,
+    build_dataset,
+    build_transforms_from_args,
+)
 from loongforge.data.embodied.sampler_builder import build_sampler
-from loongforge.data.embodied.registry import build_collator
-from loongforge.data.embodied.registry import build_dataset
-from loongforge.data.embodied.registry import build_transforms_from_args
-from loongforge.data.embodied.registry import DataRuntime
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +141,7 @@ def _build_stateful_dataloader(
     training_args,
     runtime: DataRuntime,
 ) -> StatefulDataLoader:
+    """_build_stateful_dataloader."""
     seed = training_args.seed
     seed_workers = training_args.dataloader_seed_workers
     drop_last = training_args.batch_drop_last

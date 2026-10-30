@@ -1,6 +1,8 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Glm layer spec."""
+
 from typing import Tuple, Optional
 from omegaconf import ListConfig
 
@@ -46,7 +48,6 @@ def _get_glm_layer_with_te_spec(
     Args:
         experimental_attention_variant (str, optional): The type of experimental attention variant.
                                                         Defaults to None.
-        use_dsa_fused (bool): use the Omni fused DSA modules (``--use-dsa-fused``). Defaults to False.
     """
 
     mlp = _get_mlp_module_spec(

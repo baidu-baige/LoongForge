@@ -83,6 +83,7 @@ def save_checkpoint(
     epoch: int = 0,
     dataloader_state: Optional[Dict] = None,
     model_cfg=None,
+    data_cfg=None,
 ):
     """Save a full checkpoint or a consolidated LoRA adapter checkpoint."""
     # Make sure any previous async save has finalized before we touch a new

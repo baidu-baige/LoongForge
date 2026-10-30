@@ -1,0 +1,27 @@
+_target_: loongforge.models.encoder.RiceVisionConfig
+
+num_layers: 48
+hidden_size: 1664
+ffn_hidden_size: 8192
+num_attention_heads: 16
+patch_size: 14
+image_size: [1344, 1344]
+kv_channels: 104
+normalization: LayerNorm
+swiglu: false
+class_token_len: 0
+group_query_attention: false
+attention_dropout: 0
+hidden_dropout: 0
+layernorm_epsilon: 1.0e-5
+activation_func: ${act:gelu}
+bias_activation_fusion: false
+gated_linear_unit: false
+in_channels: 3
+num_query_groups: 16
+add_bias_linear: true
+add_qkv_bias: true
+position_embedding_type: rope
+
+model_type: rice_vit
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/image_encoder/ckpt_convert/llava_vit_convert.yaml

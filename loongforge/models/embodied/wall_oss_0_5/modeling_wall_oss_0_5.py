@@ -215,8 +215,8 @@ class WallOss05Model(nn.Module):
                 lambda _module, _inp, output: output.requires_grad_(True)
             )
         wrapper = cls(model)
-        # Remember paths/sizes and settings captured at build so ``load_pretrained``
-        # needs neither training args nor the model config later.
+        # Remember paths/sizes captured at build so ``load_pretrained`` can
+        # perform the full two-stage load without re-reading training args.
         wrapper._qwen_pretrained_path = pretrained_path
         wrapper._tokenizer_len = len(processor.tokenizer)
         wrapper._ddp_mix_precision = (

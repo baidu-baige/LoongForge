@@ -1,15 +1,31 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""CLI entry point for Torch training arguments.
+"""Generic training args + CLI front-end (single module).
 
-This module registers run and backend options. Family-specific fields come
-from ``training.embodied.args``; ``TrainingArgs`` combines them into one frozen
-dataclass. Training checks run here; backend capability checks and execution
-live in ``engines.torch``.
+This module is the single source of truth for the generic, model-independent
+training parameters (``TrainingArgs``, a frozen dataclass instantiated from the
+CLI) plus the tooling that turns that dataclass into an argparse CLI.
 
-``parse_train_args`` builds training arguments from defaults and CLI values,
-then merges YAML and dotlist overrides for the model and data configs.
+Usage rules (must follow)
+-------------------------
+1. Always read fields via direct attribute access: ``training_args.lr_base``.
+2. Never use ``getattr(training_args, "x", default)`` or ``cfg.get("x", default)``:
+   - a default supplied there creates a second source of truth and hides the real one;
+   - a misspelled field should raise ``AttributeError`` immediately, not silently return
+     a fallback.
+3. To add or change a generic parameter, edit only the matching concern-scoped
+   ``_XxxArgs`` mixin dataclass (still one authoritative definition per field);
+   ``TrainingArgs`` aggregates the mixins via multiple inheritance and stays a
+   single flat frozen dataclass, so the CLI flags, ``--help``, and the parameter
+   summary are all generated from it by reflection and attribute access stays
+   flat (``training_args.lr_base``).
+
+Boundary: model-structure switches (freeze_vision_encoder, train_expert_only,
+compile_model, ...) live in the per-model ModelConfig (YAML model:). Generic
+runtime behavior, including framework-managed activation checkpoint selection,
+lives here. Data-processing params (image_size, normalization_mode, ...) live in
+the per-model DataConfig (YAML data:).
 """
 
 import argparse
@@ -34,6 +50,11 @@ from loongforge.training.cli_utils import (
 from loongforge.training.embodied.args import _EmbodiedDataArgs, _EmbodiedRoutingArgs
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Custom CLI value parsers (referenced by field metadata below)
+# ---------------------------------------------------------------------------
 
 
 def parse_reshard_after_forward(value: str):
@@ -90,10 +111,12 @@ def parse_reshard_after_forward_map(raw_map: str):
 # Recipe mixins
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class _ModelRoutingArgs:
     """Model routing: which YAML / trainer / tokenizer to select."""
 
+    # ── Model routing (which YAML / trainer / tokenizer) ──
     model_name: Optional[str] = field(
         default=None,
         metadata={
@@ -194,7 +217,7 @@ class _RunArgs:
 
 @dataclass(frozen=True)
 class _LearningRateArgs:
-    """Learning rate, LR groups, and LR schedules."""
+    """Learning rate, LR groups, and LR schedules (see diagrams below)."""
 
     lr_base: float = field(
         default=2.5e-5,
@@ -593,6 +616,11 @@ class _ProfilerArgs:
     )
 
 
+# ---------------------------------------------------------------------------
+# Engine mixins
+# ---------------------------------------------------------------------------
+
+
 @dataclass(frozen=True)
 class _StepArgs:
     """Per-micro-batch step execution and gradient accumulation."""
@@ -623,6 +651,7 @@ class _StepArgs:
             "help": "Run host-side NaN/Inf checks on loss and gradients each step."
         },
     )
+
 
 @dataclass(frozen=True)
 class _RuntimeArgs:
@@ -657,6 +686,7 @@ class _RuntimeArgs:
         },
     )
 
+
 @dataclass(frozen=True)
 class _CheckpointIOArgs:
     """On-disk checkpoint format and save behavior."""
@@ -685,6 +715,7 @@ class _CheckpointIOArgs:
                     "format only)."
         },
     )
+
 
 @dataclass(frozen=True)
 class _OptimizerArgs:
@@ -808,6 +839,7 @@ class _OptimizerArgs:
         },
     )
 
+
 @dataclass(frozen=True)
 class _LoraArgs:
     """LoRA/PEFT fine-tuning configuration."""
@@ -858,6 +890,7 @@ class _LoraArgs:
             "help": "PEFT init_lora_weights mode, such as true, gaussian, or pissa."
         },
     )
+
 
 @dataclass(frozen=True)
 class _CudaGraphArgs:
@@ -924,6 +957,7 @@ class _CudaGraphArgs:
         },
     )
 
+
 @dataclass(frozen=True)
 class _ActivationCheckpointArgs:
     """activation-checkpoint module selection."""
@@ -952,6 +986,7 @@ class _ActivationCheckpointArgs:
                     "must match at least one selected module."
         },
     )
+
 
 @dataclass(frozen=True)
 class _FP8Args:
@@ -1122,6 +1157,7 @@ class _FP8Args:
                     "for all-gather to reduce communication bandwidth.",
         },
     )
+
 
 @dataclass(frozen=True)
 class _DistributedArgs:
@@ -1510,6 +1546,11 @@ class _DistributedArgs:
     )
 
 
+# ---------------------------------------------------------------------------
+# TrainingArgs - aggregate of the grouped mixins (single flat frozen dataclass)
+# ---------------------------------------------------------------------------
+
+
 @dataclass(frozen=True)
 class TrainingArgs(
     _ModelRoutingArgs,
@@ -1532,11 +1573,12 @@ class TrainingArgs(
 ):
     """Generic training args (single source of truth). Frozen after construction.
 
-    The fields come from the mixins in this module and
-    ``loongforge.training.embodied.args``. At runtime this is one flat frozen
-    dataclass, so access stays flat (``training_args.lr_base``) and
-    ``dataclasses.fields(TrainingArgs)`` / ``OmegaConf.structured(TrainingArgs)``
-    see every field at the top level.
+    The field definitions live in the concern-scoped ``_XxxArgs`` mixins above;
+    this class only aggregates them via multiple inheritance. At runtime it is
+    still a single flat frozen dataclass, so access stays flat
+    (``training_args.lr_base``) and ``dataclasses.fields(TrainingArgs)`` /
+    ``OmegaConf.structured(TrainingArgs)`` see every field at the top level.
+    To add or change a generic parameter, edit the matching ``_XxxArgs`` mixin.
     """
 
     def __post_init__(self):
@@ -1552,7 +1594,7 @@ class TrainingArgs(
 
 
 # ---------------------------------------------------------------------------
-# CLI generation
+# CLI generation — reflect TrainingArgs into an argparse parser
 # ---------------------------------------------------------------------------
 
 
@@ -1618,12 +1660,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def validate(training_args, model_cfg, data_cfg):
-    """Validate the training recipe, then the backend options.
+# ---------------------------------------------------------------------------
+# Validation
+# ---------------------------------------------------------------------------
 
-    Recipe checks cover the learning rate, step counts, manual GC, data loading,
-    the tokenizer, and profiling. Backend checks (CUDA graph, FSDP, DDP ZeRO,
-    DMuon, LoRA, FP8) run last.
+
+def validate(training_args, model_cfg, data_cfg):
+    """Validate the combination of TrainingArgs + ModelConfig + DataConfig.
+
+    Raises ValueError on hard errors, logs warnings for soft issues.
     """
     # ── Learning rate ──
     if training_args.lr_base <= 0:
@@ -1666,8 +1711,6 @@ def validate(training_args, model_cfg, data_cfg):
         raise ValueError(
             f"--manual-gc-interval must be >= 0, got {training_args.manual_gc_interval}"
         )
-
-    # ── Data loading ──
     if training_args.dataloader_prefetch_factor <= 0:
         raise ValueError(
             "--dataloader-prefetch-factor must be positive, got "
@@ -1702,6 +1745,11 @@ def validate(training_args, model_cfg, data_cfg):
         logger.warning(
             "--save-interval=0 disables both checkpoints and LoRA adapter saving."
         )
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 
 
 def parse_train_args():

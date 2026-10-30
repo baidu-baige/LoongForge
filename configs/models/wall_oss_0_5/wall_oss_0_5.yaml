@@ -3,6 +3,7 @@ model:
   backbone: qwen2_5
   attn_implementation: flash_attention_2
   attn_deterministic: true
+  use_ema: false
   disable_train_autocast: true
   flow_loss_weight: 1.0
   ar_loss_weight: 0.01

@@ -10,7 +10,7 @@ The eval module runs a policy against a simulation benchmark from a single YAML 
 
 | Component | Responsibility |
 |---|---|
-| `adapters/<benchmark>.py` | env observation → canonical dict (`state_raw`); declares matching capabilities (`action_space`, `cameras`) |
+| `adapters/<benchmark>.py` | env observation → canonical dict (`state_raw`); declares matching capabilities (`action_space`, `default_fps`, `cameras`) |
 | `payload_builders/<model>.py` | canonical dict → `predict_action(**kwargs)`; declares model capabilities (`state_encoding` / `action_encoding` / `action_dim` / ...) |
 | `model.predict_action` (server) | model inference; owns all model-specific normalization/unnormalization |
 | `action_decoders/<encoding>.py` | raw model action chunk → benchmark env action space; identity match yields a no-op `IdentityDecoder` |
@@ -31,7 +31,7 @@ The ActionDecoder key is auto-composed at startup as `"{model.action_encoding}_t
 
 ## Message flow
 
-The client and the server exchange msgpack-numpy-encoded request / response envelopes (`PROTOCOL_VERSION = "1.0"`):
+The client and the server exchange msgpack-numpy-encoded `PolicyRequest` / `PolicyResponse` envelopes (types in `protocol/schema.py`, `PROTOCOL_VERSION = "1.0"`):
 
 ```python
 # request

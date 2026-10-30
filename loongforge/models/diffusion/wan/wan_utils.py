@@ -1,6 +1,8 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
+"""wan utils"""
+
 import torch
 from einops import rearrange
 from megatron.core.parallel_state import get_context_parallel_group

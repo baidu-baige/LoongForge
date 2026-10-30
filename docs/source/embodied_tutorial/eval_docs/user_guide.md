@@ -47,7 +47,7 @@ The example below runs LIBERO with pi05:
       loongforge_root: /path/to/LoongForge-VLA
       log: /path/to/.../policy_server.log
     env:
-      eval_root: /path/to/LoongForge/loongforge/evaluation/embodied
+      eval_root: /path/to/LoongForge-VLA/loongforge/evaluation/embodied
       libero_config_path: /path/to/libero_config
       ld_library_path: /path/to/nvidia_lib
     run:

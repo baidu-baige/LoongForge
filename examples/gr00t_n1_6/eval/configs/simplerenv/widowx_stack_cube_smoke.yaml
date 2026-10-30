@@ -61,7 +61,7 @@ env:
   # `external_dependencies/SimplerEnv` submodule (github.com/squarefk/SimplerEnv,
   # see that repo's .gitmodules). Upstream simpler-env/SimplerEnv registers
   # neither widowx drawer task and does not expose `agent.eef_pos`. Details:
-  # loongforge/evaluation/embodied/docs/patches/simplerenv/gr00t_n1_6.md.
+  # loongforge/embodied/eval/docs/patches/simplerenv/gr00t_n1_6.md.
   simplerenv_root: /path/to/SimplerEnv
   ld_library_path: /path/to/nvidia_lib
   nvidia_lib_dir: /path/to/nvidia_lib

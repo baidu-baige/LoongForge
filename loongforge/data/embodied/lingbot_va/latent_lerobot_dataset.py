@@ -710,6 +710,25 @@ def _get_relative_pose(pose: np.ndarray) -> np.ndarray:
     return np.concatenate([relative_translation, relative_rotation.as_quat()], axis=1)
 
 
+def _get_required_arg(args, *names):
+    """Run get required arg.
+
+    Args:
+        args: Input value for this operation.
+        *names: Input value for this operation.
+
+    Returns:
+        The computed result.
+    """
+    for name in names:
+        value = getattr(args, name, None)
+        if value is not None:
+            if isinstance(value, list):
+                return value[0]
+            return value
+    raise ValueError(f"Missing required argument, expected one of: {names}")
+
+
 def _as_list(value: Any) -> List[Any]:
     """Run as list.
 

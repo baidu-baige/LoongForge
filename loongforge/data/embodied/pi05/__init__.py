@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Pi05 model-specific data transforms and collator."""
+"""train.trainers.supervised - supervised finetune trainers."""
 
 from loongforge.data.embodied.pi05.transforms import pi05_collator, pi05_transform
 

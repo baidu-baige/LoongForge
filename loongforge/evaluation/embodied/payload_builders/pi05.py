@@ -19,9 +19,10 @@ from loongforge.evaluation.embodied.adapters.robotwin import ROBOTWIN_ACTION_DIM
 from loongforge.evaluation.embodied.payload_builders.base import PayloadBuilder
 from loongforge.evaluation.embodied.payload_builders.registry import register_payload_builder
 
-# openpi Aloha/RoboTwin proprio helpers (adapt_to_pi input side). They live next
-# to their only consumer (this PayloadBuilder), so the proprio conversion does not
-# import behavior from the adapter. The tiny ``_normalize_range`` / ``_unnormalize_range`` and
+# openpi Aloha/RoboTwin proprio helpers (adapt_to_pi input side). These used to
+# live in ``adapters/robotwin.py``; they now live next to their only consumer
+# (this PayloadBuilder) so the proprio conversion no longer imports behavior
+# from the adapter. The tiny ``_normalize_range`` / ``_unnormalize_range`` and
 # ``_PI05_JOINT_FLIP_MASK`` duplicated in ``action_decoders/joint.py`` (action
 # side) are intentionally copied rather than shared, to avoid a shared module.
 _PI05_JOINT_FLIP_MASK = np.asarray([1, -1, -1, 1, 1, 1, 1, 1, -1, -1, 1, 1, 1, 1], dtype=np.float32)

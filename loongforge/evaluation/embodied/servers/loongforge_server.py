@@ -30,6 +30,7 @@ class HealthHandler(BaseHTTPRequestHandler):
     ckpt_path = ""
 
     def do_GET(self) -> None:
+        """Run do_GET."""
         if self.path == "/healthz":
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -40,6 +41,7 @@ class HealthHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def log_message(self, format: str, *args: Any) -> None:
+        """Run log_message."""
         return
 
 
@@ -72,6 +74,7 @@ def _warmup_model(model_spec: Any) -> None:
 
 
 def start_health_server(port: int, ckpt_path: str) -> None:
+    """Run start_health_server."""
     HealthHandler.ckpt_path = ckpt_path
     server = ReusableHTTPServer(("0.0.0.0", port), HealthHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -79,6 +82,7 @@ def start_health_server(port: int, ckpt_path: str) -> None:
 
 
 def main() -> None:
+    """Run main."""
     import argparse
 
     parser = argparse.ArgumentParser()

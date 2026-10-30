@@ -95,8 +95,8 @@ def _wrap_fsdp(
     creation in ``sharding``, prefetch edges in ``prefetch``.
 
     ``--optimizer=dmuon`` bypasses all of the above: DMuon has to claim its
-    Muon-route parameters before any group exists, so the model extension owns
-    the wrap (see ``_wrap_dmuon_fsdp``).
+    Muon-route parameters before any group exists, so the model owns the wrap
+    (see ``_wrap_dmuon_fsdp``).
     """
     if training_args.optimizer.lower() == "dmuon":
         model = _wrap_dmuon_fsdp(model, training_args, ctx, dtype, dmuon_shard=dmuon_shard)
@@ -156,13 +156,14 @@ def _wrap_dmuon_fsdp(
     *,
     dmuon_shard=None,
 ) -> nn.Module:
-    """Apply the FSDP2 + DMuon wrap path supplied by the trainer hooks.
+    """Apply the model-owned FSDP2 + DMuon wrap path.
 
-    DMuon requires the caller to wrap after ``dmuon.dedicate_params()`` claims
-    the Muon-route parameters, before any ``fully_shard`` group exists. The
-    generic planner in ``_wrap_fsdp`` cannot express that ordering, so the
-    model's trainer hooks supply ``dmuon_shard`` (``TrainerHooks.wrap_model``)
-    and build every group. The engine keeps the backend-side preparation.
+    DMuon requires the model to own its FSDP wrapping (``convert_to_fsdp``) so
+    ``dmuon.dedicate_params()`` can claim the Muon-route parameters before any
+    ``fully_shard`` group is created. The generic planner in ``_wrap_fsdp``
+    cannot express that ordering, so this path hands mesh and mixed precision
+    policy to the model and lets it build every group itself — wall-oss-0.5
+    (``modeling_qwen2_5_vl_act.convert_to_fsdp``) is the reference implementation.
 
     Unlike ``_wrap_fsdp``, storage defaults to fp32 rather than ``--dtype``:
     DMuon keeps fp32 master weights for its dedicated params, so the whole model

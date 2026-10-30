@@ -141,3 +141,9 @@ def get_glm5_next_decoder_block_spec(config, pg_collection=None, vp_stage=None):
         layer_specs=layer_specs[offset : offset + count],
         layer_norm=NativeRMSNormFactory,
     )
+
+
+def build_glm5_next_model(config, **kwargs):
+    from .glm5_next_model import Glm5NextModel
+
+    return Glm5NextModel(config, **kwargs)

@@ -8,7 +8,7 @@
 """Cosmos3 architecture: MoT video generation SFT via rectified flow matching.
 
 Supports two batch formats:
-1. Cosmos3Batch (from cosmos3_collator.py): raw videos, online VAE encode in forward
+1. Cosmos3Batch (from cosmos3_dataset.py): raw videos, online VAE encode in forward
 2. Legacy PackedBatch: pre-packed PackedSequence (for smoke tests)
 """
 
@@ -265,7 +265,7 @@ class Cosmos3(nn.Module):
     def forward(self, batch: "Cosmos3Batch", iteration=None, **kwargs) -> Dict[str, torch.Tensor]:
         """Training forward: online VAE encode → noise → pack → MoT → loss.
 
-        Accepts Cosmos3Batch (raw videos) from cosmos3_collator.py.
+        Accepts Cosmos3Batch (raw videos) from cosmos3_dataset.py.
         """
         if batch.actions is not None:
             return self._forward_raw_video_with_action(batch, iteration=iteration)
@@ -453,6 +453,7 @@ class Cosmos3(nn.Module):
                 timesteps=ts_dev,
                 has_valid_tokens=True,
                 rectified_flow=self.rectified_flow,
+                tensor_kwargs_fp32={"device": device, "dtype": torch.float32},
             )
             loss = loss + loss_scale * loss_vision
         else:
@@ -466,6 +467,7 @@ class Cosmos3(nn.Module):
                 timesteps=ts_dev,
                 has_valid_tokens=True,
                 rectified_flow=self.rectified_flow,
+                tensor_kwargs_fp32={"device": device, "dtype": torch.float32},
                 raw_action_dim=raw_action_dims,
             )
             loss = loss + action_loss_weight * loss_action

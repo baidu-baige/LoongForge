@@ -1,11 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""GR00T-N1.7 trainer hooks.
-
-Adds to the default TorchRunner behavior: full-iteration CUDA graph support,
-GR00T-specific DDP bucket alignment, a fused optimizer, and post-setup RNG reset.
-"""
+"""GR00T-N1.7 finetune trainer with full-iteration CUDA graph support."""
 
 from __future__ import annotations
 
@@ -126,11 +122,14 @@ def _align_static_graph_buckets_after_warmup(model) -> bool:
         delattr(model, "_loong_static_graph_bucket_warmup")
 
 
-def _full_iteration_graph_stream_priority() -> int:
+def _full_iteration_graph_stream_priority(backbone_pipeline: bool) -> int:
     """Return the validated split-Graph train stream priority."""
     import torch
     low_priority, high_priority = torch.cuda.Stream.priority_range()
-    return max(high_priority, min(low_priority, -3))
+    default = high_priority if backbone_pipeline else 0
+    # The split Graph benchmark selected priority -3 on this hardware. Clamp
+    # the model-owned value to the device's supported range.
+    return max(high_priority, min(low_priority, -3 if backbone_pipeline else default))
 
 
 def _ddp_bucket_alignment_enabled(training_args=None) -> bool:
@@ -301,7 +300,7 @@ def build_hooks(training_args):
         from loongforge.engines.torch.distributed.parallel import wrap_model as _wrap
 
         default_stream = torch.cuda.current_stream(ctx.device)
-        graph_priority = _full_iteration_graph_stream_priority()
+        graph_priority = _full_iteration_graph_stream_priority(backbone_pipeline=True)
         graph_stream = torch.cuda.Stream(device=ctx.device, priority=graph_priority)
         graph_stream.wait_stream(default_stream)
         with torch.cuda.stream(graph_stream):

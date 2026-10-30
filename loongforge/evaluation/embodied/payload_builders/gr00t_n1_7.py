@@ -33,7 +33,7 @@ exterior view and an 8D state whose index 6 is a dead ``pad`` channel and whose
 index 7 is a 1D gripper openness in ``[0, 1]``; set ``state_encoding:
 simpler_widowx`` plus ``action_encoding: simpler_abs_euler`` in the YAML for that
 path. Do **not** set ``action_horizon`` there: YAML ``model:`` keys are also
-merged into ``Gr00tN1d7Config``, whose ``action_horizon`` is the DiT
+merged into ``GrootN1d7Config``, whose ``action_horizon`` is the DiT
 flow-matching sequence length (40 in the released checkpoints), and shortening it
 changes every DiT output. The decoded chunk length comes from the embodiment's
 action ``delta_indices``, not from this field.
@@ -121,6 +121,8 @@ class Gr00tN1d7PayloadBuilder(PayloadBuilder):
     #   ``libero_ee_axis_angle`` — LIBERO 8D raw state [pos(3), axis_angle(3), grip, grip]
     #   ``simpler_widowx``       — SimplerEnv Bridge 8D raw state
     #                              [pos(3), euler(3), pad=0, gripper_openness]
+    #   ``simpler_google``       — SimplerEnv Google/Fractal 8D raw state
+    #                              [pos(3), quat_xyzw(4), gripper_closedness]
     #   ``""``                   — no state kwarg emitted
     state_encoding: str = "libero_ee_axis_angle"
     action_encoding: str = "axis_angle"  # x,y,z + axis-angle(3) + gripper
@@ -148,7 +150,7 @@ class Gr00tN1d7PayloadBuilder(PayloadBuilder):
         raise ValueError(f"Unsupported Gr00tN1d7 state_encoding: {self.state_encoding!r}")
 
     def build(self, canonical: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:
-        """Return the kwargs consumed by ``Gr00tN1d7Policy.predict_action``."""
+        """Return the kwargs consumed by ``GrootN1d7Policy.predict_action``."""
         state = self._encode_state(canonical)
         if self.state_encoding and state is None:
             raise ValueError(

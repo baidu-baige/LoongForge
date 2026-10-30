@@ -25,14 +25,12 @@ def llm_model_provider(
     config,
 ):
     """Generic LLM model provider.
-    
+
     Args:
         pre_process (bool, optional): Set to true if you need to compute embedings. Defaults to True.
         post_process (bool, optional): Set to true if you need to want to compute output logits/loss. Defaults to True.
         parallel_output (bool): whether to allgather the output logits. Defaults to True.
-        args: Training args of the run.
-        config: Model config of the run.
-    
+
     Returns:
         The corresponding LLM model.
     """
@@ -40,7 +38,7 @@ def llm_model_provider(
 
     if args.use_legacy_models:
         raise ValueError("Classic Megatron-LM models are not supported.")
-    
+
     # TODO: abstract this to a common dataclass
     config.padded_vocab_size = args.padded_vocab_size
     config.fp16_lm_cross_entropy = args.fp16_lm_cross_entropy

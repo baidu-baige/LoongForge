@@ -74,6 +74,7 @@ data:
 
   state_dropout_prob: 0.2
   exclude_state: false
+  use_mean_std: false
   use_percentiles: true
   clip_outliers: true
   apply_sincos_state_encoding: false
@@ -96,6 +97,7 @@ data:
   shard_size: 1024
   episode_sampling_rate: 0.1
   num_shards_per_epoch: 100000
+  allow_padding: false
 
   use_image_transform: false
   use_action_transform: false

@@ -45,6 +45,7 @@ DATA_ARGS=(
 TRAINING_ARGS=(
     --norm-epsilon 1e-6
     --training-phase sft
+    # --trainable-modules language_model adapter
     --seq-length 32768
     --max-position-embeddings 262144
     --init-method-std 0.02

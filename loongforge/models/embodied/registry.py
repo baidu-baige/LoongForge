@@ -51,8 +51,6 @@ def build_model(model_cfg, training_args=None) -> nn.Module:
 
     Args:
         model_cfg: typed ModelConfig instance (must have a ``model_type`` attribute).
-        training_args: the run's TrainingArgs. Models whose build depends on them define
-            ``from_training_args(model_cfg, training_args)`` instead of ``from_pretrained``.
 
     Returns:
         Initialized nn.Module.
@@ -63,6 +61,10 @@ def build_model(model_cfg, training_args=None) -> nn.Module:
             f"Unknown model_type: '{model_type}'. "
             f"Registered: {sorted(MODEL_PACKAGES)}"
         )
+    import torch._dynamo
+
+    torch._dynamo.config.cache_size_limit = 512
+    torch._dynamo.config.accumulated_cache_size_limit = 4096
     package = MODEL_PACKAGES[model_type]
     importlib.import_module(f"loongforge.models.embodied.{package}.modeling_{package}")
 

@@ -98,7 +98,8 @@ def main() -> None:
     torch.cuda.set_device(local_rank)
     dist.init_process_group("nccl")
 
-    sys.path.insert(0, str(args.target_root))
+    target_module = args.target_root / "loongforge/models/foundation/glm5_next"
+    sys.path.insert(0, str(target_module))
     sys.path.insert(0, str(args.target_root / "third_party/Loong-Megatron"))
 
     from megatron.core import parallel_state
@@ -108,7 +109,7 @@ def main() -> None:
     from megatron.core.tensor_parallel.random import model_parallel_cuda_manual_seed
     from megatron.core.utils import get_batch_on_this_cp_rank
 
-    from loongforge.models.foundation.glm5_next.glm5_next_model import Glm5NextModel
+    from glm5_next_model import Glm5NextModel
 
     try:
         parallel_state.initialize_model_parallel(

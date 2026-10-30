@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Exports for the installed DDP bucket AOT op."""
+"""LoongForge compatibility exports for the installed DDP bucket AOT op."""
 
 try:
     from gr00t_n1_7_op.gr00t_ddp_reducer_bucket_control import (

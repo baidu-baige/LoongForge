@@ -28,7 +28,7 @@ class LingBotVAPreparedBatch(PreparedBatch):
     frame_ids: torch.Tensor
 
     def as_dict(self) -> Dict[str, torch.Tensor]:
-        """Return the batch as the dict that ``LingBotVAEmbodiedModel.forward`` reads."""
+        """Return the legacy dict shape expected by the existing LingBot logic."""
         return {
             "latents": self.latents,
             "actions": self.actions,
@@ -43,6 +43,11 @@ class LingBotVACollator(BaseCollator):
     """Pad and stack LingBot-VA samples into a ``LingBotVAPreparedBatch``."""
 
     def __init__(self, pad_to_multiple: int = 1):
+        """Initialize the instance.
+
+        Args:
+            pad_to_multiple: Input value for this operation.
+        """
         self.pad_to_multiple = int(pad_to_multiple)
 
     @classmethod
@@ -60,6 +65,14 @@ class LingBotVACollator(BaseCollator):
     def __call__(
         self, examples: List[Dict[str, torch.Tensor]]
     ) -> LingBotVAPreparedBatch:
+        """Apply the callable to its inputs.
+
+        Args:
+            examples: Input value for this operation.
+
+        Returns:
+            The computed result.
+        """
         if not examples:
             raise ValueError("LingBotVACollator received an empty example list")
         return LingBotVAPreparedBatch(
@@ -86,6 +99,15 @@ class LingBotVACollator(BaseCollator):
 
 
 def _pad_stack(tensors: List[torch.Tensor], pad_to_multiple: int) -> torch.Tensor:
+    """Run pad stack.
+
+    Args:
+        tensors: Input value for this operation.
+        pad_to_multiple: Input value for this operation.
+
+    Returns:
+        The computed result.
+    """
     max_shape = [
         max(tensor.shape[dim] for tensor in tensors) for dim in range(tensors[0].ndim)
     ]
@@ -102,6 +124,14 @@ def _pad_stack(tensors: List[torch.Tensor], pad_to_multiple: int) -> torch.Tenso
 
 
 def _pad_stack_text(tensors: List[torch.Tensor]) -> torch.Tensor:
+    """Run pad stack text.
+
+    Args:
+        tensors: Input value for this operation.
+
+    Returns:
+        The computed result.
+    """
     max_shape = [
         max(tensor.shape[dim] for tensor in tensors) for dim in range(tensors[0].ndim)
     ]
@@ -115,6 +145,14 @@ def _pad_stack_text(tensors: List[torch.Tensor]) -> torch.Tensor:
 
 
 def _pad_stack_1d(tensors: List[torch.Tensor]) -> torch.Tensor:
+    """Run pad stack 1d.
+
+    Args:
+        tensors: Input value for this operation.
+
+    Returns:
+        The computed result.
+    """
     max_len = max(tensor.numel() for tensor in tensors)
     if max_len == 0:
         return torch.empty((len(tensors), 0), dtype=torch.long)
@@ -125,4 +163,13 @@ def _pad_stack_1d(tensors: List[torch.Tensor]) -> torch.Tensor:
 
 
 def _align(value: int, multiple: int) -> int:
+    """Run align.
+
+    Args:
+        value: Input value for this operation.
+        multiple: Input value for this operation.
+
+    Returns:
+        The computed result.
+    """
     return ((value + multiple - 1) // multiple) * multiple

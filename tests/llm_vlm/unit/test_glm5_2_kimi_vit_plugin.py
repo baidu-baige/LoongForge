@@ -10,21 +10,21 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-import loongforge.engines.megatron  # noqa: F401 - initialize package imports in training order
+import loongforge.train  # noqa: F401 - initialize package imports in training order
 import torch
 from PIL import Image
 from transformers import AutoImageProcessor, AutoTokenizer
 from transformers.dynamic_module_utils import get_class_from_dynamic_module
 from transformers.processing_utils import ProcessorMixin
 
-from loongforge.data.chat_templates.template import MAPPING_NAME_TO_TEMPLATE
-from loongforge.data.chat_templates.plugins.kimi_plugin import KimiPlugin
-from loongforge.data.vlm import dataloader_provider
-from loongforge.data.vlm.base.task_encoder import BaseTaskEncoder
-from loongforge.data.vlm.kimi_task_encoder import KimiTaskEncoder
-from loongforge.data.vlm.vlm_task_encoder import VLMTaskEncoder
+from loongforge.data.chat_template import MAPPING_NAME_TO_TEMPLATE
+from loongforge.data.kimi_plugin import KimiPlugin
+from loongforge.data.multimodal import dataloader_provider
+from loongforge.data.multimodal.base.task_encoder import BaseTaskEncoder
+from loongforge.data.multimodal.kimi_task_encoder import KimiTaskEncoder
+from loongforge.data.multimodal.vlm_task_encoder import VLMTaskEncoder
 from loongforge.models.omni_models.omni_encoder_model import OmniEncoderModel
-from loongforge.data.chat_templates.template import DataRoles
+from loongforge.utils import constants
 
 
 class Glm52KimiVitPluginTest(unittest.TestCase):
@@ -75,11 +75,11 @@ class Glm52KimiVitPluginTest(unittest.TestCase):
         encoder.process_sft_qa.assert_called_once_with(
             [
                 {
-                    "role": DataRoles.USER,
+                    "role": constants.DataRoles.USER,
                     "content": "look <image>",
                 },
                 {
-                    "role": DataRoles.ASSISTANT,
+                    "role": constants.DataRoles.ASSISTANT,
                     "content": "answer",
                 },
             ],
@@ -111,12 +111,12 @@ class Glm52KimiVitPluginTest(unittest.TestCase):
             processor_path, trust_remote_code=True
         )
         encoder = object.__new__(KimiTaskEncoder)
-        encoder.config = SimpleNamespace(
+        encoder.args = SimpleNamespace(
             train_on_prompt=False, history_mask_loss=False
         )
         encoder.chat_template = MAPPING_NAME_TO_TEMPLATE["kimi-k2.6-hf"]
         encoder.tokenizer = SimpleNamespace(
-            tokenizer=tokenizer,
+            hf_tokenizer=lambda: tokenizer,
             convert_tokens_to_ids=tokenizer.convert_tokens_to_ids,
         )
         encoder.merge_kernel_size = (2, 2)
@@ -157,7 +157,7 @@ class VLMTaskEncoderCompatibilityTest(unittest.TestCase):
 
     def test_registered_hf_templates_use_hf_message_encoding(self):
         encoder = object.__new__(VLMTaskEncoder)
-        encoder.config = SimpleNamespace(
+        encoder.args = SimpleNamespace(
             train_on_prompt=False,
             history_mask_loss=False,
         )
@@ -172,7 +172,7 @@ class VLMTaskEncoderCompatibilityTest(unittest.TestCase):
                     return_value=([1], [2], None, None),
                 ) as encode_openai:
                     input_ids, target = encoder._encode_sft_messages(
-                        [{"role": DataRoles.USER, "content": "question"}],
+                        [{"role": constants.DataRoles.USER, "content": "question"}],
                         system="system",
                     )
 
@@ -180,7 +180,7 @@ class VLMTaskEncoderCompatibilityTest(unittest.TestCase):
                 self.assertEqual(target.tolist(), [2])
                 self.assertEqual(
                     encode_openai.call_args.kwargs["messages"][0],
-                    {"role": DataRoles.SYSTEM, "content": "system"},
+                    {"role": constants.DataRoles.SYSTEM, "content": "system"},
                 )
 
     def test_legacy_template_encoding_is_unchanged(self):
@@ -193,7 +193,7 @@ class VLMTaskEncoderCompatibilityTest(unittest.TestCase):
         ]
 
         input_ids, target = encoder._encode_sft_messages(
-            [{"role": DataRoles.USER, "content": "question"}],
+            [{"role": constants.DataRoles.USER, "content": "question"}],
             system="system",
         )
 
@@ -237,14 +237,12 @@ class VLMTaskEncoderCompatibilityTest(unittest.TestCase):
                 with patch.object(
                     BaseTaskEncoder,
                     "__init__",
-                    lambda encoder, config, tokenizer, chat_template=None: setattr(
-                        encoder, "config", config
-                    ),
+                    lambda encoder: setattr(encoder, "args", args),
                 ), patch(
-                    "loongforge.data.vlm.vlm_task_encoder.AutoProcessor.from_pretrained",
+                    "loongforge.data.multimodal.vlm_task_encoder.AutoProcessor.from_pretrained",
                     side_effect=load_processor,
                 ):
-                    VLMTaskEncoder(args, Mock())
+                    VLMTaskEncoder(args)
                 self.assertEqual(repr_was_patched, [expected_patched])
                 self.assertIs(ProcessorMixin.__repr__, original_repr)
 
@@ -264,13 +262,25 @@ class VLMValidationDatasetTest(unittest.TestCase):
     def _get_val_dataset(self, args):
         dataset = object()
         with patch.object(
+            dataloader_provider, "get_args", return_value=args
+        ), patch.object(
+            dataloader_provider.parallel_state,
+            "get_data_parallel_rank",
+            return_value=0,
+        ), patch.object(
+            dataloader_provider.parallel_state,
+            "get_data_parallel_world_size",
+            return_value=1,
+        ), patch.object(
+            dataloader_provider.parallel_state,
+            "get_data_parallel_group",
+            return_value=None,
+        ), patch.object(
             dataloader_provider.energon, "WorkerConfig", return_value=object()
         ), patch.object(
             dataloader_provider.energon, "get_val_dataset", return_value=dataset
         ) as get_val_dataset:
-            result = dataloader_provider.get_val_dataset(
-                Mock(), args, dp_rank=0, dp_size=1, dp_group=None
-            )
+            result = dataloader_provider.get_val_dataset(Mock())
         return result, dataset, get_val_dataset
 
     def test_explicit_validation_path_is_used(self):
@@ -338,10 +348,13 @@ class OmniImageFeatureValidationTest(unittest.TestCase):
             None,
         )
         encoder.image_projector = None
-        encoder.use_vit_dp_balance = False
         return encoder
 
-    def test_matching_image_tokens_and_features_are_accepted(self):
+    @patch(
+        "loongforge.models.omni_models.omni_encoder_model.get_args",
+        return_value=SimpleNamespace(use_vit_dp_balance=False),
+    )
+    def test_matching_image_tokens_and_features_are_accepted(self, _):
         encoder = self._encoder_with_features(2)
         input_ids = torch.tensor([[99, 1, 99]])
         input_embeds = torch.zeros(3, 1, 4)
@@ -351,7 +364,11 @@ class OmniImageFeatureValidationTest(unittest.TestCase):
         self.assertEqual(combined.shape, input_embeds.shape)
         self.assertEqual(mask.sum().item(), 8)
 
-    def test_mismatched_image_tokens_and_features_are_rejected(self):
+    @patch(
+        "loongforge.models.omni_models.omni_encoder_model.get_args",
+        return_value=SimpleNamespace(use_vit_dp_balance=False),
+    )
+    def test_mismatched_image_tokens_and_features_are_rejected(self, _):
         encoder = self._encoder_with_features(1)
         input_ids = torch.tensor([[99, 1, 99]])
         input_embeds = torch.zeros(3, 1, 4)

@@ -25,7 +25,7 @@ Shared fields
 -------------
 Fields used by both model and data pipeline (``action_dim``, ``action_horizon``,
 ``max_action_dim``, ``max_state_dim``, etc.) are defined here once.
-``Gr00tN1d6DataConfig`` does not duplicate them; the data side reads them from
+``GrootN1d6DataConfig`` does not duplicate them; the data side reads them from
 the ``model_cfg`` instance passed alongside.
 """
 

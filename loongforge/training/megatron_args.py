@@ -1,20 +1,14 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""CLI entry point for Megatron training arguments.
+"""LoongForge Training Arguments Module
 
-This module registers shared run and backend options and adds the LLM, VLM,
-and diffusion argument providers. Upstream Megatron and the checkpoint bridge
-register their own options on the same parser.
-
-Training checks live here; backend capability checks and execution live in
-``engines.megatron``. ``parse_megatron_train_args`` connects these providers
-and checks to the engine parser and model config loading.
+This module defines command-line arguments for LoongForge training pipeline,
+including model configuration, tokenizer settings, SFT data processing,
+video processing, multimodal training, and parallel execution.
 """
 
 import argparse
-from pathlib import Path
-from typing import Optional
 
 from megatron.training.utils import print_rank_0
 
@@ -27,384 +21,8 @@ from loongforge.training.vlm.args import add_vlm_args
 
 
 # =============================================================================
-# Argument groups
+# Tensor Logging Arguments (llm-inspector)
 # =============================================================================
-
-def _add_sft_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """Add arguments for supervised fine-tuning data and objective."""
-    group = parser.add_argument_group(
-        title="SFT Data Configuration",
-        description="Arguments for supervised fine-tuning data processing",
-    )
-
-    group.add_argument(
-        "--sft-dataset-config",
-        type=str,
-        default=None,
-        help="Path to YAML file containing dataset configurations. "
-             "Defines dataset formats and processing rules. "
-             "Default: configs/data/sft_dataset_config.yaml",
-    )
-    group.add_argument(
-        "--sft-dataset",
-        nargs="*",
-        default=None,
-        help="List of dataset names for combined train/valid/test splits. "
-             "Names must be defined in --sft-dataset-config. "
-             "Examples: 'dataset1' or 'dataset1 dataset2'. "
-             "Mutually exclusive with --sft-train-dataset/--sft-valid-dataset/--sft-test-dataset. "
-             "Default: None",
-    )
-    group.add_argument(
-        "--sft-train-dataset",
-        nargs="*",
-        default=None,
-        help="List of training dataset names. Used with --train-data-path. "
-             "Follows same naming rules as --sft-dataset. Default: None",
-    )
-    group.add_argument(
-        "--sft-valid-dataset",
-        nargs="*",
-        default=None,
-        help="List of validation dataset names. Used with --valid-data-path. "
-             "Follows same naming rules as --sft-dataset. Default: None",
-    )
-    group.add_argument(
-        "--sft-test-dataset",
-        nargs="*",
-        default=None,
-        help="List of test dataset names. Used with --test-data-path. "
-             "Follows same naming rules as --sft-dataset. Default: None",
-    )
-    group.add_argument(
-        "--sft-sort-batch",
-        action="store_true",
-        help="Sort dataset samples by length (smallest to largest) for more efficient "
-             "padding. Sorting occurs after packing if --packing-sft-data is enabled.",
-    )
-    group.add_argument(
-        "--sft-data-streaming",
-        action="store_true",
-        help="Enable streaming mode for large datasets that don't fit in memory. "
-             "Data is loaded on-demand during training. Default: False",
-    )
-    group.add_argument(
-        "--streaming-buffer-size",
-        type=int,
-        default=16384,
-        help="Buffer size for random sampling in streaming mode. Larger buffers "
-             "provide more randomization but use more memory. Default: 16384",
-    )
-    group.add_argument(
-        "--sft-data-mix-strategy",
-        type=str,
-        choices=["concat", "interleave_under", "interleave_over"],
-        default="concat",
-        help="Strategy for mixing multiple SFT datasets: "
-             "'concat': concatenate datasets sequentially; "
-             "'interleave_under': interleave datasets and stop when the shortest dataset is exhausted; "
-             "'interleave_over': interleave datasets until the longest dataset is exhausted.",
-    )
-    group.add_argument(
-        "--sft-num-preprocess-workers",
-        type=int,
-        default=None,
-        help="Number of worker processes for data preprocessing. Only applies to "
-             "non-streaming mode. More workers speed up preprocessing but use more memory. "
-             "Default: None (auto-detect)",
-    )
-    group.add_argument(
-        "--train-on-prompt",
-        action="store_true",
-        help="Include prompt tokens in loss computation. By default, loss is computed "
-             "only on response tokens. Default: False",
-    )
-    group.add_argument(
-        "--history-mask-loss",
-        action="store_true",
-        help="Compute loss only on the last turn response in multi-turn conversations, "
-             "masking the loss for tokens from previous turns. Default: False",
-    )
-    group.add_argument(
-        "--is-tokenized-data",
-        action="store_true",
-        help="Indicate that input data is already tokenized. Skips tokenization step "
-             "in data processing pipeline. Default: False",
-    )
-    group.add_argument(
-        "--enable-discard-sample",
-        action="store_true",
-        help="Discard samples that exceed --seq-length instead of truncating. "
-             "Useful for ensuring consistent sequence lengths. Default: False",
-    )
-    group.add_argument(
-        "--packing-buffer-size",
-        type=int,
-        default=10000,
-        help="Size of the sample buffer used for sequence packing. "
-             "Samples are first loaded into this buffer and then packed into sequences "
-             "by the packing algorithm. Effective only when --packing-sft-data is enabled.",
-    )
-    group.add_argument(
-        "--use-fixed-seq-lengths",
-        action="store_true",
-        help="Pad all sequences to exactly --seq-length. Currently only supported "
-             "for language models. Default: False",
-    )
-    return parser
-
-
-
-def _add_loop_logging_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """Add arguments for training-loop logging."""
-    group = parser.add_argument_group(
-        title="Training Loop Logging",
-        description="Arguments for progress and memory logging in the training loop",
-    )
-    group.add_argument(
-        "--no-detail-log",
-        action="store_false",
-        dest="log_detail",
-        help="Disable detailed timing logs during training. Default: enabled",
-    )
-    group.add_argument(
-        "--detail-log-interval",
-        type=int,
-        default=20,
-        help="Interval (iterations) between detailed timing log reports. "
-             "Only effective when timing-log-level is 0. Default: 20",
-    )
-    group.add_argument(
-        "--log-memory-stats",
-        action="store_true",
-        default=False,
-        help="Log GPU memory statistics (allocated/peak) during training. Default: False",
-    )
-    return parser
-
-
-def _add_run_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """Add run-selection, phase, and export arguments."""
-    group = parser.add_argument_group(
-        title="Run Configuration",
-        description="Arguments that select the model config and describe the run lifecycle",
-    )
-    group.add_argument(
-        "--config-file",
-        type=str,
-        default=None,
-        help="Path to YAML configuration file containing model and training settings. "
-             "Example: /path/to/config.yaml. When provided, other arguments may be "
-             "overridden by config file values. Default: None",
-    )
-    group.add_argument(
-        "--model-name",
-        type=str,
-        default=None,
-        help="Name identifier for the model architecture. Must match a registered model "
-             "in loongforge/models/catalog.py. Example: 'llama2-7b', 'qwen2-7b'. Default: None",
-    )
-    group.add_argument(
-        "--training-phase",
-        type=str,
-        default=TrainingPhase.PRETRAIN,
-        choices=[TrainingPhase.PRETRAIN, TrainingPhase.SFT],
-        help="Training phase: 'pretrain' for pre-training, 'sft' for supervised fine-tuning. "
-             "Default: pretrain",
-    )
-    group.add_argument(
-        "--save-hf",
-        type=str,
-        default="false",
-        choices=["true", "false"],
-        help="Save an HF checkpoint at the end of training. "
-             "The adapter merge size comes from the YAML peft_config. Default: false",
-    )
-    group.add_argument(
-        "--save-hf-path",
-        type=str,
-        default=None,
-        help="Path to save the HF model checkpoint. If not specified, saves to "
-             "<save>/release_hf_weights/",
-    )
-    return parser
-
-
-def _add_freeze_and_init_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """Add parameter-freezing and initialization-source arguments."""
-    group = parser.add_argument_group(
-        title="Freeze and Initialization",
-        description="Arguments for freezing parameters and choosing the starting weights",
-    )
-    group.add_argument(
-        "--freeze-parameters",
-        type=str,
-        nargs="*",
-        default=[],
-        help="List of parameter name prefixes to freeze during training. "
-             "Frozen parameters will not be updated by the optimizer. "
-             "Example: --freeze-parameters 'embed' 'lm_head' freezes embedding and output layers. "
-             "Default: [] (no freezing)",
-    )
-    group.add_argument(
-        "--freeze-parameters-regex",
-        type=str,
-        default=None,
-        help="Regular expression pattern to match parameter names to freeze. "
-             "Example: '.*bias.*' freezes all bias parameters. "
-             "Applied in addition to --freeze-parameters; a parameter is frozen when either matches. "
-             "Default: None",
-    )
-    group.add_argument(
-        "--allow-missing-adapter-checkpoint",
-        action="store_true",
-        help="Allow model loading to proceed even when the adapter checkpoint is missing. "
-             "Useful when starting from a base model without adapter weights. "
-             "Default: False (a missing adapter checkpoint raises an error)",
-    )
-    return parser
-
-
-def _add_ema_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """Add Exponential Moving Average arguments for the training loop."""
-    group = parser.add_argument_group(
-        title="EMA",
-        description="Arguments for Exponential Moving Average of model parameters",
-    )
-    group.add_argument(
-        "--enable-ema",
-        action="store_true",
-        help="Enable Exponential Moving Average (EMA) of model parameters. "
-             "EMA provides smoothed parameter estimates for more stable inference. "
-             "Default: False",
-    )
-    group.add_argument(
-        "--ema-decay",
-        type=float,
-        default=0.9999,
-        help="Decay rate for EMA parameter updates. Higher values = slower update. "
-             "Default: 0.9999",
-    )
-    group.add_argument(
-        "--save-ema",
-        type=str,
-        default=None,
-        help="Directory path to save EMA checkpoints. Defaults to ${args.save}/ema. "
-             "Default: None",
-    )
-    group.add_argument(
-        "--load-ema",
-        type=str,
-        default=None,
-        help="Directory path to load the EMA checkpoint from. Defaults to ${args.load}/ema. "
-             "Default: None",
-    )
-    return parser
-
-
-def _add_recipe_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """Add data-recipe and preprocessing arguments."""
-    group = parser.add_argument_group(
-        title="Data Recipe",
-        description="Arguments that shape the training batches and image preprocessing",
-    )
-    group.add_argument(
-        "--packing-sft-data",
-        action="store_true",
-        help="Pack multiple short sequences into a single training sample to improve "
-             "GPU utilization. Default: False",
-    )
-    group.add_argument(
-        "--dataloader-save",
-        type=str,
-        default=None,
-        help="Path to save Energon dataloader state for resumable training. Default: None",
-    )
-    return parser
-
-
-def _add_log_tensor_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """Add tensor logging and debugging arguments for the llm-inspector hook.
-
-    The training runner registers the hooks when --enable-log-tensor is set and
-    llm-inspector is installed. If the package is missing, the arguments are
-    ignored silently.
-    """
-    group = parser.add_argument_group(
-        title="Tensor Logging (llm-inspector)",
-        description="Arguments for debugging tensor statistics via llm-inspector library. "
-                    "Requires llm-inspector package to be installed.",
-    )
-    group.add_argument(
-        "--enable-log-tensor",
-        action="store_true",
-        help="[llm-inspector] Enable tensor logging for debugging. When enabled, tensor statistics "
-             "will be traced during training using the llm-inspector library. "
-             "Requires llm-inspector to be installed. Default: False",
-    )
-    group.add_argument(
-        "--log-tensor-name-pattern",
-        type=str,
-        default=None,
-        help="[llm-inspector] Regex pattern to filter module names for tensor logging. "
-             "When None (default), logs all modules. "
-             "Example: '.*attention.*' to log only attention modules. Default: None",
-    )
-    group.add_argument(
-        "--log-tensor-stage",
-        type=str,
-        default="forward",
-        choices=["init", "forward", "backward"],
-        help="[llm-inspector] Training stage at which to log tensors. "
-             "'init': model initialization, 'forward': forward pass, 'backward': backward pass. "
-             "Only one stage can be selected. Default: forward",
-    )
-    group.add_argument(
-        "--log-tensor-iter-pattern",
-        type=str,
-        default=None,
-        help="[llm-inspector] Comma-separated iteration indices at which to log tensors. "
-             "Example: '8,15,20' logs tensors at iterations 8, 15, and 20. "
-             "When None, logs at all iterations. Default: None",
-    )
-    group.add_argument(
-        "--log-tensor-mbs-pattern",
-        type=str,
-        default=None,
-        help="[llm-inspector] Comma-separated micro-batch indices at which to log tensors. "
-             "Example: '0,2,4' logs tensors for micro-batches 0, 2, and 4. "
-             "Default: None",
-    )
-    group.add_argument(
-        "--log-tensor-layer-pattern",
-        type=str,
-        default=None,
-        help="[llm-inspector] Comma-separated layer indices at which to log tensors. "
-             "Example: '0,5,10' logs tensors for layers 0, 5, and 10. "
-             "Default: None",
-    )
-    group.add_argument(
-        "--log-tensor-rank",
-        type=str,
-        default="0",
-        help="[llm-inspector] Comma-separated GPU ranks at which to log tensors. "
-             "Example: '0,1,2,4' logs tensors on ranks 0, 1, 2, and 4. "
-             "Default: 0",
-    )
-    group.add_argument(
-        "--save-tensor",
-        action="store_true",
-        help="[llm-inspector] Save logged tensors to disk files for offline analysis. "
-             "When False, only prints tensor norms to the log file. Default: False",
-    )
-    group.add_argument(
-        "--save-tensor-dir",
-        type=str,
-        default="",
-        help="[llm-inspector] Directory path to save tensor files. Used when --save-tensor is "
-             "enabled. Default: '' (current directory)",
-    )
-    return parser
 
 
 def _add_extra_tokenizer_args(parser: argparse.ArgumentParser):
@@ -485,7 +103,6 @@ def _add_extra_tokenizer_args(parser: argparse.ArgumentParser):
              "vocab size differs from model's embedding size. Default: None"
     )
 
-    # --padded-vocab-size comes from upstream megatron.training.arguments.
     # The tokenizer and the global chat template are built together at
     # initialization, so these two arguments stay with the tokenizer.
     group.add_argument(
@@ -508,15 +125,50 @@ def _add_extra_tokenizer_args(parser: argparse.ArgumentParser):
              "Default: None"
     )
 
+    group.add_argument(
+        "--padded-vocab-size",
+        type=int,
+        default=None,
+        help="Explicitly specify padded vocabulary size. Used for models with custom "
+             "vocabulary padding requirements. Default: None"
+    )
+
     return parser
 
-def _add_extra_training_args(parser: argparse.ArgumentParser):
-    """Add arguments that configure how the engine executes a step.
 
-    Training-phase, EMA, export, and data-recipe switches live in
-    ``loongforge/training/megatron_args.py``. Pipeline sequence-length
-    handling, the checkpoint format, loss reduction, and the MTP embedding copy
-    stay here because they describe backend execution.
+# =============================================================================
+# Training Arguments
+# =============================================================================
+
+def _extend_cuda_graph_scope_choices(parser: argparse.ArgumentParser):
+    """Add ``'per_microbatch'`` to the choices of Megatron's ``--cuda-graph-scope``.
+
+    Avoids patching the upstream Megatron parser. Looks up the action by its
+    option string and mutates its ``choices``/``help`` in place. Silently
+    no-ops if the upstream definition has changed and the action can't be
+    found, so we never break parsing.
+    """
+    extra_help = (
+        ' "per_microbatch" scope (LoongForge extension) captures one CUDA graph per '
+        'micro-batch with eager RNG between sub-graphs for bit-exact '
+        'alignment with pure eager. Only supported with --cuda-graph-impl=local.'
+    )
+    for action in parser._actions:
+        if "--cuda-graph-scope" in getattr(action, "option_strings", ()):
+            choices = list(action.choices or [])
+            if "per_microbatch" not in choices:
+                choices.append("per_microbatch")
+                action.choices = choices
+            if action.help and "per_microbatch" not in action.help:
+                action.help = action.help.rstrip() + extra_help
+            return
+
+
+def _add_extra_training_args(parser: argparse.ArgumentParser):
+    """Add arguments for training configuration.
+
+    These arguments control training phase, checkpointing, logging,
+    and EMA (Exponential Moving Average).
     """
     group = parser.add_argument_group(
         title="Training Configuration",
@@ -563,7 +215,34 @@ def _add_extra_training_args(parser: argparse.ArgumentParser):
              "Default: False"
     )
 
+    group.add_argument(
+        "--cuda-graph-pad-length",
+        type=int,
+        default=None,
+        dest="cuda_graph_pad_length",
+        help="Fixed sequence length for CUDA graph mode. "
+             "When set (e.g. --cuda-graph-pad-length 220), the data collator pads "
+             "all token sequences to this length (padding='max_length', truncation=True) "
+             "so all batches have identical tensor shapes — a prerequisite for CUDA graph "
+             "capture. When None (default), dynamic padding is used. "
+             "Should be set to a value slightly larger than the maximum actual token "
+             "length in the dataset to minimize wasted computation. "
+             "NOTE: currently only consumed by the gr00t SFT pipeline "
+             "(Gr00tN1d6DataCollator); other model pipelines ignore this flag.",
+    )
+
+    group.add_argument(
+        "--force-all-weight-decay",
+        action="store_false",
+        default=None,
+        help="Force all parameters into weight-decay group, overriding default "
+             "exclusions for bias and LayerNorm. Default: None (use model defaults)"
+    )
+
+    _extend_cuda_graph_scope_choices(parser)
+
     return parser
+
 
 def _add_extra_parallel_args(parser):
     """Add arguments for distributed parallel execution.
@@ -701,6 +380,436 @@ def _add_extra_parallel_args(parser):
     )
     return parser
 
+
+# =============================================================================
+# Training run argument groups
+# =============================================================================
+
+
+def _add_run_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    """Add run-selection, phase, and export arguments."""
+    group = parser.add_argument_group(
+        title="Run Configuration",
+        description="Arguments that select the model config and describe the run lifecycle",
+    )
+    group.add_argument(
+        "--config-file",
+        type=str,
+        default=None,
+        help="Path to YAML configuration file containing model and training settings. "
+             "Example: /path/to/config.yaml. When provided, other arguments may be "
+             "overridden by config file values. Default: None",
+    )
+    group.add_argument(
+        "--model-name",
+        type=str,
+        default=None,
+        help="Name identifier for the model architecture. Must match a registered model "
+             "in loongforge/models/catalog.py. Example: 'llama2-7b', 'qwen2-7b'. Default: None",
+    )
+    group.add_argument(
+        "--training-phase",
+        type=str,
+        default=TrainingPhase.PRETRAIN,
+        choices=[TrainingPhase.PRETRAIN, TrainingPhase.SFT],
+        help="Training phase: 'pretrain' for pre-training, 'sft' for supervised fine-tuning. "
+             "Default: pretrain",
+    )
+    group.add_argument(
+        "--save-hf",
+        type=str,
+        default="false",
+        choices=["true", "false"],
+        help="Save an HF checkpoint at the end of training. "
+             "The adapter merge size comes from the YAML peft_config. Default: false",
+    )
+    group.add_argument(
+        "--save-hf-path",
+        type=str,
+        default=None,
+        help="Path to save the HF model checkpoint. If not specified, saves to "
+             "<save>/release_hf_weights/",
+    )
+    group.add_argument(
+        "--random-fallback-cpu",
+        action="store_true",
+        help="Generate random numbers on CPU then move to target device. "
+             "Useful for hardware that has issues with on-device random number generation. "
+             "Default: False"
+    )
+
+    return parser
+
+
+def _add_freeze_and_init_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    """Add parameter-freezing and initialization-source arguments."""
+    group = parser.add_argument_group(
+        title="Freeze and Initialization",
+        description="Arguments for freezing parameters and choosing the starting weights",
+    )
+    group.add_argument(
+        "--freeze-parameters",
+        type=str,
+        nargs="*",
+        default=[],
+        help="List of parameter name prefixes to freeze during training. "
+             "Frozen parameters will not be updated by the optimizer. "
+             "Example: --freeze-parameters 'embed' 'lm_head' freezes embedding and output layers. "
+             "Default: [] (no freezing)",
+    )
+    group.add_argument(
+        "--freeze-parameters-regex",
+        type=str,
+        default=None,
+        help="Regular expression pattern to match parameter names to freeze. "
+             "Example: '.*bias.*' freezes all bias parameters. "
+             "Applied in addition to --freeze-parameters; a parameter is frozen when either matches. "
+             "Default: None",
+    )
+    group.add_argument(
+        "--allow-missing-adapter-checkpoint",
+        action="store_true",
+        help="Allow model loading to proceed even when the adapter checkpoint is missing. "
+             "Useful when starting from a base model without adapter weights. "
+             "Default: False (a missing adapter checkpoint raises an error)",
+    )
+    group.add_argument('--lora-alpha', type=int, help="Lora alpha for LoRA fine tuning.")
+
+    group.add_argument('--lora-dim', type=int, help="Lora dim for LoRA fine tuning.")
+
+    group.add_argument(
+        "--trainable-modules",
+        default=["all"],
+        nargs="*",
+        help="List of modules to train (unfrozen). Options: 'all', 'language_model', "
+             "'adapter', 'vision_model', 'language_expert_linear', 'vision_expert_linear'. "
+             "Default: ['all']"
+    )
+
+    return parser
+
+
+def _add_ema_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    """Add Exponential Moving Average arguments for the training loop."""
+    group = parser.add_argument_group(
+        title="EMA",
+        description="Arguments for Exponential Moving Average of model parameters",
+    )
+    group.add_argument(
+        "--enable-ema",
+        action="store_true",
+        help="Enable Exponential Moving Average (EMA) of model parameters. "
+             "EMA provides smoothed parameter estimates for more stable inference. "
+             "Default: False",
+    )
+    group.add_argument(
+        "--ema-decay",
+        type=float,
+        default=0.9999,
+        help="Decay rate for EMA parameter updates. Higher values = slower update. "
+             "Default: 0.9999",
+    )
+    group.add_argument(
+        "--save-ema",
+        type=str,
+        default=None,
+        help="Directory path to save EMA checkpoints. Defaults to ${args.save}/ema. "
+             "Default: None",
+    )
+    group.add_argument(
+        "--load-ema",
+        type=str,
+        default=None,
+        help="Directory path to load the EMA checkpoint from. Defaults to ${args.load}/ema. "
+             "Default: None",
+    )
+    return parser
+
+
+def _add_recipe_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    """Add data-recipe and preprocessing arguments."""
+    group = parser.add_argument_group(
+        title="Data Recipe",
+        description="Arguments for SFT sequence packing and dataloader state",
+    )
+    group.add_argument(
+        "--packing-sft-data",
+        action="store_true",
+        help="Pack multiple short sequences into a single training sample to improve "
+             "GPU utilization. Default: False",
+    )
+    group.add_argument(
+        "--dataloader-save",
+        type=str,
+        default=None,
+        help="Path to save Energon dataloader state for resumable training. Default: None",
+    )
+    return parser
+
+
+def _add_sft_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    """Add arguments for supervised fine-tuning data and objective."""
+    group = parser.add_argument_group(
+        title="SFT Data Configuration",
+        description="Arguments for supervised fine-tuning data processing",
+    )
+
+    group.add_argument(
+        "--sft-dataset-config",
+        type=str,
+        default=None,
+        help="Path to YAML file containing dataset configurations. "
+             "Defines dataset formats and processing rules. "
+             "Default: configs/data/sft_dataset_config.yaml",
+    )
+    group.add_argument(
+        "--sft-dataset",
+        nargs="*",
+        default=None,
+        help="List of dataset names for combined train/valid/test splits. "
+             "Names must be defined in --sft-dataset-config. "
+             "Examples: 'dataset1' or 'dataset1 dataset2'. "
+             "Mutually exclusive with --sft-train-dataset/--sft-valid-dataset/--sft-test-dataset. "
+             "Default: None",
+    )
+    group.add_argument(
+        "--sft-train-dataset",
+        nargs="*",
+        default=None,
+        help="List of training dataset names. Used with --train-data-path. "
+             "Follows same naming rules as --sft-dataset. Default: None",
+    )
+    group.add_argument(
+        "--sft-valid-dataset",
+        nargs="*",
+        default=None,
+        help="List of validation dataset names. Used with --valid-data-path. "
+             "Follows same naming rules as --sft-dataset. Default: None",
+    )
+    group.add_argument(
+        "--sft-test-dataset",
+        nargs="*",
+        default=None,
+        help="List of test dataset names. Used with --test-data-path. "
+             "Follows same naming rules as --sft-dataset. Default: None",
+    )
+    group.add_argument(
+        "--sft-sort-batch",
+        action="store_true",
+        help="Sort dataset samples by length (smallest to largest) for more efficient "
+             "padding. Sorting occurs after packing if --packing-sft-data is enabled.",
+    )
+    group.add_argument(
+        "--sft-data-streaming",
+        action="store_true",
+        help="Enable streaming mode for large datasets that don't fit in memory. "
+             "Data is loaded on-demand during training. Default: False",
+    )
+    group.add_argument(
+        "--streaming-buffer-size",
+        type=int,
+        default=16384,
+        help="Buffer size for random sampling in streaming mode. Larger buffers "
+             "provide more randomization but use more memory. Default: 16384",
+    )
+    group.add_argument(
+        "--sft-data-mix-strategy",
+        type=str,
+        choices=["concat", "interleave_under", "interleave_over"],
+        default="concat",
+        help="Strategy for mixing multiple SFT datasets: "
+             "'concat': concatenate datasets sequentially; "
+             "'interleave_under': interleave datasets and stop when the shortest dataset is exhausted; "
+             "'interleave_over': interleave datasets until the longest dataset is exhausted.",
+    )
+    group.add_argument(
+        "--sft-num-preprocess-workers",
+        type=int,
+        default=None,
+        help="Number of worker processes for data preprocessing. Only applies to "
+             "non-streaming mode. More workers speed up preprocessing but use more memory. "
+             "Default: None (auto-detect)",
+    )
+    group.add_argument(
+        "--train-on-prompt",
+        action="store_true",
+        help="Include prompt tokens in loss computation. By default, loss is computed "
+             "only on response tokens. Default: False",
+    )
+    group.add_argument(
+        "--history-mask-loss",
+        action="store_true",
+        help="Compute loss only on the last turn response in multi-turn conversations, "
+             "masking the loss for tokens from previous turns. Default: False",
+    )
+    group.add_argument(
+        "--is-tokenized-data",
+        action="store_true",
+        help="Indicate that input data is already tokenized. Skips tokenization step "
+             "in data processing pipeline. Default: False",
+    )
+    group.add_argument(
+        "--enable-discard-sample",
+        action="store_true",
+        help="Discard samples that exceed --seq-length instead of truncating. "
+             "Useful for ensuring consistent sequence lengths. Default: False",
+    )
+    group.add_argument(
+        "--packing-buffer-size",
+        type=int,
+        default=10000,
+        help="Size of the sample buffer used for sequence packing. "
+             "Samples are first loaded into this buffer and then packed into sequences "
+             "by the packing algorithm. Effective only when --packing-sft-data is enabled.",
+    )
+    group.add_argument(
+        "--use-fixed-seq-lengths",
+        action="store_true",
+        help="Pad all sequences to exactly --seq-length. Currently only supported "
+             "for language models. Default: False",
+    )
+    return parser
+
+
+def _add_loop_logging_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    """Add arguments for training-loop logging."""
+    group = parser.add_argument_group(
+        title="Training Loop Logging",
+        description="Arguments for progress and memory logging in the training loop",
+    )
+    group.add_argument(
+        "--no-detail-log",
+        action="store_false",
+        dest="log_detail",
+        help="Disable detailed timing logs during training. Default: enabled",
+    )
+    group.add_argument(
+        "--detail-log-interval",
+        type=int,
+        default=20,
+        help="Interval (iterations) between detailed timing log reports. "
+             "Only effective when timing-log-level is 0. Default: 20",
+    )
+    group.add_argument(
+        "--log-memory-stats",
+        action="store_true",
+        default=False,
+        help="Log GPU memory statistics (allocated/peak) during training. Default: False",
+    )
+    return parser
+
+
+def _add_log_tensor_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    """Add tensor logging and debugging arguments for the llm-inspector hook.
+
+    These arguments interface with the llm-inspector library for debugging
+    model training. When enabled (via --enable-log-tensor), the system will
+    register hooks to capture tensor statistics during training.
+
+    Required dependency: llm-inspector
+
+    Usage:
+        These arguments are typically used together:
+        1. --enable-log-tensor: Enable the tensor logging feature
+        2. --log-tensor-name-pattern: Filter which modules to log (regex)
+        3. --log-tensor-stage: Choose when to log (init/forward/backward)
+        4. --log-tensor-iter-pattern: Specific iterations to log
+        5. --log-tensor-mbs-pattern: Specific micro-batches to log
+        6. --log-tensor-layer-pattern: Specific layers to log
+        7. --log-tensor-rank: Which GPU ranks to log
+        8. --save-tensor: Save tensors to disk (vs just print norms)
+        9. --save-tensor-dir: Directory to save tensor files
+
+    Example:
+        python train.py --enable-log-tensor \\
+            --log-tensor-name-pattern ".*attention.*" \\
+            --log-tensor-stage "forward,backward" \\
+            --log-tensor-iter-pattern "0,100,1000" \\
+            --save-tensor \\
+            --save-tensor-dir "./tensor_logs"
+
+    Note: If llm-inspector is not installed, these arguments will be ignored
+    silently. The feature is controlled by HAS_INSPECTOR flag in training_utils.py.
+    """
+    group = parser.add_argument_group(
+        title="Tensor Logging (llm-inspector)",
+        description="Arguments for debugging tensor statistics via llm-inspector library. "
+                    "Requires llm-inspector package to be installed.",
+    )
+    group.add_argument(
+        "--enable-log-tensor",
+        action="store_true",
+        help="[llm-inspector] Enable tensor logging for debugging. When enabled, tensor statistics "
+             "will be traced during training using the llm-inspector library. "
+             "Requires llm-inspector to be installed. Default: False",
+    )
+    group.add_argument(
+        "--log-tensor-name-pattern",
+        type=str,
+        default=None,
+        help="[llm-inspector] Regex pattern to filter module names for tensor logging. "
+             "When None (default), logs all modules. "
+             "Example: '.*attention.*' to log only attention modules. Default: None",
+    )
+    group.add_argument(
+        "--log-tensor-stage",
+        type=str,
+        default="forward",
+        choices=["init", "forward", "backward"],
+        help="[llm-inspector] Training stage at which to log tensors. "
+             "'init': model initialization, 'forward': forward pass, 'backward': backward pass. "
+             "Only one stage can be selected. Default: forward",
+    )
+    group.add_argument(
+        "--log-tensor-iter-pattern",
+        type=str,
+        default=None,
+        help="[llm-inspector] Comma-separated iteration indices at which to log tensors. "
+             "Example: '8,15,20' logs tensors at iterations 8, 15, and 20. "
+             "When None, logs at all iterations. Default: None",
+    )
+    group.add_argument(
+        "--log-tensor-mbs-pattern",
+        type=str,
+        default=None,
+        help="[llm-inspector] Comma-separated micro-batch indices at which to log tensors. "
+             "Example: '0,2,4' logs tensors for micro-batches 0, 2, and 4. "
+             "Default: None",
+    )
+    group.add_argument(
+        "--log-tensor-layer-pattern",
+        type=str,
+        default=None,
+        help="[llm-inspector] Comma-separated layer indices at which to log tensors. "
+             "Example: '0,5,10' logs tensors for layers 0, 5, and 10. "
+             "Default: None",
+    )
+    group.add_argument(
+        "--log-tensor-rank",
+        type=str,
+        default="0",
+        help="[llm-inspector] Comma-separated GPU ranks at which to log tensors. "
+             "Example: '0,1,2,4' logs tensors on ranks 0, 1, 2, and 4. "
+             "Default: 0",
+    )
+
+    # Tensor saving options
+    group.add_argument(
+        "--save-tensor",
+        action="store_true",
+        help="[llm-inspector] Save logged tensors to disk files for offline analysis. "
+             "When False, only prints tensor norms to the log file. Default: False",
+    )
+    group.add_argument(
+        "--save-tensor-dir",
+        type=str,
+        default="",
+        help="[llm-inspector] Directory path to save tensor files. Used when --save-tensor is "
+             "enabled. Default: '' (current directory)",
+    )
+    return parser
+
+
 def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Register all Megatron training arguments on *parser*."""
     parser.conflict_handler = "resolve"
@@ -723,15 +832,6 @@ def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
 # =============================================================================
 # Validation
 # =============================================================================
-
-def get_default_sft_dataset_config() -> Optional[str]:
-    """Return the default SFT dataset config shipped with the repository."""
-    config_dir = Path(__file__).resolve().parents[2] / "configs" / "data"
-    for name in ("sft_dataset_config.yaml", "sft_dataset_config.yml"):
-        candidate = config_dir / name
-        if candidate.exists():
-            return str(candidate)
-    return None
 
 
 def _get_wan_packing_cp_alignment(cp_size):
@@ -781,6 +881,8 @@ def _validate_sft_args(args):
         )
 
     if args.sft_dataset_config is None:
+        from loongforge.data.llm.sft_dataset import get_default_sft_dataset_config
+
         default_config = get_default_sft_dataset_config()
         if default_config is not None:
             args.sft_dataset_config = default_config
@@ -976,10 +1078,7 @@ def validate_training_args(args):
     """Validate training-side Megatron arguments.
 
     Runs after the engine's model and tokenizer checks and before the engine's
-    training and parallel checks and the upstream ``validate_args``. The SFT
-    checks ran at this point before the move; the multimodal and wan checks now
-    run earlier, but the engine checks they now precede do not read the fields
-    they write, so the result does not change.
+    training and parallel checks and the upstream ``validate_args``.
     """
     _validate_sft_args(args)
     _validate_vlm_data_args(args)
@@ -989,6 +1088,7 @@ def validate_training_args(args):
 # =============================================================================
 # Entry point
 # =============================================================================
+
 
 def parse_megatron_train_args():
     """Parse Megatron training arguments from the CLI and the model config."""

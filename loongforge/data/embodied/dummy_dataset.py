@@ -76,7 +76,7 @@ class DummyVLADataset(Dataset):
 
 
 # ═══════════════════════════════════════════════════════════════
-# Builder
+# Builder (called by data/__init__.py)
 # ═══════════════════════════════════════════════════════════════
 
 def build_dummy_dataset(model_cfg, data_cfg, training_args, runtime) -> Dataset:

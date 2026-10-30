@@ -219,6 +219,7 @@ def gen_time_steps(batch):
         - training_target (torch.Tensor): Training target, same shape as input.
 
     """
+    # torch.manual_seed(10086)
     args = get_args()
     if args.model_name in ("wan2-1-i2v", "wan2-2-i2v") or args.model_family in SUPPORTED_MODELS:
         latents = batch.pop("input_latents")

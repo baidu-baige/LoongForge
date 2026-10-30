@@ -9,7 +9,7 @@ policy only needs to implement a compatible policy server.
 
 from __future__ import annotations
 
-from typing import Dict, List, Literal, Optional, TypedDict, Union
+from typing import Any, Dict, List, Literal, Optional, TypedDict, Union
 
 import numpy as np
 
@@ -60,6 +60,22 @@ class SingleArmAction(TypedDict):
     gripper: float
 
 
+class BimanualArmAction(TypedDict):
+    """Provide BimanualArmAction behavior."""
+
+    world_vector: List[float]
+    rotation_delta: List[float]
+    gripper: float
+
+
+class BimanualAction(TypedDict):
+    """Provide BimanualAction behavior."""
+
+    left: BimanualArmAction
+    right: BimanualArmAction
+    terminate: bool
+
+
 class CanonicalAction(SingleArmAction, total=False):
     """Provide CanonicalAction behavior."""
 
@@ -104,3 +120,23 @@ class ServerMetadata(TypedDict, total=False):
     default_unnorm_key: str
     action_keys: List[str]
     state_keys: List[str]
+
+
+class PolicyRequest(TypedDict, total=False):
+    """Provide PolicyRequest behavior."""
+
+    type: Literal["ping", "reset", "infer", "predict_action"]
+    request_id: str
+    protocol_version: str
+    payload: Dict[str, Any]
+
+
+class PolicyResponse(TypedDict, total=False):
+    """Provide PolicyResponse behavior."""
+
+    status: Literal["ok", "error"]
+    ok: bool
+    type: str
+    request_id: str
+    data: Dict[str, Any]
+    error: Dict[str, Any]

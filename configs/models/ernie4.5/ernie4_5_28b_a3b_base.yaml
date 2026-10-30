@@ -21,7 +21,9 @@ mrope_section: [22,22,20]
 max_position_embeddings: 131072
 moe_intermediate_size: [1536, 512]
 moe_router_topk: 6
+moe_layer_end_index: [29,28]
 dense_layer_index: [0,]
+moe_layer_start_index: [1,1]
 add_position_embedding: false
 rotary_interleaved: false
 normalization: "Torch_RMSNorm"

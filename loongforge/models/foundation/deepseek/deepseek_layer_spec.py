@@ -48,7 +48,6 @@ def _get_deepseek_layer_with_te_spec(
     Args:
         experimental_attention_variant (str, optional): The type of experimental attention variant.
                                                         Defaults to None.
-        use_dsa_fused (bool): use the Omni fused DSA modules (``--use-dsa-fused``). Defaults to False.
     """
 
     mlp = _get_mlp_module_spec(

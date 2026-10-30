@@ -21,7 +21,7 @@ from loongforge.data.embodied.transforms.base import BaseTransform
 
 
 # ═══════════════════════════════════════════════════════════════
-# Image resize utilities
+# Image resize utilities (formerly image_utils.py)
 # ═══════════════════════════════════════════════════════════════
 
 def resize_with_pad(

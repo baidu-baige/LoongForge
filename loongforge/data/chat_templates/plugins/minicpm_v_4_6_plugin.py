@@ -58,12 +58,14 @@ class MiniCPMV46Plugin(MMPlugin):
                 "MiniCPM-V-4.6 requires a processor with image support or a "
                 "tokenizer directory containing preprocessor_config.json."
             )
-        # Transformers 5.7 registers MiniCPM-V-4.6 in AutoImageProcessor. The
-        # loaded processor can still be a tokenizer-only object, so build the
-        # image processor from the tokenizer directory in that case.
-        from transformers import AutoImageProcessor
+        # Keep MiniCPM's torchvision dependency out of global chat-template
+        # registration; it is only needed for this fallback image processor.
+        from .minicpm_v_4_6_image_processor import MiniCPMV46ImageProcessor
 
-        image_processor = AutoImageProcessor.from_pretrained(pretrained_path)
+        image_processor = MiniCPMV46ImageProcessor.from_pretrained(
+            pretrained_path,
+            downsample_mode=getattr(processor, "downsample_mode", None),
+        )
         setattr(processor, "image_processor", image_processor)
         return image_processor
 

@@ -21,7 +21,7 @@ Usage rules (must follow)
 Shared fields
 -------------
 Fields that the model also needs (e.g. action head dims, action_horizon) live
-on ``XVLAModelConfig`` and are NOT duplicated here.  The data side reads them
+on ``XvlaModelConfig`` and are NOT duplicated here.  The data side reads them
 from the ``model_cfg`` instance passed alongside this ``DataConfig``.
 """
 
@@ -32,7 +32,7 @@ from dataclasses import dataclass
 class XVLADataConfig:
     """X-VLA data-processing config (maps 1:1 to YAML ``data:`` section).
 
-    Image resize / normalization is fully handled by ``XVLACollator``
+    Image resize / normalization is fully handled by ``XVLAPreprocessor``
     (via the checkpoint's ``AutoImageProcessor``), so no generic image
     transform knobs are needed here.  Action normalization is not applied on
     the XVLA path either.  The only remaining data-side knob is the expected

@@ -20,52 +20,12 @@ from functools import partial
 from types import ModuleType
 from typing import Any, Callable, Dict, Optional, Tuple
 
+import torch
+
 from loongforge.engines.torch.distributed.utils import is_dmuon_model
 from loongforge.engines.torch.utils.utils import resolve_dtype, set_deterministic, set_precision
 
 logger = logging.getLogger(__name__)
-
-
-def apply_runtime_args(training_args: Any) -> None:
-    """Apply the backend runtime switches (determinism, cuDNN autotune, TF32).
-
-    Seeds are not set here: seeding is a training concern and stays with the
-    runner.
-    """
-    import torch as _torch
-
-    if training_args.deterministic_mode:
-        set_deterministic()
-    if training_args.cudnn_benchmark:
-        if training_args.deterministic_mode:
-            raise ValueError(
-                "--cudnn-benchmark and --deterministic-mode conflict: autotuning "
-                "picks algorithms per shape and is not reproducible."
-            )
-        _torch.backends.cudnn.benchmark = True
-    if training_args.disable_tf32:
-        set_precision(allow_tf32=False)
-
-
-def cfg_bool(cfg: Any, key: str, default: bool = False) -> bool:
-    """Read a boolean flag from a config namespace, accepting string truthy values."""
-    value = getattr(cfg, key, default)
-    if isinstance(value, str):
-        return value.lower() in {"1", "true", "yes", "on"}
-    return bool(value)
-
-
-def set_backend_precision(model_cfg: Any) -> None:
-    """Apply optional CUDA backend precision policy from model config."""
-    import torch as _torch
-
-    if not cfg_bool(model_cfg, "disable_reduced_precision_reduction", False):
-        return
-    matmul = _torch.backends.cuda.matmul
-    if hasattr(matmul, "allow_bf16_reduced_precision_reduction"):
-        matmul.allow_bf16_reduced_precision_reduction = False
-    if hasattr(matmul, "allow_fp16_reduced_precision_reduction"):
-        matmul.allow_fp16_reduced_precision_reduction = False
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -111,7 +71,7 @@ class StepContext:
 
 @dataclass(frozen=True)
 class TrainerHooks:
-    # consulted by engines/torch/runner.py
+    # consulted by TorchRunner
     prepare_args: Optional[Callable] = None
     configure_gc: Optional[Callable] = None
     wrap_model: Optional[Callable] = None
@@ -133,13 +93,31 @@ class TrainerHooks:
 # ═══════════════════════════════════════════════════════════════════
 
 
+def cfg_bool(cfg: Any, key: str, default: bool = False) -> bool:
+    """Read a boolean flag from a config namespace, accepting string truthy values."""
+    value = getattr(cfg, key, default)
+    if isinstance(value, str):
+        return value.lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def set_backend_precision(model_cfg: Any) -> None:
+    """Apply optional CUDA backend precision policy from model config."""
+    if not cfg_bool(model_cfg, "disable_reduced_precision_reduction", False):
+        return
+    matmul = torch.backends.cuda.matmul
+    if hasattr(matmul, "allow_bf16_reduced_precision_reduction"):
+        matmul.allow_bf16_reduced_precision_reduction = False
+    if hasattr(matmul, "allow_fp16_reduced_precision_reduction"):
+        matmul.allow_fp16_reduced_precision_reduction = False
+
+
 def train_autocast(step_ctx: StepContext):
     """Return the autocast context for training forward passes."""
-    import torch as _torch
     if cfg_bool(step_ctx.model_cfg, "disable_train_autocast", False):
         return nullcontext()
     dtype = resolve_dtype(step_ctx.training_args.dtype)
-    return _torch.autocast("cuda", dtype=dtype)
+    return torch.autocast("cuda", dtype=dtype)
 
 
 def train_fp8_ctx(step_ctx: StepContext):
@@ -237,14 +215,13 @@ def backward_loss(
     health: LossHealth,
 ) -> None:
     """Scale + spike-guard + backward, accumulating losses into log_dict."""
-    import torch as _torch
     grad_accum = step_ctx.training_args.gradient_accumulation_steps
     threshold = step_ctx.training_args.loss_spike_threshold
     with step_ctx.timers("backward-compute"):
         raw_loss = loss
         loss = raw_loss / grad_accum
         loss_val = loss.detach().item()
-        is_nan = bool(_torch.isnan(loss) or _torch.isinf(loss))
+        is_nan = bool(torch.isnan(loss) or torch.isinf(loss))
         if is_nan or loss_val > threshold:
             step_ctx.log_loss_spike(step_ctx.iteration, loss_val)
             if is_nan:
@@ -255,8 +232,7 @@ def backward_loss(
         loss.backward()
 
     for key, value in log_loss_dict.items():
-        import torch as _torch2
-        v = value.detach().item() if isinstance(value, _torch2.Tensor) else float(value)
+        v = value.detach().item() if isinstance(value, torch.Tensor) else float(value)
         log_dict[key] = log_dict.get(key, 0.0) + v / grad_accum
 
 
@@ -360,6 +336,12 @@ class TorchRunner:
         self.completed_steps: int = 0
         self.current_epoch: int = 0
         self.train_iters: int = training_args.train_iters
+
+        # Cumulative iteration-health counters (reported in the training log).
+        # nan: steps whose loss was NaN/Inf. skipped: steps whose loss-spike
+        # guard fired (NaN/Inf loss or loss above --loss-spike-threshold), so
+        # the loss was zeroed and the update contributed no real gradient.
+        # Not persisted across checkpoint resume (reset to 0 on restart).
         self.nan_iterations: int = 0
         self.skipped_iterations: int = 0
 
@@ -368,6 +350,8 @@ class TorchRunner:
         self._resume_dataloader_state: Dict[str, Dict[str, Any]] = {}
         self._resume_rng_per_rank = None
         self._lora_resume_adapter_path: Optional[str] = None
+
+        # The primary loader "vla" mirrors self.current_epoch for checkpoint/log display.
         self._epochs: Dict[str, int] = {}
         self._stage_timers = None
 
@@ -411,9 +395,20 @@ class TorchRunner:
         self.ctx = DistributedContext()
         self.ctx.init()
 
-        # 2. Seed and backend runtime switches
+        # 2. Seed — use the same seed on all ranks (align with lerobot/accelerate baseline).
+        # DistributedSampler handles per-rank data partitioning internally via its own seed+rank offset.
         set_seed(training_args.seed, training_args.set_seed_by_rank)
-        apply_runtime_args(training_args)
+        if training_args.deterministic_mode:
+            set_deterministic()
+        if training_args.cudnn_benchmark:
+            if training_args.deterministic_mode:
+                raise ValueError(
+                    "--cudnn-benchmark and --deterministic-mode conflict: autotuning "
+                    "picks algorithms per shape and is not reproducible."
+                )
+            torch.backends.cudnn.benchmark = True
+        if training_args.disable_tf32:
+            set_precision(allow_tf32=False)
 
         # 3. Output directories + logging
         self.output_dir = training_args.output_dir
@@ -424,6 +419,8 @@ class TorchRunner:
         setup_logging(self.output_dir, self.ctx.rank)
         self._configure_backend_precision()
 
+        # Dump fully-resolved CLI training_args + model config now that the file
+        # handler is attached, so the effective config also lands in the log.
         log_effective_config(training_args, self.model_cfg, self.data_cfg)
 
         # GC configuration
@@ -444,7 +441,7 @@ class TorchRunner:
             run_name=os.path.basename(self.output_dir),
         )
 
-        # 5. Build model
+        # 5. Build model (from YAML model_cfg)
         with log_stage(
             "model",
             start_msg=(
@@ -455,7 +452,7 @@ class TorchRunner:
         ):
             self.model = self.method.build_model(self.model_cfg, training_args)
 
-        # 6. Pretrained weights / Resume
+        # 5. Pretrained weights / Resume (before wrapping)
         latest_path = None
         if training_args.resume:
             latest_path, latest_step, latest_epoch = get_latest_checkpoint(self.checkpoint_dir)
@@ -483,7 +480,7 @@ class TorchRunner:
 
         self.model = self._apply_lora_before_wrap(self.model)
 
-        # 7. Freeze modules
+        # 6. Freeze modules
         self._freeze_modules(training_args.freeze_modules)
 
         with log_stage(
@@ -522,7 +519,10 @@ class TorchRunner:
                 self.optimizer = build_optimizer(self.model, training_args)
             self.lr_scheduler = build_scheduler(self.optimizer, training_args)
 
-        # 8. Resume optimizer/scheduler/RNG state
+        # 9. Resume optimizer/scheduler/RNG state (after wrapping + optimizer creation).
+        # Gate on `training_args.resume` only — step==0 is a valid resume point and must
+        # still restore optimizer/scheduler/RNG/dataloader, otherwise we'd run
+        # with resumed weights but a fresh optimizer (half-resume).
         if training_args.resume and latest_path:
             with log_stage(
                 "ckpt",
@@ -533,12 +533,15 @@ class TorchRunner:
                     self.model, self.optimizer, self.lr_scheduler, latest_path, self.ctx,
                     restore_rng=False,
                 )
+                # Trust the epoch from training_state.pt over resume_meta.json
+                # when present (training_state is the freshest source). Use
+                # `is not None` so a legitimate saved_epoch=0 still overrides.
                 if saved_epoch is not None:
                     self.current_epoch = saved_epoch
                 self._resume_dataloader_state = dataloader_state or {}
                 self._resume_rng_per_rank = rng_per_rank
 
-        # 9. Data
+        # 10. Data
         with log_stage("data", start_msg="building dataloaders"):
             self.dataloaders = self.method.build_dataloaders(
                 self.model_cfg, self.data_cfg, training_args, self.ctx
@@ -547,7 +550,7 @@ class TorchRunner:
             self._train_loader = next(iter(self.dataloaders))
             self._restore_dataloader_states()
 
-        # 10. Print stats
+        # 11. Print stats
         self.logger.log_param_stats(self.model)
 
         # Hook
@@ -558,7 +561,7 @@ class TorchRunner:
             hooks.after_setup(training_args)
 
     # ═══════════════════════════════════════════════
-    # Training loop
+    # Training loop — Layer 1 (fixed orchestration, shared)
     # ═══════════════════════════════════════════════
 
     def _training_loop(self):
@@ -571,11 +574,15 @@ class TorchRunner:
         detail_log_interval = training_args.detail_log_interval
         save_interval = training_args.save_interval
 
+        # ── Profiler setup ──
         prof = Profiler(training_args, self.ctx, self.output_dir)
         prof.start()
 
+        # ── Per-stage timing (shared via instance attr) ──
         self._stage_timers = StageTimers()
 
+        # Initialize iterators for all loaders ("vla" first to keep the primary
+        # epoch semantics consistent — see _init_data_iterator).
         for name in self.dataloaders:
             self._init_data_iterator(name)
         self.method.on_after_data_iterators_initialized(
@@ -603,6 +610,9 @@ class TorchRunner:
         while self.completed_steps < self.train_iters:
 
             prof.step(self.completed_steps)
+            # Detailed per-stage timing is enabled only on the step that will be
+            # logged, so the cuda.synchronize() inside the timers does not slow
+            # down steady-state training.
             enable_detail = (
                 detail_log_interval > 0
                 and (self.completed_steps + 1) % detail_log_interval == 0
@@ -632,7 +642,7 @@ class TorchRunner:
                   and self.completed_steps % log_interval == 0):
                 self._log_local_loss(log_dict)
 
-            # Metrics
+            # ── Metrics ──
             step_time = time.perf_counter() - t0
             local_batch_size = training_args.gradient_accumulation_steps * training_args.per_device_batch_size
             global_batch_size = local_batch_size * self.ctx.world_size
@@ -655,11 +665,11 @@ class TorchRunner:
                 hooks.on_step_end(metrics, self.completed_steps, self.model)
             self._maybe_collect_manual_gc()
 
-            # Profiler stop
+            # ── Profiler stop ──
             if prof.should_stop(self.completed_steps):
                 prof.stop()
 
-            # Logging
+            # ── Logging ──
             if self.completed_steps % log_interval == 0:
                 self.logger.log_metrics(
                     metrics, self.completed_steps, self.train_iters,
@@ -667,27 +677,37 @@ class TorchRunner:
                     gradient_accumulation_steps=training_args.gradient_accumulation_steps,
                 )
 
-            # Per-stage timing log
+            # ── Per-stage timing log (all ranks call; rank 0 emits) ──
             if enable_detail:
                 self.logger.log_stage_times(
                     self._stage_timers, self.ctx, log_level=training_args.timing_log_level
                 )
                 self._stage_timers.reset()
 
+            # ── Async checkpoint finalization ──
             # Commit the availability marker of an in-flight async save as soon
             # as its write lands, instead of waiting for the next save to start
             # (which would make resume fall back a whole save interval).
             from loongforge.engines.torch.distributed.checkpoint import maybe_finalize_pending_save
             maybe_finalize_pending_save(self.ctx, self.completed_steps)
 
-            # Checkpoint
+            # ── Checkpoint ──
             if save_interval and self.completed_steps % save_interval == 0:
                 self._save_checkpoint()
 
+        # Final cleanup if loop exited before profile_step_end was reached.
         prof.stop()
 
     def _log_local_loss(self, log_dict: dict):
-        """Print this rank's own local loss (no cross-rank communication)."""
+        """Print this rank's own local loss (no cross-rank communication).
+
+        Used when ``--loss-log-rank`` lists one or more non-negative ranks: each
+        listed rank calls this and prints its own loss tagged with its rank,
+        instead of routing through the rank-0-only backends (W&B/TB/JSONL). Uses
+        ``logger.warning`` so a non-rank-0 target still emits — ``setup_logging``
+        sets non-rank-0 loggers to WARNING level, which would filter
+        ``logger.info``.
+        """
         loss_str = " ".join(
             f"{k}={v:.6f}" for k, v in log_dict.items()
             if "loss" in k and isinstance(v, (int, float))
@@ -697,7 +717,7 @@ class TorchRunner:
         )
 
     # ═══════════════════════════════════════════════
-    # Infrastructure helpers
+    # Training loop — Layer 2 (one optimizer step, shared)
     # ═══════════════════════════════════════════════
 
     def _configure_backend_precision(self):
@@ -816,7 +836,7 @@ class TorchRunner:
         return model
 
     # ═══════════════════════════════════════════════
-    # Data / state
+    # Shared functions (model-independent, reused by subclasses)
     # ═══════════════════════════════════════════════
 
     def _init_data_iterator(self, name: str):
@@ -857,7 +877,8 @@ class TorchRunner:
         return batch
 
     def _maybe_restore_rng_once(self):
-        """Restore per-rank RNG state exactly once."""
+        """Restore per-rank RNG state exactly once, guarding against multiple
+        loaders each triggering a restore on their first iterator init."""
         if self._resume_rng_per_rank is None:
             return
         from loongforge.engines.torch.distributed.checkpoint import restore_rank_rng_state
@@ -887,7 +908,7 @@ class TorchRunner:
                 )
 
     def _get_dataloader_state(self) -> Dict[str, Dict[str, Any]]:
-        """Return full dataloader states for exact checkpoint resume."""
+        """Return full dataloader states for exact checkpoint resume when supported."""
         states = {}
         for name, dl in self.dataloaders.items():
             if name in self._data_iters and hasattr(dl, "state_dict"):
@@ -898,10 +919,6 @@ class TorchRunner:
                     "dataloader state will not be saved in this checkpoint."
                 )
         return states
-
-    # ═══════════════════════════════════════════════
-    # GC management
-    # ═══════════════════════════════════════════════
 
     def _configure_manual_gc(self) -> None:
         """Configure optional explicit Python GC cadence."""
@@ -924,10 +941,6 @@ class TorchRunner:
             with self._stage_timers("manual-gc"):
                 gc.collect()
 
-    # ═══════════════════════════════════════════════
-    # Finalize
-    # ═══════════════════════════════════════════════
-
     def _shutdown_dataloaders(self) -> None:
         """Explicitly stop persistent DataLoader workers before process teardown."""
         seen: set = set()
@@ -943,7 +956,7 @@ class TorchRunner:
             if callable(shutdown):
                 try:
                     shutdown()
-                except Exception as exc:
+                except Exception as exc:  # pragma: no cover - best-effort cleanup
                     logger.warning("DataLoader iterator shutdown failed for %s: %s", name, exc)
 
         for name, iterator in list(self._data_iters.items()):
@@ -956,6 +969,9 @@ class TorchRunner:
             if hasattr(dataloader, "_iterator"):
                 dataloader._iterator = None
 
+    # ═══════════════════════════════════════════════
+    # Finalize
+    # ═══════════════════════════════════════════════
     def _finalize(self):
         """End of training: save final model, close W&B."""
         from loongforge.engines.torch.distributed.checkpoint import flush_pending_save
@@ -969,7 +985,12 @@ class TorchRunner:
         if save_interval and self.completed_steps % save_interval != 0:
             self._save_checkpoint()
 
+        # Wait for any in-flight async DCP save before tearing down the
+        # process group / NCCL — otherwise the background writer may race
+        # with destroy() and leave an unfinalized checkpoint.
         flush_pending_save(self.ctx)
+
+        # Close W&B / TensorBoard
         self.logger.finish()
         self._shutdown_dataloaders()
 

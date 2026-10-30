@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Script manifest loading: config/scripts.yaml -> {name: script path relative to examples/}."""
+"""Script manifest loading: config/scripts.yaml -> {name: script path relative to examples/embodied}."""
 
 import os
 
@@ -12,9 +12,9 @@ MANIFEST_FILE = os.path.join("config", "scripts.yaml")
 
 
 def examples_dir(embodied_root):
-    """tests/embodied -> tests -> repo root -> examples."""
+    """tests/embodied -> tests -> repo root -> examples/embodied."""
     repo_root = os.path.dirname(os.path.dirname(embodied_root))
-    return os.path.join(repo_root, "examples")
+    return os.path.join(repo_root, "examples", "embodied")
 
 
 def load_manifest(embodied_root):

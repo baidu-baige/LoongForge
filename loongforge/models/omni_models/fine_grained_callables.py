@@ -24,7 +24,7 @@ from typing import Callable
 
 import torch
 
-from megatron.core import tensor_parallel
+from megatron.core import mpu, tensor_parallel
 from megatron.core.pipeline_parallel.fine_grained_activation_offload import (
     fine_grained_offloading_group_commit,
     fine_grained_offloading_group_start,
@@ -43,8 +43,8 @@ from megatron.core.models.gpt.fine_grained_callables import (
     should_free_input,
     weak_method,
 )
+
 from loongforge.models.omni_models.utils import get_inputs_on_this_cp_rank
-from megatron.core import mpu
 
 
 class PreProcessNode(ScheduleNode):
@@ -70,7 +70,6 @@ class PreProcessNode(ScheduleNode):
             forward_group_id: The forward group ID for hetero DP.
             inner_group_id: The inner group ID within one hetero DP group.
             enable_full_hetero_dp: Whether full heterogeneous DP is enabled.
-            hetero_step: The ``HeteroStepContext`` of a full-hetero-DP run, else None.
         """
         super().__init__(weak_method(self.forward_impl), stream, event, name="pre_process")
         self.gpt_model = gpt_model
@@ -81,6 +80,8 @@ class PreProcessNode(ScheduleNode):
         self.inner_group_id = inner_group_id
         self.enable_full_hetero_dp = enable_full_hetero_dp
         self.hetero_step = hetero_step
+        # Cache the model chunk state reference for backward
+        self.model_chunk_state = chunk_state
 
     def forward_impl(self):
         """forward pass for pre-processing.
@@ -100,7 +101,7 @@ class PreProcessNode(ScheduleNode):
         image_inputs = self.chunk_state.image_inputs
         video_inputs = self.chunk_state.video_inputs
         decoder_input = self.chunk_state.decoder_input
-        
+
         has_encoder_model = hasattr(model, "encoder_model")
         combined_embeddings = None
         visual_pos_masks = None
@@ -431,6 +432,7 @@ class PreProcessNode(ScheduleNode):
                 packed_seq=packed_seq_params,
             )
 
+        #(model.config.enable_cuda_graph or model.config.flash_decode)
         if (
             (model.foundation_model.config.enable_cuda_graph)
             and rotary_pos_cos is not None
@@ -443,7 +445,7 @@ class PreProcessNode(ScheduleNode):
             )
         else:
             sequence_len_offset = None
-        
+
         # saved for later use
         self.chunk_state.decoder_input = decoder_input
         self.chunk_state.visual_pos_masks = visual_pos_masks

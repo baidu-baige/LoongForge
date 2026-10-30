@@ -82,9 +82,11 @@ TRAINING_ARGS=(
   #--use-cpu-initialization
   #--no-initialization
   --use_thumbnail
+  --replacement
   --dynamic-image-size
   --loss-reduction-all-gather
   --num-workers 8
+  --dataloader-prefetch-factor 4
   --use-flash-attn
   --recompute-granularity full
   --recompute-method block

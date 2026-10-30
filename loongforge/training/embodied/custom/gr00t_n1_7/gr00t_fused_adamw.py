@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Lazy exports for the optional GR00T-N1.7 AOT AdamW ops.
+"""Compatibility exports for the optional GR00T-N1.7 AOT AdamW ops.
 
 The AOT package is only needed by the GR00T ``TEFusedAdamW`` update.  Keep its
 import out of module initialization so importing the trainer still works with

@@ -1,13 +1,14 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Model names, engines, default YAMLs, lazy config type bindings, and Megatron model families."""
+"""config mapping"""
 
 from importlib import import_module
 from pathlib import Path
 from typing import List
 
 
+# registry for model config
 MODEL_CONFIG_REGISTRY = {
     # deepseek
     "deepseek-v2": {
@@ -282,6 +283,53 @@ MODEL_CONFIG_REGISTRY = {
         "config_name": "qwen3_next_80b_a3b",
     },
 
+    # mimo
+    "mimo": {
+        "engine": "megatron",
+        "config_path": "configs/models/mimo",
+        "config_name": "mimo_7b",
+    },
+
+    # minimax
+    "minimax2.1-230b": {
+        "engine": "megatron",
+        "config_path": "configs/models/minimax",
+        "config_name": "minimax_m2_1",
+    },
+    "minimax2.5-230b": {
+        "engine": "megatron",
+        "config_path": "configs/models/minimax",
+        "config_name": "minimax_m2_5",
+    },
+    "minimax2.7-230b": {
+        "engine": "megatron",
+        "config_path": "configs/models/minimax",
+        "config_name": "minimax_m2_7",
+    },
+
+    # ernie4.5
+    "ernie4.5-28b-a3b-base": {
+        "engine": "megatron",
+        "config_path": "configs/models/ernie4.5",
+        "config_name": "ernie4_5_28b_a3b_base",
+    },
+    "glm5": {
+        "engine": "megatron",
+        "config_path": "configs/models/glm5",
+        "config_name": "glm5",
+    },
+    "glm5.2": {
+        "engine": "megatron",
+        "config_path": "configs/models/glm5.2",
+        "config_name": "glm5_2",
+    },
+    "glm5.3-flash": {
+        "engine": "megatron",
+        "config_path": "configs/models/glm5_next",
+        "config_name": "glm5.3_flash",
+    },
+
+    # VLM
     # Kimi K3 multimodal model
     "kimi-k3": {
         "engine": "megatron",
@@ -360,11 +408,6 @@ MODEL_CONFIG_REGISTRY = {
         "engine": "megatron",
         "config_path": "configs/models/kimi_k2.6",
         "config_name": "kimi_k2_6",
-    },
-    "kimi-k2.6-bf16": {
-        "engine": "megatron",
-        "config_path": "configs/models/kimi_k2.6",
-        "config_name": "kimi_k2_6_bf16",
     },
 
     # qwen2.5-vl
@@ -469,6 +512,14 @@ MODEL_CONFIG_REGISTRY = {
         "config_name": "minicpm_v_4_6",
     },
 
+    # ernie4.5-vl
+    "ernie4.5-vl-28b-a3b": {
+        "engine": "megatron",
+        "config_path": "configs/models/ernie4.5",
+        "config_name": "ernie4_5_vl_28b_a3b",
+    },
+
+    # Diffusion
     # wan
     "wan2-1-i2v": {
         "engine": "megatron",
@@ -488,56 +539,7 @@ MODEL_CONFIG_REGISTRY = {
         "config_name": "qwen_image_edit_2511",
     },
 
-    # mimo
-    "mimo": {
-        "engine": "megatron",
-        "config_path": "configs/models/mimo",
-        "config_name": "mimo_7b",
-    },
-
-    # minimax
-    "minimax2.1-230b": {
-        "engine": "megatron",
-        "config_path": "configs/models/minimax",
-        "config_name": "minimax_m2_1",
-    },
-    "minimax2.5-230b": {
-        "engine": "megatron",
-        "config_path": "configs/models/minimax",
-        "config_name": "minimax_m2_5",
-    },
-    "minimax2.7-230b": {
-        "engine": "megatron",
-        "config_path": "configs/models/minimax",
-        "config_name": "minimax_m2_7",
-    },
-
-    # ernie4.5-vl
-    "ernie4.5-28b-a3b-base": {
-        "engine": "megatron",
-        "config_path": "configs/models/ernie4.5",
-        "config_name": "ernie4_5_28b_a3b_base",
-    },
-    "ernie4.5-vl-28b-a3b": {
-        "engine": "megatron",
-        "config_path": "configs/models/ernie4.5",
-        "config_name": "ernie4_5_vl_28b_a3b",
-    },
-    "glm5": {
-        "engine": "megatron",
-        "config_path": "configs/models/glm5",
-        "config_name": "glm5",
-    },
-    "glm5.2": {
-        "engine": "megatron",
-        "config_path": "configs/models/glm5.2",
-        "config_name": "glm5_2",
-    },
-    "glm5.3-flash": {
-        "engine": "megatron",
-        "config_path": "configs/models/glm5_next",
-        "config_name": "glm5.3_flash",
-    },
+    # Embodied
     "lingbot_va_robotwin": {
         "engine": "torch",
         "config_path": "configs/models/lingbot_va",
@@ -704,7 +706,6 @@ def get_config_types(model_name: str):
     return tuple(classes)
 
 
-######## built-in models #######
 # Using List[str] instead of list[str] to ensure compatibility with older versions of Python(<3.9)
 class _BaseFamilies(object):
     @classmethod
@@ -766,6 +767,19 @@ class DiffusionModelFamilies(_BaseFamilies):
     QWEN_IMAGE = "qwen_image"
 
 
+def get_all_model_families() -> List[str]:
+    """
+    Lookup (config_path, config_name) from MODEL_CONFIG_REGISTRY,
+    and automatically prepend absolute project_root to config_path.
+    """
+    all_families = []
+
+    for family_class in _BaseFamilies.__subclasses__():
+        all_families.extend(family_class.names())
+
+    return all_families
+
+
 # Families whose Hydra config puts model_type at the top level; VLM configs put it under ``model``.
 TOP_LEVEL_MODEL_FAMILIES = frozenset(LanguageModelFamilies.names() + DiffusionModelFamilies.names())
 
@@ -777,16 +791,3 @@ def split_model_config(config):
     if not hasattr(config, "model"):
         raise ValueError("Invalid model configuration structure")
     return config.model.model_type, config.model
-
-
-def get_all_model_families() -> List[str]:
-    """
-    Get all model families defined in this module dynamically.
-    Returns a flattened list of all string names from all subclasses of _BaseFamilies.
-    """
-    all_families = []
-
-    for family_class in _BaseFamilies.__subclasses__():
-        all_families.extend(family_class.names())
-
-    return all_families

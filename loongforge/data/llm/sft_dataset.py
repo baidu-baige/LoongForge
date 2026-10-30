@@ -41,6 +41,16 @@ SFT_SUPPORT_DATA_TYPE = {
 }
 
 
+def get_default_sft_dataset_config() -> Optional[str]:
+    """Return the default SFT dataset config shipped with the repository."""
+    config_dir = Path(__file__).resolve().parents[3] / "configs" / "data"
+    for name in ("sft_dataset_config.yaml", "sft_dataset_config.yml"):
+        candidate = config_dir / name
+        if candidate.exists():
+            return str(candidate)
+    return None
+
+
 @dataclass
 class Columns(object):
     """The field of the dataset."""

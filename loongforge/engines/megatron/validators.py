@@ -12,129 +12,15 @@ from typing import Optional
 import torch
 from megatron.core.rerun_state_machine import RerunStateMachine
 from megatron.core.transformer.enums import AttnBackend
-from megatron.training.utils import warn_rank_0
+from megatron.core.utils import is_torch_min_version
 from megatron.training.arguments import validate_args
+from megatron.training.utils import get_device_arch_version, print_rank_0, warn_rank_0
 from packaging.version import Version as PkgVersion
 
 from loongforge.engines.megatron.tokenizer import get_default_tokenizer
 from loongforge.models.catalog import VisionLanguageModelFamilies
-from megatron.core.utils import is_torch_min_version
-from megatron.training.utils import get_device_arch_version, print_rank_0
 
 _transformers_version = None
-
-
-def get_transformers_version():
-    """Get transformers version (cached)."""
-    import transformers
-
-    global _transformers_version
-
-    if _transformers_version is None:
-        # prefer module __version__ to avoid importlib.metadata lookup issues in editable installs
-        ver = getattr(transformers, "__version__", None)
-        if ver is None:
-            ver = version("transformers")
-        _transformers_version = PkgVersion(ver)
-
-    return _transformers_version
-
-
-def convert_custom_pipeline_to_layout(
-    custom_pipeline_layers: Optional[str] = None,
-    custom_virtual_pipeline_layers: Optional[str] = None,
-    num_virtual_stages_per_pipeline_rank: Optional[int] = None,
-    mtp_num_layers: Optional[int] = None,
-) -> str:
-    """
-    Convert custom-pipeline-layers format to pipeline-model-parallel-layout format.
-
-    Args:
-        custom_pipeline_layers: Comma-separated string of decoder layer counts per PP stage.
-                                Example: "6,5,7,9" means 4 PP stages with 6,5,7,9 decoder layers.
-                                Cannot be used together with custom_virtual_pipeline_layers.
-        custom_virtual_pipeline_layers: Optional. Comma-separated string specifying exact layer
-                                       counts for each VPP stage. Format: all PP's VPP0, then all PP's VPP1.
-                                       Example: "3,2,3,4,3,3,4,5" for PP=4, VPP=2
-                                       Cannot be used together with custom_pipeline_layers.
-        num_virtual_stages: Number of virtual pipeline stages (VPP) per PP rank.
-                        If None, defaults to 1 (no virtual pipeline).
-        mtp_num_layers: Number of MTP layers. If None, no MTP layers are added.
-                        MTP layers are placed in the last stage with loss.
-
-    Returns:
-        Layout string in pipeline-model-parallel-layout format.
-    """
-    # Handle None case: default to 1 (no virtual pipeline)
-    vp_size = num_virtual_stages_per_pipeline_rank if num_virtual_stages_per_pipeline_rank is not None else 1
-
-    splits = []
-    # Determine PP size based on which parameter is provided
-    if custom_virtual_pipeline_layers is not None:
-        if custom_virtual_pipeline_layers.find(',') != -1:
-            splits = [int(s) for s in custom_virtual_pipeline_layers.split(',') if s.strip()]
-        pp_size = len(splits) // vp_size
-    elif custom_pipeline_layers is not None:
-        if custom_pipeline_layers.find(',') != -1:
-            splits = [int(s) for s in custom_pipeline_layers.split(',') if s.strip()]
-        pp_size = len(splits)
-    else:
-        raise ValueError(
-            "One of custom_pipeline_layers or custom_virtual_pipeline_layers must be provided.")
-
-    # Symbol mapping
-    from megatron.core.transformer.enums import LayerType
-    symbols = {
-        LayerType.embedding: 'E',
-        LayerType.decoder: 't',
-        LayerType.mtp: 'm',
-        LayerType.loss: 'L',
-    }
-
-    # Build layout for each PP rank and VPP rank
-    # Layout order: All PP ranks' VPP0, then all PP ranks' VPP1, etc.
-    layout_stages = []
-
-    for vp_rank in range(vp_size):
-        for pp_rank in range(pp_size):
-            stage_layers = []
-
-            # First stage of first PP rank: add embedding
-            if pp_rank == 0 and vp_rank == 0:
-                stage_layers.append(symbols[LayerType.embedding])
-
-            # Determine number of decoder layers for this stage
-            if custom_virtual_pipeline_layers is not None:
-                # Directly get the layer count from custom_virtual_pipeline_layers
-                num_layers_this_stage = splits[vp_rank * pp_size + pp_rank]
-            else:
-                # Calculate layers per VPP stage using the formula:
-                # num_layers_to_build = ([q] * (vp_size - r) + [q + 1] * r)[vp_rank]
-                num_layers = splits[pp_rank]
-                q = num_layers // vp_size
-                r = num_layers % vp_size
-
-                if vp_rank < (vp_size - r):
-                    num_layers_this_stage = q
-                else:
-                    num_layers_this_stage = q + 1
-
-            # Add decoder layers for this VPP stage
-            stage_layers.extend([symbols[LayerType.decoder]] * num_layers_this_stage)
-
-            # Last stage of last PP rank: add MTP (if applicable) and loss
-            if pp_rank == pp_size - 1 and vp_rank == vp_size - 1:
-                if mtp_num_layers is not None and mtp_num_layers > 0:
-                    stage_layers.extend(
-                        [symbols[LayerType.mtp]] * mtp_num_layers)
-                stage_layers.append(symbols[LayerType.loss])
-
-            layout_stages.append(''.join(stage_layers))
-
-    # Join all stages with '|'
-    layout_str = '|'.join(layout_stages)
-
-    return layout_str
 
 
 def validate_loongforge_extra_args(args, config, validate_training_args=None):
@@ -170,6 +56,22 @@ def validate_custom_model_args(name, args):
 _YAML_KEY_ALIASES = {
     "fp8_param": "fp8_param_gather",
 }
+
+
+def get_transformers_version():
+    """Get transformers version (cached)."""
+    import transformers
+
+    global _transformers_version
+
+    if _transformers_version is None:
+        # prefer module __version__ to avoid importlib.metadata lookup issues in editable installs
+        ver = getattr(transformers, "__version__", None)
+        if ver is None:
+            ver = version("transformers")
+        _transformers_version = PkgVersion(ver)
+
+    return _transformers_version
 
 
 def _validate_extra_model_args(args, config):
@@ -345,6 +247,103 @@ def _validate_extra_parallel_args(args):
             )
 
 
+def convert_custom_pipeline_to_layout(
+    custom_pipeline_layers: Optional[str] = None,
+    custom_virtual_pipeline_layers: Optional[str] = None,
+    num_virtual_stages_per_pipeline_rank: Optional[int] = None,
+    mtp_num_layers: Optional[int] = None,
+) -> str:
+    """
+    Convert custom-pipeline-layers format to pipeline-model-parallel-layout format.
+
+    Args:
+        custom_pipeline_layers: Comma-separated string of decoder layer counts per PP stage.
+                                Example: "6,5,7,9" means 4 PP stages with 6,5,7,9 decoder layers.
+                                Cannot be used together with custom_virtual_pipeline_layers.
+        custom_virtual_pipeline_layers: Optional. Comma-separated string specifying exact layer
+                                       counts for each VPP stage. Format: all PP's VPP0, then all PP's VPP1.
+                                       Example: "3,2,3,4,3,3,4,5" for PP=4, VPP=2
+                                       Cannot be used together with custom_pipeline_layers.
+        num_virtual_stages: Number of virtual pipeline stages (VPP) per PP rank.
+                        If None, defaults to 1 (no virtual pipeline).
+        mtp_num_layers: Number of MTP layers. If None, no MTP layers are added.
+                        MTP layers are placed in the last stage with loss.
+
+    Returns:
+        Layout string in pipeline-model-parallel-layout format.
+    """
+    # Handle None case: default to 1 (no virtual pipeline)
+    vp_size = num_virtual_stages_per_pipeline_rank if num_virtual_stages_per_pipeline_rank is not None else 1
+
+    splits = []
+    # Determine PP size based on which parameter is provided
+    if custom_virtual_pipeline_layers is not None:
+        if custom_virtual_pipeline_layers.find(',') != -1:
+            splits = [int(s) for s in custom_virtual_pipeline_layers.split(',') if s.strip()]
+        pp_size = len(splits) // vp_size
+    elif custom_pipeline_layers is not None:
+        if custom_pipeline_layers.find(',') != -1:
+            splits = [int(s) for s in custom_pipeline_layers.split(',') if s.strip()]
+        pp_size = len(splits)
+    else:
+        raise ValueError(
+            "One of custom_pipeline_layers or custom_virtual_pipeline_layers must be provided.")
+
+    # Symbol mapping
+    from megatron.core.transformer.enums import LayerType
+    symbols = {
+        LayerType.embedding: 'E',
+        LayerType.decoder: 't',
+        LayerType.mtp: 'm',
+        LayerType.loss: 'L',
+    }
+
+    # Build layout for each PP rank and VPP rank
+    # Layout order: All PP ranks' VPP0, then all PP ranks' VPP1, etc.
+    layout_stages = []
+
+    for vp_rank in range(vp_size):
+        for pp_rank in range(pp_size):
+            stage_layers = []
+
+            # First stage of first PP rank: add embedding
+            if pp_rank == 0 and vp_rank == 0:
+                stage_layers.append(symbols[LayerType.embedding])
+
+            # Determine number of decoder layers for this stage
+            if custom_virtual_pipeline_layers is not None:
+                # Directly get the layer count from custom_virtual_pipeline_layers
+                num_layers_this_stage = splits[vp_rank * pp_size + pp_rank]
+            else:
+                # Calculate layers per VPP stage using the formula:
+                # num_layers_to_build = ([q] * (vp_size - r) + [q + 1] * r)[vp_rank]
+                num_layers = splits[pp_rank]
+                q = num_layers // vp_size
+                r = num_layers % vp_size
+
+                if vp_rank < (vp_size - r):
+                    num_layers_this_stage = q
+                else:
+                    num_layers_this_stage = q + 1
+
+            # Add decoder layers for this VPP stage
+            stage_layers.extend([symbols[LayerType.decoder]] * num_layers_this_stage)
+
+            # Last stage of last PP rank: add MTP (if applicable) and loss
+            if pp_rank == pp_size - 1 and vp_rank == vp_size - 1:
+                if mtp_num_layers is not None and mtp_num_layers > 0:
+                    stage_layers.extend(
+                        [symbols[LayerType.mtp]] * mtp_num_layers)
+                stage_layers.append(symbols[LayerType.loss])
+
+            layout_stages.append(''.join(stage_layers))
+
+    # Join all stages with '|'
+    layout_str = '|'.join(layout_stages)
+
+    return layout_str
+
+
 def _validate_legacy_pipeline_args(args):
     """Validate parallel arguments"""
     # Uneven virtual pipeline parallelism
@@ -419,8 +418,13 @@ def _validate_legacy_pipeline_args(args):
             args.num_virtual_stages_per_pipeline_rank = None
 
 
+def _check_arg_is_not_none(args, arg):
+    """Check if an argument is not None."""
+    assert getattr(args, arg) is not None, '{} argument is None'.format(arg)
+
+
 # Adapted from megatron/training/arguments.py
-def _validate_custom_model_args(name, args):
+def _validate_custom_model_args(name, args, defaults={}):
     """Validate non foundational model arguments"""
     if args.custom_pipeline_recompute_layers is not None:
         assert args.recompute_granularity == "full", \
@@ -433,7 +437,7 @@ def _validate_custom_model_args(name, args):
         assert len(pp_recompute_splits) == args.pipeline_model_parallel_size, (
             f"the number of elements in --custom-pipeline-recompute-layers must be equal to "
             f"pipeline size {args.pipeline_model_parallel_size}")
-        
+
         args.custom_pipeline_recompute_layers = pp_recompute_splits
     # Temporary model parallel size. Added by loongforge
     if args.pipeline_model_parallel_size > 1:
@@ -443,7 +447,7 @@ def _validate_custom_model_args(name, args):
     if args.sequence_parallel:
         warnings.warn(f"WARNING: Now for {name}, we do not support sequence parallel.")
         args.sequence_parallel = False
-    
+
     if args.expert_model_parallel_size > 1:
         warnings.warn(f"WARNING: Now for {name}, we only support expert model parallel size 1.")
         args.expert_model_parallel_size = 1
@@ -486,14 +490,14 @@ def _validate_custom_model_args(name, args):
     if args.moe_router_group_topk is not None:
         warnings.warn(f"WARNING: Now for {name}, we do not support moe_router_group_topk.")
         args.moe_router_group_topk = None
-    
+
     # Temporary
     assert args.non_persistent_ckpt_type in ['global', 'local', None], \
         'Currently only global and local checkpoints are supported'
     if args.non_persistent_ckpt_type == 'local':
         try:
             from nvidia_resiliency_ext.checkpointing.local.ckpt_managers.local_manager import \
-                LocalCheckpointManager  # noqa: F401 (availability probe)
+                LocalCheckpointManager
         except ModuleNotFoundError as e:
             raise RuntimeError('nvidia_resiliency_ext is required for local checkpointing') from e
 
@@ -1025,10 +1029,20 @@ def _validate_custom_model_args(name, args):
         warnings.warn("Warning: For those non foundation model, custom_pipeline_layers must be None.")
         args.custom_pipeline_layers = None
 
+    # # add loongforge for custom virtual layers in first pipeline stage check
+    # if hasattr(args, 'custom_virtual_layers_first_pipeline') and \
+    #         args.custom_virtual_layers_first_pipeline is not None:
+    #     warnings.warn("Warning: For those non foundation model, custom_virtual_layers_first_pipeline must be None.")
+    #     args.custom_virtual_layers_first_pipeline = None
+
     # add loongforge for custom virtual pipeline layers check
     if hasattr(args, 'custom_virtual_pipeline_layers') and args.custom_virtual_pipeline_layers is not None:
         warnings.warn("Warning: For those non foundation model, custom_virtual_pipeline_layers must be None.")
         args.custom_virtual_pipeline_layers = None
+
+    # if args.custom_pipeline_recompute_layers is not None:
+    #     warnings.warn("Warning: For those non foundation model, custom_pipeline_recompute_layers must be None.")
+    #     args.custom_pipeline_recompute_layers = None
 
     # Data blend checks
     assert args.mock_data + \

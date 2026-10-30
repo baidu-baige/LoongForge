@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-Omni Model Provider. Provides model construction interfaces compatible with existing training frameworks.
+Omni Model Provider.Provides model construction interfaces compatible with existing training frameworks.
 """
 
 from __future__ import annotations
@@ -12,6 +12,15 @@ from typing import Optional
 from .omni_combination_model import OmniCombinationModel
 from megatron.core import mpu
 import torch
+from loongforge.models.common import BaseModelConfig
+
+
+def check_model_config(model_config: BaseModelConfig):
+    """Validate model configuration including hidden size and number of attention heads."""
+    for config in model_config:  # TODO: Implement actual validation logic
+        # Check hidden_size and num_attention_heads
+        print(config)
+    return model_config
 
 
 def omni_model_provider(
@@ -26,25 +35,25 @@ def omni_model_provider(
 ) -> OmniCombinationModel:
     """
     Construct and return an Omni combination model instance.
-    
-    This function builds a multimodal combination model from the caller's training args
-    and model config, with support for parallel processing and pre/post-processing options.
+
+    This function builds a multimodal combination model based on provided parameters
+    and global args configuration. Model configuration is obtained from args.model_name,
+    with support for parallel processing and pre/post-processing options.
 
     Args:
         pre_process: Whether to perform pre-processing (default: True)
         post_process: Whether to perform post-processing (default: True)
         parallel_output: Whether to enable parallel output (default: True)
-        args: Training args of the run.
-        model_config: Model config of the run.
-        runtime: ``MultimodalRuntime`` with the engine bindings, built by the training method.
 
     Returns:
         OmniCombinationModel: Constructed combination model instance
 
     Notes:
+        - Model configuration is obtained from args.model_name
         - Supports encoder pipeline parallel processing
         - Includes language model related parameter configuration
     """
+    # check_model_config(model_config)
     # build_transformer_config(args)
     # FIXME: Need to handle when model_type is encoder_and_decoder
     if args.enable_full_hetero_dp:

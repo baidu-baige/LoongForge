@@ -83,7 +83,7 @@ combination used by the training runs is:
 | Python | 3.12 |
 | PyTorch / torchvision | 2.8.0 / 0.23.0, CUDA 12.8 wheels |
 | LeRobot | 0.5.0 |
-| Transformers | 5.7.0 |
+| Transformers | 5.3.0 |
 | torchdata / torchcodec | 0.11.0 / 0.7.0 |
 
 After the base LoongForge installation, install the LoongForge-VLDA
@@ -96,7 +96,7 @@ uv pip install --python .venv/bin/python \
     --index-url https://download.pytorch.org/whl/cu128
 
 uv pip install --python .venv/bin/python \
-    lerobot==0.5.0 transformers==5.7.0 torchdata==0.11.0 \
+    lerobot==0.5.0 transformers==5.3.0 torchdata==0.11.0 \
     sentencepiece timm==1.0.3 pandas pyarrow tensorboard \
     websockets==15.0.1 msgpack
 

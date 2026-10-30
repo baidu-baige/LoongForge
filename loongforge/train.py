@@ -1,11 +1,11 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Composition root: pick the engine, parse its arguments, and run the selected recipe.
+"""Training entry for the Megatron-based core stack (LLM / VLM / Diffusion).
 
-The tables map a Megatron family and phase, or a Torch trainer type, to a recipe.
-Recipe, hook, and runner modules are imported only for the selected run,
-so importing this module stays cheap.
+This is NOT a unified entry for the whole framework. Embodied / VLA models run on a
+separate torch-native (DDP/FSDP) subsystem with its own entry at
+``loongforge/embodied/train.py`` — see ``loongforge/embodied/README.md``.
 """
 
 from __future__ import annotations
@@ -42,31 +42,42 @@ METHOD_REGISTRY: Dict[Tuple[str, str], str] = {
     ("llm", "sft"): "loongforge.training.llm.sft_llm",
     ("vlm", "pretrain"): "loongforge.training.vlm.pretrain_vlm",
     ("vlm", "sft"): "loongforge.training.vlm.sft_vlm",
+    ("intern_vl", "pretrain"): "loongforge.training.vlm.pretrain_vlm",
     ("intern_vl", "sft"): "loongforge.training.vlm.sft_internvl",
+    ("ernie4_5_vl", "pretrain"): "loongforge.training.vlm.pretrain_vlm",
     ("ernie4_5_vl", "sft"): "loongforge.training.vlm.sft_ernie",
     ("wan", "pretrain"): "loongforge.training.diffusion.pretrain_wan",
     ("qwen_image", "pretrain"): "loongforge.training.diffusion.pretrain_qwen_image",
 }
 
 # ---------------------------------------------------------------------------
-# Torch: trainer type -> (method, optional hooks factory)
+# Torch: trainer type -> (method, optional hooks factory, runner)
 # ---------------------------------------------------------------------------
 
-TORCH_TRAINER_TYPES: Dict[str, Tuple[str, str | None]] = {
-    "FinetuneTrainer": ("loongforge.training.embodied.sft", None),
-    "VLDAFinetuneTrainer": ("loongforge.training.embodied.custom.vlda.vlda_finetune_trainer", None),
+TORCH_TRAINER_TYPES: Dict[str, Tuple[str, str | None, str]] = {
+    "FinetuneTrainer": (
+        "loongforge.training.embodied.sft", None, "loongforge.engines.torch.runner.TorchRunner",
+    ),
+    "VLDAFinetuneTrainer": (
+        "loongforge.training.embodied.custom.vlda.vlda_finetune_trainer", None,
+        "loongforge.training.embodied.custom.vlda.vlda_finetune_trainer.VLDAFinetuneTrainer",
+    ),
     "Gr00tN1d6Trainer": (
         "loongforge.training.embodied.sft", "loongforge.training.embodied.custom.gr00t_n1_6.gr00t_trainer",
+        "loongforge.engines.torch.runner.TorchRunner",
     ),
     "Gr00tN1d7Trainer": (
         "loongforge.training.embodied.sft", "loongforge.training.embodied.custom.gr00t_n1_7.gr00t_trainer",
+        "loongforge.engines.torch.runner.TorchRunner",
     ),
     "LingBotFinetuneTrainer": (
         "loongforge.training.embodied.custom.lingbot_va.lingbot_finetune_trainer",
         "loongforge.training.embodied.custom.lingbot_va.lingbot_finetune_trainer",
+        "loongforge.engines.torch.runner.TorchRunner",
     ),
     "WallOss05Trainer": (
-        "loongforge.training.embodied.sft", "loongforge.training.embodied.custom.wall_oss_0_5.factory",
+        "loongforge.training.embodied.sft", "loongforge.training.embodied.custom.wall_oss_0_5.wall_oss_trainer",
+        "loongforge.engines.torch.runner.TorchRunner",
     ),
 }
 
@@ -100,7 +111,7 @@ def resolve_torch_trainer(trainer_type: str):
             f"Available: {sorted(TORCH_TRAINER_TYPES.keys())}"
         )
 
-    method_path, factory_path = entry
+    method_path, factory_path, _ = entry
     method = importlib.import_module(method_path)
     if factory_path is None:
         from loongforge.engines.torch.runner import TrainerHooks
@@ -110,11 +121,8 @@ def resolve_torch_trainer(trainer_type: str):
 
 def resolve_torch_runner(trainer_type: str):
     """Select the lifecycle for the recipe's checkpoint contract."""
-    if trainer_type == "VLDAFinetuneTrainer":
-        from loongforge.training.embodied.custom.vlda.vlda_finetune_trainer import VLDAFinetuneTrainer
-        return VLDAFinetuneTrainer
-    from loongforge.engines.torch.runner import TorchRunner
-    return TorchRunner
+    module_path, class_name = TORCH_TRAINER_TYPES[trainer_type][2].rsplit(".", 1)
+    return getattr(importlib.import_module(module_path), class_name)
 
 
 def _run_megatron():

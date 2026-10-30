@@ -3,13 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ═══════════════════════════════════════════════════════════════
-# sft_pi05_ddp.sh - pi05 VLA SFT Launch Script (DDP)
+# run_pi05_ddp_finetune.sh - pi05 VLA SFT Launch Script (DDP)
 #
 # Usage:
-#   bash sft_pi05_ddp.sh
-#   TRAIN_ITERS=50 bash sft_pi05_ddp.sh                          # override via env
-#   bash sft_pi05_ddp.sh --train-iters 50                        # override a training param (flag form)
-#   bash sft_pi05_ddp.sh model.state_dim=8 data.image_size=448   # override YAML model:/data: fields (dotlist form)
+#   bash run_pi05_ddp_finetune.sh
+#   TRAIN_ITERS=50 bash run_pi05_ddp_finetune.sh                          # override via env
+#   bash run_pi05_ddp_finetune.sh --train-iters 50                        # override a training param (flag form)
+#   bash run_pi05_ddp_finetune.sh model.state_dim=8 data.image_size=448   # override YAML model:/data: fields (dotlist form)
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -56,6 +56,7 @@ DATA_ARGS=(
     --dataset-format lerobot_datasets
     --dataset-path "$DATA_PATH"
     --tokenizer-path "$TOKENIZER_PATH"
+    --robot-type libero_franka
     --batch-drop-last
     --num-workers "$NUM_WORKERS"
 )

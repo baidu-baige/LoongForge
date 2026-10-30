@@ -64,3 +64,6 @@ class Gr00tN1d6DataConfig:
     apply_sincos_state_encoding: bool = False
     use_relative_action: bool = True
     use_processor_image_size: bool = False
+
+    # Multi-frame observation sampling indices. None means single-frame (default).
+    observation_delta_indices: Optional[List[int]] = None

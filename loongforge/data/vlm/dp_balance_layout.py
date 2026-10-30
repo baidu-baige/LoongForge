@@ -3,9 +3,9 @@
 
 """VLM packed-batch layout for DP load balancing.
 
-Depacks a packed VLM batch into samples, redistributes them with the context the
-engine passes in, and re-packs them. ``training/vlm`` installs it with
-``engines.megatron.dp_balance.rebalance.layout.install_batch_layout``.
+Depacks a packed VLM batch into samples, redistributes them with the context
+``data/dp_balance`` passes in, and re-packs them. ``training/vlm`` installs it with
+``data.dp_balance.rebalance.layout.install_batch_layout``.
 """
 
 from functools import partial
@@ -22,7 +22,9 @@ class VLMDataSample:
         self,
         tokens,
         labels,
+        # position_ids,
         attn_mask,
+        # loss_mask,
         pixel_values_images=None,
         image_thw=None,
         pixel_values_videos=None,
@@ -30,7 +32,9 @@ class VLMDataSample:
     ):
         self.tokens = tokens
         self.labels = labels
+        # self.position_ids = position_ids
         self.attn_mask = attn_mask
+        # self.loss_mask = loss_mask
         self.pixel_values_images = pixel_values_images
         self.image_thw = image_thw
         self.pixel_values_videos = pixel_values_videos
@@ -70,6 +74,8 @@ def depack_data_for_vlm(data):
         tokens = data["tokens"][:, start:end]
         labels = data["labels"][:, start:end]
         attn_mask = data["attn_mask"][:, start:end]
+        # loss_mask = data["loss_mask"][:, start:end]
+        # position_ids = data["position_ids"][:, 0, start:end]
 
         # -------- image --------
         pixel_values_images = None
@@ -103,6 +109,8 @@ def depack_data_for_vlm(data):
         vlm_sample = VLMDataSample(
             tokens=tokens,
             labels=labels,
+            # position_ids=position_ids,
+            # loss_mask=loss_mask,
             attn_mask=attn_mask,
             pixel_values_images=pixel_values_images,
             image_thw=image_thw,
@@ -130,6 +138,8 @@ def pack_data_for_vlm(vlm_samples):
     tokens_list = []
     labels_list = []
     attn_mask_list = []
+    # loss_mask_list = []
+    # position_ids_list = []
 
     cu_lengths = [0]
     cur_len = 0
@@ -193,6 +203,8 @@ def pack_data_for_vlm(vlm_samples):
         "max_lengths": max_lengths,
         "cu_lengths": cu_lengths,
         "attn_mask": attn_mask,
+        # "loss_mask": loss_mask,
+        # "position_ids": position_ids,
         "imgs": images,
         "pixel_values_videos": pixel_values_videos,
         "image_grid_thw": image_grid_thw,
@@ -215,6 +227,11 @@ def reconstruct_visual_grid_thw_for_vlm(tensor):
 def reconstruct_visual_for_vlm(tensor, visual_size):
     """Reshape flattened visual embeddings to (num_tokens, visual_size)."""
     return tensor.reshape(-1, visual_size)
+
+
+def reconstruct_position_ids_for_vlm(tensor):
+    """Reshape position IDs to (3, 1, seq_len) for InternVL-style VLM."""
+    return tensor.reshape(3, 1, -1)
 
 
 def reorder_data_for_vlm(data, ctx):

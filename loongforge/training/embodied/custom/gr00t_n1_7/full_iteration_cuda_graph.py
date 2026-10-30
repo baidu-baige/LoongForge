@@ -424,11 +424,11 @@ class Gr00tN1d7FullIterationCudaGraphRunner:
         self._noop_ddp_logger = _NoopDdpLogger()
         self._copy_stream: torch.cuda.Stream | None = None
         self._copy_event: torch.cuda.Event | None = None
-        # Beta timestep sampling stays on the CPU so that graph replay consumes
-        # the same RNG stream as eager. Copying that tensor synchronously inside
-        # Forward would expose the preceding graph work to the host; a dedicated
-        # stream/event lets the tiny H2D copy proceed independently of input
-        # staging.
+        # Beta timestep sampling is intentionally kept on the CPU so that the
+        # graph replay consumes the same RNG stream as eager.  The old path
+        # copied that tensor synchronously from inside Forward, which exposed
+        # the preceding graph work to the host.  A dedicated stream/event lets
+        # the tiny H2D copy proceed independently of input staging.
         self._time_stream: torch.cuda.Stream | None = None
         self._time_event: torch.cuda.Event | None = None
         self._time_host_buffer: torch.Tensor | None = None

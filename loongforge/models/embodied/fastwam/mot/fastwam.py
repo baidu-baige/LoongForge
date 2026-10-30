@@ -1165,7 +1165,7 @@ class FastWAM(torch.nn.Module):
         """Save MoT, optional proprio encoder, and optimizer checkpoint state."""
         payload = {
             # `_extra_state` is dropped so the file does not depend on the RMSNorm
-            # implementation it was trained with (see `fastwam/utils/state_dict.py`).
+            # implementation it was trained with (see `utils.state_dict`).
             "mot": drop_extra_state(self.mot.state_dict()),
             "step": step,
             "torch_dtype": str(self.torch_dtype),

@@ -19,7 +19,7 @@
 # limitations under the License.
 
 """
-DiT (Diffusion Transformer) modules for Gr00t N1.6.
+DiT (Diffusion Transformer) modules for GR00T N1.6.
 
 Ported from gr00t-orig/model/modules/dit.py
 """

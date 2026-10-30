@@ -3,7 +3,22 @@
 
 from pathlib import Path
 
-from ci.check_doc_links import PLACEHOLDER, changed_markdown_files, references, scan_documents
+from tests.ci_test_utils import load_module
+
+
+MODULE_PATH = (
+    Path(__file__).resolve().parents[1]
+    / ".github"
+    / "scripts"
+    / "check_doc_links.py"
+)
+check_doc_links = load_module("check_doc_links", MODULE_PATH)
+
+PLACEHOLDER = check_doc_links.PLACEHOLDER
+changed_markdown_files = check_doc_links.changed_markdown_files
+references = check_doc_links.references
+repo_root = check_doc_links.repo_root
+scan_documents = check_doc_links.scan_documents
 
 
 def _references(text: str):
@@ -13,14 +28,14 @@ def _references(text: str):
 def test_finds_bare_relative_and_project_absolute_references():
     found = _references(
         """
-        Run `examples/pi05/run.sh`.
+        Run `examples/embodied/pi05/run.sh`.
         [config](../../configs/models/qwen3/model.yaml)
-        https://github.com/baidu-baige/LoongForge/blob/master/examples/pi05/run.sh
+        https://github.com/baidu-baige/LoongForge/blob/master/examples/embodied/pi05/run.sh
         https://raw.githubusercontent.com/baidu-baige/LoongForge/master/configs/models/qwen3/model.yaml
         """
     )
     targets = {target for _, target in found}
-    assert "examples/pi05/run.sh" in targets
+    assert "examples/embodied/pi05/run.sh" in targets
     assert "configs/models/qwen3/model.yaml" in targets
 
 
@@ -76,3 +91,7 @@ def test_changed_markdown_files_uses_git_revision(tmp_path):
     )
     changed = changed_markdown_files(tmp_path, "HEAD^")
     assert changed == [Path("README.md")]
+
+
+def test_repo_root_matches_repository_parent():
+    assert repo_root() == Path(__file__).resolve().parents[1]

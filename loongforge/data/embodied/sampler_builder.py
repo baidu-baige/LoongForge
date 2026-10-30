@@ -1,12 +1,12 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""DataLoader sampler selection, with a default distributed sampler.
+"""Registry for DataLoader samplers, with a default distributed sampler.
 
 A *sampler builder* is a callable ``fn(SamplerBuilderContext) -> Sampler | None``
 selected by ``model_cfg.model_type``. Models that need custom index ordering
 (e.g. multi-frame grouping, curriculum sampling) register their own builder via
-``@register_sampler_builder("<model_type>")`` (``embodied/registry.py``); models without a registered
+``@register_sampler_builder("<model_type>")``; models without a registered
 builder fall back to :func:`default_sampler_builder`.
 
 Returning ``None`` means "no sampler" — the DataLoader then falls back to plain
@@ -16,11 +16,13 @@ shuffling (map-style) or natural iteration (iterable-style).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, Callable, Optional, TYPE_CHECKING
 
 import torch
 from torch.utils.data import IterableDataset, Sampler
 from torchdata.stateful_dataloader.sampler import StatefulDistributedSampler
+
+from loongforge.data.embodied.registry import get_sampler_builder
 
 if TYPE_CHECKING:
     from loongforge.data.embodied.registry import DataRuntime
@@ -37,6 +39,8 @@ class SamplerBuilderContext:
     seed: int
     shuffle: bool
 
+
+SamplerBuilder = Callable[[SamplerBuilderContext], Optional[Sampler]]
 
 class _BlockShardSampler(Sampler[int]):
     """Distribute contiguous batches across data-parallel ranks."""
@@ -152,8 +156,6 @@ def build_sampler(
     shuffle: bool = True,
 ) -> Optional[Sampler]:
     """Build the sampler for ``model_type`` via its registered builder."""
-    from loongforge.data.embodied.registry import get_sampler_builder
-
     builder = get_sampler_builder(model_type) or default_sampler_builder
     context = SamplerBuilderContext(
         dataset=dataset,

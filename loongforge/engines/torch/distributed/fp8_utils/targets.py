@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 def get_default_fp8_targets(model: nn.Module) -> Optional[dict[str, Any]]:
     """Return the model-provided FP8 target specification, if available.
 
-    Mirrors ``engines.torch.lora.get_default_lora_targets``: the framework owns the
+    Mirrors ``train.lora.get_default_lora_targets``: the framework owns the
     mechanism, the model owns the knowledge of which of its own layers must stay
     out of FP8. Defaults normally select large Transformer/DiT block subtrees
     and leave numerically sensitive input/output heads, explicitly fp32 modules,

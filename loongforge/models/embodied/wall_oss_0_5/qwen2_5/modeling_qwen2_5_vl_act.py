@@ -1,6 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
+"""modeling_qwen2_5_vl_act module."""
 import os
 import re
 import torch
@@ -114,6 +115,7 @@ class Qwen25VLDecoderLayerWithMoE(nn.Module, ActionModelMixMin):
         num_experts: int,
         use_selective_recompute: bool = True,
     ):
+        """Initialize the instance."""
         super().__init__()
         self.hidden_size = config.hidden_size
         self.use_selective_recompute = use_selective_recompute
@@ -311,6 +313,7 @@ class Qwen25VLDecoderLayerWithMoE(nn.Module, ActionModelMixMin):
 class Qwen25VLMoEModel(Qwen25VLPreTrainedModel, ActionModelMixMin):
     """Qwen2 5 VLMoEModel."""
     def __init__(self, config: Qwen25VLConfig, use_selective_recompute=False):
+        """Initialize the instance."""
         super().__init__(config)
         self.config = config
         self.use_selective_recompute = use_selective_recompute
@@ -602,6 +605,7 @@ class Qwen25VLMoEModel(Qwen25VLPreTrainedModel, ActionModelMixMin):
         output_attentions: bool,
         moe_token_types: Optional[torch.LongTensor] = None,
     ):
+        """Update causal mask."""
         if self.config._attn_implementation == "flash_attention_2":
             if attention_mask is not None and past_key_values is not None:
                 is_padding_right = (
@@ -805,6 +809,7 @@ class Qwen25VLMoEForAction(
         processor=None,
         use_selective_recompute=False,
     ):
+        """Initialize the instance."""
         super().__init__(config)
         self.visual = self._build_visual(config, use_selective_recompute)
         self.model = Qwen25VLMoEModel(
@@ -856,15 +861,19 @@ class Qwen25VLMoEForAction(
         pass
 
     def get_input_embeddings(self):
+        """Get input embeddings."""
         return self.model.embed_tokens
 
     def set_input_embeddings(self, value):
+        """Set input embeddings."""
         self.model.embed_tokens = value
 
     def get_output_embeddings(self):
+        """Get output embeddings."""
         return self.lm_head
 
     def set_output_embeddings(self, new_embeddings):
+        """Set output embeddings."""
         self.lm_head = new_embeddings
 
     def train_step_forward(
@@ -903,6 +912,7 @@ class Qwen25VLMoEForAction(
         flow_loss_mask: Optional[torch.FloatTensor] = None,
         **kwargs,
     ) -> Union[Tuple, Qwen25VLACausalLMOutputWithPast]:
+        """Train step forward."""
         if input_ids is not None:
             batch_size, seq_length = input_ids.shape
 
@@ -1185,6 +1195,7 @@ class Qwen25VLMoEForAction(
 
         # assert self.config._attn_implementation == "sdpa", "generate_flow_action only support sdpa attn
         # implementation"
+        """Generate flow action."""
         ctx = self._prepare_flow_action_inputs(
             input_ids=input_ids,
             action_horizon=action_horizon,
@@ -1271,6 +1282,7 @@ class Qwen25VLMoEForAction(
         agent_pos_mask,
         action_norm_stats,
     ):
+        """Prepare flow action inputs."""
         batch_size = (
             input_ids.shape[0] if input_ids is not None else inputs_embeds.shape[0]
         )
@@ -1502,6 +1514,7 @@ class Qwen25VLMoEForAction(
 
     def _generate_flow_action_vanilla(self, ctx):
         # Timing: prefill forward pass
+        """Generate flow action vanilla."""
         all_attention_maps = []
         output_attentions = True if ctx["output_attentions"] else False
         prefetch_output = self.model(
@@ -1553,6 +1566,7 @@ class Qwen25VLMoEForAction(
         ) = self._prepare_flow_postfix(ctx, prefix_kv_cache)
 
         def step_with_kvcache(timestep, noisy_action):
+            """Step with kvcache."""
             action_mask = (
                 postfix_input_ids == self.action_token_id_set["action_token_id"]
             )
@@ -1627,6 +1641,7 @@ class Qwen25VLMoEForAction(
         return action_trajectory, attention_maps
 
     def _prepare_flow_postfix(self, ctx, prefix_kv_cache=None):
+        """Prepare flow postfix."""
         postfix_position_ids = ctx["position_ids"][:, :, ctx["prefix_length"] :]
         postfix_inputs_embeds = ctx["inputs_embeds"][:, ctx["prefix_length"] :, :]
         postfix_attention_mask = ctx["attention_mask"][:, ctx["prefix_length"] :]
@@ -1721,6 +1736,7 @@ class Qwen25VLMoEForAction(
         )
 
     def _finalize_flow_action_output(self, action_trajectory, ctx):
+        """Finalize flow action output."""
         predict_action = action_trajectory[-1]
         action_norm_stats = ctx["action_norm_stats"]
         predict_action = unnormalize_actions_q99(predict_action, action_norm_stats)
@@ -1746,6 +1762,7 @@ class Qwen25VLMoEForAction(
             raise NotImplementedError("invalid key")
 
     def rename_vlm_weights_for_vla(self, merged_weights):
+        """Rename vlm weights for vla."""
         renamed = {}
 
         for key, value in merged_weights.items():
@@ -1799,6 +1816,7 @@ class Qwen25VLMoEForAction(
     def fuse_gate_up(
         fused, prefix, suffix_gate="gate_proj", suffix_up="up_proj", out="gate_up_proj"
     ):
+        """Fuse gate up."""
         gate_w = fused.get(prefix + f"{suffix_gate}.weight")
         up_w = fused.get(prefix + f"{suffix_up}.weight")
         gate_b = fused.get(prefix + f"{suffix_gate}.bias")
@@ -1892,6 +1910,12 @@ class Qwen25VLMoEForAction(
             full = prefix + n
             if full in fused:
                 del fused[full]
+
+    @staticmethod
+    def is_fused(state_dict):
+        # Check whether the model is already fused by looking for fused weight markers
+        """Is fused."""
+        return any(".moe.experts.0.gate_up_proj" in key for key in state_dict.keys())
 
     @staticmethod
     def convert_to_fused(state_dict):
@@ -1989,6 +2013,7 @@ class Qwen25VLMoEForAction(
 
     def convert_to_mix_precision(self):
         # Mix Precision
+        """Convert to mix precision."""
         params_to_keep_float32 = []
         for name, _ in self.named_parameters():
             if any(

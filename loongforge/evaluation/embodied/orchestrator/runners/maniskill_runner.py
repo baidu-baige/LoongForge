@@ -193,7 +193,7 @@ def run_evaluation(args: argparse.Namespace) -> Dict[str, Any]:
         raise NotImplementedError(
             f"ManiSkill+{action_decoder_key} requires an absolute-EE control "
             f"mode (not implemented; ManiSkill only ships pd_ee_delta_pose). "
-            f"See loongforge/evaluation/embodied/docs/model_integration.md §4.2. "
+            f"See docs/source/embodied_tutorial/eval_docs/model_integration.md §4.2. "
             f"For link smoke, set server.random_init: true."
         )
     client = PolicyClient(host=args.host, port=args.port)
@@ -397,7 +397,7 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--save-trace", action="store_true")
     parser.add_argument(
         "--output-dir",
-        default="/workspace/LoongForge/loongforge/evaluation/embodied/reports/manual/maniskill/smoke",
+        default="/workspace/LoongForge-VLA/loongforge/evaluation/embodied/reports/manual/maniskill/smoke",
     )
     return parser
 

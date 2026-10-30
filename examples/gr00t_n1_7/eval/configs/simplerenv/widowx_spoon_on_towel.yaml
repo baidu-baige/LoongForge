@@ -1,5 +1,6 @@
 # Public template: replace every /path/to/... placeholder before use.
-# The internal counterpart (same name + _internal) holds the machine-specific paths.
+# Machine-specific paths are filled in by the user or injected at runtime by an
+# external launcher; nothing machine-specific is checked in.
 #
 # GR00T-N1.7 x SimplerEnv WidowX (Bridge) -- widowx_spoon_on_towel, official parity.
 #   --max_episode_steps 300 -> benchmark.max_steps (counts INNER env steps)
@@ -36,11 +37,6 @@ server:
   host: 127.0.0.1
   port: 13773
   health_port: 13774
-  # To reproduce the reported success rates this env must have transformers
-  # 4.57.3. The 5.x series diverges inside the Qwen3-VL backbone: on 5.3.0 -- the
-  # version our own pyproject.toml installs -- the six-task WidowX total
-  # drops from 85/120 to 35/120, and nothing in the run warns about it. See
-  # loongforge/evaluation/embodied/docs/patches/simplerenv/gr00t_n1_7.md.
   python: /path/to/conda/envs/loongforge/bin/python
   log: /path/to/reports/gr00t_n1_7/simplerenv/widowx_spoon_on_towel/policy_server.log
   start_timeout_sec: 2400
@@ -58,7 +54,7 @@ env:
   # `external_dependencies/SimplerEnv` submodule (github.com/squarefk/SimplerEnv,
   # see that repo's .gitmodules). Upstream simpler-env/SimplerEnv registers
   # neither widowx drawer task and does not expose `agent.eef_pos`. Details:
-  # loongforge/evaluation/embodied/docs/patches/simplerenv/gr00t_n1_6.md.
+  # loongforge/embodied/eval/docs/patches/simplerenv/gr00t_n1_6.md.
   simplerenv_root: /path/to/SimplerEnv
   ld_library_path: /path/to/nvidia_lib
   nvidia_lib_dir: /path/to/nvidia_lib

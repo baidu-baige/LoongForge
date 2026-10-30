@@ -113,6 +113,7 @@ def on_after_data_iterators_initialized(model, *, training_args, completed_steps
             args=training_args,
             completed_steps=completed_steps,
             optimizer=optimizer,
+            ctx=ctx,
         )
 
 

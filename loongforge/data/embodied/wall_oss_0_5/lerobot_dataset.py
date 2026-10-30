@@ -16,10 +16,12 @@ logger = logging.getLogger(__name__)
 
 
 def _wall_oss_split_len(dataset):
+    """Wall oss split len."""
     return len(dataset._wall_oss_split_indices)
 
 
 def _wall_oss_split_index(dataset, idx):
+    """Wall oss split index."""
     return dataset._wall_oss_split_indices[int(idx)]
 
 
@@ -64,6 +66,8 @@ def build_wall_oss_0_5_lerobot_dataset(model_cfg, data_cfg, training_args, runti
     base_len = len(raw_dataset)
     split_indices = list(train_split.indices)
 
+    raw_dataset._wall_oss_dataset_name = str(repo_id)
+    raw_dataset._wall_oss_train_episodes = train_episodes
     raw_dataset._wall_oss_base_len = base_len
     raw_dataset._wall_oss_split_indices = split_indices
     raw_dataset._length_fn = _wall_oss_split_len

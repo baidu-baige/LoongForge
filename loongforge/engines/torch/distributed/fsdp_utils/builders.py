@@ -40,7 +40,7 @@ def build_mp_policy(training_args, model: nn.Module | None = None) -> MixedPreci
     Note:
         An unset ``--fsdp-unshard-param-dtype`` means "do not extra-cast" only
         for models authored with mixed parameter dtypes. Uniform-dtype models
-        fall back to ``--dtype`` so
+        fall back to ``--dtype``, matching the pre-refactor default so
         all-gather / compute stay on the training dtype (typically bf16) and
         ``cast_forward_inputs`` still has a target.
 

@@ -5,7 +5,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: OpenMDW-1.1
 
-"""Cosmos3 collator: collate function producing Cosmos3Batch."""
+"""Cosmos3 preprocessor: collate function producing Cosmos3Batch."""
 
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
@@ -84,7 +84,7 @@ class Cosmos3Batch:
 
 
 class DeferredVideoTail:
-    """ColorJitter + everything after it, runs outside the dataloader worker.
+    """ColorJitter + everything after it, moved out of the dataloader worker.
 
     ColorJitter on a full-resolution 3-view stack is the worker bottleneck, so
     ``colorjitter_on_gpu`` defers it. Deferring only the jitter would change the
@@ -117,6 +117,9 @@ class DeferredVideoTail:
     def __setstate__(self, state):
         """Rebuild from the shipped parameters (the transform is not pickled)."""
         self.__init__(*state["params"])
+
+    # NOTE: params are kept for provenance; build_image_augmentor owns the values
+    # actually used, so the in-worker and device-side transforms cannot drift.
 
     def _augment(self, stack: torch.Tensor, rng_state: torch.Tensor) -> torch.Tensor:
         """Run crop -> resize -> ColorJitter from the worker's RNG position.

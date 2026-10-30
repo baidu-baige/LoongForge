@@ -13,6 +13,7 @@ import numpy as np
 
 
 def encode(obj):
+    """Run encode."""
     if isinstance(obj, np.ndarray):
         return {
             b"__ndarray__": True,
@@ -26,6 +27,7 @@ def encode(obj):
 
 
 def decode(obj):
+    """Run decode."""
     if b"__ndarray__" in obj:
         array = np.frombuffer(
             obj[b"data"], dtype=np.dtype(obj[b"dtype"].decode() if isinstance(obj[b"dtype"], bytes) else obj[b"dtype"])
@@ -38,12 +40,15 @@ class Packer:
     """Provide Packer behavior."""
 
     def pack(self, obj):
+        """Run pack."""
         return msgpack.packb(obj, default=encode, use_bin_type=True)
 
 
 def packb(obj):
+    """Run packb."""
     return msgpack.packb(obj, default=encode, use_bin_type=True)
 
 
 def unpackb(payload):
+    """Run unpackb."""
     return msgpack.unpackb(payload, object_hook=decode, raw=False)

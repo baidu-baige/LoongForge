@@ -20,7 +20,7 @@ def build_hooks(training_args):
     from loongforge.engines.torch.runner import TrainerHooks, LossHealth
     from loongforge.models.embodied.gr00t_n1_6.eagle3_model import modeling_eagle3_vl
 
-    # Eagle picks its loader and attention paths when it is built; this factory runs before that.
+    # Eagle picks its loader and attention paths when it is built; set_graph_mode runs before that.
     modeling_eagle3_vl.set_graph_mode(
         training_args.cuda_graph_impl == "local"
         and training_args.cuda_graph_scope in {"full_iteration", "per_microbatch"}

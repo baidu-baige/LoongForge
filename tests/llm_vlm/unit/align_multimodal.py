@@ -74,8 +74,9 @@ def main() -> None:
 
         Glm5NextTextIndexer.forward = indexer_forward_with_long_indices
 
-        sys.path.insert(0, str(args.target_root))
-        from loongforge.models.foundation.glm5_next.glm5_next_model import Glm5NextModel
+        target_module = args.target_root / "loongforge/models/foundation/glm5_next"
+        sys.path.insert(0, str(target_module))
+        from glm5_next_model import Glm5NextModel
 
         device = torch.device("cuda")
         reference = Glm5NextForConditionalGeneration.from_pretrained(

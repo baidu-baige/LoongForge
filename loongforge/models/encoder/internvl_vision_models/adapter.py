@@ -68,6 +68,7 @@ class InternAdapter(BaseMegatronModule):
             self.freeze()
 
     def forward(self, hidden_states, window_index=None, **kwargs):
+        """ forward """
         hidden_states = self.layernorm(hidden_states)
 
         # [s, b, 4 * h/p]

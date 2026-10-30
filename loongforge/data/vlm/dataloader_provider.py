@@ -62,7 +62,9 @@ class VLMDataConfig:
     frame_max_pixels: int = 768 * 28 * 28
     frame_min_pixels: int = 128 * 28 * 28
     group_by_length: bool = False
+    hf_processor_path: Optional[str] = None
     hf_tokenizer_path: Optional[str] = None
+    history_mask_loss: bool = False
     image_resolution: Optional[int] = None
     loss_reduction: str = "square"
     max_buffer_size: int = 20
@@ -83,20 +85,11 @@ class VLMDataConfig:
     sft_dataset_config: Optional[str] = None
     strict_mode: bool = False
     task_encoder: Optional[str] = None
+    train_on_prompt: bool = False
     training_phase: str = TrainingPhase.PRETRAIN
     training_rice_vl_max_answer_length: int = 4096
     use_thumbnail: bool = False
     video_max_pixels: int = 65536 * 28 * 28
-
-    # Fields read by the ERNIE encoder but not defined as CLI arguments.
-    # Kept as ``Any`` so the existing call sites keep their current behaviour.
-    image_dtype: Any = None
-    image_token_len: Any = None
-    pad: Any = None
-    sft_image_normalize: Any = None
-    sft_image_rescale: Any = None
-    sft_replace_ids: Any = None
-    sft_shift_by_one: Any = None
 
     @classmethod
     def from_args(cls, args) -> "VLMDataConfig":
@@ -622,10 +615,11 @@ def build_full_hetero_encoder_energon_iterator(
     num_real_microbatch,
     prefetch_count,
 ):
-    """Wrap an Energon encoder loader with the strided/prefetch iterator for full hetero DP.
+    """Build encoder iterator for full_hetero_dp with Energon dataloader.
 
-    The loader itself is built by the training method from its data config; this
-    function only owns the parallelism-specific wrapping.
+    Creates a separate EnergonDataloader (same dataset config as decoder) and
+    wraps it with EncoderStridedIterator to yield only microbatches assigned
+    to this PP rank.
     """
     from loongforge.data.vlm.encoder_strided_sampler import EncoderStridedIterator, PrefetchIterator
 

@@ -4,16 +4,7 @@
 # Modified from Megatron-LM under the BSD 3-Clause License.
 # Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
 
-"""Model chunk schedule plan for MoE EP communication overlap.
-
-Modified copy of ``megatron/core/models/common/model_chunk_schedule_plan.py`` (Loong-Megatron b10469fc8);
-``ModelChunkState`` is imported from it, ``PostProcessNode`` and ``TransformerLayerState`` from upstream
-``fine_grained_callables``. The copies here differ:
-
-- ``TransformerLayerSchedulePlan``: DeepStack node built from ``extra_args["deepstack_handler"]``.
-- ``TransformerModelChunkSchedulePlan``: image/video/audio inputs, encoder and full hetero DP arguments
-  (``batch_list``, ``forward_group_id``, ``inner_group_id``); DeepStack handler per layer.
-"""
+"""Model chunk schedule plan."""
 from contextlib import nullcontext
 from typing import Optional, Dict
 
@@ -360,7 +351,6 @@ class TransformerModelChunkSchedulePlan(AbstractSchedulePlan):
             extra_block_kwargs: Additional keyword arguments for blocks.
             runtime_gather_output: Whether to gather output at runtime.
             loss_mask (torch.Tensor): Used to mask out some portions of the loss
-            hetero_step: The ``HeteroStepContext`` of a full-hetero-DP run, else None.
 
         Returns:
             The model chunk schedule plan.

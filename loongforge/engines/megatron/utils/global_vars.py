@@ -25,6 +25,8 @@ _GLOBAL_CHAT_TEMPLATE: Optional["ChatTemplate"] = None
 _GLOBAL_LOONGFORGE_TOKENIZER: Optional["MegatronLegacyTokenizer"] = None
 _GLOBAL_MODEL_CONFIG = None
 _GLOBAL_HYDRA_CONFIG = None
+_GLOBAL_DATA_CONFIG = None
+
 _GLOBAL_ARGS_DICT = None
 
 
@@ -36,6 +38,11 @@ def get_model_config():
 def get_hydra_config():
     """Get the hydra configuration"""
     return _GLOBAL_HYDRA_CONFIG
+
+
+def get_data_config():
+    """Get the data configuration"""
+    return _GLOBAL_DATA_CONFIG
 
 
 def get_args_dict():
@@ -57,6 +64,13 @@ def set_hydra_config(hydra_config):
     _GLOBAL_HYDRA_CONFIG = hydra_config
 
 
+def set_data_config(data_config):
+    """Set the data configuration"""
+    global _GLOBAL_DATA_CONFIG
+    _ensure_var_is_not_initialized(_GLOBAL_DATA_CONFIG, "data config")
+    _GLOBAL_DATA_CONFIG = data_config
+
+
 def set_args_dict(args_dict):
     """Set the args dictionary"""
     global _GLOBAL_ARGS_DICT
@@ -64,11 +78,12 @@ def set_args_dict(args_dict):
     _GLOBAL_ARGS_DICT = args_dict
 
 
-def set_loongforge_extra_global_vars(args) -> None:
+def set_loongforge_extra_global_vars(args, build_tokenizer=True) -> None:
     """Set LOONGFORGE extra global variables"""
     assert args is not None
-    _ = _build_chat_template(args)
-    _ = _build_tokenizer(args)
+    if build_tokenizer:
+        _ = _build_chat_template(args)
+        _ = _build_tokenizer(args)
 
 
 def _build_chat_template(args) -> Optional["ChatTemplate"]:
@@ -104,14 +119,14 @@ def _build_chat_template(args) -> Optional["ChatTemplate"]:
 def _build_tokenizer(args) -> Optional["MegatronLegacyTokenizer"]:
     """Initialize tokenizer."""
     global _GLOBAL_LOONGFORGE_TOKENIZER
-    _ensure_var_is_not_initialized(_GLOBAL_LOONGFORGE_TOKENIZER, "loongforge.engines.megatron.tokenizer")
+    _ensure_var_is_not_initialized(_GLOBAL_LOONGFORGE_TOKENIZER, "loongforge-tokenizer")
     _GLOBAL_LOONGFORGE_TOKENIZER = build_tokenizer(args, chat_template=_GLOBAL_CHAT_TEMPLATE)
     return _GLOBAL_LOONGFORGE_TOKENIZER
 
 
 def get_tokenizer() -> Optional["MegatronLegacyTokenizer"]:
     """Return tokenizer."""
-    _ensure_var_is_initialized(_GLOBAL_LOONGFORGE_TOKENIZER, "loongforge.engines.megatron.tokenizer")
+    _ensure_var_is_initialized(_GLOBAL_LOONGFORGE_TOKENIZER, "loongforge-tokenizer")
     return _GLOBAL_LOONGFORGE_TOKENIZER
 
 

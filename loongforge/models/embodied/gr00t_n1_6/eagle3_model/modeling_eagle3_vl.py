@@ -113,7 +113,7 @@ def _flash_attention_mask_no_sync(
 
 
 # Prevents GPU→CPU sync in create_causal_mask → flash_attention_mask
-# Deferred: applied only when GRooT model is instantiated (see Eagle3VlForConditionalGeneration.__init__)
+# Deferred: applied only when GR00T model is instantiated (see Eagle3VlForConditionalGeneration.__init__)
 _FA2_PATCHES_INSTALLED = False
 
 

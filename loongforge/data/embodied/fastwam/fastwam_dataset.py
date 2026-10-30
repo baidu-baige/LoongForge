@@ -4,7 +4,7 @@
 """FastWAM multi-frame-observation dataset strategy: behaviour hook for the
 generic lerobot datasets.
 
-FastWAM plugs its geometry into :class:`LeRobotV3Dataset` through the
+Like Motus, FastWAM plugs its geometry into :class:`LeRobotV3Dataset` through the
 ``delta_timestamps_fn`` hook instead of branching inside the dataset class. The
 hook adds, for every video key, a multi-frame observation stack sampled at the
 ``observation_delta_indices`` offsets (in addition to the standard pi05 action
@@ -18,12 +18,12 @@ chunk). The base dataset stays entirely model-agnostic.
 from __future__ import annotations
 
 from pathlib import Path
-
 from typing import Any, Dict, List
 
 from loongforge.data.embodied.lerobot_dataset import (
     LeRobotV3Dataset,
-    build_default_lerobot_dataset,
+    MultiLeRobotV2Dataset,
+    _build_lerobot_dataset,
 )
 
 
@@ -70,27 +70,40 @@ def fastwam_delta_timestamps(dataset: LeRobotV3Dataset, info: Dict[str, Any], fp
 def build_fastwam_lerobot_dataset(model_cfg, data_cfg, training_args, runtime):
     """Build the FastWAM multi-frame-observation dataset via the behaviour hook.
 
-    Calls :func:`build_default_lerobot_dataset` with
+    Derives ``repo_id`` from ``--dataset-path`` and dispatches through the
+    version-aware factory (``_build_lerobot_dataset``), wiring
     :func:`fastwam_delta_timestamps` as the ``delta_timestamps_fn`` hook.
     Sampling geometry (``observation_delta_indices``) comes from the FastWAM
     ``data_cfg``; ``action_horizon`` comes from the ``model_cfg``.
     """
-    roots = [Path(part.strip()) for part in str(training_args.dataset_path or "").split(",") if part.strip()]
-    if len(roots) > 1:
-        from loongforge.data.embodied.lerobot_dataset import MultiLeRobotV2Dataset
+    dataset_path = training_args.dataset_path
+    if not dataset_path:
+        raise ValueError("Must specify --dataset-path")
 
-        return MultiLeRobotV2Dataset(
-            roots=roots,
+    # --dataset-path may be a comma-separated list of dataset dirs. When multiple
+    # datasets are given they are concatenated into one MultiLeRobotV2Dataset
+    # (each sub-dataset keeps its own task_index -> text map), reproducing the
+    # official FastWAM "4 suites joint + frame-count-weighted sampling" setup.
+    roots = [Path(p.strip()) for p in str(dataset_path).split(",") if p.strip()]
+    if len(roots) == 1:
+        repo_id = roots[0].name
+        return _build_lerobot_dataset(
+            repo_id=repo_id,
+            root=str(roots[0]),
             action_horizon=model_cfg.action_horizon,
+            streaming=training_args.streaming,
             episodes=None,
             video_backend=training_args.video_backend,
+            tolerance_s=1e-4,
+            lerobotdataset_version=training_args.lerobotdataset_version,
             observation_delta_indices=data_cfg.observation_delta_indices,
+            delta_timestamps_fn=fastwam_delta_timestamps,
         )
-    return build_default_lerobot_dataset(
-        model_cfg,
-        data_cfg,
-        training_args,
-        runtime,
+
+    return MultiLeRobotV2Dataset(
+        roots=roots,
+        action_horizon=model_cfg.action_horizon,
+        episodes=None,
+        video_backend=training_args.video_backend,
         observation_delta_indices=data_cfg.observation_delta_indices,
-        delta_timestamps_fn=fastwam_delta_timestamps,
     )

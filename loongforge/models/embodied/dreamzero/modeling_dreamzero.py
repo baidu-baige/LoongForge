@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 from collections import deque
 from dataclasses import fields
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 import torch
 from torch import Tensor
@@ -31,6 +31,9 @@ from loongforge.models.embodied.registry import register_model
 from .model_configuration_dreamzero import DreamZeroConfig
 from .modules.action_head_tf import WANPolicyHead, WANPolicyHeadConfig
 from .precomputed_cache import build_precomputed_cache_config
+
+if TYPE_CHECKING:
+    from loongforge.engines.torch.distributed.context import DistributedContext
 
 logger = logging.getLogger(__name__)
 
@@ -256,6 +259,7 @@ class DreamZeroPolicy(PreTrainedPolicy):
         args: Any,
         completed_steps: int,
         optimizer: torch.optim.Optimizer | None,
+        ctx: DistributedContext,
     ) -> None:
         """Apply one-time DreamZero FSDP initialization compatibility rounding."""
         del args
@@ -458,3 +462,15 @@ class DreamZeroPolicy(PreTrainedPolicy):
             # (batch, n_action_steps, action_dim) -> queue of (batch, action_dim)
             self._action_queue.extend(actions.transpose(0, 1))
         return self._action_queue.popleft()
+
+    # Megatron pipeline APIs expect set_input_tensor even when pipeline parallel size is 1.
+    # Provide a no-op shim to satisfy forward_backward_no_pipelining.
+    def set_input_tensor(self, input_tensor):
+        """Set input tensor for pipeline parallelism (no-op for PP=1)."""
+        self._input_tensor = input_tensor
+
+    # Megatron checkpointing.generate_state_dict calls model.state_dict_for_save_checkpoint().
+    # Default to torch nn.Module.state_dict() — adequate for non-PP, non-distributed-optim cases.
+    def state_dict_for_save_checkpoint(self, destination=None, prefix: str = "", keep_vars: bool = False):
+        """Return a Megatron-compatible checkpoint state dictionary."""
+        return self.state_dict(destination=destination, prefix=prefix, keep_vars=keep_vars)

@@ -1,6 +1,8 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
+"""llama model"""
+
 from typing import Optional
 
 import torch

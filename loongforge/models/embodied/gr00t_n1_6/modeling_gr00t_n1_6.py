@@ -48,7 +48,7 @@ from loongforge.models.embodied.gr00t_n1_6.eagle3_model.image_augmentations impo
     build_image_transformations_albumentations,
 )
 
-from .eagle3_model.eagle_backbone import EagleBackbone
+from .eagle3_model import EagleBackbone
 from .model_configuration_gr00t_n1_6 import Gr00tN1d6ModelConfig
 from .modules.dit import AlternateVLDiT, DiT
 from .modules.embodiment_mlp import (
@@ -558,6 +558,12 @@ class Gr00tN1d6(nn.Module):
         self._pad_bufs: dict | None = None
         self.collator = None
 
+    # Megatron pipeline APIs expect set_input_tensor even when pipeline parallel size is 1.
+    # Provide a no-op shim to satisfy forward_backward_no_pipelining.
+    def set_input_tensor(self, input_tensor):
+        """Set input tensor for pipeline parallelism."""
+        self._input_tensor = input_tensor
+
     def _detect_checkpoint_state_dim(self) -> int:
         """Detect the checkpoint's expected state dimension from loaded weights.
 
@@ -915,6 +921,8 @@ class Gr00tN1d6Policy(nn.Module):
         self.model_action_horizon = int(config.action_horizon)
         self.action_horizon = len(self.modality_config["action"].delta_indices)
         self.action_dim = int(config.action_dim)
+        self.native_action_dim = int(config.action_dim)
+        self._predict_action_initialized = False
         self._predict_action_validation_zero_state = False
         self._predict_action_use_bf16 = bool(config.use_bf16)
         self._predict_action_eagle_assets_path = config.vlm_tokenizer_path or config.model_name
@@ -977,11 +985,7 @@ class Gr00tN1d6Policy(nn.Module):
         use_bf16: bool | None = None,
         validation_zero_state: bool = False,
     ) -> None:
-        """Configure eval-side resources used by ``predict_action``.
-
-        ``collator_cls`` (``Gr00tN1d6DataCollator``) and ``processor_cls``
-        (``StateActionProcessor``) come from the data package; the eval factory passes them.
-        """
+        """Configure eval-side resources used by ``predict_action``."""
         if embodiment_tag not in MODALITY_CONFIGS:
             raise ValueError(f"Unsupported GR00T-N1.6 embodiment_tag={embodiment_tag!r}")
         if embodiment_tag not in EMBODIMENT_TAG_TO_PROJECTOR_INDEX:
@@ -1028,6 +1032,7 @@ class Gr00tN1d6Policy(nn.Module):
             256,  # shortest_image_edge
             0.95,  # crop_fraction
         )
+        self._predict_action_initialized = True
         self.eval()
 
     @torch.no_grad()
@@ -1428,6 +1433,11 @@ class Gr00tN1d6Policy(nn.Module):
     def dtype(self):
         """Return dtype of the policy parameters."""
         return next(iter(self.parameters())).dtype
+
+    def restore_trainable_params_fp32(self) -> None:
+        """Restore GR00T trainable parameters to fp32 after framework dtype casts."""
+        with self._precision_restore_guard():
+            self._restore_trainable_params_fp32_impl()
 
     def _restore_trainable_params_fp32_impl(self) -> None:
         if self.config.backbone_trainable_params_fp32:

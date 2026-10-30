@@ -52,3 +52,6 @@ class Pi05DataConfig:
     action_padding_strategy: str = "zero"
     action_transform_horizon: Optional[int] = None
     action_transform_max_action_dim: Optional[int] = None
+
+    # Multi-frame observation sampling indices. None means single-frame (default).
+    observation_delta_indices: Optional[List[int]] = None

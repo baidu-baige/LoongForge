@@ -5,10 +5,8 @@
 
 Classes:
     - PreparedBatch: Base dataclass for model-ready batch tensors
-    - BaseCollator: Abstract base for collate functions
-    - DummyCollator: Pass-through collator for ``model_type="dummy"``
-
-Registration and lookup by model type live in ``embodied/registry.py``.
+    - BasePreprocessor: Abstract base for collate functions
+    - register_preprocessor: Decorator to register model-specific collators
 """
 
 from dataclasses import dataclass, fields

@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""LingBot-VA adapter around the common TorchRunner lifecycle."""
+"""LingBot-VA adapter around the common FinetuneTrainer lifecycle."""
 
 from __future__ import annotations
 
@@ -152,9 +152,9 @@ def build_hooks(training_args):
 
         Same contract as the common trainer, except the spike/NaN check stays on
         the device: the per-microbatch records are drained once per optimizer
-        step in ``_drain_loss_guard_records``, which replaces the base
+        step in ``_finish_device_loss_guard``, which replaces the base
         implementation's per-microbatch ``.item()`` synchronization. Gradient
-        sync gating is the caller's ``grad_sync_ctx``, as upstream.
+        sync gating is the caller's ``_grad_sync_ctx``, as upstream.
         """
         grad_accum = step_ctx.training_args.gradient_accumulation_steps
         threshold = step_ctx.training_args.loss_spike_threshold

@@ -4,12 +4,7 @@
 # Modified from Megatron-LM under the BSD 3-Clause License.
 # Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 
-"""Input/output checkpointing.
-
-Modified copy of ``megatron/training/checkpointing.py`` (Loong-Megatron). Functions identical to upstream are
-imported from it; every local copy documents its divergence in its own docstring. Upstream keeps these bodies
-inside ``load_checkpoint`` or exposes no hook where the local additions fit, so they cannot be imported.
-"""
+"""Input/output checkpointing."""
 
 import contextlib
 import os
@@ -38,32 +33,33 @@ from megatron.training.async_utils import is_empty_async_queue, schedule_async_s
 from megatron.training.global_vars import get_args
 from megatron.training.one_logger_utils import on_save_checkpoint_start, on_save_checkpoint_success
 from megatron.training.utils import append_to_progress_log, is_last_rank, print_rank_0, unwrap_model
+
+# Identical to upstream, so imported.
 from megatron.training.checkpointing import (
-    get_checkpoint_version,
-    set_checkpoint_version,
-    isfile,
-    ensure_directory_exists,
-    get_load_checkpoint_path_by_args,
-    get_distributed_optimizer_checkpoint_name,
-    get_checkpoint_tracker_filename,
-    checkpoint_exists,
     CheckpointType,
+    _build_sharded_state_dict_metadata,
     _get_checkpoint_format,
-    _to_dtensor,
-    cleanup_old_non_persistent_checkpoint,
     _get_non_persistent_iteration,
     _load_global_dist_base_checkpoint,
-    # Identical to upstream, so imported.
-    check_checkpoint_args,
-    get_checkpoint_name,
-    find_checkpoint_rank_0,
-    read_metadata,
-    get_rng_state,
-    _build_sharded_state_dict_metadata,
-    maybe_save_dataloader_state,
-    generate_state_dict,
-    fix_query_key_value_ordering,
     _load_non_persistent_base_checkpoint,
+    _to_dtensor,
+    check_checkpoint_args,
+    checkpoint_exists,
+    cleanup_old_non_persistent_checkpoint,
+    ensure_directory_exists,
+    find_checkpoint_rank_0,
+    fix_query_key_value_ordering,
+    generate_state_dict,
+    get_checkpoint_name,
+    get_checkpoint_tracker_filename,
+    get_checkpoint_version,
+    get_distributed_optimizer_checkpoint_name,
+    get_load_checkpoint_path_by_args,
+    get_rng_state,
+    isfile,
+    maybe_save_dataloader_state,
+    read_metadata,
+    set_checkpoint_version,
 )
 
 from loongforge.models.common.peft.utils import apply_peft_adapter_filter_to_state_dict
@@ -90,11 +86,7 @@ _NON_PERSISTENT_CKPT_SUBDIR = 'non_persistent'
 
 
 def _load_model_state_dict(module, state_dict, strict: bool):
-    """Load state while retaining the TransformerEngine compatibility fallback.
-
-    Upstream defines this as the nested ``load_model_state_dict`` inside ``load_checkpoint``; the behavior is
-    the same and it is a module function here so it can be tested on its own.
-    """
+    """Load state while retaining the TransformerEngine compatibility fallback."""
     try:
         module.load_state_dict(state_dict, strict=strict)
     except Exception as e:
@@ -118,7 +110,7 @@ def load_dataloader_state(args):
     data_save_name = get_checkpoint_name(
         args.dataloader_save,
         args.iteration,
-        pipeline_rank=0,  # Only the first pipeline parallel rank stores the dataloader checkpoint.
+        pipeline_rank=0,
         basename=f"train_dataloader_dprank{dp_rank:03d}.pt",
     )
     if not os.path.exists(data_save_name):
@@ -156,9 +148,6 @@ def save_checkpoint(
 
     Checkpointing context is used to persist some checkpointing state
     throughout a single job. Must be initialized externally (not used if None).
-
-    Differs from upstream: the ``peft_class`` argument drops non-adapter weights from the state dict before
-    writing, so a PEFT run stores only the adapter.
 
     If non_persistent_ckpt is True,
     the checkpoint will be saved with special functionality for removing old checkpoints.
@@ -577,13 +566,11 @@ def _load_base_checkpoint(
     sharded_state_dict=None,
     checkpointing_context=None,
     ignore_ckpt_step: bool = False,
+    peft_class=None,
 ):
     """Load the base state_dict from the given directory
 
     If rank0 is true, just loads rank 0 checkpoint, ignoring arguments.
-
-    Differs from upstream: ``ignore_ckpt_step`` disables the ``args.ckpt_step`` override, and the two legacy
-    ``torch.load`` calls pass ``weights_only=False`` to read older checkpoint payloads.
     """
     # Try to load non-persistent checkpoint first
     non_persistent_global_dir = (
@@ -746,9 +733,6 @@ def load_checkpoint(
     peft_class=None,
 ):
     """Load a model checkpoint and return the iteration.
-
-    Differs from upstream: the ``peft_class`` argument is forwarded to ``_load_checkpoint_from_path``, and the
-    body lives there instead of here.
     strict (bool): whether to strictly enforce that the keys in
         :attr:`state_dict` of the checkpoint match the names of
         parameters and buffers in model.
@@ -796,10 +780,6 @@ def _load_checkpoint_from_path(
     peft_class=None,
 ) -> tuple[int, int]:
     """Load a checkpoint from a given path.
-
-    Upstream has no separate function: this is the body of ``load_checkpoint`` with the ``get_args()`` call and
-    the pretrained-directory switch removed. It adds ``ignore_ckpt_step`` on both base loads, the PEFT resume
-    filter of the sharded state dict, and ``strict=False`` on the model load when resuming a PEFT run.
 
     Args:
         load_dir: The directory containing the checkpoint.

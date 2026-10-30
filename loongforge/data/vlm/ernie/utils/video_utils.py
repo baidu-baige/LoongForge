@@ -44,3 +44,10 @@ def group_frame_by_video(schema):
 
     assert len(keys) == len(set(keys)), f"found duplicate keys: {keys}"
     return ret
+
+
+def is_gif(data: bytes) -> bool:
+    """
+    check if a bytes is a gif based on the magic head
+    """
+    return data[:6] in (b"GIF87a", b"GIF89a")

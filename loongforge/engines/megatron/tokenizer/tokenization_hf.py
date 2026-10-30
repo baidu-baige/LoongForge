@@ -203,4 +203,5 @@ class AutoTokenizerFromHF(MegatronLegacyTokenizer):
 
     @property
     def padding_side(self) -> str:
+        """padding side"""
         return self.tokenizer.padding_side

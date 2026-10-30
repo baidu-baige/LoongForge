@@ -1,8 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Position ID utilities for multimodal data."""
-
+"""Get position index function"""
 import torch
 from typing import Tuple
 

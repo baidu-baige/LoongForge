@@ -956,6 +956,7 @@ class HashBucketProcessor:
         if output_boxes:
             total_items = sum(len(box) for box in output_boxes)
             avg_items_per_box = total_items / len(output_boxes)
+            total_capacity_used = len(output_boxes) * box_capacity
             
             self._logger.info("Multithreaded packing completed:")
             self._logger.info(f"  Total time: {end_time - start_time:.2f} seconds")
@@ -1603,6 +1604,7 @@ class HashBucketProcessor:
                         self.key_stats[k] = len(self.hash_buckets[k])
                         
             def get_seed_item(self, seed_key: int) -> Tuple[bool, Optional[np.record]]:
+                """Get seed item"""
                 with self.lock:
                     if (seed_key in self.hash_buckets and 
                         len(self.hash_buckets[seed_key]) > 0):
@@ -2263,6 +2265,7 @@ class PackingTracker:
 
 
 def analyze_packing_history(tracker):
+    """Analyze packing history"""
     print("\n=== Detailed Analysis ===")
     
     total_boxes = sum(op['boxes_count'] for op in tracker.history)

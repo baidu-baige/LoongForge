@@ -1,6 +1,8 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
+"""preprocess sft data"""
+
 import argparse
 
 from transformers import AutoProcessor
@@ -8,7 +10,11 @@ from datasets import DatasetDict
 
 from megatron.core.datasets.utils import get_blend_from_list, Split
 
-from loongforge.data.llm.sft_dataset import SFTDatasetConfig, SFTDataset
+from loongforge.data.llm.sft_dataset import (
+    SFTDatasetConfig,
+    SFTDataset,
+    get_default_sft_dataset_config,
+)
 from loongforge.data.chat_templates.template import (
     ChatTemplate,
     HFChatTemplate,
@@ -17,11 +23,11 @@ from loongforge.data.chat_templates.template import (
 )
 from loongforge.engines.megatron.tokenizer import build_tokenizer
 from loongforge.data import IGNORE_INDEX, TrainingPhase
-from loongforge.training.megatron_args import get_default_sft_dataset_config
 from loongforge.data.llm.blended_hf_dataset_config import get_dataset_blend_from_list
 
 
 def build_sft_dataset(args):
+    """build sft dataset"""
     tokenizer = build_tokenizer(args, chat_template=args.template)
     processor = AutoProcessor.from_pretrained(args.hf_tokenizer_path, trust_remote_code=True)
     if args.image_resolution:
@@ -73,6 +79,7 @@ def build_sft_dataset(args):
 
 
 def _add_arguments(parser: argparse.ArgumentParser):
+    """Add arguments"""
     group = parser.add_argument_group(title='input-data')
     group.add_argument('--input', type=str, required=True, help='Path to input JSON')
 

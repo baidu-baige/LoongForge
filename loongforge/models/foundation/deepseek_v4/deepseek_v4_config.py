@@ -155,6 +155,7 @@ class DeepseekV4Config(BaseModelMLAConfig):
 
     # ── MTP ────────────────────────────────────────────────────────────────────
     mtp_num_layers: int = 0
+    mtp_loss_coef: float = 0.1
 
     model_spec = [
         "loongforge.models.foundation.deepseek_v4.deepseek_v4_layer_spec",

@@ -4,7 +4,7 @@
 """GR00T-N1.6 model factory for the LoongForge eval server.
 
 GR00T-N1.6 is a multi-embodiment model. Its training-side
-``Gr00tN1d6Policy.predict_action(images, instructions, state=None,
+``GrootN1d6Policy.predict_action(images, instructions, state=None,
 dataset_stats=None)`` already matches the shared eval contract, so this factory
 only:
 
@@ -69,10 +69,10 @@ class Gr00tN1d6ModelFactory:
         model_cfg: Gr00tN1d6ModelConfig,
         server_args: EvalServerArgs,
     ) -> PredictActionModelSpec:
-        """Create Gr00tN1d6Policy and return it with eval metadata.
+        """Create GrootN1d6Policy and return it with eval metadata.
 
         Args:
-            model_cfg: Typed Gr00tN1d6ModelConfig resolved from the YAML ``model:``.
+            model_cfg: Typed GrootN1d6ModelConfig resolved from the YAML ``model:``.
             server_args: Typed EvalServerArgs with runtime/infra options.
         """
         import torch
@@ -91,7 +91,7 @@ class Gr00tN1d6ModelFactory:
             else "cpu"
         )
 
-        # Builds Gr00tN1d6Policy (loads the Eagle backbone from model_cfg.model_name).
+        # Builds GrootN1d6Policy (loads the Eagle backbone from model_cfg.model_name).
         model = build_model(model_cfg)
         if not server_args.random_init:
             model.load_pretrained(pretrained_path, device=resolved_device)
@@ -127,7 +127,7 @@ class Gr00tN1d6ModelFactory:
 
             def _predict_action_truncate(images, instructions, state=None, dataset_stats=None, **kwargs):
                 # Extra eval payload keys (cfg_scale, unnorm_key, ...) are swallowed
-                # here and NOT forwarded: Gr00tN1d6Policy.predict_action does not
+                # here and NOT forwarded: GrootN1d6Policy.predict_action does not
                 # consume them.
                 result = _orig_predict_action(
                     images, instructions, state=state, dataset_stats=dataset_stats

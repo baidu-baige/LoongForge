@@ -17,7 +17,7 @@ from unittest.mock import patch
 import pytest
 import torch
 
-from loongforge.data.vlm.base.task_encoder import (
+from loongforge.data.multimodal.base.task_encoder import (
     BaseTaskEncoder,
     BaseTaskSample,
     BaseTaskSamplePacked,
@@ -34,9 +34,9 @@ _ACCEPTS_SUBFLAVOR = "__subflavor__" in inspect.signature(
 
 
 def make_encoder(seq_length: int = 64) -> BaseTaskEncoder:
-    """Build an encoder carrying only the config the packing method needs."""
+    """Build an encoder carrying only the args the packing method needs."""
     encoder = BaseTaskEncoder.__new__(BaseTaskEncoder)
-    encoder.config = SimpleNamespace(seq_length=seq_length)
+    encoder.args = SimpleNamespace(seq_length=seq_length)
     return encoder
 
 
@@ -183,7 +183,7 @@ def test_pack_energon_subflavor_branch(needs_subflavor):
     sample = make_sample("s1", [1, 2], [1, 2], [True, True])
 
     with patch(
-        "loongforge.data.vlm.base.task_encoder._ENERGON_NEEDS_SUBFLAVOR",
+        "loongforge.data.multimodal.base.task_encoder._ENERGON_NEEDS_SUBFLAVOR",
         needs_subflavor,
     ):
         packed = encoder.pack_selected_samples([sample])

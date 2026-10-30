@@ -6,7 +6,7 @@
 """LLavA-OneVision TaskEncoder class."""
 
 import re
-from typing import List, Tuple, Union, Optional, TypeVar
+from typing import Callable, List, Tuple, Union, Optional, TypeVar
 
 import numpy as np
 import torch
@@ -49,6 +49,11 @@ IMAGE_TOKEN = "<|image_pad|>"
 VIDEO_TOKEN = "<|video_pad|>"
 VISION_TAGS = ["<|vision_start|>", "<|vision_end|>"]
 IMAGE_TOKEN_WITH_TAGS = VISION_TAGS[0] + IMAGE_TOKEN + VISION_TAGS[1]
+
+
+def get_stateless(fn: Callable[..., T_sample]) -> bool:
+    """Get whether a function is stateless."""
+    return getattr(fn, "__stateless__", False)
 
 
 class LLavaOv15TaskEncoder(VLMTaskEncoder):

@@ -32,20 +32,17 @@ from megatron.training.utils import (
     get_batch_on_this_tp_rank,
     is_first_or_last_pipeline_stage,
     get_next_batch_on_this_tp_rank,
+    print_rank_0,
 )
 from megatron.core.utils import get_attr_wrapped_model
 from megatron.core import parallel_state
 from megatron.core.transformer.multi_token_prediction import mtp_on_this_rank, get_mtp_ranks
 
-from megatron.training.utils import print_rank_0
-from loongforge.engines.megatron import get_args, get_tokenizer
+from loongforge.engines.megatron import get_args, get_model_config, get_tokenizer
 
 
 from loongforge.models.foundation.llm_model_provider import llm_model_provider
 from loongforge.engines.megatron.runner import pretrain
-
-from loongforge.engines.megatron.utils.global_vars import get_model_config
-
 
 stimer = StragglerDetector()
 

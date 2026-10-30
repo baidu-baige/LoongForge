@@ -3,18 +3,20 @@
 
 """Contract tests for the sensitive-information scanner's public interfaces."""
 
-import importlib.util
 from pathlib import Path
-import sys
 
 import pytest
 
-MODULE_PATH = Path(__file__).resolve().parents[1] / "ci" / "sensitive_scan.py"
-SPEC = importlib.util.spec_from_file_location("sensitive_scan", MODULE_PATH)
-assert SPEC and SPEC.loader
-sensitive_scan = importlib.util.module_from_spec(SPEC)
-sys.modules["sensitive_scan"] = sensitive_scan
-SPEC.loader.exec_module(sensitive_scan)
+from tests.ci_test_utils import load_module
+
+
+MODULE_PATH = (
+    Path(__file__).resolve().parents[1]
+    / ".github"
+    / "scripts"
+    / "sensitive_scan.py"
+)
+sensitive_scan = load_module("sensitive_scan", MODULE_PATH)
 
 
 def _email() -> str:
@@ -109,3 +111,69 @@ def test_path_filter_outside_repository_is_rejected(tmp_path):
     with pytest.raises(SystemExit) as exc:
         sensitive_scan.normalize_path_filters([str(tmp_path.parent)], str(tmp_path))
     assert exc.value.code == 2
+
+
+def _runner_proxy_line(endpoint: str, protocol: str = "HTTP") -> str:
+    return (
+        f"Runner is running behind proxy server '{endpoint}' "
+        f"for all {protocol} requests."
+    )
+
+
+@pytest.mark.parametrize("protocol", ["HTTP", "HTTPS"])
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "http://proxy.example.invalid:8080",
+        "https://proxy.example.invalid:8443",
+        "http://operator:example-password@proxy.example.invalid:8080",
+        "http://operator:example%40password@proxy.example.invalid:8080",
+        "http://operator:example%3Apassword@proxy.example.invalid:8080",
+    ],
+)
+def test_runner_startup_proxy_is_detected_without_reprinting_endpoint(
+    endpoint, protocol, capsys
+):
+    rules = sensitive_scan.compile_rules(None)
+    findings = sensitive_scan.scan_text(
+        rules,
+        sensitive_scan.compile_allowlist(),
+        "job.log",
+        ["2026-01-01T00:00:00Z " + _runner_proxy_line(endpoint, protocol)],
+        "job.log",
+    )
+
+    assert len(findings) == 1
+    assert findings[0].rule == "runner-proxy-disclosure"
+    assert findings[0].severity == "error"
+    assert endpoint not in findings[0].snippet
+    assert "proxy.example.invalid" not in findings[0].snippet
+    assert "example-password" not in findings[0].snippet
+    sensitive_scan.report_ci_summary(findings, strict=True)
+    output = capsys.readouterr().out
+    assert "runner-proxy-disclosure (1)" in output
+    assert endpoint not in output
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "***",
+        "http://***:8080",
+        "http://127.0.0.1:8080",
+        "http://localhost:8080",
+        "http://[::1]:8080",
+        "http://operator:example%40password@127.0.0.1:8080",
+        "http://operator:example%40password@localhost:8080",
+        "http://operator:example%40password@[::1]:8080",
+    ],
+)
+def test_masked_and_loopback_runner_proxies_are_allowed(endpoint):
+    findings = sensitive_scan.scan_text(
+        sensitive_scan.compile_rules(None),
+        sensitive_scan.compile_allowlist(),
+        "job.log",
+        [_runner_proxy_line(endpoint)],
+        "job.log",
+    )
+    assert findings == []

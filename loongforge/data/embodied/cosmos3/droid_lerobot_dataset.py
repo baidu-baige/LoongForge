@@ -33,8 +33,9 @@ Each ``__getitem__`` returns a raw sample dict::
         "idle_frames":       Tensor[long] scalar,
     }
 
-:mod:`loongforge.data.embodied.cosmos3.transforms.cosmos3_transform` pads ``action`` to
-``max_action_dim``, builds the ``sequence_plan``, and tokenizes the caption.
+A separate :mod:`cosmos3_action_transform` is responsible for padding
+``action`` to ``max_action_dim``, building the ``sequence_plan``, and
+tokenizing the caption.
 """
 
 from __future__ import annotations
@@ -90,9 +91,9 @@ _CONCAT_VIEW_DESCRIPTION = (
 
 # Verbatim copy of cosmos_framework/data/vfm/action/domain_utils.py's
 # ``EMBODIMENT_TO_DOMAIN_ID`` registry. Keeping it inline avoids depending on
-# cosmos at import time and keeps the mapping deterministic across runs; a
-# stable mapping is used because Python's str hash is randomized via
-# ``PYTHONHASHSEED``.
+# cosmos at import time and keeps the mapping deterministic across runs (the
+# previous ``hash(name) % 32`` implementation was non-deterministic because
+# Python's str hash is randomized via ``PYTHONHASHSEED``).
 _EMBODIMENT_TO_DOMAIN_ID: Dict[str, int] = {
     "no_action": 0,
     "av": 1,
@@ -218,7 +219,7 @@ def compose_concat_view(stack: torch.Tensor, n: int, m: int) -> torch.Tensor:
 
     ``stack`` is the crop/resized ``[3T,C,H,W]`` stack, ``n``/``m`` the wrist and
     wrist+left split points. Module-level so the deferred pipeline in
-    ``cosmos3_collator`` runs the exact same tail as the in-worker path.
+    ``cosmos3_preprocessor`` runs the exact same tail as the in-worker path.
     """
     wrist, left, right = stack[:n], stack[n:m], stack[m:]
     _, _, h_w, w_w = wrist.shape
@@ -303,11 +304,12 @@ class DROIDLeRobotDataset(Dataset):
         self._domain_id = _domain_id_from_name(domain_name)
         self._video_backend = video_backend
         self._use_image_augmentation = use_image_augmentation
+        self._colorjitter_on_gpu = bool(colorjitter_on_gpu)
         # When ColorJitter runs on the model device, the dataset stops right after
         # crop/resize and ships the 3-view stack; ColorJitter and everything after it
         # run in the deferred pipeline, so the augmentation keeps its pipeline slot.
         self._defer_video_tail = bool(use_image_augmentation and colorjitter_on_gpu)
-        # Set from DataRuntime.deterministic in the main process and pickled
+        # Set from training_args.deterministic_mode in the main process and pickled
         # into workers; torch.are_deterministic_algorithms_enabled() is False inside
         # spawned DataLoader workers, so we cannot rely on it here.
         self._deterministic = bool(deterministic)
@@ -568,8 +570,9 @@ class DROIDLeRobotDataset(Dataset):
 def build_droid_dataset(model_cfg, data_cfg, training_args, runtime) -> DROIDLeRobotDataset:
     """Dataset strategy ``cosmos3_droid`` (see ``DATASET_STRATEGIES`` in ``registry.py``).
 
-    Reads the chunk length, fps, video backend and augmentation flags from
-    ``data_cfg`` (``Cosmos3DataConfig``).
+    Reads the chunk length from ``model_cfg.cosmos3.action_chunk_length`` (with
+    a CLI override via ``args.action_chunk_length``) and falls back to 32, the
+    canonical DROID action-policy length.
     """
     return DROIDLeRobotDataset(
         root=training_args.dataset_path,

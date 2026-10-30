@@ -16,6 +16,7 @@ logger = create_color_logger(name=__name__)
 import glob
 
 class PrecessDataCheckTask(BaseTask):
+    """PrecessDataCheckTask"""
     def __init__(self,
                  model_description: Dict[str, Any],
                  task_description: Dict[str, Any],
@@ -167,6 +168,8 @@ class PrecessDataCheckTask(BaseTask):
 
         # Data preprocessing
         model_name = self.model_name
+        node_nums = self.input_cmd_args.node_nums
+        timeout = self.input_cmd_args.timeout
         scripts_root_path = model_config["scripts_root_path"]
         model_lock_file_path = model_config["model_lock_file_path"]
         training_log_path = model_config["training_log_path"]

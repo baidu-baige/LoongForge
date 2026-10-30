@@ -33,3 +33,4 @@ class PackedMultiMixQASample(Sample):
     videos: Optional[List[list[AVData]]]
     contexts: List[List[str]]
     answers: List[List[str]]
+    answer_weights: Optional[List[torch.Tensor]] = None

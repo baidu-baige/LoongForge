@@ -3,6 +3,7 @@
 
 """FastWAM collator for LoongForge embodied dataloaders."""
 
+import sys
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,6 +13,18 @@ import torch
 
 from loongforge.data.embodied.transforms.collator import BaseCollator, PreparedBatch
 from loongforge.data.embodied.registry import register_collator
+
+
+def _ensure_fastwam_on_path() -> None:
+    """Insert the FastWAM ``src`` directory into ``sys.path`` if present."""
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        candidate = parent / "FastWAM" / "src"
+        if candidate.is_dir():
+            path = str(candidate)
+            if path not in sys.path:
+                sys.path.insert(0, path)
+            return
 
 
 def _model_id_to_enc_id(model_id: str) -> str:
@@ -55,7 +68,7 @@ class FastWAMCollator(BaseCollator):
     """Collate LeRobot-style samples into upstream FastWAM sample dicts."""
 
     def __init__(self, model_cfg: Any, data_cfg: Any):
-        """Initialize collator from typed FastWAMConfig and FastWAMDataConfig."""
+        """Initialize preprocessor from typed FastWAMConfig and FastWAMDataConfig."""
         self.cfg = model_cfg
         self.data_cfg = data_cfg
         self.context_len = model_cfg.tokenizer_max_len

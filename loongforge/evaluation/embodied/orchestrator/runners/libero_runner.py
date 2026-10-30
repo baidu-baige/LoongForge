@@ -65,6 +65,7 @@ def _render_resolution(args: argparse.Namespace) -> int:
 
 
 def _get_libero_env(task, resolution: int, seed: int):
+    """Run _get_libero_env."""
     from libero.libero import get_libero_path
     from libero.libero.envs import OffScreenRenderEnv
 
@@ -79,6 +80,7 @@ def _get_libero_env(task, resolution: int, seed: int):
 
 
 def _extract_primary_frame(obs: Dict[str, Any]) -> np.ndarray:
+    """Run _extract_primary_frame."""
     return np.ascontiguousarray(obs["agentview_image"][::-1, ::-1])
 
 
@@ -118,6 +120,7 @@ def close_cached_env() -> None:
 def _save_replay(
     frames: List[np.ndarray], output_dir: str, task_suite: str, task_id: int, episode_idx: int, success: bool
 ) -> Optional[str]:
+    """Run _save_replay."""
     if not frames:
         return None
     status = "success" if success else "fail"
@@ -128,6 +131,7 @@ def _save_replay(
 def _save_trace(
     trace: List[Dict[str, Any]], output_dir: str, task_suite: str, task_id: int, episode_idx: int, success: bool
 ) -> Optional[str]:
+    """Run _save_trace."""
     if not trace:
         return None
     status = "success" if success else "fail"
@@ -156,6 +160,7 @@ def _build_rpc_payload(
 
 
 def _env_step(env, action, timeout_sec: float):
+    """Run _env_step."""
     with alarm_timeout(timeout_sec, StepTimeoutError):
         return env.step(action)
 
@@ -178,6 +183,7 @@ def _failure_record(
     replay_path: Optional[str] = None,
     trace_path: Optional[str] = None,
 ) -> Dict[str, Any]:
+    """Run _failure_record."""
     return {
         "benchmark": "libero",
         "task_suite": task_suite_name,
@@ -216,6 +222,7 @@ def _failure_record(
 
 
 def _classify_exception(exc: Exception) -> str:
+    """Run _classify_exception."""
     if isinstance(exc, EpisodeTimeoutError):
         return "episode_timeout"
     if isinstance(exc, StepTimeoutError):
@@ -241,6 +248,7 @@ def run_episode(
     initial_state: Any,
     args: argparse.Namespace,
 ) -> Dict[str, Any]:
+    """Run run_episode."""
     env_seed_mode = str(getattr(args, "env_seed_mode", "per_episode"))
     if env_seed_mode == "per_task":
         # Official semantics: seed once per task (process), env reused across trials.
@@ -497,6 +505,7 @@ def _manifest_protocol(args: argparse.Namespace) -> Dict[str, Any]:
 
 
 def run_batch(args: argparse.Namespace) -> Dict[str, Any]:
+    """Run run_batch."""
     os.environ.setdefault("MUJOCO_GL", "egl")
     os.environ.setdefault("PYOPENGL_PLATFORM", "egl")
 
@@ -667,6 +676,7 @@ def _resolve_libero_use_delta(args: Any, action_decoder_key: str = "") -> bool:
 
 
 def build_argparser() -> argparse.ArgumentParser:
+    """Run build_argparser."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=10093)
@@ -747,6 +757,7 @@ def build_argparser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    """Run main."""
     args = build_argparser().parse_args()
     summary = run_batch(args)
     print(json.dumps(summary, ensure_ascii=False, indent=2))

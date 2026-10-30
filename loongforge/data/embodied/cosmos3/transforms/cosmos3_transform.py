@@ -28,7 +28,7 @@ feed ``Cosmos3._forward_raw_video_with_action``:
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 import torchvision.transforms.functional as transforms_F
@@ -248,11 +248,19 @@ class Cosmos3ActionTransform(BaseTransform):
         action_chunk_length: int = 32,
         temporal_compression: int = 4,
         cfg_dropout_rate: float = 0.0,
+        # Backwards-compat aliases used by older configs/tests:
+        target_h: Optional[int] = None,
+        target_w: Optional[int] = None,
     ) -> None:
         super().__init__(apply_to=["video", "action", "ai_caption"], training=True)
         self.max_text_tokens = max_text_tokens
         self.max_action_dim = max_action_dim
         self.resolution = str(resolution)
+        if target_h is not None or target_w is not None:
+            # Old single-square (480, 480) callers: keep map to "480" tier.
+            # The actual closest aspect bucket is selected per-sample via
+            # find_closest_target_size; target_h/target_w are no longer used.
+            pass
         self.action_chunk_length = int(action_chunk_length)
         self.temporal_compression = int(temporal_compression)
         self.cfg_dropout_rate = float(cfg_dropout_rate)

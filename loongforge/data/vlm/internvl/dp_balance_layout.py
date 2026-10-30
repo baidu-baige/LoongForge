@@ -51,7 +51,7 @@ def depack_data_for_intern_vl(
 
     Assumptions:
         - attention_mask encodes cumulative token offsets
-        - img_context_token_id marks image-token regions
+        - IMG_CONTEXT_TOKEN marks image-token regions
         - image tokens map to pixel_values in fixed chunks (heuristic-based)
 
     Note:
@@ -154,13 +154,15 @@ def pack_data_for_intern_vl(
     data_sample_list: List[InternVLDataSample],
 ) -> Dict[str, Any]:
     """
-    Pack InternVL samples into a model-ready batch dictionary.
+    Pack a list of InternVLDataSample objects into model-ready batch tensors.
 
     Notes:
         - This function ONLY performs local tensor packing.
         - It does NOT execute forward/backward, nor any DP/SP communication.
+        - The returned tuple is the final packed batch representation.
+
     Returns:
-        Dict[str, Any]: packed batch data used directly by the model.
+        Tuple[Any, ...]: packed batch data used directly by the model.
     """
     pixel_values_list = []
     image_flags_list = []
@@ -222,24 +224,29 @@ def pack_data_for_intern_vl(
     return batch_data
 
 
+def reconstruct_llm_for_internvl(tensor):
+    """Reshape packed LLM tensors to (1, seq_len) for InternVL."""
+    return tensor.reshape(1, -1)
+
+
+def reconstruct_image_flags_for_internvl(tensor):
+    """Image flag metadata; no reconstruction needed."""
+    return tensor
+
+
+def reconstruct_pixel_values_for_internvl(tensor, img_size):
+    """Reshape flattened pixels to (N, 3, H, W) using img_size."""
+    return tensor.reshape(-1, 3, img_size, img_size)
+
+
 def reorder_data_for_internvl(data, ctx, *, img_size, img_context_token_id):
     """
-    Reorder data across DP ranks for InternVL models.
+    Depack a packed VLM batch into per-sample VLMDataSample list.
 
-    This function performs load balancing for InternVL models by:
-    1. Depacking the data into individual samples
-    2. Computing optimal redistribution plan
-    3. Redistributing samples across DP ranks
-    4. Repacking the redistributed samples
-
-    Args:
-        data: Packed data batch from InternVL dataloader.
-        ctx: Gather, plan and redistribution helpers from the engine.
-        img_size: Side length of one image tile (``--force-image-size``).
-        img_context_token_id: Token id of ``<IMG_CONTEXT>``.
-
-    Returns:
-        Reordered data batch with samples redistributed across DP ranks.
+    Assumptions:
+      - tokens / labels / masks are packed along seq dim
+      - images / videos are concatenated in sample order
+      - cu_lengths defines text boundaries
     """
     local_sample_list = depack_data_for_intern_vl(data, img_size, img_context_token_id)
     local_pixel_values = []
@@ -270,21 +277,21 @@ def reorder_data_for_internvl(data, ctx, *, img_size, img_context_token_id):
     # dimensions, gather once and reuse to avoid redundant all_gather calls.
     llm_gathered = ctx.gather(local_input_ids)
     redistributed_input_ids = ctx.redistribute(
-        local_input_ids, dp_reorder_plan, llm_gathered, _reconstruct_llm,
+        local_input_ids, dp_reorder_plan, llm_gathered, reconstruct_llm_for_internvl,
     )
     redistributed_labels = ctx.redistribute(
-        local_labels, dp_reorder_plan, llm_gathered, _reconstruct_llm,
+        local_labels, dp_reorder_plan, llm_gathered, reconstruct_llm_for_internvl,
     )
     redistributed_loss_weights = ctx.redistribute(
-        local_loss_weights, dp_reorder_plan, llm_gathered, _reconstruct_llm,
+        local_loss_weights, dp_reorder_plan, llm_gathered, reconstruct_llm_for_internvl,
     )
 
     # pixel_values and image_flags have different element counts, gather separately
     redistributed_pixel_values = ctx.redistribute_grouped(
-        local_pixel_values, dp_reorder_plan, partial(_reconstruct_pixel_values, img_size=img_size),
+        local_pixel_values, dp_reorder_plan, partial(reconstruct_pixel_values_for_internvl, img_size=img_size),
     )
     redistributed_image_flags = ctx.redistribute_grouped(
-        local_image_flags, dp_reorder_plan, _reconstruct_image_flags,
+        local_image_flags, dp_reorder_plan, reconstruct_image_flags_for_internvl,
     )
 
     redistributed_samples = []
@@ -300,21 +307,6 @@ def reorder_data_for_internvl(data, ctx, *, img_size, img_context_token_id):
 
     new_data = pack_data_for_intern_vl(redistributed_samples)
     return new_data
-
-
-def _reconstruct_llm(tensor):
-    """Reshape packed LLM tensors to (1, seq_len) for InternVL."""
-    return tensor.reshape(1, -1)
-
-
-def _reconstruct_image_flags(tensor):
-    """Image flag metadata; no reconstruction needed."""
-    return tensor
-
-
-def _reconstruct_pixel_values(tensor, img_size):
-    """Reshape flattened pixels to (N, 3, H, W) using img_size."""
-    return tensor.reshape(-1, 3, img_size, img_size)
 
 
 def internvl_cumulative_lengths(micro_batch):

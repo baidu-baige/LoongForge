@@ -369,8 +369,9 @@ class HDF5VLADataset(Dataset):
         """
         Return a lightweight metadata object for downstream compatibility.
 
-        Produces a simple namespace with ``stats``: action statistics as tensors
-        (mirrors ``dataset_statistics``).
+        Produces a simple namespace with:
+        * ``stats``: action statistics as tensors (mirrors ``dataset_statistics``).
+        * ``camera_keys``: list of HDF5 observation keys used for images.
         """
         class _Meta:
             pass
@@ -380,6 +381,7 @@ class HDF5VLADataset(Dataset):
             k: {sk: torch.as_tensor(sv) for sk, sv in v.items()}
             for k, v in self._stats.items()
         }
+        m.camera_keys = self.observation_keys
         return m
 
     # ----------------------------------------------------------- indexing
@@ -599,7 +601,7 @@ class HDF5VLADataset(Dataset):
 
 
 # ═══════════════════════════════════════════════════════════════
-# Builder
+# Builder (called by data/__init__.py)
 # ═══════════════════════════════════════════════════════════════
 
 def build_hdf5_dataset(model_cfg, data_cfg, training_args, runtime) -> Dataset:

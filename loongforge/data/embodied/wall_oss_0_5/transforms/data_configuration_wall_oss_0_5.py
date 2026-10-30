@@ -35,6 +35,7 @@ class WallOss05DataConfig:
     )
     padding_side: str = "left"
     use_fast_tokenizer: bool = False
+    action_tokenizer_path: Optional[str] = None
     noise_scheduler: Dict = field(default_factory=dict)
     priority_order: Optional[Dict[str, float]] = None
     camera_name_mapping: Optional[Dict[str, str]] = None

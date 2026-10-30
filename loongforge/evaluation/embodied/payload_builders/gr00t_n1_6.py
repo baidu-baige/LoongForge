@@ -182,13 +182,13 @@ class Gr00tN1d6PayloadBuilder(PayloadBuilder):
         raise ValueError(f"Unsupported gr00tn1d6 state_encoding: {self.state_encoding!r}")
 
     def build(self, canonical: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:
-        """Return the kwargs consumed by ``Gr00tN1d6Policy.predict_action``."""
+        """Return the kwargs consumed by ``GrootN1d6Policy.predict_action``."""
         images = _pack_images(canonical["images"])
         if self.state_encoding == "simpler_widowx":
             # Official WidowXBridgeEnv resizes the view to 256x256 before the
             # model. The remaining letterbox-pad + 95%-center-crop step (matching
             # Gr00tN1d6Processor.eval_image_transform) is applied inside
-            # Gr00tN1d6Policy.predict_action, not here — see modeling_gr00t_n1_6.py.
+            # GrootN1d6Policy.predict_action, not here — see modeling_gr00t_n1_6.py.
             import cv2
 
             images = [

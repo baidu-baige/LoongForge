@@ -19,10 +19,15 @@ class WallOss05ModelConfig:
     attn_deterministic: Optional[bool] = True
     use_selective_recompute: bool = False
     disable_train_autocast: bool = False
+    use_ema: bool = False
     flow_loss_weight: float = 1.0
     ar_loss_weight: float = 0.01
 
     # Optional tokenizer extension path for AR/token action variants.
+    action_tokenizer_type: Optional[str] = None
+    action_tokenizer_path: Optional[str] = None
+    action_tokenizer_checkpoint_path: Optional[str] = None
+    action_tokenizer_config_dir: Optional[str] = None
     new_special_tokens: Optional[List[str]] = None
     action_tokenizer: Dict[str, Any] = field(default_factory=dict)
 
@@ -58,8 +63,10 @@ class WallOss05ModelConfig:
 
     @property
     def action_dim(self) -> int:
+        """Action dim."""
         return int(sum(self.dof_config.values()))
 
     @property
     def propri_dim(self) -> int:
+        """Propri dim."""
         return int(sum(self.agent_pos_config.values()))

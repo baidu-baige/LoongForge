@@ -4,9 +4,9 @@
 """PayloadBuilder registry.
 
 Mirrors ``factories/registry.py`` — decorator-based registration plus a hard
-coded auto-import list. ``tests/embodied/evaluation/test_payload_builder.py``
-asserts ``set(MODEL_FACTORY_REGISTRY) == set(PAYLOAD_BUILDER_REGISTRY)`` so a
-Factory without a matching PayloadBuilder (or vice-versa) is caught early.
+coded auto-import list. Orchestrator asserts ``set(MODEL_FACTORY_REGISTRY) ==
+set(PAYLOAD_BUILDER_REGISTRY)`` at startup so a Factory without a matching
+PayloadBuilder (or vice-versa) fails fast.
 """
 
 from __future__ import annotations
@@ -72,3 +72,9 @@ def build_payload_builder(
         )
     cls = PAYLOAD_BUILDER_REGISTRY[model_type]
     return cls(yaml_model=yaml_model, yaml_server=yaml_server, yaml_benchmark=yaml_benchmark)
+
+
+def registered_model_types() -> set:
+    """Return the set of currently registered PayloadBuilder model types."""
+    _auto_import_payload_builder_modules()
+    return set(PAYLOAD_BUILDER_REGISTRY.keys())

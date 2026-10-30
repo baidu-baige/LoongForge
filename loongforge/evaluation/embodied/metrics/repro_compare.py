@@ -34,6 +34,7 @@ _VOLATILE_KEYS = {
 
 
 def compare_results(left_path: PathLike, right_path: PathLike) -> Dict[str, Any]:
+    """Run compare_results."""
     left = _canonical_records(load_jsonl(left_path))
     right = _canonical_records(load_jsonl(right_path))
     left_map = {_record_key(record): record for record in left}
@@ -59,6 +60,7 @@ def compare_results(left_path: PathLike, right_path: PathLike) -> Dict[str, Any]
 
 
 def write_repro_comparison(left_path: PathLike, right_path: PathLike, output_path: PathLike) -> Dict[str, Any]:
+    """Run write_repro_comparison."""
     result = compare_results(left_path, right_path)
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -67,6 +69,7 @@ def write_repro_comparison(left_path: PathLike, right_path: PathLike, output_pat
 
 
 def _canonical_records(records: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Run _canonical_records."""
     canonical = []
     for record in records:
         canonical.append({key: value for key, value in sorted(record.items()) if key not in _VOLATILE_KEYS})
@@ -87,6 +90,7 @@ def _record_key(record: Dict[str, Any]) -> Tuple[Any, ...]:
 
 
 def build_argparser() -> argparse.ArgumentParser:
+    """Run build_argparser."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--left", required=True)
     parser.add_argument("--right", required=True)
@@ -95,6 +99,7 @@ def build_argparser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    """Run main."""
     args = build_argparser().parse_args()
     result = write_repro_comparison(args.left, args.right, args.output)
     print(

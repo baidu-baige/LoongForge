@@ -16,6 +16,6 @@ def build_lingbot_va_transforms(ctx: TransformBuilderContext):
     """Return no per-sample transforms for LingBot latent datasets.
 
     The LingBot latent dataset already emits model-ready sample keys; batching is
-    owned by ``LingBotVACollator``.
+    owned by ``LingBotVAPreprocessor``.
     """
     return []

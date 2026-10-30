@@ -52,6 +52,7 @@ TRAINING_ARGS=(
     --num-latent-frames 1
     --max-latent-height $H
     --max-latent-width $W
+    --max-text-length 1024
     --seq-length $SEQ_LEN
     --max-position-embeddings $SEQ_LEN
     --init-method-std 0.02

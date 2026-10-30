@@ -3,7 +3,7 @@
 
 """sft datacollator"""
 
-from typing import TYPE_CHECKING, Optional, Union, Any
+from typing import TYPE_CHECKING, Optional, Union, Any, Dict, Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -15,8 +15,9 @@ import torch
 from loongforge.data import IGNORE_INDEX
 
 if TYPE_CHECKING:
-    from transformers import PreTrainedTokenizerBase
+    from transformers import PreTrainedTokenizerBase, ProcessorMixin
     from transformers.utils import PaddingStrategy
+    from loongforge.data.chat_templates.plugins.mm_plugin import MMPlugin
 
 
 @dataclass
@@ -166,3 +167,49 @@ class DataCollatorForSupervisedDataset:
             result["group_total_tokens"] = torch.tensor(group_total_tokens, dtype=torch.long)
 
         return result
+
+
+@dataclass
+class MultiModalDataCollatorForSupervisedDataset(DataCollatorForSupervisedDataset):
+    """Multi-modal data collator"""
+
+    processor: "ProcessorMixin" = None
+    plugin: "MMPlugin" = None
+
+    def __call__(self, features: Sequence[Dict[str, Any]]) -> Dict[str, "torch.Tensor"]:
+        batch_images, batch_videos, batch_imglens, batch_vidlens, batch_seqlens = (
+            [],
+            [],
+            [],
+            [],
+            [],
+        )
+        for feature in features:
+            images = feature.pop("images", None) or []
+            videos = feature.pop("videos", None) or []
+            batch_images.extend(images)
+            batch_videos.extend(videos)
+            batch_imglens.append(len(images))
+            batch_vidlens.append(len(videos))
+            batch_seqlens.append(len(feature["input_ids"]))
+
+        mm_inputs = self.plugin.get_mm_inputs(
+            batch_images,
+            batch_videos,
+            batch_imglens,
+            batch_vidlens,
+            batch_seqlens,
+            self.processor,
+        )
+
+        features: Dict[str, "torch.Tensor"] = super().__call__(features)
+
+        # keys are named in transformers/src/transformers/models/qwen2_vl/image_processing_qwen2_vl.py
+        if "pixel_values" in mm_inputs:
+            features["images"] = mm_inputs.get("pixel_values")
+            features["image_grid_thw"] = mm_inputs.get("image_grid_thw")
+        if "pixel_values_videos" in mm_inputs:
+            features["videos"] = mm_inputs.get("pixel_values_videos")
+            features["video_grid_thw"] = mm_inputs.get("video_grid_thw")
+
+        return features

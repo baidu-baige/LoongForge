@@ -9,9 +9,11 @@
 import torch
 
 from functools import partial
+from typing import Any, Dict
 
+from typing import List
 
-from megatron.core import mpu, tensor_parallel
+from megatron.core import mpu, tensor_parallel, parallel_state
 from megatron.core.enums import ModelType
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.utils import StragglerDetector
@@ -37,7 +39,6 @@ from loongforge.data import IGNORE_INDEX
 
 from loongforge.engines.megatron.runner import pretrain
 
-from loongforge.engines.megatron.runner import get_batch_on_this_cp_rank
 from loongforge.data.llm.blended_hf_dataset_config import get_dataset_blend_from_list
 from loongforge.engines.megatron.checkpointing import load_dataloader_state
 from loongforge.data.llm.sft_dataloader import (
@@ -326,6 +327,75 @@ def get_batch_on_this_tp_rank(data_iterator):
     return batch
 
 
+def get_batch_on_this_cp_rank(batch: Dict[str, Any]):
+    """Slice batch input along sequence dimension into multiple chunks,
+    which are parallelized across GPUs in a context parallel group.
+    """
+    cp_size = parallel_state.get_context_parallel_world_size()
+    if cp_size > 1:
+        packed_seq_params = batch.get('packed_seq_params', None)
+        cp_rank = parallel_state.get_context_parallel_rank()
+        # DSv4 CSA consumes a contiguous CP row partition (rank r owns global
+        # rows [r * l_local, (r + 1) * l_local)), matching the Megatron-LM
+        # cp_partition_mode='contiguous' contract. All other models keep TE's
+        # zigzag (load-balanced) THD layout.
+        model_config = get_model_config()
+        cp_partition_mode = (
+            'contiguous'
+            if getattr(model_config, 'csa_compress_ratios', None) is not None
+            else 'zigzag'
+        )
+        if packed_seq_params is not None:
+            packed_seq_params.cp_partition_mode = cp_partition_mode
+        for key, val in batch.items():
+            if val is not None:
+                if key == 'packed_seq_params':
+                    batch[key] = val
+                    continue
+                if key == 'composite_component_sizes':
+                    # Plain Python list, not a sequence-dim tensor — leave
+                    # untouched so the SFT scheduler can read it on every CP
+                    # rank without slicing.
+                    continue
+
+                seq_dim = 1 if key != 'attention_mask' else 2
+                if packed_seq_params is not None and packed_seq_params.qkv_format == 'thd':
+                    if cp_partition_mode == 'contiguous':
+                        total_tokens = val.shape[seq_dim]
+                        assert total_tokens % cp_size == 0, (
+                            f"Contiguous CP slicing requires total_tokens="
+                            f"{total_tokens} to be divisible by cp_size={cp_size}."
+                        )
+                        local_rows = total_tokens // cp_size
+                        batch[key] = val.narrow(
+                            seq_dim, cp_rank * local_rows, local_rows
+                        ).contiguous()
+                        continue
+                    #assert get_accelerator_backend() == "NvidiaGpu", "Only NvidiaGPU supports packed_seq_params."
+                    import transformer_engine_torch as tex
+                    # assume cu_seqlens_q == cu_seqlens_kv
+                    cu_seqlens_q = packed_seq_params.cu_seqlens_q
+                    seq_idx_val = tex.thd_get_partitioned_indices(
+                        cu_seqlens_q, val.shape[seq_dim], cp_size, cp_rank
+                    )
+                    batch[key] = val.index_select(seq_dim, seq_idx_val)
+                else:
+                    val = val.view(
+                        *val.shape[0:seq_dim],
+                        2 * cp_size,
+                        val.shape[seq_dim] // (2 * cp_size),
+                        *val.shape[(seq_dim + 1) :],
+                    )
+                    index = torch.tensor(
+                        [cp_rank, (2 * cp_size - cp_rank - 1)], device="cpu", pin_memory=True
+                    ).cuda(non_blocking=True)
+                    val = val.index_select(seq_dim, index)
+                    val = val.view(*val.shape[0:seq_dim], -1, *val.shape[(seq_dim + 2) :])
+                    batch[key] = val
+
+    return batch
+
+
 def get_batch(data_iterator):
     """Generate a batch"""
     # get batches based on the TP rank you are on
@@ -334,10 +404,11 @@ def get_batch(data_iterator):
     # slice batch along sequence dimension for context parallelism
     batch = get_batch_on_this_cp_rank(batch)
 
-    # Extract chunk_group_size into the model config for model-side code.
+    # Extract chunk_group_size into args (for scheduler) and config (for model-side code).
     args = get_args()
     if args.enable_chunkpipe and "chunk_group_size" in batch:
         group_size = batch["chunk_group_size"][0].item()
+        args.chunkpipe_current_chunk_group_size = group_size
         config = get_model_config()
         if config is not None and getattr(config, 'sft_chunkpipe_mode', False):
             # Always write chunkpipe_current_group_size from the batch data, regardless of
@@ -373,11 +444,13 @@ def get_batch(data_iterator):
                     components = batch["composite_component_sizes"]
                     if components:
                         config.chunkpipe_component_sizes = list(components)
+                        config.chunkpipe_composite_group_size = sum(components)
                     else:
                         # No composite info → fall back to trivial (single
                         # real group). Keeps behavior sane if the queues are
                         # somehow not populated (e.g. ad-hoc test paths).
                         config.chunkpipe_component_sizes = [group_size]
+                        config.chunkpipe_composite_group_size = group_size
 
         # N_g and G for the per-sample loss path. N_g is per-chunk (same value
         # for all chunks in one source sequence), G_total is per-step (same
@@ -513,7 +586,7 @@ def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor):
     #
     # The D pre-compensation symmetrically applies to the reporting tensor so
     # that the post-aggregation report (sum-across-mbs → all-reduce-sum →
-    # divide-by-DPxCP-world-size in runner) recovers the same
+    # divide-by-DPxCP-world-size in training_utils) recovers the same
     # (1/G_total) sum_g (1/N_g) sum_k S_{g,k} value. Using G_total instead of
     # G_local also fixes a latent precision bug in the equal-DP case where
     # LPT did not strictly guarantee G_local = G_total / D across ranks.
@@ -528,7 +601,7 @@ def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor):
 
         denom = N_g * G_total * cp
         scaled = loss * (D * M_raw / denom)
-        # Pre-compensate D*cp for the all_reduce + divide by (D*cp) in runner.py.
+        # Pre-compensate D*cp for the all_reduce + divide by (D*cp) in training_utils.py.
         # Without cp factor, the logged loss would be 1/cp times smaller than correct value.
         reporting = (D * cp * loss / (N_g * G_total)).detach()
         loss_reduced_dict = {'lm loss': reporting}
@@ -539,7 +612,7 @@ def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor):
     # With context parallelism each CP rank only sees a shard of every sample,
     # and a contiguous-CP shard can contain zero valid tokens (all supervised
     # tokens live on the other rank). Reporting the local [S, n] pair would
-    # then make runner compute S/n = 0/0 = NaN and silently drop
+    # then make training_utils compute S/n = 0/0 = NaN and silently drop
     # 'lm loss' from the log line. Aggregate the reporting pair across the CP
     # group first (same as Megatron-LM's loss_func) so downstream reporting
     # always divides whole-sample sums. The backward `loss` and the returned
@@ -696,9 +769,9 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
         is_built_on_rank=lambda: mpu.get_tensor_model_parallel_rank() == 0,
         config=config,
         vp_rank=mpu.get_virtual_pipeline_model_parallel_rank(),
-        distributed=mpu.get_world_size() > 1,
-        is_global_rank_0=mpu.get_rank() == 0,
-        global_rank=mpu.get_rank(),
+        distributed=torch.distributed.is_initialized(),
+        is_global_rank_0=torch.distributed.get_rank() == 0,
+        global_rank=torch.distributed.get_rank(),
     ).build()
 
     # will use external dataloader type for sft

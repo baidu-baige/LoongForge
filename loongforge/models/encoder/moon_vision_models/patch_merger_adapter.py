@@ -144,16 +144,6 @@ class KimiK3PatchMerger(BaseMegatronModule):
     def forward(
         self, x: Union[torch.Tensor, list, tuple], window_index=None
     ) -> torch.Tensor:
-        """Merge each 2x2 patch group and project it to the language hidden size.
-
-        Args:
-            x: Vision features as one tensor, or a list or tuple with one tensor per image.
-            window_index: Unused; kept for interface compatibility with other projectors.
-
-        Returns:
-            The projected features. A list input returns a list split by the original
-            per-image lengths.
-        """
         del window_index
         if isinstance(x, (list, tuple)):
             lengths = [item.shape[0] for item in x]

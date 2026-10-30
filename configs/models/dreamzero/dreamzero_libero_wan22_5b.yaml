@@ -17,6 +17,7 @@ model:
 
   # State/action padding
   max_state_dim: 64
+  action_loss_embodiment_ids: [21]
 
   # Checkpoint paths
   text_encoder_pretrained_path: ${oc.env:WAN22_CKPT_DIR}/models_t5_umt5-xxl-enc-bf16.pth

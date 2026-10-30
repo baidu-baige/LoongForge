@@ -60,6 +60,8 @@ class PayloadBuilder:
                 if key in source:
                     setattr(self, key, source[key])
         self._yaml_model = yaml_model
+        self._yaml_server = yaml_server
+        self._yaml_benchmark = yaml_benchmark
 
     @classmethod
     def _collect_annotated_fields(cls) -> set:
@@ -69,6 +71,8 @@ class PayloadBuilder:
             names.update(getattr(klass, "__annotations__", {}) or {})
         # Do not treat internal fields as YAML-overridable.
         names.discard("_yaml_model")
+        names.discard("_yaml_server")
+        names.discard("_yaml_benchmark")
         return names
 
     # ------------------------------------------------------------------

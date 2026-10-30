@@ -16,3 +16,4 @@ class PackedVQASample(Sample):
     images: List[torch.Tensor]
     contexts: List[str]
     answers: Optional[List[List[str]]] = None
+    answer_weights: Optional[List[torch.Tensor]] = None

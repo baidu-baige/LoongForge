@@ -107,6 +107,15 @@ def _create_lingbot_block_mask(mask, total_length, device, block_size):
     )
 
 
+def _run_compiled_self_flex_attention(query, key, value, block_mask):
+    if _SELF_FLEX_DIVISIBLE_COMPILED_SELF_FLEX is None:
+        raise RuntimeError("compiled FlexAttention is unavailable")
+    with _self_flex_patch_scope():
+        return _SELF_FLEX_DIVISIBLE_COMPILED_SELF_FLEX(
+            query, key, value, block_mask
+        )
+
+
 def _candidate_compile(function):
     compiler = getattr(torch, "compile", None)
     if compiler is None:
@@ -215,6 +224,7 @@ class WanRotaryPosEmbed(nn.Module):
             "w_freqs_base", self._frequency_base(w_dim, theta), persistent=False
         )
         self._frequency_cache = {}
+        self._compiled_frequency_forward = None
 
     @staticmethod
     def _frequency_base(dim: int, theta: float):

@@ -172,6 +172,6 @@ The current `configs/models` directory already mirrors this plug-and-play compon
 
 * `image_encoder/`: vision encoder configs  
 * `image_projector/`: projector configs  
-* `llama3/`, `qwen2/`, `deepseek2/`, etc.: LLM backbone configs  
+* `llama3/`, `qwen2/`, `deepseek_v2/`, etc.: LLM backbone configs
 
 With this approach, building a multimodal large model is as easy as snapping LEGO bricks together.

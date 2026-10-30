@@ -12,7 +12,7 @@ import copy
 
 from megatron.training import get_timers
 
-from typing import List
+from typing import Dict, List
 from megatron.core.transformer.multi_token_prediction import get_mtp_ranks
 
 from megatron.core import mpu, tensor_parallel
@@ -27,8 +27,7 @@ from transformers import DataCollatorForSeq2Seq
 from loongforge.data import TrainingPhase
 from loongforge.engines.megatron import get_args, get_chat_template, get_model_config, get_tokenizer
 
-from loongforge.engines.megatron.runner import dump_model_input_example_once
-from loongforge.engines.megatron.runner import pretrain
+from loongforge.engines.megatron.runner import dump_model_input_example_once, pretrain
 from loongforge.data.llm.sft_dataloader import (
     SFTLoaderConfig,
     build_full_hetero_encoder_data_iterator,
@@ -54,11 +53,11 @@ from loongforge.models.omni_models.omni_model_provider import (
     omni_model_provider,
 )
 from loongforge.engines.megatron import full_hetero_cpu_offload
-from loongforge.engines.megatron.dp_balance.rebalance.layout import (
+from loongforge.data.dp_balance.rebalance.layout import (
     BatchLayout,
     install_batch_layout,
 )
-from loongforge.engines.megatron.runner import get_batch_on_this_cp_rank
+from loongforge.models.omni_models.utils import get_inputs_on_this_cp_rank
 from loongforge.engines.megatron.get_loss_func import default_loss_func
 from loongforge.engines.megatron.initialize import (
     change_parallel_state,
@@ -180,6 +179,27 @@ def get_batch_on_this_tp_rank(data_iterator):
     return batch
 
 
+def get_batch_on_this_cp_rank(batch: Dict):
+    """slice batch along sequence dimension for context parallelism"""
+    # TODO: Currently only split labels and loss_mask, may split other parameters in the future
+    args = get_args()
+
+    if args.context_parallel_size > 1:
+        labels = batch.get('labels', None)
+        loss_mask = batch.get('loss_mask', None)
+        packed_seq_params = batch.get('packed_seq_params', None)
+
+        assert labels is not None and loss_mask is not None, "labels and loss_mask must in batch"
+
+        labels = get_inputs_on_this_cp_rank(labels.transpose(0, 1), packed_seq_params).transpose(0, 1)
+        loss_mask = get_inputs_on_this_cp_rank(loss_mask.transpose(0, 1), packed_seq_params).transpose(0, 1)
+
+        batch['labels'] = labels
+        batch['loss_mask'] = loss_mask
+
+    return batch
+
+
 def get_batch(data_iterator):
     """Generate a batch"""
 
@@ -222,9 +242,9 @@ def _reset_step_state():
     _vpp_counters.clear()
 
 
-def build_multimodal_runtime(args):
+def build_omni_runtime(args):
     """Engine bindings the multimodal model needs; call after Megatron parallel state exists."""
-    from loongforge.models.omni_models.runtime import MultimodalRuntime
+    from loongforge.models.omni_models.runtime import OmniRuntime
     from loongforge.engines.megatron.initialize import (
         change_parallel_state,
         get_encoder_dp_size,
@@ -233,13 +253,13 @@ def build_multimodal_runtime(args):
 
     vit_balance = None
     if args.use_vit_dp_balance:
-        from loongforge.engines.megatron.dp_balance.vit_balance import (
+        from loongforge.data.dp_balance.vit_balance import (
             dp_balance_vit_encoder,
         )
 
         vit_balance = dp_balance_vit_encoder
 
-    return MultimodalRuntime(
+    return OmniRuntime(
         encoder_dp_size=get_encoder_dp_size("image_encoder"),
         model_size=get_model_size(),
         parallel_state_switch=change_parallel_state,
@@ -391,9 +411,12 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False, heter
     return output_tensor, partial(loss_func, loss_mask)  # TODO: add loss_weights data
 
 
+GLOBAL_TRAIN_DATASET_SIZE = None
+
 def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None, hetero_step=None):
     """Provides the datasets used by the trainer"""
-    import loongforge.engines.megatron.dp_balance.patches  # noqa: F401
+    global GLOBAL_TRAIN_DATASET_SIZE
+    import loongforge.data.dp_balance.patches
     args = get_args()
     tokenizer = get_tokenizer()
     loader_config = SFTLoaderConfig.from_args(args)
@@ -454,6 +477,11 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None,
             dp_size=dpw,
             dp_group=parallel_state.get_data_parallel_group(),
         )
+
+        try:
+            GLOBAL_TRAIN_DATASET_SIZE = len(train_dataset)
+        except TypeError:
+            GLOBAL_TRAIN_DATASET_SIZE = getattr(train_dataset, "num_rows", None)
 
         collator = build_sft_data_collator(
             partial(
@@ -521,7 +549,7 @@ def model_provider(pre_process=True, post_process=True, vp_stage=None):
     """Build the multimodal model with this run's args and model config."""
     args = get_args()
     return omni_model_provider(pre_process, post_process, vp_stage=vp_stage, args=args,
-                               model_config=get_model_config(), runtime=build_multimodal_runtime(args))
+                               model_config=get_model_config(), runtime=build_omni_runtime(args))
 
 
 VLM_BATCH_LAYOUT = BatchLayout(

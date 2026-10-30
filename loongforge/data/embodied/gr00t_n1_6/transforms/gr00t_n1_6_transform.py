@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 from PIL import Image
@@ -31,6 +31,7 @@ from loongforge.models.embodied.gr00t_n1_6.embodiment_configs import (
     EMBODIMENT_STAT_CONFIGS,
     EMBODIMENT_TAG_TO_PROJECTOR_INDEX,
     MODALITY_CONFIGS,
+    EmbodimentTag,
     ModalityConfig,
     convert_lerobot_stats_to_processor_format,
 )
@@ -137,6 +138,7 @@ class Gr00tN1d6FeatureTransform(BaseTransform):
             if self.embodiment_tag in EMBODIMENT_STAT_CONFIGS
             else None
         )
+        self.embodiment_enum = self._build_embodiment_enum()
         self.embodiment_id = EMBODIMENT_TAG_TO_PROJECTOR_INDEX.get(self.embodiment_tag, 10)
 
         processor_stats = self._build_processor_stats(dataset_stats, dataset)
@@ -250,6 +252,12 @@ class Gr00tN1d6FeatureTransform(BaseTransform):
         if not dataset_stats_local:
             return None
         return convert_lerobot_stats_to_processor_format(dataset_stats_local, self.embodiment_tag)
+
+    def _build_embodiment_enum(self) -> EmbodimentTag:
+        try:
+            return EmbodimentTag(self.embodiment_tag)
+        except ValueError:
+            return EmbodimentTag.NEW_EMBODIMENT
 
     def _build_image_transforms(self):
         if self.use_albumentations and not ALBUMENTATIONS_AVAILABLE:
@@ -399,6 +407,17 @@ class Gr00tN1d6FeatureTransform(BaseTransform):
             }
         ]
         return {"text": None, "images": pil_images, "conversation": conversation}
+
+
+class Gr00tBatchTransform(BaseTransform):
+    """No-op marker transform for GR00T-specific pipeline registration."""
+
+    def __init__(self, apply_to: List[str] | None = None, training: bool = True):
+        super().__init__(apply_to=apply_to or [], training=training)
+
+    def apply(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Pass data through unchanged."""
+        return data
 
 
 def _as_size_list(value: Any, default: list[int]) -> list[int]:

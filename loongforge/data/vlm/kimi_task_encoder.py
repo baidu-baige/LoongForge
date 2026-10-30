@@ -36,6 +36,10 @@ MEDIA_PAD = "<|media_pad|>"
 # For image: <|media_begin|>image<|media_content|><|media_pad|><|media_end|>
 IMAGE_TOKEN_WITH_TAGS = f"{MEDIA_BEGIN}image{MEDIA_CONTENT}{MEDIA_PAD}{MEDIA_END}"
 
+# For video chunk: timestamp<|media_begin|>video<|media_content|><|media_pad|><|media_end|>
+VIDEO_TOKEN_WITH_TAGS = f"{MEDIA_BEGIN}video{MEDIA_CONTENT}{MEDIA_PAD}{MEDIA_END}"
+
+
 # Kimi chat template special tokens
 IM_USER = "<|im_user|>"
 IM_ASSISTANT = "<|im_assistant|>"

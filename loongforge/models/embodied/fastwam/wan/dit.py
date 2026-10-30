@@ -266,7 +266,7 @@ def make_rmsnorm(dim: int, eps: float, impl: str) -> nn.Module:
 
     Both implementations expose a single ``weight`` parameter of shape ``(dim,)``,
     so checkpoints are interchangeable except for the ``_extra_state`` key that TE
-    modules add (see ``fastwam/utils/state_dict.py::drop_extra_state``).
+    modules add (see ``utils.state_dict.drop_extra_state``).
 
     Which one is faster depends on the torch build, so the choice is configuration
     rather than autodetection:

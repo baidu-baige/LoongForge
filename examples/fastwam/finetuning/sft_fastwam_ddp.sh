@@ -3,13 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ═══════════════════════════════════════════════════════════════
-# sft_fastwam_ddp.sh - FastWAM SFT Launch Script (DDP)
+# run_fastwam_sft_ddp_finetune.sh - FastWAM SFT Launch Script (DDP)
 #
 # Usage:
-#   bash sft_fastwam_ddp.sh
-#   TRAIN_ITERS=50 bash sft_fastwam_ddp.sh                          # override via env
-#   bash sft_fastwam_ddp.sh --train-iters 50                        # override a training param (flag form)
-#   bash sft_fastwam_ddp.sh model.action_dit_pretrained_path=/path   # override YAML model:/data: fields (dotlist form)
+#   bash run_fastwam_sft_ddp_finetune.sh
+#   TRAIN_ITERS=50 bash run_fastwam_sft_ddp_finetune.sh                          # override via env
+#   bash run_fastwam_sft_ddp_finetune.sh --train-iters 50                        # override a training param (flag form)
+#   bash run_fastwam_sft_ddp_finetune.sh model.action_dit_pretrained_path=/path   # override YAML model:/data: fields (dotlist form)
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -61,6 +61,7 @@ DATA_ARGS=(
     --dataset-strategy fastwam
     --dataset-path "$DATASET_PATH"
     --tokenizer-path "$TOKENIZER_PATH"
+    --robot-type libero_franka
     --num-workers "$NUM_WORKERS"
     --lerobotdataset-version v2.1
     --video-backend pyav

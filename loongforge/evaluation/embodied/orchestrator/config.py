@@ -107,6 +107,7 @@ def build_rpc_payload(
 
 
 def load_config(path: str) -> Dict[str, Any]:
+    """Run load_config."""
     config_path = Path(path)
     if not config_path.exists():
         raise FileNotFoundError(f"Config file not found: {path}")
@@ -213,6 +214,7 @@ CONFIG_MAPPING = {
 
 
 def apply_config(args: Any, config: Dict[str, Any]) -> Any:
+    """Run apply_config."""
     for source, target in CONFIG_MAPPING.items():
         value = _get_nested(config, source)
         if value is not None:
@@ -221,6 +223,7 @@ def apply_config(args: Any, config: Dict[str, Any]) -> Any:
 
 
 def expand_sweep(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Run expand_sweep."""
     sweep = config.get("sweep") or {}
     if not sweep:
         return [config]
@@ -237,6 +240,7 @@ def expand_sweep(config: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def _expand_item(config: Dict[str, Any], overrides: Dict[str, Any], index: int) -> Dict[str, Any]:
+    """Run _expand_item."""
     item = copy.deepcopy(config)
     item.pop("sweep", None)
     for dotted_key, value in overrides.items():
@@ -249,6 +253,7 @@ def _expand_item(config: Dict[str, Any], overrides: Dict[str, Any], index: int) 
 
 
 def _get_nested(data: Dict[str, Any], dotted_key: str) -> Any:
+    """Run _get_nested."""
     current: Any = data
     for part in dotted_key.split("."):
         if not isinstance(current, dict) or part not in current:
@@ -258,6 +263,7 @@ def _get_nested(data: Dict[str, Any], dotted_key: str) -> Any:
 
 
 def _set_nested(data: Dict[str, Any], dotted_key: str, value: Any) -> None:
+    """Run _set_nested."""
     current = data
     parts = dotted_key.split(".")
     for part in parts[:-1]:

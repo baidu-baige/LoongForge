@@ -1,12 +1,11 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Backend option validation for the Torch engine.
+"""VLA training config validation.
 
-Checks the combinations that only make sense for this backend: CUDA graph, FSDP,
-DDP ZeRO, DMuon, LoRA, and FP8. Recipe checks (learning rate, step counts, data
-loading, profiling) live in ``loongforge.training.torch_args.validate``, which
-calls :func:`validate_engine_args` last.
+Called by parse_train_args() on the DictConfig stage (before to_object()), so it
+benefits from OmegaConf missing-key / interpolation checks. Operates on the two
+typed configs: training_args (TrainingArgs), model_cfg (ModelConfig).
 """
 
 import logging

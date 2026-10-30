@@ -23,7 +23,7 @@ class BlendedHuggingFaceDatasetBuilder(object):
     """Builder class for the SFT Dataset.
 
     Args:
-        cls (type): Dataset class to instantiate, e.g. SFTDataset; must provide split()
+        cls (HuggingFaceDataset): The class to instantiate, wich build on huggingface. i.e. SFTDataset
 
         sizes (List[Optional[int]]): The minimum total number of samples to draw, or None, per split
 
@@ -32,8 +32,6 @@ class BlendedHuggingFaceDatasetBuilder(object):
             and virtual rank may inform its return value.
 
         config (BlendedHuggingFaceDatasetConfig): The config object which informs dataset creation
-
-        vp_rank (Optional[int]): The virtual pipeline-parallel rank of the current rank, or None
     """
 
     def __init__(

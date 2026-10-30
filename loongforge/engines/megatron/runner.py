@@ -21,7 +21,7 @@ except ImportError:
 
 from megatron.training.log_handler import CustomHandler
 
-from typing import Dict, Optional
+from typing import Optional
 from megatron.core.optimizer.distrib_optimizer import DistributedOptimizer
 
 # Make default logging level INFO, but filter out all log messages not from MCore.
@@ -129,11 +129,13 @@ from loongforge.models.common.peft.utils import apply_peft_transformation
 from megatron.core.transformer.multi_token_prediction import MTPLossLoggingHelper
 from dataclasses import asdict
 from loongforge.data import TrainingPhase
-from loongforge.engines.megatron import get_args, global_vars
-from loongforge.engines.megatron.utils.global_vars import get_model_config as get_loongforge_model_config
-from loongforge.models.omni_models.utils import get_inputs_on_this_cp_rank
+from loongforge.engines.megatron import (
+    get_args,
+    get_model_config as get_loongforge_model_config,
+    global_vars,
+)
 from loongforge.engines.megatron.initialize import initialize_loongforge_megatron
-from loongforge.engines.megatron.dp_balance.train_hooks import (
+from loongforge.data.dp_balance.train_hooks import (
     train_step_decorator,
     train_log_decorator
 )
@@ -148,27 +150,6 @@ except ImportError:
     HAS_INSPECTOR = False
 
 stimer = StragglerDetector()
-
-
-def get_batch_on_this_cp_rank(batch: Dict):
-    """slice batch along sequence dimension for context parallelism"""
-    # TODO: Currently only split labels and loss_mask, may split other parameters in the future
-    args = get_args()
-
-    if args.context_parallel_size > 1:
-        labels = batch.get('labels', None)
-        loss_mask = batch.get('loss_mask', None)
-        packed_seq_params = batch.get('packed_seq_params', None)
-
-        assert labels is not None and loss_mask is not None, "labels and loss_mask must in batch"
-
-        labels = get_inputs_on_this_cp_rank(labels.transpose(0, 1), packed_seq_params).transpose(0, 1)
-        loss_mask = get_inputs_on_this_cp_rank(loss_mask.transpose(0, 1), packed_seq_params).transpose(0, 1)
-
-        batch['labels'] = labels
-        batch['loss_mask'] = loss_mask
-
-    return batch
 
 
 def is_hf_checkpoint(load_path):
@@ -216,6 +197,29 @@ def update_ema(ema_model, model, rate=0.9999):
     for name, param in model_params.items():
         ema_params[name].mul_(rate).add_(param.data, alpha=1 - rate)
 
+
+_FULL_ITER_GRAPH_REGISTRY: dict[str, type] = {}
+_PER_MICROBATCH_GRAPH_REGISTRY: dict[str, type] = {}
+
+
+def register_full_iteration_graph_wrapper(model_name: str, wrapper_cls: type):
+    """Register a full-iteration CUDA graph wrapper for a given model."""
+    _FULL_ITER_GRAPH_REGISTRY[model_name] = wrapper_cls
+
+
+def get_full_iteration_graph_wrapper(model_name: str):
+    """Look up a registered full-iteration graph wrapper, or None."""
+    return _FULL_ITER_GRAPH_REGISTRY.get(model_name)
+
+
+def register_per_microbatch_graph_wrapper(model_name: str, wrapper_cls: type):
+    """Register a per-microbatch CUDA graph wrapper for a given model."""
+    _PER_MICROBATCH_GRAPH_REGISTRY[model_name] = wrapper_cls
+
+
+def get_per_microbatch_graph_wrapper(model_name: str):
+    """Look up a registered per-microbatch CUDA graph wrapper, or None."""
+    return _PER_MICROBATCH_GRAPH_REGISTRY.get(model_name)
 
 def enable_memory_history_record(memory_snapshot_path):
     """Enable memory history record"""
@@ -322,6 +326,8 @@ def pretrain(
     model_type,
     forward_step_func,
     process_non_loss_data_func=None,
+    extra_args_provider=None,
+    args_defaults={},
     get_embedding_ranks=None,
     get_position_embedding_ranks=None,
     non_loss_data_func=None,
@@ -352,6 +358,10 @@ def pretrain(
             network. It can be used for dumping output tensors (e.g images) to
             tensorboard. It takes `collected data`(list of tensors),
             `current iteration index` and `tensorboard writer` as arguments.
+        extra_args_provider: a function that takes a parser and adds arguments
+            to it. It is used for programs to add their own arguments.
+        args_defaults: a dictionary from argument-name to argument-value. It
+            to set already parse arguments.
         get_embedding_ranks (TODO):
         get_position_embedding_ranks (TODO):
         non_loss_data_func (callable): A custom function to call during evaluation.
@@ -593,7 +603,7 @@ def pretrain(
             write_to_tensorboard=not args.skip_train,
             non_loss_data_func=non_loss_data_func,
         )
-    
+
     # Save HF checkpoint at the end of training if --save-hf is enabled
     save_hf_enabled = getattr(args, 'save_hf', 'false').lower() == 'true'
     if save_hf_enabled and iteration == args.train_iters:
@@ -681,6 +691,8 @@ def check_vlm_peft_config(model_config):
             target_modules[i] = target_prefix + target
     peft_config.target_modules = target_modules
     return peft_config
+
+
 
 
 def get_model(
@@ -1033,6 +1045,12 @@ def setup_model_and_optimizer(
     # If the user is asking for a non-zero embedding init std, skip weight decay for embeddings
     # to avoid embeddings from shrinking to zero as recommended in https://arxiv.org/abs/2312.16903
     # default_skip_embedding_weight_decay=args.embedding_init_method_std is not None,
+
+    # Control whether to force every parameter into the weight‑decay group.
+    # Legacy default (flag unset) keeps the old behavior: force everything.
+    # When --force-all-weight-decay true/false is provided, we respect that choice.
+    if getattr(args, "force_all_weight_decay", None):
+        no_wd_decay_cond = (False,)
 
     optimizer = get_megatron_optimizer(
         config,
@@ -2471,6 +2489,9 @@ def train(
     forward_backward_func = get_forward_backward_func()
 
     # Full-iteration CUDA graph: wraps forward_backward_func when enabled.
+    # Wrapper class is registered by model-specific trainer (e.g. sft_groot.py).
+    # If no model-specific wrapper is registered, fall back to Megatron's
+    # FullCudaGraphWrapper (simpler, no loss-allreduce suppression or self-heal).
     if (getattr(args, "cuda_graph_impl", "none") == "local" and
             getattr(args, "cuda_graph_scope", "full") == "full_iteration"):
         from megatron.core.full_cuda_graph import FullCudaGraphWrapper
@@ -2909,7 +2930,7 @@ def dump_model_input_example_once(
 
     _PRINTED_MODEL_INPUT_EXAMPLE = True
 
-    from loongforge.engines.megatron.utils.global_vars import get_tokenizer as get_loongforge_tokenizer
+    from loongforge.engines.megatron import get_tokenizer as get_loongforge_tokenizer
     from loongforge.data import IGNORE_INDEX
 
     tokenizer = get_loongforge_tokenizer()

@@ -149,3 +149,11 @@ class GenericPredictActionPolicy:
             raise FileNotFoundError(f"dataset statistics file not found: {path}")
         with stats_path.open("r", encoding="utf-8") as f:
             return json.load(f)
+
+
+def __getattr__(name):
+    # Lazy re-exports to avoid circular imports between servers/ and factories/.
+    if name in ("PI05ModelFactory", "LoongForgePI05Policy"):
+        from loongforge.evaluation.embodied.factories.pi05_factory import PI05ModelFactory, LoongForgePI05Policy
+        return {"PI05ModelFactory": PI05ModelFactory, "LoongForgePI05Policy": LoongForgePI05Policy}[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

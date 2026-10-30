@@ -303,6 +303,8 @@ class WANPolicyHead(ActionHead):
         self.config = config
         self._dreamzero_runtime_dtype = _dreamzero_resolve_torch_dtype(config.model_dtype)
         self._dreamzero_prompt_emb_cache = OrderedDict()
+        self._dreamzero_prompt_emb_cache_hits = 0
+        self._dreamzero_prompt_emb_cache_misses = 0
         self._dreamzero_video_loss_impl = _dreamzero_compile_loss_fn(
             _dreamzero_weighted_video_loss,
             "weighted_video_loss",
@@ -426,6 +428,27 @@ class WANPolicyHead(ActionHead):
         sample = self.beta_dist.sample([batch_size]).to(device, dtype=dtype)
         return (self.config.noise_s - sample) / self.config.noise_s
 
+    @staticmethod
+    def _dreamzero_autocast_enabled(device_type: str) -> bool:
+        try:
+            return bool(torch.is_autocast_enabled(device_type))
+        except TypeError:
+            if device_type == "cuda":
+                return bool(torch.is_autocast_enabled())
+            return False
+
+    @staticmethod
+    def _dreamzero_autocast_dtype(device_type: str) -> torch.dtype | None:
+        try:
+            return torch.get_autocast_dtype(device_type)
+        except (AttributeError, RuntimeError):
+            if device_type == "cuda":
+                try:
+                    return torch.get_autocast_gpu_dtype()
+                except (AttributeError, RuntimeError):
+                    return None
+            return None
+
     def prepare_input(self, batch: dict) -> BatchFeature:
         """Wrap a raw batch dict into a ``BatchFeature``."""
         return BatchFeature(data=batch)
@@ -478,9 +501,11 @@ class WANPolicyHead(ActionHead):
         for key in keys:
             value = self._dreamzero_prompt_emb_cache.get(key)
             if value is None:
+                self._dreamzero_prompt_emb_cache_misses += len(keys) - len(cached)
                 return keys, None
             self._dreamzero_prompt_emb_cache.move_to_end(key)
             cached.append(value)
+        self._dreamzero_prompt_emb_cache_hits += len(cached)
         device = input_ids.device
         if not torch.is_tensor(input_ids) or input_ids.device.type == "cpu":
             device = torch.device(self._device)
@@ -587,6 +612,7 @@ class WANPolicyHead(ActionHead):
         if needs_move:
             self.vae.to(device=ref_device, dtype=ref_dtype)
         self.vae.eval()
+        self._vae_device_ready = True
 
     def encode_video(self, input_video, tiled=True, tile_size=(34, 34), tile_stride=(18, 16)):
         """Encode video frames into VAE latents, moving the VAE onto device first."""

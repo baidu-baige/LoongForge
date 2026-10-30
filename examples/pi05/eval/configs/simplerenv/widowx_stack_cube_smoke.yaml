@@ -1,6 +1,6 @@
 # pi0.5 SimplerEnv Bridge link smoke (open-source template).
 # No Bridge/WidowX pi05 finetune yet → server.random_init: true (not task-success).
-# For task-success on this benchmark see xvla + X-VLA-WidowX (examples/xvla).
+# For task-success on this benchmark see xvla + X-VLA-WidowX (examples/embodied/xvla).
 #
 # Optional overrides (edit this file):
 #   task_name / robot_setup / scene_name / max_steps — other Bridge tasks:

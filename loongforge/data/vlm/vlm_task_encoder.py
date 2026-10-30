@@ -49,6 +49,7 @@ IMAGE_TOKEN = "<|image_pad|>"
 VIDEO_TOKEN = "<|video_pad|>"
 VISION_TAGS = ["<|vision_start|>", "<|vision_end|>"]
 IMAGE_TOKEN_WITH_TAGS = VISION_TAGS[0] + IMAGE_TOKEN + VISION_TAGS[1]
+VIDEO_TOKEN_WITH_TAGS = VISION_TAGS[0] + VIDEO_TOKEN + VISION_TAGS[1]
 
 
 @dataclass
@@ -127,7 +128,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
     def __init__(self, config, tokenizer, chat_template=None):
         super().__init__(config, tokenizer)
         self.chat_template = chat_template
-        processor_path = getattr(self.config, "hf_processor_path", None)
+        processor_path = self.config.hf_processor_path
         if processor_path:
             # Transformers 5.3 logs this processor via repr; Kimi's repr is not pickle-safe.
             original_repr = ProcessorMixin.__repr__
@@ -341,8 +342,8 @@ class VLMTaskEncoder(BaseTaskEncoder):
                 tokenizer=self.tokenizer,
                 messages=hf_messages,
                 tools=tools,
-                train_on_prompt=getattr(self.config, "train_on_prompt", False),
-                history_mask_loss=getattr(self.config, "history_mask_loss", False),
+                train_on_prompt=self.config.train_on_prompt,
+                history_mask_loss=self.config.history_mask_loss,
                 ignore_index=IGNORE_INDEX,
             )
         else:

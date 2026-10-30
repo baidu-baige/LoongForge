@@ -10,12 +10,12 @@ from typing import Any, Dict, Optional, Tuple
 import torch
 from torch import Tensor
 from .omni_encoder_model import OmniEncoderModel
-from loongforge.models.omni_models.utils import get_inputs_on_this_cp_rank
+from .utils import get_inputs_on_this_cp_rank
 from transformers.models.auto.modeling_auto import AutoModel
 from loongforge.models.common import BaseMegatronModule, BaseModelConfig
 from megatron.core import InferenceParams, tensor_parallel
 from megatron.core import parallel_state as mpu
-from loongforge.models.omni_models.runtime import MultimodalRuntime
+from loongforge.models.omni_models.runtime import OmniRuntime
 from megatron.core.pipeline_parallel.fine_grained_activation_offload import (
     fine_grained_offloading_init_chunk_handler,
 )
@@ -48,7 +48,7 @@ class OmniCombinationModel(BaseMegatronModule):
         use_vit_dp_balance: bool,
         enable_encoder_hetero_dp: bool,
         enable_full_hetero_dp: bool,
-        runtime: MultimodalRuntime,
+        runtime: OmniRuntime,
     ) -> None:
         super().__init__(config.foundation)
         self.runtime = runtime
@@ -145,8 +145,7 @@ class OmniCombinationModel(BaseMegatronModule):
         elif self.add_encoder:
             self.encoder_model.set_input_tensor(input_tensor[0])
         elif self.pre_process:
-            # Encoder-only mode: no foundation model consumes the hidden state yet.
-            pass
+            self.encoder_hidden_state = input_tensor[0]  # TODO: Handle encoder hidden state
         else:
             self.foundation_model.set_input_tensor(input_tensor[0])
 
@@ -158,6 +157,22 @@ class OmniCombinationModel(BaseMegatronModule):
             raise ValueError("In offline mode, `output_embeddings` must be provided.")
 
         return output_embeddings
+
+    def get_modality(self):
+        """Get input/output modality types of the current model"""
+        input_modality = self.encoder.modality
+        output_modality = self.decoder.modality
+        return {"input": input_modality, "output": output_modality}
+
+    def prepare_inputs_for_generation(
+        self, input_ids: Optional[torch.LongTensor] = None
+    ):
+        """Prepare inputs for generation process"""
+        pass
+
+    def generate_multimodal(self, hidden_states):
+        """Generate multimodal data"""
+        pass
 
     def preprocess_for_fine_grained_offloading(self):
         """Preprocess for fine-grained activation offloading."""
@@ -682,9 +697,7 @@ class OmniCombinationModel(BaseMegatronModule):
             self.preprocess_for_fine_grained_offloading()
 
         """Build the schedule plan for the model."""
-        from loongforge.models.omni_models.model_chunk_schedule_plan import (
-            TransformerModelChunkSchedulePlan,
-        )
+        from .model_chunk_schedule_plan import TransformerModelChunkSchedulePlan
 
         return TransformerModelChunkSchedulePlan(
             self,

@@ -3,13 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ═══════════════════════════════════════════════════════════════
-# sft_xvla_ddp.sh - X-VLA Training Launch Script (DDP)
+# run_xvla_ddp_finetune.sh - X-VLA Training Launch Script (DDP)
 #
 # Usage:
-#   bash sft_xvla_ddp.sh
-#   TRAIN_ITERS=50 bash sft_xvla_ddp.sh                  # override via env
-#   bash sft_xvla_ddp.sh --lr-base 1e-4                  # override a training param (flag form)
-#   bash sft_xvla_ddp.sh backbone.image_size=448         # override YAML fields (dotlist form)
+#   bash run_xvla_ddp_finetune.sh
+#   TRAIN_ITERS=50 bash run_xvla_ddp_finetune.sh                  # override via env
+#   bash run_xvla_ddp_finetune.sh --lr-base 1e-4                  # override a training param (flag form)
+#   bash run_xvla_ddp_finetune.sh backbone.image_size=448         # override YAML fields (dotlist form)
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -67,6 +67,7 @@ DATA_ARGS=(
     --dataset-format hdf5_datasets
     --dataset-path "$DATA_PATH"
     --tokenizer-path "$TOKENIZER_PATH"
+    --robot-type libero_franka
     --num-workers "$NUM_WORKERS"
     --batch-drop-last
 )

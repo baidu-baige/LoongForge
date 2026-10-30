@@ -197,8 +197,8 @@ class DreamZeroShardedSampler(Sampler[int]):
         dataset: A ``DreamZeroLeRobotDataset`` instance exposing ``trajectory_ids``,
             ``trajectory_lengths``, ``step_filter``, ``max_delta_index``,
             ``all_steps``, ``discard_bad_trajectories``, and ``lerobot_info_meta``.
-        num_replicas: World size for DDP, supplied by the caller.
-        rank: This rank, supplied by the caller.
+        num_replicas: World size for DDP. If None, inferred from ``torch.distributed``.
+        rank: This rank. If None, inferred.
         seed: Seed for numpy RNG.
         shard_sampling_rate: Fraction of steps per shard to keep.
         num_steps_per_shard: Target steps per shard.

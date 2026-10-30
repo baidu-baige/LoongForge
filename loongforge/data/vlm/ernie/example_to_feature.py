@@ -98,7 +98,6 @@ class ExampleToFeature:
         drop_untrainble_sample=False,
         chat_template="ernie",
     ):
-        self.args = None
         self.is_training = True
         self.is_pretraining = True
 
@@ -898,3 +897,10 @@ class ExampleToFeature:
                 ids_token_type[i] = self.token_type_mapping[ids]
 
         return ids_token_type
+
+
+    def process(self, *args, **kwargs):
+        """
+        main process function
+        """
+        return self.example_to_feature(*args, **kwargs)

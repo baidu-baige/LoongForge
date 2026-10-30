@@ -25,7 +25,7 @@ LeRobot port.
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
@@ -44,6 +44,17 @@ from .modules.wan_streaming import (
 )
 
 
+# Training config keys that mean the same thing under a different name.
+_TRAINING_KEY_ALIASES = {
+    "lingbot_va_snr_shift": "snr_shift",
+    "lingbot_va_action_snr_shift": "action_snr_shift",
+    "lingbot_va_sigma_min": "sigma_min",
+    "lingbot_va_extra_one_step": "extra_one_step",
+    "lingbot_va_num_train_timesteps": "num_train_timesteps",
+    "lingbot_va_chunk_size": "frame_chunk_size",
+    "lingbot_va_diffusers_checkpoint_path": "checkpoint_path",
+}
+
 # Every layout branch is an ``== "robotwin_tshape"`` test with width_concat as the fallback,
 # so an unrecognized value would assemble the wrong canvas, run to completion, and only show
 # up as a degraded success rate. Validated in ``__post_init__``.
@@ -54,8 +65,9 @@ _CAMERA_LAYOUTS = ("width_concat", "robotwin_tshape")
 class LingBotVAInferenceConfig:
     """Config for a closed-loop rollout: transformer geometry plus inference-only settings.
 
-    The sampling / autoregression / camera / quantile fields have no training counterpart.
-    Defaults match upstream ``wan_va/configs/va_libero_cfg.py``.
+    :meth:`from_mapping` pulls the shared values out of a training YAML so the two cannot
+    drift; the sampling / autoregression / camera / quantile fields have no training
+    counterpart. Defaults match upstream ``wan_va/configs/va_libero_cfg.py``.
     """
 
     # Transformer geometry — must match the trained checkpoint.
@@ -118,6 +130,39 @@ class LingBotVAInferenceConfig:
 
     device: str = "cuda"
     dtype: str = "bfloat16"
+
+    @classmethod
+    def from_mapping(cls, *sections: Optional[Dict[str, Any]], **overrides: Any):
+        """Build a config from training YAML sections (``model``, ``data``, ...).
+
+        Keys matching a field name are taken as-is, ``lingbot_va_*`` keys via
+        :data:`_TRAINING_KEY_ALIASES`; unknown keys are ignored, so whole sections can be
+        passed in directly.
+        """
+        known = {f.name for f in fields(cls)}
+        values: Dict[str, Any] = {}
+        for section in sections:
+            for key, value in (section or {}).items():
+                key = _TRAINING_KEY_ALIASES.get(key, key)
+                if key in known and value is not None:
+                    values[key] = value
+
+        # Upstream builds ``inverse_used_action_channel_ids`` as ``[len(used)] * action_dim``
+        # and overwrites the used positions with their index, so unused slots hold the
+        # sentinel ``len(used)`` — also the maximum. Used channels are those below it.
+        for section in sections:
+            inverse_ids = (section or {}).get("inverse_used_action_channel_ids")
+            if not inverse_ids or "used_action_channel_ids" in overrides:
+                continue
+            sentinel = max(inverse_ids)
+            values["used_action_channel_ids"] = tuple(
+                i for i, channel in enumerate(inverse_ids) if channel < sentinel
+            )
+
+        values.update(overrides)
+        if "latent_patch_size" in values:
+            values["latent_patch_size"] = tuple(values["latent_patch_size"])
+        return cls(**values)
 
     @property
     def torch_dtype(self) -> torch.dtype:

@@ -13,6 +13,7 @@ from ..common.base_model_mixins import (
 
 _LAZY_EXPORTS = {
     "OmniEncoderModel": (".omni_encoder_model", "OmniEncoderModel"),
+    "OmniDecoderModel": (".omni_decoder_model", "OmniDecoderModel"),
     "OmniCombinationModel": (".omni_combination_model", "OmniCombinationModel"),
     "omni_model_provider": (".omni_model_provider", "omni_model_provider"),
 }
@@ -39,6 +40,7 @@ __all__ = [
     "BaseMegatronModule",
     # Model classes
     "OmniEncoderModel",
+    "OmniDecoderModel",
     "OmniCombinationModel",
     # Implementations
     "omni_model_provider",

@@ -34,6 +34,9 @@ class  MultiTypeMoeSubmodules:
 class ErnieDispatcher(MoEAlltoAllTokenDispatcher):
     """Ernie Dispatcher"""
     def token_dispatch(self, permutated_local_input_tokens, permuted_probs):
+        """
+        Token dispatch
+        """
         # Perform expert parallel AlltoAll communication
         self.tokens_per_expert = self._maybe_dtoh_and_synchronize(
             "before_ep_alltoall", self.tokens_per_expert
@@ -285,6 +288,7 @@ class ErnieMultiTypeMoE(MegatronModule):
         self.submodules = submodules
         self.text_config = deepcopy(self.config)
         self.vision_config = deepcopy(self.config)
+        self.shared_config = deepcopy(self.config)
         self.text_config.moe_ffn_hidden_size = self.config.moe_intermediate_size[0]
         self.vision_config.moe_ffn_hidden_size = self.config.moe_intermediate_size[1]
         self.text_moe_layer = build_module(self.submodules.text_moe_layer, self.text_config)

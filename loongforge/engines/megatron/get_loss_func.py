@@ -3,7 +3,7 @@
 #
 # Modified from Megatron-LM under the BSD 3-Clause License.
 
-"""Loss functions and DP/CP reporting reduction utilities."""
+"""Generic loss function"""
 
 import os
 

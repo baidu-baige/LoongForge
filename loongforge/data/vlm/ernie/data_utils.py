@@ -59,7 +59,7 @@ class ErnieTensorDataset(torch.utils.data.Dataset):
     them to PyTorch tensors. Uses random sampling with fixed seed for reproducibility.
 
     Args:
-        config: Config with seed and hf_tokenizer_path
+        args: Config with seed and hf_tokenizer_path
         metadata_path: Path to file listing all .npy file paths
         steps_per_epoch: Total number of training steps
     """

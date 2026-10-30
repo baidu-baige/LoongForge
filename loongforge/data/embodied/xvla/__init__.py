@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""XVLA model-specific data transforms and collator."""
+"""Train utilities."""
 
 from loongforge.data.embodied.xvla.transforms import xvla_collator, xvla_transform
 

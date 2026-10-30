@@ -32,11 +32,10 @@ e4m3 (TransformerEngine ``Float8BlockQuantizer``, which needs SM89+), while SM80
 runs BF16 because Ampere has no FP8 tensor cores.  Callers must branch on
 :attr:`DSAKernelBackend.indexer_is_fp8` rather than assuming FP8.
 
-Selection order: ``TransformerConfig.dsa_kernel_backend`` (from ``--dsa-kernel-backend``)
-> ``LOONGFORGE_DSA_KERNEL_BACKEND`` env var > compute capability.  ``torch_ref`` is
-intentionally kept as a permanent option: it is the numerical ground truth used to
-validate the CUDA kernels, and it is the only backend that runs without any custom
-kernel installed.
+Selection order: explicit ``--dsa-kernel-backend`` > ``LOONGFORGE_DSA_KERNEL_BACKEND``
+env var > compute capability.  ``torch_ref`` is intentionally kept as a permanent
+option: it is the numerical ground truth used to validate the CUDA kernels, and it
+is the only backend that runs without any custom kernel installed.
 """
 
 import sys
@@ -47,7 +46,7 @@ import torch
 
 # The SM80 operator packages (``flash_mla_sm80`` / ``lightning_indexer_sm80``) are
 # vendored in-tree under ``ops/cuda_source/`` and built in place, so LoongForge can
-# call them without depending on a vendored checkout or a manually-set PYTHONPATH.  Their
+# call them without depending on DeepTraining or a manually-set PYTHONPATH.  Their
 # parent directories are appended (not prepended) to ``sys.path`` so that a
 # pip-installed copy or an explicit ``DSA_SM80_OPS_PATH`` on ``PYTHONPATH`` still
 # takes precedence as an override.
@@ -149,7 +148,8 @@ class DSAKernelBackend:
 
         ``flashinfer.top_k`` is a radix select with no tensor-core code and no
         arch gating, so it works unchanged on SM80; verified against
-        ``torch.topk`` on A800.
+        ``torch.topk`` on A800.  ``radix_topk`` (DeepTraining ``cuda_source/topk``)
+        is an equivalent drop-in should flashinfer ever be unavailable.
         """
 
         def _load():
@@ -303,7 +303,8 @@ class DSAKernelBackend:
             # in TMEM and issues 2-SM cluster UMMA, neither of which exists
             # before Blackwell.  The sm100 backend also serves SM89/SM90, where
             # the FlashMLA *forward* runs but this backward does not, so fall
-            # back to the TileLang backward there.
+            # back to the TileLang backward there -- exactly what the
+            # pre-refactor ``major != 10`` branch did.
             if torch.cuda.get_device_capability()[0] == 10:
                 def _load():
                     try:
@@ -545,9 +546,10 @@ _BACKEND: Optional[DSAKernelBackend] = None
 def resolve_backend_name(source=None) -> str:
     """Backend name :func:`get_dsa_backend` would resolve to for ``source``.
 
-    ``source`` is the training args or a TransformerConfig; its ``dsa_kernel_backend``
-    wins over the env var.  Name resolution only -- no kernels are bound and no
-    operator packages are imported -- so this is safe to call from argument validation.
+    Name resolution only -- no kernels are bound and no operator packages are
+    imported -- so this is safe to call from argument validation.  ``args``
+    defaults to the megatron global args; pass it explicitly when they are not
+    yet installed (e.g. during early arg validation).
     """
     name = _requested_backend(source)
     if name == BACKEND_AUTO:

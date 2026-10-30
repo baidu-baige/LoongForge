@@ -87,10 +87,13 @@ TRAINING_ARGS=(
   --loss-reduction square
   #--use-cpu-initialization
   #--no-initialization
+  --use-packed-ds
   --use_thumbnail
+  --replacement
   --dynamic-image-size
   --loss-reduction-all-gather
   --num-workers 8
+  --dataloader-prefetch-factor 4
   --manual-gc
   --manual-gc-interval 0
   --use-flash-attn

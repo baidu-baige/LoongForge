@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import torch
 
-from loongforge.engines.torch.optimizer.lr_scheduler import build_scheduler
+from loongforge.embodied.optimizer.lr_scheduler import build_scheduler
 
 PEAK_LR = 5e-5
 MIN_LR = 1e-5

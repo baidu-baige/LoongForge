@@ -23,6 +23,8 @@ import torch.nn.functional as F
 import transformers
 import sys
 import cv2
+import io
+import logging
 import random
 
 IGNORE_TOKEN_ID = -100
@@ -53,6 +55,21 @@ def expand2square(pil_img, background_color):
         result.paste(pil_img, ((height - width) // 2, 0))
         return result
 
+
+def simulate_jpeg_degradation(quality):
+    def jpeg_degrade(img):
+        with io.BytesIO() as output:
+            img.convert("RGB").save(output, format="JPEG", quality=quality)
+            output.seek(0)  # Move the reading cursor to the start of the stream
+            img_jpeg = Image.open(output).copy()  # Use .copy() to make sure the image is loaded in memory
+        return img_jpeg
+
+    return jpeg_degrade
+
+
+# Define the JPEG compression quality range, pre-create all JPEG compression functions
+qualities = list(range(75, 101))
+jpeg_degrade_functions = {quality: simulate_jpeg_degradation(quality) for quality in qualities}
 
 @dataclasses.dataclass
 class Conversation:
@@ -90,9 +107,75 @@ class Conversation:
                 ret += role
         return ret
 
+    def set_system_message(self, system_message: str):
+        """Set the system message."""
+        self.system_message = system_message
+
+
     def append_message(self, role: str, message: str):
         """Append a new message."""
         self.messages.append([role, message])
+
+
+    def update_last_message(self, message: str):
+        """Update the last output.
+
+        The last message is typically set to be None when constructing the prompt,
+        so we need to update it in-place after getting the response from a model.
+        """
+        self.messages[-1][1] = message
+
+
+    def to_gradio_chatbot(self):
+        """Convert the conversation to gradio chatbot format."""
+        ret = []
+        for i, (role, msg) in enumerate(self.messages[self.offset :]):
+            if i % 2 == 0:
+                ret.append([msg, None])
+            else:
+                ret[-1][-1] = msg
+        return ret
+
+
+    def to_openai_api_messages(self):
+        """Convert the conversation to OpenAI chat completion format."""
+        ret = [{"role": "system", "content": self.system_message}]
+
+        for i, (_, msg) in enumerate(self.messages[self.offset :]):
+            if i % 2 == 0:
+                ret.append({"role": "user", "content": msg})
+            else:
+                if msg is not None:
+                    ret.append({"role": "assistant", "content": msg})
+        return ret
+
+
+    def copy(self):
+        """Copy the current instance"""
+        return Conversation(
+            name=self.name,
+            system_template=self.system_template,
+            system_message=self.system_message,
+            roles=self.roles,
+            messages=[[x, y] for x, y in self.messages],
+            offset=self.offset,
+            sep_style=self.sep_style,
+            sep=self.sep,
+            sep2=self.sep2,
+            stop_str=self.stop_str,
+            stop_token_ids=self.stop_token_ids,
+        )
+
+
+    def dict(self):
+        """Convert the conversation to a dictionary"""
+        return {
+            "template_name": self.name,
+            "system_message": self.system_message,
+            "roles": self.roles,
+            "messages": self.messages,
+            "offset": self.offset,
+        }
 
 
 class InternvlPreprocess:
@@ -103,6 +186,7 @@ class InternvlPreprocess:
         self.config = config
         super().__init__()
         self.image_size = config.force_image_size
+        self.is_train = False
         self.use_thumbnail = config.use_thumbnail
         self.pad2square = config.pad2square
         self.normalize_type = config.normalize_type
@@ -157,6 +241,7 @@ class InternvlPreprocess:
 
         # Transform each frame image and stack them into a tensor
         transform = self.build_transform(
+            is_train=self.is_train,
             input_size=self.image_size,
             pad2square=self.pad2square,
             normalize_type=self.normalize_type,
@@ -340,6 +425,7 @@ class InternvlPreprocess:
     def get_transform(self):
         """Build transformation function"""
         transform = self.build_transform(
+            is_train=self.is_train,
             input_size=self.image_size,
             pad2square=self.pad2square,
             normalize_type=self.normalize_type,
@@ -347,7 +433,7 @@ class InternvlPreprocess:
         return transform
 
     def build_transform(
-        self, input_size, pad2square=False, normalize_type="imagenet"
+        self, is_train, input_size, pad2square=False, normalize_type="imagenet"
     ):
         """Build transform for image"""
         if normalize_type == "imagenet":
@@ -358,11 +444,17 @@ class InternvlPreprocess:
             MEAN, STD = SIGLIP_MEAN, SIGLIP_STD
         else:
             raise NotImplementedError
-        if pad2square is False:  # now we use this transform function by default
+        if is_train:  # use data augumentation
             transform = T.Compose(
                 [
                     T.Lambda(
                         lambda img: img.convert("RGB") if img.mode != "RGB" else img
+                    ),
+                    T.RandomChoice(
+                        [
+                            T.Lambda(jpeg_degrade_functions[quality])
+                            for quality in qualities
+                        ]
                     ),
                     T.Resize(
                         (input_size, input_size),
@@ -373,24 +465,39 @@ class InternvlPreprocess:
                 ]
             )
         else:
-            transform = T.Compose(
-                [
-                    T.Lambda(
-                        lambda img: img.convert("RGB") if img.mode != "RGB" else img
-                    ),
-                    T.Lambda(
-                        lambda img: expand2square(
-                            img, tuple(int(x * 255) for x in MEAN)
-                        )
-                    ),
-                    T.Resize(
-                        (input_size, input_size),
-                        interpolation=InterpolationMode.BICUBIC,
-                    ),
-                    T.ToTensor(),
-                    T.Normalize(mean=MEAN, std=STD),
-                ]
-            )
+            if pad2square is False:  # now we use this transform function by default
+                transform = T.Compose(
+                    [
+                        T.Lambda(
+                            lambda img: img.convert("RGB") if img.mode != "RGB" else img
+                        ),
+                        T.Resize(
+                            (input_size, input_size),
+                            interpolation=InterpolationMode.BICUBIC,
+                        ),
+                        T.ToTensor(),
+                        T.Normalize(mean=MEAN, std=STD),
+                    ]
+                )
+            else:
+                transform = T.Compose(
+                    [
+                        T.Lambda(
+                            lambda img: img.convert("RGB") if img.mode != "RGB" else img
+                        ),
+                        T.Lambda(
+                            lambda img: expand2square(
+                                img, tuple(int(x * 255) for x in MEAN)
+                            )
+                        ),
+                        T.Resize(
+                            (input_size, input_size),
+                            interpolation=InterpolationMode.BICUBIC,
+                        ),
+                        T.ToTensor(),
+                        T.Normalize(mean=MEAN, std=STD),
+                    ]
+                )
 
         return transform
 

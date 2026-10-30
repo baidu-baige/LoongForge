@@ -13,7 +13,7 @@ def run_redactor(source, target, values):
     env = os.environ.copy()
     env.update(values)
     return subprocess.run(
-        [sys.executable, "ci/redact_ci_artifact.py", "--input", str(source), "--output", str(target)],
+        [sys.executable, ".github/scripts/redact_ci_artifact.py", "--input", str(source), "--output", str(target)],
         env=env, capture_output=True, text=True, check=False,
     )
 
@@ -217,7 +217,7 @@ def test_redactor_stream_removes_release_infrastructure(monkeypatch):
         "/private/release/release.env http://proxy.corp.invalid:8891\n"
     )
     result = subprocess.run(
-        [sys.executable, "ci/redact_ci_artifact.py", "--stream"],
+        [sys.executable, ".github/scripts/redact_ci_artifact.py", "--stream"],
         input=text,
         env=env,
         capture_output=True,
@@ -270,7 +270,7 @@ def test_redactor_keeps_suite_results_and_redacts_nested_paths(tmp_path):
         "results": [
             {
                 "model_name": "pi05_ddp",
-                "script": "/workspace/source/examples/pi05/run.sh",
+                "script": "/workspace/source/examples/embodied/pi05/run.sh",
                 "passed": True,
                 "failed_metrics": [],
                 "warnings": ["throughput degraded 10% > 5% (soft check, warning only)"],

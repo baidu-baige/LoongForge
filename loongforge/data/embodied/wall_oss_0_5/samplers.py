@@ -13,6 +13,7 @@ from loongforge.data.embodied.sampler_builder import SamplerBuilderContext
 
 @register_sampler_builder("wall_oss_0_5")
 def wall_oss_0_5_sampler_builder(context: SamplerBuilderContext):
+    """Wall oss 0 5 sampler builder."""
     return DistributedSampler(
         context.dataset,
         num_replicas=context.runtime.world_size,

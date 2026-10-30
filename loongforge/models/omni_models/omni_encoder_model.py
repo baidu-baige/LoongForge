@@ -44,12 +44,14 @@ class _DummyEncoderPassthrough(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, input_embeds, encoder_output):
+        """forward."""
         ctx.encoder_output_shape = encoder_output.shape
         ctx.encoder_output_dtype = encoder_output.dtype
         return input_embeds
 
     @staticmethod
     def backward(ctx, grad_output):
+        """backward"""
         grad_encoder_output = torch.zeros(
             ctx.encoder_output_shape,
             dtype=ctx.encoder_output_dtype,
@@ -70,7 +72,7 @@ def make_encoder_forward_pre_hook(module_name, switch_parallel_state):
     Returns:
         Callable: A forward pre-hook function that accepts (module, input)
         and switches the tensor-parallel state by calling
-        ``switch_parallel_state(module_name)`` before returning the input
+        `change_parallel_state(module_name)` before returning the input
         unchanged.
     """
 
@@ -104,6 +106,38 @@ def make_encoder_forward_hook(module_name, switch_parallel_state):
     return encoder_forward_hook
 
 
+def make_encoder_backward_pre_hook(module_name):
+    """
+    Create a backward pre-hook that adjusts the tensor-parallel state
+    before the backward pass of a module.
+
+    This factory function generates a backward pre-hook intended for use
+    with `module.register_full_backward_pre_hook(...)`. The returned hook
+    is invoked before gradients are computed for the module, allowing the
+    runtime to switch tensor-parallel or pipeline-parallel states
+    dynamically based on the module name.
+
+    Args:
+        module_name : str
+            The name of the module whose backward pass should trigger a
+            parallel-state change.
+
+    Returns:
+        callable:
+            A backward pre-hook function with signature `(module, input)`,
+            which updates the parallel state and returns the original input
+            tuple unchanged.
+    """
+
+    from loongforge.engines.megatron.initialize import change_parallel_state
+
+    def encoder_backward_pre_hook(module, input):
+        change_parallel_state(module_name)
+        return input
+
+    return encoder_backward_pre_hook
+
+
 class OmniEncoderModel(torch.nn.Module):
     def __init__(
         self,
@@ -123,7 +157,7 @@ class OmniEncoderModel(torch.nn.Module):
         **kwargs,
     ) -> None:
         super().__init__()
-        # Engine callables injected by the training method (see ``MultimodalRuntime``).
+        # Engine callables injected by the training method (see ``OmniRuntime``).
         self.parallel_state_switch = parallel_state_switch
         self.vit_balance = vit_balance
         self.config = config

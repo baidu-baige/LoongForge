@@ -6,8 +6,8 @@
 #   control_mode=arm_pd_ee_target_base_pose_gripper_pd_joint_pos
 # REQUIRED: this config needs the SimplerEnv absolute EE controller, which upstream
 #   does not ship — use the 255isWhite fork or apply the two manual patches
-#   (see loongforge/evaluation/embodied/docs/benchmarks/simplerenv.md Step 1 and
-#   loongforge/evaluation/embodied/docs/patches/simplerenv/xvla.md).
+#   (see loongforge/embodied/eval/docs/benchmarks/simplerenv.md Step 1 and
+#   loongforge/embodied/eval/docs/patches/simplerenv/xvla.md).
 #
 # Optional overrides (edit this file):
 #   task_name / robot_setup / scene_name — other Bridge tasks:

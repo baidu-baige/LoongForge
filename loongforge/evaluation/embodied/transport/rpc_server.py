@@ -25,6 +25,7 @@ class PolicyServer:
     def __init__(
         self, policy, host: str = "0.0.0.0", port: int = 10093, metadata: Dict[str, Any] | None = None
     ) -> None:
+        """Run __init__."""
         self._policy = policy
         self._host = host
         self._port = port
@@ -32,9 +33,11 @@ class PolicyServer:
         self._metadata.setdefault("protocol_version", PROTOCOL_VERSION)
 
     def serve_forever(self) -> None:
+        """Run serve_forever."""
         asyncio.run(self.run())
 
     async def run(self) -> None:
+        """Run run."""
         async with websockets.asyncio.server.serve(
             self._handler,
             self._host,
@@ -46,6 +49,7 @@ class PolicyServer:
             await server.serve_forever()
 
     async def _handler(self, websocket: websockets.asyncio.server.ServerConnection) -> None:
+        """Run _handler."""
         packer = msgpack_numpy.Packer()
         await websocket.send(packer.pack(self._metadata))
 
@@ -65,6 +69,7 @@ class PolicyServer:
                 raise
 
     def _route_message(self, msg: Dict[str, Any]) -> Dict[str, Any]:
+        """Run _route_message."""
         request_id = msg.get("request_id", "default")
         message_type = msg.get("type", "infer")
         payload = msg.get("payload", msg)

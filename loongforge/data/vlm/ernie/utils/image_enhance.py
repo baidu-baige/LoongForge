@@ -898,3 +898,7 @@ class ImageEnhance:
                 meta_info = self.apply_transform(meta_info, transform_augs)
 
         return meta_info
+
+
+if __name__ == "__main__":
+    image_enhance = ImageEnhance("config_transform.yaml")

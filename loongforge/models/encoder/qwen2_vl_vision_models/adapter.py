@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""MLP projector shared by VLM models."""
+"""Adapters"""
 
 import torch
 from dataclasses import dataclass

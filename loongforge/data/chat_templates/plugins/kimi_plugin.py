@@ -25,7 +25,7 @@ from typing import (
 from typing_extensions import override
 from PIL import Image
 
-from .mm_plugin import MMPlugin
+from .mm_plugin import MMPlugin, Placeholder
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +42,12 @@ if TYPE_CHECKING:
 MEDIA_BEGIN = "<|media_begin|>"
 MEDIA_END = "<|media_end|>"
 MEDIA_CONTENT = "<|media_content|>"
+MEDIA_PAD = "<|media_pad|>"
+
+# Image format: <|media_begin|>image<|media_content|><|media_pad|><|media_end|>
+IMAGE_PLACEHOLDER_TEMPLATE = f"{MEDIA_BEGIN}image{MEDIA_CONTENT}{{tokens}}{MEDIA_END}"
+# Video chunk format: timestamp<|media_begin|>video<|media_content|><|media_pad|><|media_end|>
+VIDEO_CHUNK_TEMPLATE = "{{timestamp}}" + f"{MEDIA_BEGIN}video{MEDIA_CONTENT}{{tokens}}{MEDIA_END}"
 
 
 class KimiPlugin(MMPlugin):
@@ -80,6 +86,8 @@ class KimiPlugin(MMPlugin):
         self.image_prefix = image_prefix
         self.image_suffix = image_suffix
         self.include_image_size = include_image_size
+        # Kimi uses <|media_content|> as the placeholder token
+        self.media_placeholder_token_id = 163605
 
     @override
     def _preprocess_image(self, image: "ImageObject", **kwargs) -> "ImageObject":
@@ -249,8 +257,6 @@ class KimiPlugin(MMPlugin):
         Returns:
             Tuple of (processed_messages, mm_inputs)
         """
-        from .mm_plugin import Placeholder
-
         self._validate_input(images, videos)
 
         # Get multimodal inputs (pixel values and grid_thws)
@@ -350,3 +356,15 @@ class KimiPlugin(MMPlugin):
         """
         self._validate_input(images, videos)
         return self._get_mm_inputs(images, videos, processor)
+
+
+# Plugin registry entry
+def get_kimi_plugin(**kwargs) -> KimiPlugin:
+    """Create a Kimi multimodal plugin with default settings."""
+    return KimiPlugin(
+        image_token=MEDIA_CONTENT,
+        video_token=MEDIA_CONTENT,
+        merge_kernel_size=(2, 2),
+        temporal_merge_kernel_size=4,
+        **kwargs,
+    )

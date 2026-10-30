@@ -21,16 +21,23 @@ import copy
 import json
 import logging
 import random
-from collections import namedtuple
+from collections import OrderedDict, namedtuple
 from itertools import groupby
 
 import numpy as np
 
-from .utils.constant import IDTYPES_2_ID, IMAGETYPES_2_ID
+from .utils.constant import DATATYPE_2_ID, IDTYPES_2_ID, IMAGETYPES_2_ID
 from .utils.image_enhance import ImageEnhance
 
 logger = logging.getLogger(__name__)
+from .utils.processor_base import ProcessorBase
 from .tokenizer_vl import special_tokens_info
+
+try:
+    from .utils.io_utils import get_downloadable_image
+except Exception as e:
+    logger.warning(f" decord not found: {e}")
+    get_downloadable_image = None
 
 # ── pure-transformers replacement ────────────────────────────────────────────
 from transformers.image_utils import ChannelDimension
@@ -58,15 +65,14 @@ logger = logging.getLogger(__name__)
 logging.getLogger("PIL").setLevel(logging.WARNING)
 
 
-class ImageModificationProcessor:
+class ImageModificationProcessor(ProcessorBase):
     """
     ImageModificationProcessor
     """
 
     def __init__(self, config, tokenizer, image_preprocess):
+        super().__init__(config)
         self.config = config
-        self.is_training = True
-        self.is_pretraining = True
         self.tokenizer = tokenizer
         self.image_token_len = config.image_token_len
         self.image_preprocess = image_preprocess
@@ -402,3 +408,170 @@ class ImageModificationProcessor:
         grid_thw_list = np.concatenate(grid_thw_list, axis=0)
 
         return pixel_values_list, grid_thw_list
+
+    def mm_example_to_feature(self, example, download_fn=None):
+        """
+        mm_example_to_feature
+        """
+        download_fn = download_fn or get_downloadable_image
+        try:
+            assert isinstance(example, VisionExample), " only support VisionExample"
+            images, grid_thw = self.image_handling_for_adaptive(
+                example, download_fn=download_fn
+            )
+            input_ids = np.array(example.ids, dtype=np.int64)
+            token_type_ids = np.array(example.token_type_ids, dtype=np.int64)
+            image_type_ids = np.array(example.image_type_ids, dtype=np.int64)
+            image_type_ids[image_type_ids == IMAGETYPES_2_ID["padded_image"]] = (
+                IMAGETYPES_2_ID["video"]
+            )
+
+            if example.lossmask is not None:
+                labels = np.array(
+                    [
+                        self.tokenizer.ignored_index if j == 0 else i
+                        for i, j in zip(example.ids, example.lossmask)
+                    ],
+                    dtype=np.int64,
+                )
+            else:
+                labels = input_ids
+                print("example.lossmask is not None, labels=input_ids")
+
+            if not self.is_pretraining:
+                replace_token_id = self.cls_token_id
+                if self.chat_template == "ernie":
+                    replace_token_id = self.cls_token_id
+                elif (
+                    self.chat_template == "ernie_vl"
+                    or self.chat_template == "ernie_vl_thinking"
+                ):
+                    replace_token_id = self.sep_token_id
+                else:
+                    raise NotImplementedError(
+                        f"{self.chat_template} is not supported now."
+                    )
+                labels[labels == replace_token_id] = self.eos_token_id
+                print(
+                    "labels[labels == replace_token_id] = self.eos_token_id",
+                    f"self.should_shift_by_one: {self.should_shift_by_one}",
+                )
+                if self.sft_replace_ids:
+                    input_ids[input_ids == replace_token_id] = self.eos_token_id
+
+            features = OrderedDict(
+                src_id=example.src,
+                images=images,
+                input_ids=input_ids[:-1] if self.should_shift_by_one else input_ids,
+                labels=labels[1:] if self.should_shift_by_one else labels,
+                data_type=(
+                    DATATYPE_2_ID["mm"] if images is not None else DATATYPE_2_ID["lm"]
+                ),
+                token_type_ids=token_type_ids,
+                image_type_ids=image_type_ids,
+                data_not_valid=0,
+                grid_thw=grid_thw,
+            )
+        except Exception as e:
+            logger.exception(e)
+            if not self.is_training:
+                raise e
+            if self.variable_resolution:
+                images = np.zeros(
+                    [4, 3 * (self.image_preprocess.patch_size**2)],
+                    dtype=self.image_dtype,
+                )
+                grid_thw = np.array([[1, 2, 2]])
+                input_ids = np.array([self.im_patch_id] * 1 + [1])
+                labels = (
+                    np.ones_like([self.im_patch_id] * 1 + [1])
+                    * self.tokenizer.ignored_index
+                )
+                print("Exception create: labels")
+                token_type_ids = np.array(
+                    1 * [IDTYPES_2_ID["image"]] + 1 * [IDTYPES_2_ID["text"]],
+                    dtype="int64",
+                )
+                image_type_ids = np.array(1 * [IMAGETYPES_2_ID["image"]])
+                features = OrderedDict(
+                    src_id=example.src,
+                    images=images,
+                    input_ids=input_ids,
+                    labels=labels,
+                    data_type=DATATYPE_2_ID["mm"],
+                    token_type_ids=token_type_ids,
+                    image_type_ids=image_type_ids,
+                    data_not_valid=1,
+                    grid_thw=grid_thw,
+                )
+        finally:
+            pass
+
+        return features
+
+    def fill_empty_field_in_features(self, features):
+        """make sure all fields are filled"""
+        new_features = OrderedDict(
+            src_id=features["src_id"],
+            input_ids=features["input_ids"],
+            labels=features["labels"],
+            data_type=features["data_type"],
+            token_type_ids=features["token_type_ids"],
+            images=features.get("images", None),
+            image_type_ids=features.get("image_type_ids", None),
+            data_not_valid=features.get(
+                "data_not_valid", np.array([1], dtype="float32")
+            ),
+            grid_thw=features.get("grid_thw", None),
+            position_ids=features.get("position_ids", None),
+        )
+        return new_features
+
+    def json_2_example(self, data):
+        """Convert json format data to VisionExample"""
+        def _vision_key_formatting(data):
+            ret = {}
+            ret["meta"] = data["meta"]
+            ret["ids"] = data["ids"] if "ids" in data else data["ds16"]
+            ret["sids"] = None
+            ret["task"] = "mm"
+            ret["src"] = data.get("part", -1)
+            ret["part"] = data.get("part", -1)
+            ret["lossmask"] = (
+                data["lossmask"] if "lossmask" in data else data["ds16_lossmask"]
+            )
+            ret["info"] = -1
+            ret["name"] = "dummy"
+            ret["data_type"] = DATATYPE_2_ID["mm"]
+            ret["token_type_ids"] = (
+                data["token_type_ids"]
+                if "token_type_ids" in data
+                else data["ds16_tokenwise_type_id"]
+            )
+            ret["image_type_ids"] = (
+                data["image_type_ids"]
+                if "image_type_ids" in data
+                else data["ds16_imagewise_type_id"]
+            )
+            return ret
+
+        assert isinstance(data, dict)
+        data = _vision_key_formatting(data)
+        return VisionExample(**data)
+
+    def process(self, data, **kwargs):
+        """Convert json format data to VisionExample, and then to features"""
+        self.should_shift_by_one = self.is_training and (
+            self.is_pretraining or self.sft_shift_by_one
+        )
+        if isinstance(data, dict):
+            example = self.json_2_example(data)
+        else:
+            example = data
+        features = self.mm_example_to_feature(example, kwargs.get("download_fn", None))
+
+        if self.rope_3d:
+            features = self.position_ids_for_rope_3d(features)
+
+        features = self.fill_empty_field_in_features(features)
+        return features

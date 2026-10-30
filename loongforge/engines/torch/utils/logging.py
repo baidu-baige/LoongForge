@@ -3,7 +3,6 @@
 
 """Training logging utilities for metrics, W&B, and progress tracking."""
 
-import contextlib
 import json
 import logging
 import os
@@ -11,6 +10,8 @@ import time
 from contextlib import contextmanager
 from datetime import datetime
 from typing import Any, Dict, Optional
+
+import numpy as np
 
 import torch
 import wandb
@@ -58,7 +59,7 @@ def setup_logging(output_dir: str, rank: int):
     logging.basicConfig(level=level, handlers=handlers, force=True)
 
 
-@contextlib.contextmanager
+@contextmanager
 def log_stage(
     tag: str,
     start_msg: str = "",
@@ -284,10 +285,12 @@ class StageTimers:
 class TrainingLogger:
     """Handles training metrics logging, W&B integration, and progress tracking.
 
-    This class centralizes all logging-related functionality. It provides:
+    This class centralizes all logging-related functionality that was previously
+    scattered in BaseTrainer. It provides:
       - Metrics collection and formatting
       - W&B integration
       - JSONL metrics export
+      - Progress bar management
       - Training configuration logging
     """
 
@@ -327,6 +330,7 @@ class TrainingLogger:
         self.model_cfg = model_cfg
         self._wandb_initialized = False
         self._tb_writer = None
+        self._tb_dir: Optional[str] = None
 
         wandb_enabled = wandb_mode != "disabled"
         tb_enabled = bool(tensorboard_dir)
@@ -343,6 +347,7 @@ class TrainingLogger:
                 self._tb_writer = SummaryWriter(
                     log_dir=tb_dir, max_queue=tensorboard_queue_size
                 )
+                self._tb_dir = tb_dir
                 logger.info(f"TensorBoard enabled: {tb_dir}")
             except Exception as e:
                 logger.warning(f"TensorBoard init failed: {e}")
@@ -436,6 +441,59 @@ class TrainingLogger:
     # ═══════════════════════════════════════════════════════════════
     # Metrics Collection
     # ═══════════════════════════════════════════════════════════════
+
+    def count_batch_size(self, batch) -> int:
+        """Count batch size from batch data.
+
+        Supports:
+          - list of samples
+          - dict with tensor values
+          - dataclass/obj with tensor attributes
+
+        Args:
+            batch: Batch data
+
+        Returns:
+            Number of samples in the batch.
+        """
+        # 1. List format: len(batch)
+        if isinstance(batch, list):
+            return len(batch)
+
+        # 2. Dict format: check common keys for batch dimension
+        if isinstance(batch, dict):
+            for key in ("actions", "action", "input_ids", "attention_mask", "state"):
+                if key in batch and batch[key] is not None:
+                    return self._get_batch_dim(batch[key])
+            return 0
+
+        # 3. Dataclass/object format: check common attributes for batch dimension
+        for key in ("actions", "action", "input_ids", "attention_mask", "state"):
+            if hasattr(batch, key):
+                val = getattr(batch, key)
+                if val is not None:
+                    return self._get_batch_dim(val)
+        return 0
+
+
+    def _get_batch_dim(self, value) -> int:
+        """Get batch dimension from tensor/ndarray.
+
+        Returns 0 if value is not a tensor/ndarray or has no batch dim.
+        """
+        if isinstance(value, torch.Tensor):
+            return value.shape[0] if value.ndim > 0 else 0
+        elif isinstance(value, np.ndarray):
+            return value.shape[0] if value.ndim > 0 else 0
+        elif isinstance(value, list) and len(value) > 0:
+            # Handle list of tensors (e.g., images_list)
+            first = value[0]
+            if isinstance(first, torch.Tensor):
+                return first.shape[0] if first.ndim > 0 else 0
+            elif isinstance(first, np.ndarray):
+                return first.shape[0] if first.ndim > 0 else 0
+        return 0
+
 
     def collect_metrics(
         self,
@@ -618,6 +676,13 @@ class TrainingLogger:
         if not self.is_main:
             return
         logger.info(f"Resumed model weights from step {step}")
+
+    def log_resume_not_found(self):
+        """Log that resume was requested but no checkpoint found."""
+        if not self.is_main:
+            return
+        logger.warning("--resume set but no checkpoint found, starting from scratch")
+
 
     def log_frozen_module(self, dot_path: str):
         """Log frozen module.

@@ -4,8 +4,8 @@ Run these scripts from the repository root.
 
 | Script | Purpose |
 | --- | --- |
-| `compute_norm_stats.sh` | Compute LeRobot action/state normalization statistics (e.g. `libero_norm_stats.json`). |
-| `sft_wall_oss_0_5_dmuon_fsdp8.sh` | Run Wall-OSS-0.5 fine-tuning on 8 GPUs with FSDP + the DMuon optimizer. |
+| `finetuning/compute_norm_stats.sh` | Compute LeRobot action/state normalization statistics (e.g. `libero_norm_stats.json`). |
+| `finetuning/sft_wall_oss_0_5_dmuon_fsdp8.sh` | Run Wall-OSS-0.5 fine-tuning on 8 GPUs with FSDP + the DMuon optimizer. |
 
 ## Paths
 

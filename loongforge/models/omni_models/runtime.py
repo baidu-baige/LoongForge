@@ -12,7 +12,7 @@ from typing import Any, Callable, Optional
 
 
 @dataclass(frozen=True)
-class MultimodalRuntime:
+class OmniRuntime:
     """Engine capabilities the multimodal model needs at run time."""
 
     #: Image-encoder data-parallel size decided by the engine's parallel layout.

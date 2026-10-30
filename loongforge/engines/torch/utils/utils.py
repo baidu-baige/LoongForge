@@ -11,6 +11,21 @@ import numpy as np
 import torch
 
 
+logger = logging.getLogger(__name__)
+
+
+def resolve_dtype(dtype_str: str) -> torch.dtype:
+    """Convert string dtype to torch.dtype.
+    """
+    mapping = {
+        "bfloat16": torch.bfloat16,
+        "float16": torch.float16,
+        "float32": torch.float32,
+    }
+
+    return mapping[dtype_str]
+
+
 def parse_dtype_from_str(dtype_name: str) -> torch.dtype:
     """Map a canonical FSDP CLI dtype name to ``torch.dtype``."""
     DTYPE_MAP_BY_STR = {
@@ -55,21 +70,6 @@ def parse_module_key_patterns(
     ):
         raise ValueError(f"{option_name} cannot contain empty segments")
     return patterns
-
-
-def resolve_dtype(dtype_str: str) -> torch.dtype:
-    """Convert string dtype to torch.dtype.
-    """
-    mapping = {
-        "bfloat16": torch.bfloat16,
-        "float16": torch.float16,
-        "float32": torch.float32,
-    }
-
-    return mapping[dtype_str]
-
-
-logger = logging.getLogger(__name__)
 
 
 def set_seed(seed: int, by_rank: bool = False):
@@ -142,6 +142,12 @@ class Profiler:
         else:
             self.mode = "off"
         self._active = self.mode != "off"
+
+    @property
+    def is_active(self) -> bool:
+        """Is profiling active on this rank"""
+        return self._active
+
 
     def start(self):
         """Build the underlying profiler and start it (pytorch mode).

@@ -6,7 +6,7 @@
 # path required to produce ``libero_norm_stats.json`` is kept: read
 # ``observation.state`` and ``action`` columns from a local LeRobot v2.1/v3
 # parquet dataset and write per-dim mean/std/q01/q99 in the layout expected by
-# ``loongforge/data/embodied/wall_oss_0_5/transforms/wall_oss_0_5_utils.py::load_norm_stats``.
+# ``wall_oss_0_5/transforms/wall_oss_0_5_utils.py::load_norm_stats``.
 """Compute LeRobot normalization stats (mean, std, q01, q99).
 
 Output JSON layout::
@@ -18,7 +18,7 @@ Output JSON layout::
 
 Usage::
 
-    python examples/wall_oss_0_5/finetuning/compute_norm_stats.py \\
+    python -m examples.wall_oss_0_5.finetuning.compute_norm_stats \\
         --data-root /path/to/lerobot_dataset \\
         --output-path /path/to/libero_norm_stats.json
 """
@@ -33,6 +33,7 @@ import pyarrow.dataset as pa_ds
 
 
 def compute_vector_stats(values: np.ndarray) -> dict[str, list[float]]:
+    """Compute vector stats."""
     if values.ndim == 1:
         values = values.reshape(-1, 1)
     return {
@@ -84,6 +85,7 @@ def compute_norm_stats(
     state_key: str = "observation.state",
     action_key: str = "action",
 ) -> dict[str, dict]:
+    """Compute norm stats."""
     states, actions = load_state_action_arrays(data_root, state_key, action_key)
     norm_stats = {
         state_key: compute_vector_stats(states),
@@ -98,6 +100,7 @@ def compute_norm_stats(
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse args."""
     parser = argparse.ArgumentParser(
         description="Compute norm stats for a local LeRobot v2.1/v3 dataset.",
     )
@@ -129,6 +132,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """Main."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     args = parse_args()
 

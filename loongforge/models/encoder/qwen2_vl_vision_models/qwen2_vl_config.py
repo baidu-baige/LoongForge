@@ -27,6 +27,7 @@ class Qwen2VisionModelConfig(BaseModelConfig):
     # ------- Fields with default values, write later -------
     normalization: str = "LayerNorm"
     swiglu: bool = False
+    class_token_len: int = 0
     group_query_attention: bool = False
     attention_dropout: float = 0.0
     hidden_dropout: float = 0.0

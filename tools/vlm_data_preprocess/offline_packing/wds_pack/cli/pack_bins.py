@@ -87,6 +87,7 @@ def init(cfg):
 
 
 def run_hashbucket(token_info_file, max_token_len):
+    bins_boxs = []
     processor, tracker = init_from_file(token_info_file, max_token_len)
     return run_hashbucket_processor(processor, tracker, max_token_len)
 
@@ -134,11 +135,12 @@ def run_hashbucket_processor(processor, tracker, max_token_len):
         "pack_with_deletion", box_capacity=max_token_len
     )
     update_stats = processor.update_hash_buckets(remove_empty=True, verbose=True)
-    update_info(update_stats)
+    rest_items = update_info(update_stats)
     bins_boxs.extend(bin_boxs_001)
     mean, min_, max_, num = get_hs(processor.hash_buckets)
     if num == 0:
         return bins_boxs
+    scale = int(mean - (mean - min_) * 0.1)
     print(
         f"in the first round of end ----------the current processing box number: {len (bin_boxs_001)}, total box {len (bins_boxs)}, handle the {num - tmp_num} items, remaining {num} the items"
     )
@@ -195,6 +197,7 @@ def run_hashbucket_processor(processor, tracker, max_token_len):
 
     for i in range(2):
         if num > 10000:
+            scale = int(mean - (mean - min_) * 0.1)
             min_items, min_ratio = 4, 0.90
             bin_boxs_turn = tracker.track_packing(
                 "pack_with_flexible_seeds",

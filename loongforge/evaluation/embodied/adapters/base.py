@@ -8,7 +8,7 @@ Adapters live on the simulator side and must not import model frameworks.
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Tuple
 
 
 class BaseBenchmarkAdapter:
@@ -24,4 +24,12 @@ class BaseBenchmarkAdapter:
 
     def get_eval_context(self) -> Dict[str, Any]:
         """Return benchmark metadata such as control_hz, max_steps, and action_scale."""
+        raise NotImplementedError
+
+    def judge_success(self, episode_replay: Dict[str, Any]) -> Tuple[Optional[bool], str]:
+        """Real-robot success oracle hook. Sim adapters normally do not implement this."""
+        raise NotImplementedError
+
+    def wait_reset_complete(self) -> None:
+        """Real-robot async reset hook. Sim adapters normally do not implement this."""
         raise NotImplementedError

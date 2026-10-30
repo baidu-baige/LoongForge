@@ -3,13 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ═══════════════════════════════════════════════════════════════
-# sft_gr00t_n1_6_ddp.sh - GR00T-N1.6 Training Launch Script (DDP)
+# run_gr00t_n1_6_ddp_finetune.sh - GR00T-N1.6 Training Launch Script (DDP)
 #
 # Usage:
-#   bash sft_gr00t_n1_6_ddp.sh
-#   TRAIN_ITERS=50 bash sft_gr00t_n1_6_ddp.sh            # override via env
-#   bash sft_gr00t_n1_6_ddp.sh --train-iters 50000       # override a training param (flag form)
-#   bash sft_gr00t_n1_6_ddp.sh model.tune_llm=true       # override YAML model:/data: fields (dotlist form)
+#   bash run_gr00t_n1_6_ddp_finetune.sh
+#   TRAIN_ITERS=50 bash run_gr00t_n1_6_ddp_finetune.sh            # override via env
+#   bash run_gr00t_n1_6_ddp_finetune.sh --train-iters 50000       # override a training param (flag form)
+#   bash run_gr00t_n1_6_ddp_finetune.sh model.tune_llm=true       # override YAML model:/data: fields (dotlist form)
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -60,6 +60,7 @@ NUM_WORKERS=${NUM_WORKERS:-16}
 DATA_ARGS=(
     --dataset-format lerobot_datasets
     --dataset-path "$DATA_PATH"
+    --robot-type libero_franka
     --video-backend torchcodec
     --num-workers "$NUM_WORKERS"
     --dataloader-multiprocessing-context spawn

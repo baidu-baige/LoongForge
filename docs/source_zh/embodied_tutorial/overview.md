@@ -13,7 +13,7 @@
 | `examples/` | 模型级启动脚本目录，可通过脚本末尾的透传参数覆盖默认配置 |
 | `configs/models/` | 模型默认 YAML 配置目录，包含 `model:` / `data:` 两个顶层配置段 |
 | `loongforge/train.py` | 训练入口，负责解析配置、构建 Trainer 并启动训练 |
-| `loongforge/training/torch_args.py` | 训练流程参数定义文件，负责生成 shell CLI |
+| `loongforge/training/torch_args.py` | 通用训练参数定义文件，负责生成 shell CLI |
 | `loongforge/models/catalog.py` | 统一模型路由表，将 `--model-name` 绑定到引擎、YAML，以及 Torch 所需的配置类型 |
 | `loongforge/models/embodied/` | Torch 具身模型组网与模型注册 |
 | `loongforge/data/embodied/` | 具身数据流水线：`dataloader.py`（DataLoader 入口）、`registry.py`（模型类型注册表）、所有模型共用的代码（数据集类 `lerobot_dataset.py`、`dummy_dataset.py`、`hdf5_dataset.py`，视频后端与统计；`sampler_builder.py` 采样；`transforms/` 下的 `base.py`、`collator.py` 拼批和 `utils/` 逐样本变换），以及每个模型一个目录（模型目录下带 `transforms/`） |
@@ -85,7 +85,7 @@ Dataset
     ↓
 sample-level transform
     ↓
-preprocessor / collate_fn
+collator / collate_fn
     ↓
 PreparedBatch
     ↓
@@ -102,16 +102,18 @@ model.forward(batch)
 | --- | --- | --- | --- | --- |
 | 数据格式 | `--dataset-format` | `lerobot_datasets` | `lerobot_datasets`, `hdf5_datasets`, `dummy_datasets` | 选择数据集格式 |
 | 数据路径 | `--dataset-path` | `None` | 本地路径或数据集 id | 训练数据路径 |
+| 数据 split | `--split` | `train` | 字符串 | 数据集切分 |
 | dummy 样本数 | `--num-samples` | `100` | 正整数 | `dummy_datasets` 下生成的样本数 |
 ### 2.2 LeRobot 数据策略
 
-使用 LeRobot 格式时，可通过以下参数进一步控制数据加载行为：指定数据集格式版本（v2.0 / v2.1 / v3.0）、选择针对不同机器人或任务的构建策略，以及配置视频解码后端。
+使用 LeRobot 格式时，可通过以下参数进一步控制数据加载行为：指定数据集格式版本（v2.0 / v2.1 / v3.0）、选择针对不同机器人或任务的构建策略、配置视频解码后端，以及指定 Robot型号以匹配 embodiment 的 action-state 布局。
 
 | 功能 | 配置项 | 默认值 | 取值 / 类型 | 说明 |
 | --- | --- | --- | --- | --- |
 | LeRobotdataset 版本 | `--lerobotdataset-version` | `v3.0` | `v2.0`, `v2.1`, `v3.0` | 解析不同 LeRobot 磁盘格式 |
 | 数据策略 | `--dataset-strategy` | `default` | `default`, `fastwam`, `lingbot_va`, `gr00t_n1_7`, `cosmos3_droid`, `dreamzero`, `wall_oss_0_5` | 选择 LeRobot 构建策略 |
 | 视频后端 | `--video-backend` | `torchcodec` | `torchcodec`, `decord`, `opencv`, `pyav`, `torchvision_av` | 视频解码实现 |
+| robot 类型 | `--robot-type` | `None` | 字符串 | 选择 embodiment / action-state layout |
 
 > **注意：** `--video-backend` 用于指定 `--lerobotdataset-version` v2.x 系列及其变体的数据读取后端；v3.0 系列默认支持 `torchcodec`、`pyav` 两种后端。
 
@@ -302,7 +304,7 @@ Trainer 模块负责训练生命周期编排，包括分布式上下文初始化
 
 ### 4.1 Trainer 选择
 
-通过 `--trainer-type` 选择训练器，可选值为 `loongforge/train.py` 中 `TORCH_TRAINER_TYPES` 的键，每个键对应 `loongforge/training/embodied/` 下的一个训练 method 模块，以及 `loongforge/training/embodied/custom/` 下可选的单模型定制包。默认的 `FinetuneTrainer` 适用于标准单数据流的监督微调。若涉及多数据流或特殊 loss 组合，可在 `loongforge/training/embodied/` 下新增 method 模块。若需要非标准 step 调度，可在 `loongforge/training/embodied/custom/<model>/` 下新增模块，由其中的 `build_hooks` 返回 `TrainerHooks`。新的训练器类型需登记到 `TORCH_TRAINER_TYPES`。
+通过 `--trainer-type` 选择训练器，可选值为 `loongforge/train.py` 中 `TORCH_TRAINER_TYPES` 的键，每个条目指定训练 method 模块、可选的 hooks 工厂和 runner 类。共享 method 放在 `loongforge/training/embodied/`，单模型 method、hooks 和定制 runner 放在 `loongforge/training/embodied/custom/<model>/`。默认的 `FinetuneTrainer` 使用 `TorchRunner`，适用于标准单数据流的监督微调。若涉及多数据流或特殊 loss 组合，可在对应位置新增 method 模块。若需要非标准 step 调度，可通过 `build_hooks` 返回 `TrainerHooks`，或使用定制 runner。新的 method、hooks 工厂和 runner 需登记到 `TORCH_TRAINER_TYPES`。
 
 ### 4.2 分布式策略
 

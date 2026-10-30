@@ -8,13 +8,13 @@ from runpy import run_path
 
 
 ROOT = Path(__file__).resolve().parents[3]
-CATALOG = run_path(str(ROOT / "loongforge/models/catalog.py"))
+CONSTANTS = run_path(str(ROOT / "loongforge/utils/constants.py"))
 
 
 def test_kimi_k3_llm_example_uses_the_llm_training_path():
     script = (ROOT / "examples/kimi_k3/pretrain/pretrain_kimi_k3_llm.sh").read_text()
 
-    assert CATALOG["LanguageModelFamilies"].KIMI_K3_LLM == "kimi_k3_llm"
+    assert CONSTANTS["LanguageModelFamilies"].KIMI_K3_LLM == "kimi_k3_llm"
     assert "MODEL_CONFIG_FILE=${MODEL_CONFIG_FILE:-" in script
     assert "configs/models/kimi_k3/kimi_k3_backbone.yaml" in script
     assert "model_type=kimi_k3_llm" in script

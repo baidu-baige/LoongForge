@@ -286,6 +286,7 @@ class Glm5NextModel(nn.Module):
         )
         if post_process:
             self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
+        self._input_tensor = None
         self._initialize_glm_modules()
 
     def get_input_embeddings(self) -> nn.Embedding:
@@ -309,6 +310,7 @@ class Glm5NextModel(nn.Module):
             if len(input_tensor) != 1:
                 raise ValueError("GLM-5.3-Flash expects one pipeline input tensor")
             input_tensor = input_tensor[0]
+        self._input_tensor = input_tensor
         self.model.language_model.set_input_tensor(input_tensor)
 
     @classmethod
@@ -322,6 +324,13 @@ class Glm5NextModel(nn.Module):
                 nn.init.ones_(module.index_kpool_compress_gate)
             if isinstance(module, Glm5NextTextLinearAttention):
                 initialize_kda(module)
+
+    def _initialize_module(self, module: nn.Module) -> None:
+        if isinstance(module, KPoolDSAIndexer):
+            nn.init.zeros_(module.index_kpool_compress_ape)
+            nn.init.ones_(module.index_kpool_compress_gate)
+        if isinstance(module, Glm5NextTextLinearAttention):
+            initialize_kda(module)
 
     def forward(
         self,

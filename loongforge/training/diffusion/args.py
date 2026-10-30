@@ -77,4 +77,40 @@ def add_diffusion_args(parser: argparse.ArgumentParser) -> argparse.ArgumentPars
         default=None,
         help="Maximum width of video in latent space. Default: None"
     )
+    group.add_argument(
+        "--caption-channels",
+        type=int,
+        default=None,
+        help="Number of channels for caption/text embeddings in video models. Default: None"
+    )
+
+    group.add_argument(
+        "--max-text-length",
+        type=int,
+        default=None,
+        help="Maximum text/caption token length. Default: None"
+    )
+
+    group.add_argument(
+        "--max-video-length",
+        type=int,
+        default=32760,
+        help="Maximum video token length. Default: 32760"
+    )
+
+    group.add_argument(
+        "--max-image-length",
+        type=int,
+        default=None,
+        help="Maximum image token length. Default: None"
+    )
+
+    group.add_argument(
+        '--dataset-metadata-path',
+        type=str,
+        default=None,
+        help="Path to dataset metadata file containing video/image information. "
+             "Default: None"
+    )
+
     return parser

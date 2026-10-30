@@ -214,8 +214,8 @@ def build_transforms_from_args(
 def build_dataset_by_strategy(model_cfg, data_cfg, training_args, runtime):
     """Build a lerobot dataset via the strategy named by ``training_args.dataset_strategy``.
 
-    Uses ``"default"`` when the field is absent or empty; raises ``ValueError``
-    for a name that is not in ``DATASET_STRATEGIES``.
+    Falls back to ``"default"`` when the field is absent, empty, or names a
+    dataset that has no dedicated strategy.
     """
     name = training_args.dataset_strategy or "default"
     if name not in DATASET_STRATEGIES:

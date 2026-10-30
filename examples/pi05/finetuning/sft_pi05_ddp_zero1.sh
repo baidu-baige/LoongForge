@@ -3,16 +3,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ═══════════════════════════════════════════════════════════════
-# sft_pi05_ddp_zero1.sh - pi05 VLA SFT Launch Script (DDP + ZeRO1)
+# run_pi05_ddp_zero1_finetune.sh - pi05 VLA SFT Launch Script (DDP + ZeRO1)
 #
-# Mirrors the config from examples/pi05/finetuning/sft_pi05_ddp.sh
-# but uses the embodied training framework (loongforge/train.py).
+# Mirrors the config from examples/pi05/finetuning/sft_pi05.sh
+# but uses the embodied training framework (loongforge/embodied/train.py).
 #
 # Usage:
-#   bash sft_pi05_ddp_zero1.sh
-#   TRAIN_ITERS=50 bash sft_pi05_ddp_zero1.sh                          # override via env
-#   bash sft_pi05_ddp_zero1.sh --train-iters 50000                     # override a training param (flag form)
-#   bash sft_pi05_ddp_zero1.sh model.state_dim=8 data.image_size=448   # override YAML model:/data: fields (dotlist form)
+#   bash run_pi05_ddp_zero1_finetune.sh
+#   TRAIN_ITERS=50 bash run_pi05_ddp_zero1_finetune.sh                          # override via env
+#   bash run_pi05_ddp_zero1_finetune.sh --train-iters 50000                     # override a training param (flag form)
+#   bash run_pi05_ddp_zero1_finetune.sh model.state_dim=8 data.image_size=448   # override YAML model:/data: fields (dotlist form)
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -60,11 +60,12 @@ DATA_ARGS=(
     --dataset-format lerobot_datasets
     --dataset-path "$DATA_PATH"
     --tokenizer-path "$TOKENIZER_PATH"
+    --robot-type libero_franka
     --batch-drop-last
     --num-workers "$NUM_WORKERS"
 )
 
-# ── Training params (aligned with examples/pi05/finetuning/sft_pi05_ddp.sh) ──
+# ── Training params (aligned with examples/pi05/finetuning/sft_pi05.sh) ──
 # Old Megatron config: micro-batch-size=16, global-batch-size=128, 8 GPUs
 # => gradient-accumulation-steps = 128 / (16 * 8) = 1
 TRAIN_ITERS=${TRAIN_ITERS:-20}

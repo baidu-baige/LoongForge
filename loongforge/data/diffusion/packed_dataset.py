@@ -18,17 +18,31 @@ from loongforge.data.diffusion.latent_dataset import LatentDataset
 
 
 def first_fit(seqlens: List[int], pack_size: int) -> List[List[int]]:
-    """Pack sequence indices into bins of capacity ``pack_size`` (first-fit)."""
-    bins = []  # each bin: [indices, used]
+    """
+    Packs sequences of varying lengths into bins using the First-Fit algorithm.
+
+    Args:
+      seqlens: A list of integers, representing the lengths of the sequences to be packed.
+      pack_size: The maximum capacity of each bin.
+
+    Returns:
+      A list of lists, where each inner list represents a bin and contains the indices
+        of the sequences assigned to that bin.
+    """
+    bins = []  # each bin: {"indices": [...], "used": total_size}
     for i, s in enumerate(seqlens):
+        # Find first bin that fits
+        found = False
         for bin_info in bins:
-            if bin_info[1] + s <= pack_size:
-                bin_info[0].append(i)
-                bin_info[1] += s
+            if bin_info["used"] + s <= pack_size:
+                bin_info["indices"].append(i)
+                bin_info["used"] += s
+                found = True
                 break
-        else:
-            bins.append([[i], s])
-    return [indices for indices, _ in bins]
+        if not found:  # open a new bin
+            bins.append({"indices": [i], "used": s})
+    # Return only the indices
+    return [bin_info["indices"] for bin_info in bins]
 
 
 def _get_cp_sample_alignment(cp_world_size: int) -> int:
@@ -79,6 +93,10 @@ def patchify_for_conv3d(latent: torch.Tensor, patch_size=(1, 2, 2)):
     x = x.permute(1, 3, 5, 0, 2, 4, 6).contiguous()
     num_patches = fP * hP * wP
     return x.reshape(num_patches, c * pT * pH * pW)
+
+
+
+
 
 
 class PackedDataset(IterableDataset):

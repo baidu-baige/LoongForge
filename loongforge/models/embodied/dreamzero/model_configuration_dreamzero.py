@@ -202,6 +202,9 @@ class DreamZeroConfig(PreTrainedConfig):
     # ------------------------------------------------------------------
     # Multi-embodiment routing. IDs must match the action-head projector table.
     # ------------------------------------------------------------------
+    action_loss_embodiment_ids: list[int] = field(
+        default_factory=lambda: [26, 17, 32]
+    )
     max_num_embodiments: int = 32
 
     # ------------------------------------------------------------------
@@ -209,6 +212,7 @@ class DreamZeroConfig(PreTrainedConfig):
     # ------------------------------------------------------------------
     tune_projector: bool = True
     tune_diffusion_model: bool = True
+    freeze_decode_layer: bool = False
     # Re-anchor global RNG after the first batch fetch and before the first
     # stochastic model forward. This is model-local and does not affect other
     # trainer users.
@@ -245,11 +249,13 @@ class DreamZeroConfig(PreTrainedConfig):
     expert_model_parallel_size: int = 1
 
     # Generic training compatibility knobs
+    deallocate_pipeline_outputs: bool = False
     random_fallback_cpu: bool = False
     fp8: bool = False
     fp4: bool = False
     bf16: bool = True
     fp16: bool = False
+    enable_autocast: bool = False
     calculate_per_token_loss: bool = False
     init_model_with_meta_device: bool = False
     barrier_with_L1_time: bool = False
@@ -292,7 +298,11 @@ class DreamZeroConfig(PreTrainedConfig):
         # Megatron/DiT hidden size and action-head backbone embedding dim.
         self.hidden_size = preset["dim"]
         self.backbone_hidden_size = preset["dim"]
+        self.backbone_in_dim = preset["in_dim"]
+        self.backbone_out_dim = preset["out_dim"]
+        self.backbone_freq_dim = preset["freq_dim"]
         self.backbone_model_type = preset["model_type"]
+        self.backbone_frame_seqlen = preset["frame_seqlen"]
         self.backbone_concat_first_frame_latent = preset["concat_first_frame_latent"]
         self.vae_class = preset["vae_class"]
         self.vae_z_dim = preset["vae_z_dim"]

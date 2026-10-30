@@ -4,8 +4,8 @@
 """Pi05 batch-level collator and tokenization utilities.
 
 Batch-level collator (DataLoader collate_fn):
-    @register_collator("pi05")
-    Pi05Collator: transformed samples → Pi05PreparedBatch (CPU tensors)
+    @register_preprocessor("PaliGemmaPi05")
+    Pi05Preprocessor: transformed samples → Pi05PreparedBatch (CPU tensors)
 
 Utilities:
     tokenize_prompts(prompts, tokenizer, max_length) -> dict

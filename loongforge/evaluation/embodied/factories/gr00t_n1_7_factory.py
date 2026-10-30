@@ -4,7 +4,7 @@
 """GR00T-N1.7 model factory for the LoongForge eval server.
 
 GR00T-N1.7 is a multi-embodiment model. Its training-side
-``Gr00tN1d7Policy.predict_action(images, instructions, state=None,
+``GrootN1d7Policy.predict_action(images, instructions, state=None,
 dataset_stats=None)`` already matches the shared eval contract, so this factory
 only:
 
@@ -96,10 +96,10 @@ class Gr00tN1d7ModelFactory:
         model_cfg: Gr00tN1d7Config,
         server_args: EvalServerArgs,
     ) -> PredictActionModelSpec:
-        """Create Gr00tN1d7Policy and return it with eval metadata.
+        """Create GrootN1d7Policy and return it with eval metadata.
 
         Args:
-            model_cfg: Typed Gr00tN1d7Config resolved from the YAML ``model:``.
+            model_cfg: Typed GrootN1d7Config resolved from the YAML ``model:``.
             server_args: Typed EvalServerArgs with runtime/infra options.
         """
         import os
@@ -121,7 +121,7 @@ class Gr00tN1d7ModelFactory:
             else "cpu"
         )
 
-        # Builds Gr00tN1d7Policy (loads the Qwen3-VL backbone from model_cfg.model_name).
+        # Builds GrootN1d7Policy (loads the Qwen3-VL backbone from model_cfg.model_name).
         model = build_model(model_cfg)
         if not server_args.random_init:
             # Load on CPU first: the backbone is already materialized on CPU here,
@@ -151,7 +151,7 @@ class Gr00tN1d7ModelFactory:
         model.eval()
         if server_args.use_bf16 and resolved_device.type == "cuda":
             # Eval runs the whole model in bf16 like the official server. Without
-            # this flag, Gr00tN1d7Policy._restore_precision_after_apply would cast
+            # this flag, GrootN1d7Policy._restore_precision_after_apply would cast
             # the trainable action head back to fp32 right after .to(bf16) below,
             # which is the training-side precision policy, not the eval behavior.
             os.environ.setdefault("GR00T_ALLOW_TRAINABLE_PARAM_BF16", "1")
@@ -167,7 +167,7 @@ class Gr00tN1d7ModelFactory:
 
             def _predict_action_truncate(images, instructions, state=None, dataset_stats=None, **kwargs):
                 # Extra eval payload keys (cfg_scale, unnorm_key, ...) are swallowed
-                # here and NOT forwarded: Gr00tN1d7Policy.predict_action does not
+                # here and NOT forwarded: GrootN1d7Policy.predict_action does not
                 # consume them.
                 result = _orig_predict_action(
                     images, instructions, state=state, dataset_stats=dataset_stats

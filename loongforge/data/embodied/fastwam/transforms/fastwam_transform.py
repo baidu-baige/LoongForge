@@ -167,7 +167,7 @@ def build_fastwam_transforms(ctx: TransformBuilderContext):
 
     normalization_mode = ctx.data_cfg.normalization_mode
 
-    # Action normalization, same as the original FastWAM pipeline's
+    # Action normalization: matches bak pipeline.py step 2.
     # ActionTransform(apply_to=["action"], action_horizon=32, normalization_mode=q99)
     action_stats = (
         convert_stats(ctx.dataset_stats.get("action"))
@@ -186,7 +186,7 @@ def build_fastwam_transforms(ctx: TransformBuilderContext):
     ))
 
     # Proprio normalization: normalize observation.state to match BCTrainer pipeline.
-    # The original FastWAM pipeline applies ActionTransform(apply_to=["observation.state"], normalization_mode=q99)
+    # bak pipeline.py applies ActionTransform(apply_to=["observation.state"], normalization_mode=q99)
     # before FastWAMKeyMappingTransform reads it as `proprio`.
     proprio_stats = (
         convert_stats(ctx.dataset_stats.get("observation.state"))

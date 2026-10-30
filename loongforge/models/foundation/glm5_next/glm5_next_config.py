@@ -15,8 +15,6 @@ from loongforge.models.common.base_model_config import BaseModelMLAConfig
 
 @dataclass
 class Glm5NextVisionConfig:
-    """Vision tower and projector configuration for GLM-5.3-Flash."""
-
     depth: int = 24
     hidden_size: int = 1024
     hidden_act: str = "silu"
@@ -42,7 +40,6 @@ class Glm5NextVisionConfig:
     memory_efficient_layer_norm: bool = False
 
     def __post_init__(self) -> None:
-        """Check that heads divide the hidden size and that patch and merge sizes are positive."""
         if self.hidden_size % self.num_heads:
             raise ValueError("vision hidden_size must be divisible by num_heads")
         if self.patch_size <= 0 or self.temporal_patch_size <= 0 or self.spatial_merge_size <= 0:

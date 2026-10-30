@@ -1009,6 +1009,8 @@ class BaseTask(object):
 
         # ckpt weight conversion
         model_name = self.model_name
+        node_nums = self.input_cmd_args.node_nums
+        timeout = self.input_cmd_args.timeout
         scripts_root_path = model_config["scripts_root_path"]
         model_lock_file_path = model_config["model_lock_file_path"]
         training_log_path = model_config["training_log_path"]
@@ -1096,6 +1098,8 @@ class BaseTask(object):
 
         # ckpt weight conversion
         model_name = self.model_name
+        node_nums = self.input_cmd_args.node_nums
+        timeout = self.input_cmd_args.timeout
         scripts_root_path = model_config["scripts_root_path"]
         model_lock_file_path = model_config["model_lock_file_path"]
         training_log_path = model_config["training_log_path"]

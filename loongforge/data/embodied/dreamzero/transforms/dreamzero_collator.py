@@ -287,10 +287,9 @@ class DreamZeroPreparedBatch(dict):
     ``.to(device)`` / ``pin_memory()`` so the generic trainer's
     ``_move_batch_to_device`` moves it uniformly like other models' PreparedBatch.
 
-    The container is a dict subclass; values and key access match the plain-dict
-    form used by ``DreamZeroPolicy``. Device movement now happens in the trainer
-    (idempotent w.r.t. the per-tensor move still done inside
-    ``_prepare_action_input``).
+    Values are identical to the legacy plain-dict output; only the container type
+    changes. Device movement now happens in the trainer (idempotent w.r.t. the
+    per-tensor move still done inside ``_prepare_action_input``).
     """
 
     def to(self, device) -> "DreamZeroPreparedBatch":

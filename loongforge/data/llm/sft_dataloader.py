@@ -27,27 +27,52 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-# A scheduling slot consumed by `_schedule_step_aligned`. Each slot occupies
-# `len(chunks)` chunks of step capacity and contributes one or more real
-# source groups to the per-sample loss normalization.
-#
-# - chunks:     flat dataset indices, length k = sum(components).
-# - components: real-group sizes inside the slot, in chunk-placement order.
-#               * Real slot: components == [k] (single real group).
-#               * Synth slot: components == [c1, c2, ...] with sum == k,
-#                 stitched from short real groups in the synthesis path.
-#
-# MLA's KV chain resets at chunk_idx_in_group==0, so each component (real
-# group) inside a synth slot keeps an independent KV chain — no special
-# handling needed in the attention layer.
-Slot = namedtuple("Slot", ["chunks", "components"])
+@dataclass(frozen=True)
+class SFTLoaderConfig:
+    """Data-recipe fields needed to assemble the SFT loader.
 
+    Built by the training method from its arguments; the loader never reads
+    backend arguments or global CLI state.
+    """
 
-def _cyclic_iter(iter):
-    """cyclic iteration"""
-    while True:
-        for x in iter:
-            yield x
+    tokenizer_type: str
+    variable_seq_lengths: bool
+    enable_chunkpipe: bool
+    chunksize: int
+    seq_length: int
+    sft_chunkpipe_mode: bool
+    mtp_num_layers: int
+    sft_data_streaming: bool
+    streaming_buffer_size: int
+    seed: int
+    micro_batch_size: int
+    global_batch_size: int
+    data_sharding: bool
+    chunkpipe_enable_synthesis: bool
+    num_workers: int
+    dataloader_save: Optional[str] = None
+
+    @classmethod
+    def from_args(cls, args) -> "SFTLoaderConfig":
+        """Build the loader recipe from the training arguments."""
+        return cls(
+            tokenizer_type=args.tokenizer_type,
+            variable_seq_lengths=args.variable_seq_lengths,
+            enable_chunkpipe=args.enable_chunkpipe,
+            chunksize=args.chunksize,
+            seq_length=args.seq_length,
+            sft_chunkpipe_mode=getattr(args, "sft_chunkpipe_mode", False),
+            mtp_num_layers=args.mtp_num_layers or 0,
+            sft_data_streaming=args.sft_data_streaming,
+            streaming_buffer_size=args.streaming_buffer_size,
+            seed=args.seed,
+            micro_batch_size=args.micro_batch_size,
+            global_batch_size=args.global_batch_size,
+            data_sharding=args.data_sharding,
+            chunkpipe_enable_synthesis=getattr(args, "chunkpipe_enable_synthesis", False),
+            num_workers=args.num_workers,
+            dataloader_save=args.dataloader_save,
+        )
 
 
 def llm_pad_to_multiple_of(args) -> int:
@@ -107,6 +132,29 @@ def build_sft_data_collator(
     return data_collator
 
 
+# A scheduling slot consumed by `_schedule_step_aligned`. Each slot occupies
+# `len(chunks)` chunks of step capacity and contributes one or more real
+# source groups to the per-sample loss normalization.
+#
+# - chunks:     flat dataset indices, length k = sum(components).
+# - components: real-group sizes inside the slot, in chunk-placement order.
+#               * Real slot: components == [k] (single real group).
+#               * Synth slot: components == [c1, c2, ...] with sum == k,
+#                 stitched from short real groups in the synthesis path.
+#
+# MLA's KV chain resets at chunk_idx_in_group==0, so each component (real
+# group) inside a synth slot keeps an independent KV chain — no special
+# handling needed in the attention layer.
+Slot = namedtuple("Slot", ["chunks", "components"])
+
+
+def _cyclic_iter(iter):
+    """cyclic iteration"""
+    while True:
+        for x in iter:
+            yield x
+
+
 class _IterableWithState:
     def __init__(self, dataloader):
         self.dataloader = dataloader
@@ -123,6 +171,7 @@ class _IterableWithState:
             return batch
         except StopIteration:
             self._iterator = iter(self.dataloader)
+            # self.step = 0
             batch = next(self._iterator)
             self.step += 1
             return batch
@@ -249,10 +298,19 @@ class ChunkPipeGroupBatchSampler:
             f"Increase global_batch_size or decrease seq_length/chunksize ratio."
         )
 
+        # Pre-compute a stable usable-sample estimate for external consumers
+        # that still inspect these attributes. Resume positioning below uses
+        # the exact shuffled schedule of each epoch instead.
+        dummy_buckets = self._lpt_partition(range(len(self.groups)))
+        _, _, _, _, dummy_aligned = self._schedule_buckets(dummy_buckets)
+        self.usable_per_rank = dummy_aligned * self.step_capacity
+        self.usable_total = self.usable_per_rank * self.data_parallel_size
+
         # Determine initial epoch and completed iteration offset for checkpoint
         # resume. ChunkPipe SFT only supports resuming from full training
         # iteration boundaries.
         self._epoch, self._resume_step_in_epoch = self._locate_resume_position(consumed_samples)
+        self._resume_offset = self._resume_step_in_epoch * self.step_capacity
 
         # Per-microbatch G FIFO queue. Semantics: each entry is the GLOBAL
         # source group count G_total for the step that the corresponding
@@ -263,11 +321,13 @@ class ChunkPipeGroupBatchSampler:
         # and also fixes a latent precision drift in the equal-DP case where
         # G_local could fluctuate across ranks.
         #
-        # Populated yield-time in __iter__, consumed by attach_step_metadata,
-        # which pops one entry per batch and writes it onto the batch dict; get_batch
-        # then broadcasts it from TP rank 0. The deques are created once and never
-        # cleared, so FIFO alignment with the DataLoader's batch production holds:
-        # sampler yield and metadata pop both run in the main process in strict order.
+        # Populated yield-time in __iter__, consumed by get_batch via TP rank-0
+        # popleft + broadcast. The deque object itself is created once and
+        # never cleared, so downstream references (saved in
+        # args.chunkpipe_step_g_queue) stay valid across epochs. FIFO alignment
+        # with the DataLoader's actual batch production is guaranteed because
+        # sampler yield and get_batch consumption both run in the main process
+        # in strict order.
         self._step_g_queue = deque()
 
         # Per-microbatch composite-group descriptor queue. Each entry is the
@@ -276,8 +336,8 @@ class ChunkPipeGroupBatchSampler:
         # size 5 made of a real group of size 3 followed by a real group of
         # size 2). For trivial composites (every real group is its own
         # composite, the equal-DP path), this is a single-element list
-        # [group_size]. Consumed by the SFT scheduler (via get_batch's TP rank-0
-        # broadcast of the value attached to the batch) to drive
+        # [group_size]. Consumed by the SFT scheduler (via
+        # get_batch_on_this_tp_rank's TP rank-0 popleft + broadcast) to drive
         # the outer composite loop and to attribute each chunk to its real
         # group within the composite.
         self._composite_queue = deque()
@@ -771,13 +831,14 @@ class ChunkPipeGroupBatchSampler:
         # the first real batch consumed after resume.
         skip_steps = self._resume_step_in_epoch
         self._resume_step_in_epoch = 0
+        self._resume_offset = 0
 
         # Yield one micro-batch at a time. Every micro-batch within a step
         # shares the same G_total = total source groups in that step across
         # all DP ranks. We append G_total to _step_g_queue and per-microbatch
         # composite descriptor to _composite_queue immediately before yield
-        # (never clear them) so that attach_step_metadata's popleft order matches
-        # yield order strictly — robust to DataLoader prefetching and epoch
+        # (never clear them) so that get_batch's popleft order matches yield
+        # order strictly — robust to DataLoader prefetching and epoch
         # boundaries. Skipped micro-batches (via resume) do NOT enter the
         # queues, preserving FIFO alignment.
         #
@@ -814,54 +875,7 @@ class ChunkPipeGroupBatchSampler:
         # Epoch complete — next __iter__ call will use a different shuffle
         self._epoch += 1
         self._resume_step_in_epoch = 0
-
-
-@dataclass(frozen=True)
-class SFTLoaderConfig:
-    """Data-recipe fields needed to assemble the SFT loader.
-
-    Built by the training method from its arguments; the loader never reads
-    backend arguments or global CLI state.
-    """
-
-    tokenizer_type: str
-    variable_seq_lengths: bool
-    enable_chunkpipe: bool
-    chunksize: int
-    seq_length: int
-    sft_chunkpipe_mode: bool
-    mtp_num_layers: int
-    sft_data_streaming: bool
-    streaming_buffer_size: int
-    seed: int
-    micro_batch_size: int
-    global_batch_size: int
-    data_sharding: bool
-    chunkpipe_enable_synthesis: bool
-    num_workers: int
-    dataloader_save: Optional[str] = None
-
-    @classmethod
-    def from_args(cls, args) -> "SFTLoaderConfig":
-        """Build the loader recipe from the training arguments."""
-        return cls(
-            tokenizer_type=args.tokenizer_type,
-            variable_seq_lengths=args.variable_seq_lengths,
-            enable_chunkpipe=args.enable_chunkpipe,
-            chunksize=args.chunksize,
-            seq_length=args.seq_length,
-            sft_chunkpipe_mode=getattr(args, "sft_chunkpipe_mode", False),
-            mtp_num_layers=args.mtp_num_layers or 0,
-            sft_data_streaming=args.sft_data_streaming,
-            streaming_buffer_size=args.streaming_buffer_size,
-            seed=args.seed,
-            micro_batch_size=args.micro_batch_size,
-            global_batch_size=args.global_batch_size,
-            data_sharding=args.data_sharding,
-            chunkpipe_enable_synthesis=getattr(args, "chunkpipe_enable_synthesis", False),
-            num_workers=args.num_workers,
-            dataloader_save=args.dataloader_save,
-        )
+        self._resume_offset = 0
 
 
 def load_pretokenized_dataset(data_path, dp_rank):

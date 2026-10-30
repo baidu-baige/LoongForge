@@ -24,7 +24,7 @@ from loongforge.data.vlm.internvl.dp_balance_layout import (
     internvl_cumulative_lengths,
     reorder_data_for_internvl,
 )
-from loongforge.engines.megatron.dp_balance.rebalance.layout import (
+from loongforge.data.dp_balance.rebalance.layout import (
     BatchLayout,
     install_batch_layout,
 )
@@ -66,7 +66,7 @@ def model_provider(pre_process=True, post_process=True, vp_stage: int = None):
         vp_stage=vp_stage,
         args=args,
         model_config=get_model_config(),
-        runtime=pretrain_vlm.build_multimodal_runtime(args),
+        runtime=pretrain_vlm.build_omni_runtime(args),
     )
 
 
@@ -287,7 +287,7 @@ def forward_step(data_iterator, model):
 
 def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None):
     """Train_valid_test_datasets_provider """
-    import loongforge.engines.megatron.dp_balance.patches  # noqa: F401
+    import loongforge.data.dp_balance.patches
     args = get_args()
     loader_config = SFTLoaderConfig.from_args(args)
     data_config = VLMDataConfig.from_args(args)

@@ -23,7 +23,7 @@ The FastWAM collator looks up cached prompt embeddings by filename:
 where ``prompt`` is the fully formatted FastWAM prompt. This script scans task
 strings from LeRobot-style metadata or explicit prompt files, encodes them with
 the same Wan T5 tokenizer/text encoder used by LoongForge FastWAM, and writes
-cache files consumable by ``FastWAMCollator``.
+cache files consumable by ``FastWAMPreprocessor``.
 """
 
 from __future__ import annotations

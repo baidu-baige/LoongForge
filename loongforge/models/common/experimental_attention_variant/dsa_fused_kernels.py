@@ -2112,6 +2112,8 @@ class DSADotProductAttention(MegatronModule):
     sparse attention operations optimized for DeepSeek models.
     """
 
+    cp_stream: torch.cuda.Stream = None
+
     def __init__(
         self,
         config: TransformerConfig,

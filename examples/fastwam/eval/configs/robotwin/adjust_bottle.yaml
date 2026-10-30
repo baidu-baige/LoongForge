@@ -22,7 +22,7 @@
 #   task_name / task_config / episodes_per_task / max_steps / start_seed
 #   server.random_init: true + max_steps: 5 for an RPC wiring check without weights
 #
-# Full-sweep notes (see examples/fastwam/eval/ROBOTWIN_EVAL_NOTES.md):
+# Full-sweep notes (see examples/embodied/fastwam/eval/ROBOTWIN_EVAL_NOTES.md):
 #   - max_steps is task-specific: copy from RoboTwin task_config/_eval_step_limit.yml
 #     (400 is NOT universal: blocks_ranking_* 1200, hanging_mug 900, open_laptop
 #     700, open_microwave 1500). Truncated horizons undercount success.

@@ -144,7 +144,7 @@ class Parser:
         # ============================================================================
 
         # INT4 dequantization for Bridge online HF loading (also defined as training
-        # CLI args in tools/mcore_bridge/arguments.py::add_bridge_args).
+        # CLI args in loongforge/training/megatron_args.py::_add_extra_bridge_args).
         param_dict['hf_dequantize_int4'] = getattr(args, 'hf_dequantize_int4', False)
         param_dict['hf_dequantize_mxfp4'] = getattr(args, 'hf_dequantize_mxfp4', False)
         param_dict['hf_dequantize_dtype'] = getattr(args, 'hf_dequantize_dtype', 'bfloat16')

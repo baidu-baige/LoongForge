@@ -156,6 +156,7 @@ def _initial_condition_to_obs(initial_state: Dict[str, Any]) -> Tuple[Any, Any]:
 
 
 def _save_replay(frames: List[np.ndarray], output_dir: str, sequence_idx: int, success_count: int) -> Optional[str]:
+    """Run _save_replay."""
     if not frames:
         return None
     artifact_dir = pathlib.Path(output_dir) / "artifacts" / "calvin" / f"sequence{sequence_idx}"
@@ -163,6 +164,7 @@ def _save_replay(frames: List[np.ndarray], output_dir: str, sequence_idx: int, s
 
 
 def _save_trace(trace: List[Dict[str, Any]], output_dir: str, sequence_idx: int, success_count: int) -> Optional[str]:
+    """Run _save_trace."""
     if not trace:
         return None
     artifact_dir = pathlib.Path(output_dir) / "artifacts" / "calvin" / f"sequence{sequence_idx}"
@@ -170,6 +172,7 @@ def _save_trace(trace: List[Dict[str, Any]], output_dir: str, sequence_idx: int,
 
 
 def _classify_exception(exc: Exception) -> str:
+    """Run _classify_exception."""
     if isinstance(exc, SequenceTimeoutError):
         return "sequence_timeout"
     if isinstance(exc, StepTimeoutError):
@@ -197,6 +200,7 @@ def _failure_record(
     replay_path: Optional[str] = None,
     trace_path: Optional[str] = None,
 ) -> Dict[str, Any]:
+    """Run _failure_record."""
     return {
         "benchmark": "calvin",
         "task_suite": args.task_suite_name,
@@ -569,6 +573,7 @@ def run_batch(args: argparse.Namespace) -> Dict[str, Any]:
 
 
 def build_argparser() -> argparse.ArgumentParser:
+    """Run build_argparser."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=10093)
@@ -593,12 +598,13 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--continuous-gripper", action="store_true", default=False)
     parser.add_argument(
         "--output-dir",
-        default="/workspace/LoongForge/loongforge/evaluation/embodied/reports/manual/calvin/runner",
+        default="/workspace/LoongForge-VLA/loongforge/evaluation/embodied/reports/manual/calvin/runner",
     )
     return parser
 
 
 def main() -> None:
+    """Run main."""
     args = build_argparser().parse_args()
     summary = run_batch(args)
     print(json.dumps(summary, ensure_ascii=False, indent=2))

@@ -18,11 +18,13 @@ class ManagedServer:
     """Provide ManagedServer behavior."""
 
     def __init__(self, args: argparse.Namespace) -> None:
+        """Run __init__."""
         self.args = args
         self.process: subprocess.Popen | None = None
 
     @property
     def health_url(self) -> str:
+        """Run health_url."""
         return f"http://{self.args.host}:{self.args.health_port}/healthz"
 
     def start(self) -> None:
@@ -59,6 +61,7 @@ class ManagedServer:
         return "address already in use" in tail or "eaddrinuse" in tail
 
     def ensure_running(self) -> None:
+        """Run ensure_running."""
         if self.process is None or self.process.poll() is not None:
             self.stop()
             self.start()
@@ -73,6 +76,7 @@ class ManagedServer:
         self.start()
 
     def stop(self) -> None:
+        """Run stop."""
         if self.process is None:
             return
         if self.process.poll() is None:
@@ -92,6 +96,7 @@ class ManagedServer:
 
 
 def wait_healthz(url: str, timeout_sec: float, process: subprocess.Popen | None) -> None:
+    """Run wait_healthz."""
     deadline = time.time() + timeout_sec
     last_error = None
     while time.time() < deadline:
@@ -108,6 +113,7 @@ def wait_healthz(url: str, timeout_sec: float, process: subprocess.Popen | None)
 
 
 def ensure_libero_config(args: argparse.Namespace) -> None:
+    """Run ensure_libero_config."""
     if not args.libero_config_path:
         return
     config_dir = Path(args.libero_config_path)
@@ -127,6 +133,7 @@ def ensure_libero_config(args: argparse.Namespace) -> None:
 
 
 def apply_runtime_env(args: argparse.Namespace, env: dict[str, str]) -> None:
+    """Run apply_runtime_env."""
     if args.ld_library_path:
         env["LD_LIBRARY_PATH"] = f"{args.ld_library_path}:{env.get('LD_LIBRARY_PATH', '')}"
     env["LD_LIBRARY_PATH"] = f"/usr/lib64:{env.get('LD_LIBRARY_PATH', '')}"
@@ -139,6 +146,7 @@ def apply_runtime_env(args: argparse.Namespace, env: dict[str, str]) -> None:
 
 
 def start_server(args: argparse.Namespace) -> subprocess.Popen:
+    """Run start_server."""
     eval_root = Path(args.eval_root).resolve()
     loongforge_root = Path(args.loongforge_root).resolve() if args.loongforge_root else eval_root.parent
     env = os.environ.copy()
@@ -182,6 +190,7 @@ def start_server(args: argparse.Namespace) -> subprocess.Popen:
 
 
 def build_argparser() -> argparse.ArgumentParser:
+    """Run build_argparser."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="")
     parser.add_argument("--server-kind", default="mock")
@@ -191,7 +200,7 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--server-start-timeout-sec", type=float, default=180.0)
     parser.add_argument(
         "--server-log",
-        default="/workspace/LoongForge/loongforge/evaluation/embodied/reports/manual/policy_server.log",
+        default="/workspace/LoongForge-VLA/loongforge/evaluation/embodied/reports/manual/policy_server.log",
     )
     parser.add_argument("--action-dim", type=int, default=7)
     parser.add_argument("--server-python", default="/path/to/conda/envs/loongforge/bin/python")

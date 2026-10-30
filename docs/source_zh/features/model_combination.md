@@ -172,6 +172,6 @@ model:
 
 * `image_encoder/`：视觉编码器配置
 * `image_projector/`：投影层配置
-* `llama3/`、`qwen2/`、`deepseek2/` 等：LLM 基座配置
+* `llama3/`、`qwen2/`、`deepseek_v2/` 等：LLM 基座配置
 
 通过这种方式，构建多模态大模型就像拼搭 LEGO 积木一样简单。

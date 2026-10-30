@@ -5,11 +5,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: OpenMDW-1.1
 
-"""Cosmos3 policy configuration for LoongForge.
+"""FastWAM policy configuration for LoongForge.
 
 YAML / config relationship
 --------------------------
-- The YAML file (``configs/models/cosmos3/nano.yaml``, ``model:`` section) is the
+- The YAML file (``configs/models/fastwam/fastwam.yaml``, ``model:`` section) is the
   user-facing knob: edit it to override any field for a specific run.
 - This dataclass provides all defaults and is the single source of truth.
   At startup, OmegaConf merges the YAML ``model:`` section on top of a structured
@@ -17,13 +17,27 @@ YAML / config relationship
 
 Usage rules (must follow)
 -------------------------
-1. Always read fields via direct attribute access: ``model_cfg.max_action_dim``.
+1. Always read fields via direct attribute access: ``model_cfg.action_dim``.
 2. Never use ``getattr(cfg, "x", default)`` or ``cfg.get("x", default)``:
    - a default supplied there creates a second source of truth and hides the real one;
    - a misspelled field should raise ``AttributeError`` immediately, not silently
      return a fallback.
 3. To add or change a model-structure parameter, edit only this dataclass
    (one authoritative definition).
+
+Shared fields
+-------------
+Fields used by both model and data pipeline (``action_dim``, ``action_horizon``,
+``proprio_dim``, etc.) are defined here once. ``FastWAMDataConfig`` does not
+duplicate them; the data side reads them from the ``model_cfg`` instance
+passed alongside.
+
+Nested architecture configs
+---------------------------
+``video_dit_config``, ``action_dit_config``, ``video_scheduler``,
+``action_scheduler``, and ``loss`` carry fixed architecture params for the
+Wan2.2-5B backbone.  They are **not** exposed in the YAML; override per-key
+after construction when needed for ablations.
 """
 
 from __future__ import annotations
@@ -80,8 +94,10 @@ class Cosmos3ModelConfig:
     # VAE encoder.
     vae_path: str = "Wan-AI/Wan2.2-TI2V-5B/Wan2.2_VAE.pth"
     vae_temporal_compression: int = 4
+    vae_spatial_compression: int = 16
     # Conditioning distribution: vision-only path uses [0.7, 0.2, 0.1] but
     # the action-policy path overrides condition_frame_indexes_vision per-sample.
+    condition_frame_distribution: list = field(default_factory=lambda: [0.7, 0.2, 0.1])
     # Action heads.
     max_action_dim: int = 64
     num_embodiment_domains: int = 32

@@ -13,6 +13,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import random
 import re
 from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, Optional, Tuple
 
@@ -122,6 +123,7 @@ class Gr00tN1d7ActionHead(nn.Module):
         self._split_noise_buf = None
         self._split_time_buf = None
         self._split_state_dropout_buf = None
+        self._split_supports_state_dropout_buf = True
         self._split_record_shape = False
         self._split_actions_shape = None
         self._split_actions_device = None
@@ -332,6 +334,10 @@ class Gr00tN1d7(nn.Module):
         )
         self.action_head = Gr00tN1d7ActionHead(config)
 
+    def set_input_tensor(self, input_tensor) -> None:
+        """Megatron compatibility no-op."""
+        self._input_tensor = input_tensor
+
     def prepare_input(self, inputs: dict) -> Tuple[BatchFeature, BatchFeature]:
         """Split LoongForge batch dict into backbone and action inputs."""
         backbone_inputs = self.backbone.prepare_input(inputs)
@@ -393,6 +399,8 @@ class Gr00tN1d7(nn.Module):
 class Gr00tN1d7Policy(nn.Module):
     """GR00T-N1.7 policy wrapper for the LoongForge Torch engine."""
 
+    preserve_param_dtype = True
+
     def __init__(self, config: Gr00tN1d7Config):
         super().__init__()
         self.config = config
@@ -421,6 +429,7 @@ class Gr00tN1d7Policy(nn.Module):
         self.action_dim = int(
             max(meta["end"] for meta in self.modality_meta["action"].values())
         )
+        self._predict_action_initialized = False
         self._predict_action_validation_zero_state = False
         self._predict_action_use_bf16 = bool(config.use_bf16)
         self._predict_action_statistics: Dict[str, Any] | None = None
@@ -444,6 +453,15 @@ class Gr00tN1d7Policy(nn.Module):
     def fp8_unsupported_reason(self) -> str | None:
         """GR00T-N1.7 loads the backbone before structural FP8 conversion."""
         return None
+
+    def reset_data_iterator_rng(self, seed: int) -> None:
+        """Align DataLoader worker base seeds with Isaac's finetune path."""
+        seed = int(seed)
+        random.seed(seed)
+        np.random.seed(seed % (2**32 - 1))
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
 
     @classmethod
     def from_pretrained(cls, cfg) -> "Gr00tN1d7Policy":
@@ -487,6 +505,11 @@ class Gr00tN1d7Policy(nn.Module):
         if not self._restoring_after_apply:
             self._restore_precision_after_apply()
         return result
+
+    def restore_trainable_params_fp32(self) -> None:
+        """Restore trainable parameters to fp32 after framework dtype casts."""
+        with self._precision_restore_guard():
+            self._restore_trainable_params_fp32_impl()
 
     def _restore_trainable_params_fp32_impl(self) -> None:
         if self.config.backbone_trainable_params_fp32:
@@ -550,10 +573,6 @@ class Gr00tN1d7Policy(nn.Module):
 
         Args:
             checkpoint_statistics: Per-embodiment or raw-LeRobot state/action stats.
-            collator_cls: ``Gr00tN1d7DataCollator`` from the data package.
-            processor_cls: ``StateActionProcessor`` from the data package.
-            build_image_transforms: ``build_image_transformations_albumentations``
-                from the data package.
             embodiment_tag: Which embodiment's modality config / projector to activate.
             use_bf16: Override the config's bf16 autocast setting.
             validation_zero_state: Allow ``state=None`` to fall back to a zero
@@ -606,9 +625,7 @@ class Gr00tN1d7Policy(nn.Module):
             model_type=self.config.backbone_model_type,
             transformers_loading_kwargs={"trust_remote_code": True, "local_files_only": True},
         )
-        # Official Gr00tN1d7FeatureTransform eval pipeline: letterbox ->
-        # SmallestMaxSize(shortest_image_edge) -> crop_fraction center crop ->
-        # SmallestMaxSize. predict_action() applies this before building
+        # Match the checkpoint processor's eval image pipeline before building
         # vlm_content so callers only need to supply the env's native camera image.
         image_target_size = list(pk.get("image_target_size") or [256, 256])
         image_crop_size = list(pk.get("image_crop_size") or [230, 230])
@@ -637,6 +654,7 @@ class Gr00tN1d7Policy(nn.Module):
             self._predict_action_use_percentiles,
             self._predict_action_clip_outliers,
         )
+        self._predict_action_initialized = True
         self.eval()
 
     @torch.no_grad()
@@ -696,7 +714,7 @@ class Gr00tN1d7Policy(nn.Module):
             # Qwen3Backbone.forward casts hidden_states to fp32 (training-side
             # precision policy); the official server keeps bf16 for the whole
             # model, so cast back here on the eval path. The action head is
-            # already bf16 (GR00T_ALLOW_TRAINABLE_PARAM_BF16=1 in the factory),
+            # already bf16 (GROOT_ALLOW_TRAINABLE_PARAM_BF16=1 in the factory),
             # so running without autocast keeps every intermediate bf16.
             if self._predict_action_use_bf16 and device.type == "cuda":
                 backbone_output["backbone_features"] = backbone_output["backbone_features"].to(
@@ -789,7 +807,7 @@ class Gr00tN1d7Policy(nn.Module):
         normalized = processor.apply_state(state_dict, self.embodiment_tag)
         packed = np.concatenate([np.asarray(normalized[key]) for key in self.state_keys], axis=-1)
         # The action head's state_encoder is shared across embodiments and always
-        # consumes max_state_dim, so training's Gr00tN1d7FeatureTransform._pack_state
+        # consumes max_state_dim, so training's GrootN1d7FeatureTransform._pack_state
         # zero-pads the per-embodiment state to that width. Mirror it here.
         max_state_dim = int(self.config.max_state_dim)
         if packed.shape[-1] < max_state_dim:
@@ -945,7 +963,7 @@ class Gr00tN1d7Policy(nn.Module):
     ) -> list[list[Image.Image]]:
         """Apply the official crop/resize pipeline so callers only need to
         supply the env's native camera image (matching training-time
-        ``Gr00tN1d7FeatureTransform._build_vlm_content``, which applies the
+        ``GrootN1d7FeatureTransform._build_vlm_content``, which applies the
         same albumentations pipeline before assembling ``vlm_content``)."""
         transform = getattr(self, "_predict_action_eval_image_transform", None)
         if transform is None:
@@ -1219,7 +1237,7 @@ def _restore_rotary_buffers_fp32(module: nn.Module) -> None:
 def _formalize_language(instruction: Any) -> str:
     """Lowercase and strip punctuation, matching the training-time transform.
 
-    ``Gr00tN1d7FeatureTransform`` applies ``re.sub(r"[^\\w\\s]", "", text.lower())``
+    ``GrootN1d7FeatureTransform`` applies ``re.sub(r"[^\\w\\s]", "", text.lower())``
     when ``formalize_language`` is set (true for every released GR00T-N1.7
     checkpoint), so the eval path must normalize instructions identically or the
     prompt tokens drift from what the checkpoint was trained on.

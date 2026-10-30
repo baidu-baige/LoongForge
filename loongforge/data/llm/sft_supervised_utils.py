@@ -283,196 +283,6 @@ def _split_long_sequence(
     return chunks
 
 
-def _encode_one(
-    samples: Dict[str, List[Any]],
-    i: int,
-    config: "SFTDatasetConfig",
-    use_hf_chat_template: bool,
-) -> Optional[Tuple[List[int], List[int], List[int]]]:
-    """Encode sample ``i``. Return (input_ids, labels, loss_mask), or None if it is skipped."""
-    if use_hf_chat_template:
-        input_ids, labels, loss_mask, ori_total_len = _encode_openai_example(
-            messages_json=samples["messages"][i],
-            tools_json=samples["tools"][i] if "tools" in samples else None,
-            config=config,
-        )
-    else:
-        if len(samples["prompt"][i]) % 2 != 1 or len(samples["response"][i]) != 1:
-            # Compact form: dumping full payloads made >100MB log files.
-            logger.warning(
-                "Ignore invalid sample: %d prompt msgs, %d response msgs.",
-                len(samples["prompt"][i]),
-                len(samples["response"][i]),
-            )
-            return None
-
-        input_ids, labels, loss_mask, ori_total_len = _encode_supervised_example(
-            prompt=samples["prompt"][i],
-            response=samples["response"][i],
-            system=samples["system"][i],
-            images=samples["images"][i] or [],
-            videos=samples["videos"][i] or [],
-            config=config,
-        )
-
-    if not input_ids:
-        logger.warning("Ignore sample with no tokens after preprocessing.")
-        return None
-
-    if config.enable_discard_sample and ori_total_len > config.sequence_length:
-        return None
-
-    return input_ids, labels, loss_mask
-
-
-def _append_row(
-    model_inputs: Dict[str, List[Any]],
-    config: "SFTDatasetConfig",
-    input_ids: List[int],
-    labels: List[int],
-    attention_mask: List[int],
-    loss_mask: List[int],
-    images: Any,
-    videos: Any,
-    **extra: Any,
-) -> None:
-    """Append one output row. ``extra`` holds the chunkpipe-only columns."""
-    model_inputs["input_ids"].append(input_ids)
-    model_inputs["labels"].append(labels)
-    model_inputs["attention_mask"].append(attention_mask)
-    model_inputs["images"].append(images)
-    model_inputs["videos"].append(videos)
-    if not config.eod_mask_loss:
-        model_inputs["loss_mask"].append(loss_mask)
-    for key, value in extra.items():
-        model_inputs[key].append(value)
-
-
-def _concat_knapsack(
-    knapsack: List[int],
-    seqs: Tuple[List[List[int]], List[List[int]], List[List[int]]],
-    len_to_indexs: Dict[int, List[int]],
-    *,
-    shift: bool,
-    ignore_index: Optional[int] = None,
-) -> Tuple[List[int], List[int], List[int], List[int]]:
-    """Concatenate the sequences of one knapsack.
-
-    Return (input_ids, labels, loss_mask, attention_mask); attention_mask numbers the
-    sequences from 1. With ``shift`` the labels and loss_mask are moved left by one
-    position per sequence (next-token prediction format) and ``ignore_index`` fills the last one.
-    """
-    all_input_ids, all_labels, all_loss_mask = seqs
-    packed_input_ids, packed_labels, packed_loss_mask, packed_attention_mask = [], [], [], []
-    for i, length in enumerate(knapsack):
-        idx = len_to_indexs[length].pop()
-        packed_input_ids += all_input_ids[idx]
-        if shift:
-            packed_labels += all_labels[idx][1:] + [ignore_index]
-            packed_loss_mask += all_loss_mask[idx][1:] + [0]
-        else:
-            packed_labels += all_labels[idx]
-            packed_loss_mask += all_loss_mask[idx]
-        packed_attention_mask += [i + 1] * len(all_input_ids[idx])  # start from 1
-    return packed_input_ids, packed_labels, packed_loss_mask, packed_attention_mask
-
-
-def _emit_chunkpipe(
-    model_inputs: Dict[str, List[Any]],
-    config: "SFTDatasetConfig",
-    long_seqs: Tuple[List[List[int]], List[List[int]], List[List[int]]],
-    short_seqs: Tuple[List[List[int]], List[List[int]], List[List[int]]],
-) -> None:
-    """Write chunkpipe rows: split long sequences into chunks, binpack short ones."""
-    chunksize = config.chunksize
-    mtp_num_layers = getattr(config, "mtp_num_layers", 0) or 0
-    pad_token_id = config.tokenizer.pad
-    ignore_index = config.ignore_index
-
-    # (c) Long sequence splitting: split each long sequence into chunks of chunksize
-    for input_ids, labels, loss_mask in zip(*long_seqs):
-        chunks = _split_long_sequence(
-            input_ids, labels, loss_mask, chunksize, pad_token_id, ignore_index, mtp_num_layers
-        )
-        # N_g = total response tokens across all chunks of this source
-        # sequence (sum of per-chunk loss masks). Shared by every chunk.
-        group_total_tokens = sum(
-            sum(chunk_loss_mask[:chunksize]) for _, _, chunk_loss_mask in chunks
-        )
-        for chunk_input_ids, chunk_labels, chunk_loss_mask in chunks:
-            _append_row(
-                model_inputs, config, chunk_input_ids, chunk_labels,
-                [1] * chunksize + [0] * mtp_num_layers, chunk_loss_mask, [], [],
-                chunk_group_size=len(chunks), group_total_tokens=group_total_tokens,
-            )
-
-    # (d) Short sequence binpacking: pack short sequences into bins of chunksize
-    short_sample_lens = [len(input_ids) for input_ids in short_seqs[0]]
-    short_len_to_sample_indexs = defaultdict(list)
-    for index, length in enumerate(short_sample_lens):
-        short_len_to_sample_indexs[length].append(index)
-    for knapsack in _build_knapsacks(short_sample_lens, chunksize):
-        packed_input_ids, packed_labels, packed_loss_mask, packed_attention_mask = _concat_knapsack(
-            knapsack, short_seqs, short_len_to_sample_indexs, shift=True, ignore_index=ignore_index
-        )
-
-        # Pad to chunksize
-        padding_len = chunksize - len(packed_input_ids)
-        if padding_len > 0:
-            packed_input_ids += [pad_token_id] * padding_len
-            packed_labels += [ignore_index] * padding_len
-            packed_loss_mask += [0] * padding_len
-            packed_attention_mask += [0] * padding_len
-
-        if mtp_num_layers > 0:
-            packed_input_ids += [pad_token_id] * mtp_num_layers
-            packed_labels += [ignore_index] * mtp_num_layers
-            packed_loss_mask += [0] * mtp_num_layers
-            packed_attention_mask += [0] * mtp_num_layers
-
-        # Bin-packed chunk is treated as a single sample; N_g = total
-        # response tokens of the base chunk, excluding MTP bridge padding.
-        _append_row(
-            model_inputs, config, packed_input_ids, packed_labels, packed_attention_mask,
-            packed_loss_mask, [], [],
-            chunk_group_size=1, group_total_tokens=sum(packed_loss_mask[:chunksize]),
-        )
-
-
-def _emit_packing(
-    model_inputs: Dict[str, List[Any]],
-    config: "SFTDatasetConfig",
-    seqs: Tuple[List[List[int]], List[List[int]], List[List[int]]],
-) -> None:
-    """Write packing rows: binpack the sequences into bins of sequence_length."""
-    all_sample_lens = [len(input_ids) for input_ids in seqs[0]]
-    len_to_sample_indexs = defaultdict(list)
-    for index, length in enumerate(all_sample_lens):
-        len_to_sample_indexs[length].append(index)
-    estimated_computational_load_list = []
-    for knapsack in _build_knapsacks(all_sample_lens, config.sequence_length):
-        packed_input_ids, packed_labels, packed_loss_mask, packed_attention_mask = _concat_knapsack(
-            knapsack, seqs, len_to_sample_indexs, shift=False
-        )
-        # for language model, we use the estimated computational load to sort the batch
-        estimated_computational_load_list.append(sum(length**2 for length in knapsack))
-        # TODO: support images/videos, just placeholder for now
-        _append_row(
-            model_inputs, config, packed_input_ids, packed_labels, packed_attention_mask,
-            packed_loss_mask, [], [],
-        )
-
-    if config.sort_batch:
-        sorted_indices = sorted(
-            range(len(model_inputs["input_ids"])),
-            key=lambda i: estimated_computational_load_list[i],
-        )
-        # TODO: add images pixels
-        for key in ("input_ids", "labels", "attention_mask", "loss_mask"):
-            if key in model_inputs:
-                model_inputs[key] = [model_inputs[key][i] for i in sorted_indices]
-
-
 def _preprocess_supervised_dataset(
     samples: Dict[str, List[Any]],
     config: "SFTDatasetConfig",
@@ -503,18 +313,29 @@ def _preprocess_supervised_dataset(
         # tokens. Consumed by the SFT chunkpipe per-sample loss path.
         model_inputs["group_total_tokens"] = []
 
-    # (input_ids, labels, loss_mask) lists collected for chunkpipe or packing.
-    # Chunkpipe: long sequences (len > chunksize) are split into chunks,
-    # short ones are binpacked. Packing only uses ``short_seqs``.
-    long_seqs = ([], [], [])
-    short_seqs = ([], [], [])
+    pad_to_multiple_of = 1
+    if config.packing:
+        all_input_ids, all_labels, all_loss_mask = [], [], []
+        all_sampel_lens = []
+        len_to_sample_indexs = defaultdict(list)
+        index = 0
+        # When using context parallel, sequence is split by CP size
+        pad_to_multiple_of *= (
+            (2 * config.context_parallel_size)
+            if (config.context_parallel_size and config.context_parallel_size > 1)
+            else 1
+        )
 
-    # When using context parallel, sequence is split by CP size
-    pad_to_multiple_of = (
-        2 * config.context_parallel_size
-        if (config.context_parallel_size and config.context_parallel_size > 1)
-        else 1
-    )
+    if config.enable_chunkpipe:
+        chunksize = config.chunksize
+        mtp_num_layers = getattr(config, "mtp_num_layers", 0) or 0
+        # Buffers for long sequences (len > chunksize): will be split into chunks
+        long_input_ids, long_labels, long_loss_mask = [], [], []
+        # Buffers for short sequences (len <= chunksize): will be binpacked
+        short_input_ids, short_labels, short_loss_mask = [], [], []
+        short_sample_lens = []
+        short_len_to_sample_indexs = defaultdict(list)
+        short_index = 0
 
     use_hf_chat_template = isinstance(config.chat_template, HFChatTemplate)
     if use_hf_chat_template:
@@ -535,51 +356,236 @@ def _preprocess_supervised_dataset(
         sample_count = len(samples["prompt"])
 
     for i in range(sample_count):
-        encoded = _encode_one(samples, i, config, use_hf_chat_template)
-        if encoded is None:
-            continue
-        input_ids, labels, loss_mask = encoded
-
-        if config.enable_chunkpipe:
-            seqs = long_seqs if len(input_ids) > config.chunksize else short_seqs
-        elif not config.packing:
-            _append_row(
-                model_inputs, config, input_ids, labels, [1] * len(input_ids), loss_mask,
-                samples["images"][i], samples["videos"][i],
+        if use_hf_chat_template:
+            input_ids, labels, loss_mask, ori_total_len = _encode_openai_example(
+                messages_json=samples["messages"][i],
+                tools_json=samples["tools"][i] if "tools" in samples else None,
+                config=config,
             )
-            continue
         else:
-            # TODO: support packing for images/videos
-            assert samples["images"][i] in [None, []] and samples["videos"][i] in [
-                None,
-                [],
-            ], "packing is not supported for images/videos yet."
-
-            if pad_to_multiple_of > 1:
-                input_ids = _pad_sequence_to_multiple(
-                    config, input_ids, pad_to_multiple_of, config.tokenizer.pad
-                )
-                labels = _pad_sequence_to_multiple(
-                    config, labels, pad_to_multiple_of, IGNORE_INDEX
-                )
-                loss_mask = _pad_sequence_to_multiple(
-                    config, loss_mask, pad_to_multiple_of, 0
-                )
-
-            if len(input_ids) > config.sequence_length:
+            if (
+                len(samples["prompt"][i]) % 2 != 1
+                or len(samples["response"][i]) != 1
+            ):
+                # Compact form: dumping full payloads made >100MB log files.
                 logger.warning(
-                    f"Ignore too long sample with length {len(input_ids)} > {config.sequence_length}."
+                    "Ignore invalid sample: %d prompt msgs, %d response msgs.",
+                    len(samples["prompt"][i]),
+                    len(samples["response"][i]),
                 )
                 continue
-            seqs = short_seqs
 
-        for buffer, seq in zip(seqs, (input_ids, labels, loss_mask)):
-            buffer.append(seq)
+            input_ids, labels, loss_mask, ori_total_len = _encode_supervised_example(
+                prompt=samples["prompt"][i],
+                response=samples["response"][i],
+                system=samples["system"][i],
+                images=samples["images"][i] or [],
+                videos=samples["videos"][i] or [],
+                config=config,
+            )
+
+        if not input_ids:
+            logger.warning("Ignore sample with no tokens after preprocessing.")
+            continue
+
+        if config.enable_discard_sample:
+            if ori_total_len > config.sequence_length:
+                continue
+
+        if config.enable_chunkpipe:
+            _sample_len = len(input_ids)
+            if _sample_len > chunksize:
+                # Long sequence: collect for later splitting
+                long_input_ids.append(input_ids)
+                long_labels.append(labels)
+                long_loss_mask.append(loss_mask)
+            else:
+                # Short sequence: collect for later binpacking
+                short_input_ids.append(input_ids)
+                short_labels.append(labels)
+                short_loss_mask.append(loss_mask)
+                short_sample_lens.append(_sample_len)
+                short_len_to_sample_indexs[_sample_len].append(short_index)
+                short_index += 1
+
+        else:
+            if not config.packing:
+                model_inputs["input_ids"].append(input_ids)
+                model_inputs["labels"].append(labels)
+                model_inputs["attention_mask"].append([1] * len(input_ids))
+                model_inputs["images"].append(samples["images"][i])
+                model_inputs["videos"].append(samples["videos"][i])
+                if not config.eod_mask_loss:
+                    model_inputs["loss_mask"].append(loss_mask)
+
+            else:
+                # TODO: support packing for images/videos
+                assert samples["images"][i] in [None, []] and samples["videos"][i] in [
+                    None,
+                    [],
+                ], "packing is not supported for images/videos yet."
+
+                if pad_to_multiple_of > 1:
+                    input_ids = _pad_sequence_to_multiple(
+                        config, input_ids, pad_to_multiple_of, config.tokenizer.pad
+                    )
+                    labels = _pad_sequence_to_multiple(
+                        config, labels, pad_to_multiple_of, IGNORE_INDEX
+                    )
+                    loss_mask = _pad_sequence_to_multiple(
+                        config, loss_mask, pad_to_multiple_of, 0
+                    )
+
+                # prepare for packing
+                _sample_len = len(input_ids)
+                if _sample_len > config.sequence_length:
+                    logger.warning(
+                        f"Ignore too long sample with length {_sample_len} > {config.sequence_length}."
+                    )
+                    continue
+
+                all_input_ids.append(input_ids)
+                all_labels.append(labels)
+                all_loss_mask.append(loss_mask)
+                all_sampel_lens.append(_sample_len)
+                len_to_sample_indexs[_sample_len].append(index)
+                index += 1
+
+    if not config.packing and not config.enable_chunkpipe:
+        return model_inputs
 
     if config.enable_chunkpipe:
-        _emit_chunkpipe(model_inputs, config, long_seqs, short_seqs)
-    elif config.packing:
-        _emit_packing(model_inputs, config, short_seqs)
+        pad_token_id = config.tokenizer.pad
+        ignore_index = config.ignore_index
+
+        # (c) Long sequence splitting: split each long sequence into chunks of chunksize
+        for idx in range(len(long_input_ids)):
+            chunks = _split_long_sequence(
+                long_input_ids[idx],
+                long_labels[idx],
+                long_loss_mask[idx],
+                chunksize,
+                pad_token_id,
+                ignore_index,
+                mtp_num_layers,
+            )
+            num_chunks = len(chunks)
+            # N_g = total response tokens across all chunks of this source
+            # sequence (sum of per-chunk loss masks). Shared by every chunk.
+            group_total_tokens = sum(
+                sum(chunk_loss_mask[:chunksize]) for _, _, chunk_loss_mask in chunks
+            )
+            for chunk_input_ids, chunk_labels, chunk_loss_mask in chunks:
+                model_inputs["input_ids"].append(chunk_input_ids)
+                model_inputs["labels"].append(chunk_labels)
+                model_inputs["attention_mask"].append(
+                    [1] * chunksize + [0] * mtp_num_layers
+                )
+                model_inputs["images"].append([])
+                model_inputs["videos"].append([])
+                model_inputs["chunk_group_size"].append(num_chunks)
+                model_inputs["group_total_tokens"].append(group_total_tokens)
+                if not config.eod_mask_loss:
+                    model_inputs["loss_mask"].append(chunk_loss_mask)
+
+        # (d) Short sequence binpacking: pack short sequences into bins of chunksize
+        knapsacks = _build_knapsacks(short_sample_lens, chunksize)
+        for knapsack in knapsacks:
+            packed_input_ids, packed_labels, packed_loss_mask, packed_attention_mask = (
+                [], [], [], [],
+            )
+            for i, length in enumerate(knapsack):
+                idx = short_len_to_sample_indexs[length].pop()
+                packed_input_ids += short_input_ids[idx]
+                # Pre-shift labels and loss_mask per sequence for next-token prediction:
+                # shift left by 1, last position set to IGNORE/0 (end of sequence)
+                packed_labels += short_labels[idx][1:] + [ignore_index]
+                packed_loss_mask += short_loss_mask[idx][1:] + [0]
+                packed_attention_mask += [i + 1] * len(short_input_ids[idx])  # start from 1
+
+            # Pad to chunksize
+            padding_len = chunksize - len(packed_input_ids)
+            if padding_len > 0:
+                packed_input_ids += [pad_token_id] * padding_len
+                packed_labels += [ignore_index] * padding_len
+                packed_loss_mask += [0] * padding_len
+                packed_attention_mask += [0] * padding_len
+
+            if mtp_num_layers > 0:
+                packed_input_ids += [pad_token_id] * mtp_num_layers
+                packed_labels += [ignore_index] * mtp_num_layers
+                packed_loss_mask += [0] * mtp_num_layers
+                packed_attention_mask += [0] * mtp_num_layers
+
+            model_inputs["input_ids"].append(packed_input_ids)
+            model_inputs["labels"].append(packed_labels)
+            model_inputs["attention_mask"].append(packed_attention_mask)
+            model_inputs["images"].append([])
+            model_inputs["videos"].append([])
+            model_inputs["chunk_group_size"].append(1)
+            # Bin-packed chunk is treated as a single sample; N_g = total
+            # response tokens of the base chunk, excluding MTP bridge padding.
+            model_inputs["group_total_tokens"].append(
+                sum(packed_loss_mask[:chunksize])
+            )
+            if not config.eod_mask_loss:
+                model_inputs["loss_mask"].append(packed_loss_mask)
+
+        return model_inputs
+
+    # build packing
+    knapsacks = _build_knapsacks(all_sampel_lens, config.sequence_length)
+    estimated_computational_load_list = []
+    for knapsack in knapsacks:
+        packed_input_ids, packed_attention_masks, packed_labels, packed_loss_masks = (
+            [],
+            [],
+            [],
+            [],
+        )
+        # for language model, we use the estimated computational load to sort the batch
+        estimated_computational_load = 0
+
+        for i, length in enumerate(knapsack):
+            index = len_to_sample_indexs[length].pop()
+            # packing
+            packed_input_ids += all_input_ids[index]
+            estimated_computational_load += len(all_input_ids[index]) ** 2
+            packed_labels += all_labels[index]
+            packed_loss_masks += all_loss_mask[index]
+            packed_attention_masks += [i + 1] * len(
+                all_input_ids[index]
+            )  # start from 1
+
+        estimated_computational_load_list.append(estimated_computational_load)
+        model_inputs["input_ids"].append(packed_input_ids)
+        model_inputs["labels"].append(packed_labels)
+        model_inputs["attention_mask"].append(packed_attention_masks)
+        # TODO: support images/videos, just placeholder for now
+        model_inputs["images"].append([])
+        model_inputs["videos"].append([])
+
+        if not config.eod_mask_loss:
+            model_inputs["loss_mask"].append(packed_loss_masks)
+
+    if config.sort_batch:
+        sorted_indices = sorted(
+            range(len(model_inputs["input_ids"])),
+            key=lambda i: estimated_computational_load_list[i],
+        )
+        model_inputs["input_ids"] = [
+            model_inputs["input_ids"][i] for i in sorted_indices
+        ]
+        model_inputs["labels"] = [model_inputs["labels"][i] for i in sorted_indices]
+        model_inputs["attention_mask"] = [
+            model_inputs["attention_mask"][i] for i in sorted_indices
+        ]
+        # TODO: add images pixels
+
+        if not config.eod_mask_loss:
+            model_inputs["loss_mask"] = [
+                model_inputs["loss_mask"][i] for i in sorted_indices
+            ]
 
     return model_inputs
 

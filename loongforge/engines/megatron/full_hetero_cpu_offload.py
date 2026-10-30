@@ -1,20 +1,11 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Full heterogeneous DP (``--enable-full-hetero-dp``): per-step state, CPU offload, encoder parallel facts.
+"""CPU offload utilities for full hetero DP memory optimization.
 
-Encoder ranks run the vision encoder for every microbatch of their decoder DP group, gather the
-embeddings, and scatter the gradients back after the decoder backward. ``train_step``, the model's
-encoder path and the EP-overlap callables share the state kept here:
-
-- embedding / grad / visual-pos-mask / deepstack lists of the current step;
-- the CPU offload manager (``--full-hetero-dp-cpu-offload``);
-- the encoder data iterator, which the training method builds with ``data/vlm/encoder_strided_sampler.py``
-  from the sizes ``encoder_parallel_facts`` returns;
-- the method's batch functions.
-
-``HeteroStepContext`` owns all of it. The training method creates it, ``train_step``
-fills the per-step lists and calls ``end_step`` after the step.
+Provides async GPU-to-CPU and CPU-to-GPU tensor transfers using pinned memory
+and dedicated CUDA streams, allowing encoder embeddings and decoder gradients
+to be temporarily stored on the host while the decoder runs.
 """
 
 from typing import Dict, Optional, Tuple
@@ -119,6 +110,11 @@ class CpuOffloadManager:
 
         self._store[key] = (cpu_tensor, tensor.shape, tensor.dtype, tensor.device)
         self._offload_events[key] = event
+
+    def offload_sync(self, key: str) -> None:
+        """Block until a specific offload finishes."""
+        if key in self._offload_events:
+            self._offload_events[key].synchronize()
 
     def reload(self, key: str) -> Optional[torch.Tensor]:
         """Async copy a tensor back from CPU to GPU.

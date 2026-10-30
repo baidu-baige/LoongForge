@@ -12,7 +12,7 @@ from megatron.core.enums import ModelType
 from megatron.training import get_timers
 
 from megatron.training.utils import print_rank_0
-from loongforge.engines.megatron import get_args, get_tokenizer
+from loongforge.engines.megatron import get_args, get_model_config, get_tokenizer
 from loongforge.data.vlm.ernie.data_utils import ErnieTensorDataset
 from loongforge.engines.megatron.runner import pretrain
 from megatron.core import parallel_state
@@ -20,10 +20,6 @@ from megatron.core import mpu, tensor_parallel
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.transformer.enums import AttnMaskType
 from megatron.core.utils import StragglerDetector
-from loongforge.engines.megatron import get_model_config
-from loongforge.models.omni_models.omni_model_provider import (
-    omni_model_provider
-)
 from loongforge.engines.megatron.get_loss_func import default_loss_func
 
 logger = logging.getLogger(__name__)
@@ -171,6 +167,7 @@ def forward_step(data_iterator, model):
 
     model_config = get_model_config()
     image_mask = input_ids == model_config.foundation.im_patch_id
+    # breakpoint()
     with stimer:
         loss = model(
             input_ids=input_ids,
@@ -246,25 +243,13 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
     return iter(dataloader), None, None
 
 
-def model_provider(pre_process=True, post_process=True, vp_stage=None):
-    """Build the multimodal model with this run's args and model config."""
-    return omni_model_provider(
-        pre_process,
-        post_process,
-        vp_stage=vp_stage,
-        args=get_args(),
-        model_config=get_model_config(),
-        runtime=pretrain_vlm.build_multimodal_runtime(get_args()),
-    )
-
-
 def train(args):
     """Run ERNIE-4.5-VL SFT."""
     train_valid_test_datasets_provider.is_distributed = True
     pretrain(
         args,
         train_valid_test_datasets_provider,
-        model_provider,
+        pretrain_vlm.model_provider,
         ModelType.encoder_or_decoder,
         forward_step,
     )

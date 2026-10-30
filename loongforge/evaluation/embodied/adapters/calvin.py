@@ -34,6 +34,7 @@ class CalvinAdapter(BaseBenchmarkAdapter):
     # PayloadBuilder's ``action_encoding × adapter.action_space`` compose to
     # ``ee6d_to_calvin_abs`` (registered decoder key).
     action_space: str = "calvin_abs"
+    default_fps: int = 30
     cameras: tuple = ("primary", "wrist")
 
     def __init__(
@@ -95,6 +96,7 @@ class CalvinAdapter(BaseBenchmarkAdapter):
         }
 
     def action_from_canonical(self, canonical_action: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Any:
+        """Run action_from_canonical."""
         if "world_vector" in canonical_action:
             world_vector = np.asarray(canonical_action["world_vector"], dtype=np.float32).reshape(-1)
             rotation_delta = np.asarray(canonical_action["rotation_delta"], dtype=np.float32).reshape(-1)
@@ -118,6 +120,7 @@ class CalvinAdapter(BaseBenchmarkAdapter):
         return np.concatenate([world_vector, rotation_delta, gripper], axis=0).astype(np.float32)
 
     def get_eval_context(self) -> Dict[str, Any]:
+        """Run get_eval_context."""
         return {
             "benchmark": "calvin",
             "robot_setup": self.robot_setup,

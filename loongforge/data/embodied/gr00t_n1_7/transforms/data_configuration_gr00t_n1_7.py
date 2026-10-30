@@ -21,6 +21,7 @@ class Gr00tN1d7DataConfig:
 
     state_dropout_prob: float = 0.2
     exclude_state: bool = False
+    use_mean_std: bool = False
     use_percentiles: bool = True
     clip_outliers: bool = True
     apply_sincos_state_encoding: bool = False
@@ -46,6 +47,7 @@ class Gr00tN1d7DataConfig:
     shard_size: int = 1024
     episode_sampling_rate: float = 0.1
     num_shards_per_epoch: int = 100000
+    allow_padding: bool = False
 
     use_image_transform: bool = False
     use_action_transform: bool = False

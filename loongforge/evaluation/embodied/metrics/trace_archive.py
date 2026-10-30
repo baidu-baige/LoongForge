@@ -14,6 +14,7 @@ from .results import PathLike, load_jsonl
 
 
 def archive_traces(results_path: PathLike, output_dir: PathLike, run_id: str = "default") -> List[Dict[str, Any]]:
+    """Run archive_traces."""
     records = load_jsonl(results_path)
     trace_root = Path(output_dir) / "traces" / _safe_name(run_id)
     manifest: List[Dict[str, Any]] = []
@@ -49,4 +50,5 @@ def archive_traces(results_path: PathLike, output_dir: PathLike, run_id: str = "
 
 
 def _safe_name(value: str) -> str:
+    """Run _safe_name."""
     return "".join(char if char.isalnum() or char in "._-" else "_" for char in value)

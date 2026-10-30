@@ -121,6 +121,7 @@ class Gr00tN1d6PerMicrobatchCudaGraphRunner:
         self._graph_stream: torch.cuda.Stream | None = None
         self._materialized_sync_grad_ids: set[int] = set()
         self._profile_enabled = os.environ.get("LOONGFORGE_PROFILE_TRAIN_STEP", "0") == "1"
+        self._last_profile: dict[str, float] = {}
         self._last_grad_sync_ms: float | None = None
         bucket_mb = float(self.training_args.cuda_graph_grad_sync_bucket_mb)
         self._max_grad_sync_bucket_numel = max(int(bucket_mb * 1024 * 1024 / 4), 1)
@@ -162,7 +163,7 @@ class Gr00tN1d6PerMicrobatchCudaGraphRunner:
         """Return whether per-microbatch CUDA graph execution is enabled.
 
         Args:
-            training_args: Training arguments whose CUDA graph settings are inspected.
+            trainer: Trainer instance whose ``args`` are inspected.
 
         Returns:
             ``True`` when CUDA is available, ``cuda_graph_impl`` is ``"local"``,
@@ -186,7 +187,7 @@ class Gr00tN1d6PerMicrobatchCudaGraphRunner:
             Tuple of ``(output_dict, loss)`` where *output_dict* contains at
             least ``"action_loss"`` and *loss* is the all-reduced scalar loss.
         """
-        profile: dict[str, float] | None = {} if self._profile_enabled and self._captured else None
+        profile: dict[str, float] | None = {} if self._profile_enabled else None
         fetch_start = time.perf_counter()
         batches = self._fetch_prefetched_batches(step_ctx)
         if profile is not None:
@@ -194,7 +195,13 @@ class Gr00tN1d6PerMicrobatchCudaGraphRunner:
             profile["fetch_ms"] = (time.perf_counter() - fetch_start) * 1000.0
 
         if self._warmup_count < self.warmup_steps:
+            run_start = time.perf_counter()
             output, accum_loss = self._run_eager_batches(step_ctx, batches)
+            if profile is not None:
+                torch.cuda.synchronize()
+                profile["runner_ms"] = (time.perf_counter() - run_start) * 1000.0
+                if self._last_grad_sync_ms is not None:
+                    profile["grad_sync_ms"] = self._last_grad_sync_ms
             self._warmup_count += 1
             self._grad_buffers_ready = self._has_any_grad_buffer()
             if self._warmup_count == self.warmup_steps:
@@ -203,11 +210,19 @@ class Gr00tN1d6PerMicrobatchCudaGraphRunner:
                     self.warmup_steps,
                 )
             result = self._sync_step_output(output)
+            if profile is not None:
+                self._last_profile = profile
             return result
 
         if not self._captured:
+            run_start = time.perf_counter()
             output, _accum_loss = self._capture_and_replay(step_ctx, batches)
+            if profile is not None:
+                torch.cuda.synchronize()
+                profile["runner_ms"] = (time.perf_counter() - run_start) * 1000.0
             result = self._sync_step_output(output)
+            if profile is not None:
+                self._last_profile = profile
             return result
 
         try:
@@ -219,8 +234,14 @@ class Gr00tN1d6PerMicrobatchCudaGraphRunner:
         except RuntimeError as exc:
             logger.info("CUDA graph invalidated, re-capturing: %s", exc)
             self._invalidate()
+            run_start = time.perf_counter()
             output, _accum_loss = self._capture_and_replay(step_ctx, batches)
+            if profile is not None:
+                torch.cuda.synchronize()
+                profile["runner_ms"] = (time.perf_counter() - run_start) * 1000.0
             result = self._sync_step_output(output)
+            if profile is not None:
+                self._last_profile = profile
             return result
 
         run_start = time.perf_counter()
@@ -238,12 +259,24 @@ class Gr00tN1d6PerMicrobatchCudaGraphRunner:
         if profile is not None:
             torch.cuda.synchronize()
             profile["loss_sync_ms"] = (time.perf_counter() - sync_start) * 1000.0
+            self._last_profile = profile
             if self.ctx.is_main:
                 logger.info(
                     "CUDA graph runner profile: %s",
                     ", ".join(f"{key}={value:.2f}ms" for key, value in sorted(profile.items())),
                 )
         return result
+
+    def metrics_batch_size(self, local_batch_size: int) -> int:
+        """Return the effective batch size used for metrics reporting.
+
+        Args:
+            local_batch_size: Per-rank batch size for the current step.
+
+        Returns:
+            The unmodified *local_batch_size*.
+        """
+        return local_batch_size
 
     def _sync_step_output(self, output: dict[str, torch.Tensor]) -> tuple[dict[str, torch.Tensor], float]:
         if output is None or "action_loss" not in output:
@@ -269,7 +302,11 @@ class Gr00tN1d6PerMicrobatchCudaGraphRunner:
             self._set_shape_recording(False)
             self._set_graph_warmup_flag(False)
             self._wait_default_on_graph_stream()
+        sync_start = time.perf_counter()
         self._manual_sync_grads_if_needed()
+        if self._profile_enabled:
+            torch.cuda.synchronize()
+            self._last_grad_sync_ms = (time.perf_counter() - sync_start) * 1000.0
         return output, accum_loss
 
     def _capture_and_replay(

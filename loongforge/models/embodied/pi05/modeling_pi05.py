@@ -63,11 +63,6 @@ logger = logging.getLogger(__name__)
 OPENPI_ATTENTION_MASK_VALUE = -2.3819763e38
 DEFAULT_IMAGE_SIZE = 224
 
-# Per-layer torch.compile guards on layer_idx, so every layer needs its own
-# cache entry. The torch default limit (8) is below the layer count.
-torch._dynamo.config.cache_size_limit = 512
-torch._dynamo.config.accumulated_cache_size_limit = 4096
-
 
 # ═══════════════════════════════════════════════════════════════
 # Internal low-level config (backbone structure is fixed, not externally visible)

@@ -6,6 +6,9 @@
 import argparse
 
 
+from loongforge.models import catalog as constants
+from loongforge.models.factory import get_support_model_archs
+
 def add_vlm_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Register VLM-only arguments on *parser*."""
     group = parser.add_argument_group(
@@ -240,4 +243,45 @@ def add_vlm_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
         default=448,
         help="Force resize images to this size (pixels). Default: 448",
     )
+    group.add_argument(
+        "--replacement",
+        action="store_true",
+        help="Restart dataset iteration from beginning when exhausted. Default: False"
+    )
+
+    group.add_argument(
+        "--patch-size",
+        type=int,
+        default=14,
+        help="Vision encoder patch size for image tokenization. Default: 14"
+    )
+
+    group.add_argument(
+        "--use-packed-ds",
+        action="store_true",
+        help="[DEPRECATED] Enable packed dataset mode for efficient multi-image training. Default: False"
+    )
+
+    group.add_argument(
+        "--save-dataset-state",
+        action="store_true",
+        help="[DEPRECATED] Save dataset state for resumable training. Default: False"
+    )
+
+    group.add_argument(
+        "--dataloader-prefetch-factor",
+        type=int,
+        default=2,
+        help="Number of batches to prefetch per worker in dataloader. Default: 2"
+    )
+
+    group.add_argument(
+        "--language-model-type",
+        type=str,
+        default=None,
+        choices=get_support_model_archs(constants.LanguageModelFamilies.names()),
+        help="Language model backbone architecture for multimodal models. "
+             "Must be from supported language model families. Default: None"
+    )
+
     return parser

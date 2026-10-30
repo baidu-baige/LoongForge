@@ -20,6 +20,7 @@ __all__ = [
 
 
 def __getattr__(name: str):
+    """Run __getattr__."""
     if name == "SimplerEnvAdapter":
         from .simplerenv import SimplerEnvAdapter
 

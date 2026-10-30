@@ -426,6 +426,7 @@ def cooker_multi_vid_vqa(sample: dict, config):
 @stateless
 def cooker_feature_qa(sample: dict):
     """Convert raw sample dict into a FeatureQASample."""
+    # TODO
     pass
 
 
@@ -561,6 +562,7 @@ def cooker_packed_multi_mix_qa(sample: dict):
             videos=videos,
             contexts=contexts,
             answers=answers,
+            answer_weights=None,
         )
     else:
         return PackedMultiMixQASample(
@@ -571,6 +573,7 @@ def cooker_packed_multi_mix_qa(sample: dict):
             videos=videos,
             contexts=contexts,
             answers=answers,
+            answer_weights=None,
         )
 
 

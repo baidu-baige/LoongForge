@@ -289,7 +289,7 @@ class XVLAPolicy(torch.nn.Module):
     def _prepare_inputs(self, batch) -> Dict[str, torch.Tensor]:
         """Map an XVLAProcessor-style batch dict into XVLA model forward arguments.
 
-        The XVLA collator (``XVLACollator``) emits X-VLA-native batch keys via
+        The XVLA collator (``XVLAPreprocessor``) emits X-VLA-native batch keys via
         :class:`XVLAProcessor`:
           - ``input_ids``    token ids [B, L]
           - ``image_input``  multi-view images [B, V, 3, H, W]

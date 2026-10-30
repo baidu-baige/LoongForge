@@ -24,7 +24,7 @@ stimer = StragglerDetector()
 
 
 def model_provider(pre_process=True, post_process=True, vp_stage: int = None):
-    """Return the Qwen-Image model instance."""
+    """Return the Qwen-Image model instance registered with LoongForge."""
     args = get_args()
     if args.context_parallel_size != 1:
         raise AssertionError("Qwen-Image uses FSDP + TP; set context parallel size to 1.")
@@ -288,7 +288,7 @@ def forward_step(diffusion, data_iterator, model):
 
 
 def train_valid_test_datasets_provider(diffusion, train_val_test_num_samples, vp_stage=None):
-    """Build the train dataloader (LatentDataset over pre-cached Qwen-Image latents)."""
+    """Build the train dataloader (TensorDataset over pre-cached Qwen-Image latents)."""
     args = get_args()
     keep_keys = {
         "input_latents",

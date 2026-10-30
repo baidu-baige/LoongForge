@@ -26,7 +26,6 @@ def wan_i2v_model_provider(
         pre_process (bool, optional): Set to true if you need to compute embedings. Defaults to True.
         post_process (bool, optional): Set to true if you need to want to compute output logits/loss. Defaults to True.
         parallel_output (bool): whether to allgather the output logits
-        args: Training args of the run.
 
     Returns:
         WanModel: The returned model
@@ -60,3 +59,6 @@ def wan_i2v_model_provider(
     )
 
     return model
+
+
+wan2_2_i2v_model_provider = wan_i2v_model_provider

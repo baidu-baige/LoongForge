@@ -16,8 +16,8 @@ class _EmbodiedRoutingArgs:
     trainer_type: str = field(
         default="FinetuneTrainer",
         metadata={
-            "help": "Trainer class to instantiate (e.g. FinetuneTrainer, "
-                    "Gr00tN1d6Trainer); resolved by the trainer builder registry."
+            "help": "Trainer type (e.g. FinetuneTrainer, Gr00tN1d6Trainer); "
+                    "selects the recipe, hooks and runner in loongforge/train.py."
         },
     )
 
@@ -43,10 +43,41 @@ class _EmbodiedDataArgs:
         default="default",
         metadata={
             "help": "Under --dataset-format lerobot_datasets: the model-specific "
-                    "dataset build strategy ('default', 'fastwam', "
+                    "dataset build strategy ('default', 'vlda', 'fastwam', "
                     "'lingbot_va', 'gr00t_n1_7', 'cosmos3_droid', "
                     "'dreamzero', or 'wall_oss_0_5'); unknown values raise "
                     "ValueError."
+        },
+    )
+
+    split: str = field(
+        default="train",
+        metadata={
+            "help": "Dataset split to load (RLDS), e.g. 'train' or 'train[:95%%]'."
+        },
+    )
+
+    data_root_dir: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "Root directory containing the datasets referenced by "
+                    "--dataset-mix."
+        },
+    )
+
+    robot_type: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "Robot embodiment type (e.g. libero_franka); selects "
+                    "action/state layout."
+        },
+    )
+
+    task_name: str = field(
+        default="perform the task",
+        metadata={
+            "help": "Language instruction used as the prompt when the dataset has "
+                    "none (HDF5)."
         },
     )
 
@@ -128,7 +159,7 @@ class _EmbodiedDataArgs:
                     "permutation -- this reproduces standalone FastWAM, whose "
                     "ResumableEpochSampler epoch is never advanced. Only used by "
                     "model types that register their own sampler builder (currently "
-                    "fastwam); see data/datasets/<model>/samplers.py.",
+                    "fastwam); see data/embodied/fastwam/samplers.py.",
         },
     )
 

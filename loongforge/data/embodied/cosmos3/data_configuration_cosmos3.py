@@ -5,11 +5,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: OpenMDW-1.1
 
-"""Cosmos3 DataConfig — data-processing parameters (config, from YAML ``data:`` section).
+"""FastWAM DataConfig — data-processing parameters (config, from YAML ``data:`` section).
 
 YAML / config relationship
 --------------------------
-- The YAML file (``configs/models/cosmos3/nano.yaml``, ``data:`` section) is the
+- The YAML file (``configs/models/fastwam/fastwam.yaml``, ``data:`` section) is the
   user-facing knob: edit it to override any field for a specific run.
 - This dataclass provides all defaults and is the single source of truth.
   At startup, OmegaConf merges the YAML ``data:`` section on top of a structured
@@ -42,6 +42,8 @@ class Cosmos3DataConfig:
     max_text_tokens: int = 2048
     action_fps: float = 15.0
     cfg_dropout_rate: float = 0.0
+    target_h: int = 480
+    target_w: int = 480
     video_backend: str = "torchcodec"
     use_image_augmentation: bool = False
     colorjitter_on_gpu: bool = False

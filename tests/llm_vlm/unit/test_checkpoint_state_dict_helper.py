@@ -3,7 +3,7 @@
 
 import pytest
 
-from loongforge.engines.megatron.checkpointing import _load_model_state_dict
+from loongforge.train.checkpointing import _load_model_state_dict
 
 
 class _FakeModule:

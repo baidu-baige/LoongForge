@@ -69,6 +69,7 @@ Or for breaking changes:
    - `.github/workflows/` → `ci`
    - `examples/` → `scripts`
    - `loongforge/models/embodied/` → check model type (`diffusion`/`vla`)
+   - `loongforge/models/diffusion/` → `diffusion`
 3. Determine type from commit messages and nature of changes
 4. Write a concise description (imperative mood, lowercase start)
 
@@ -153,7 +154,7 @@ After PR is created:
 | llm | `loongforge/models/foundation/`, `configs/models/<llm>/` |
 | vlm | `loongforge/models/encoder/`, `loongforge/models/omni_models/` |
 | vla | `loongforge/models/embodied/` (VLA models) |
-| diffusion | `loongforge/models/embodied/` (diffusion models) |
+| diffusion | `loongforge/models/diffusion/`, `loongforge/models/embodied/` (diffusion models) |
 | train | `loongforge/engines/`, `loongforge/training/`, `loongforge/train.py` |
 | data | `loongforge/data/` |
 | ops | `ops/` |

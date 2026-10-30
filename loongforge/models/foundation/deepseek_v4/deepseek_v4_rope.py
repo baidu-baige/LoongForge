@@ -164,3 +164,97 @@ def apply_dsv4_rotary_pos_emb(
         cp_group=cp_group,
         **kwargs,
     )
+
+
+# =============================================================================
+# Contiguous CP Local RoPE
+# =============================================================================
+
+
+def _thd_cp_contiguous_position_ids(
+    cu_seqlens: Tensor, global_start: int, local_rows: int
+) -> Tensor:
+    """Compute within-sequence position IDs for contiguous CP partition.
+
+    In contiguous CP, rank r holds global rows [global_start, global_start + local_rows).
+    Each row's position = global_row - sequence_start.
+    """
+    device = cu_seqlens.device
+    global_rows = torch.arange(
+        int(global_start),
+        int(global_start) + int(local_rows),
+        dtype=cu_seqlens.dtype,
+        device=device,
+    )
+    sequence_ids = torch.bucketize(
+        global_rows, cu_seqlens[1:], out_int32=True, right=True
+    ).clamp_max(cu_seqlens.shape[0] - 2)
+    sequence_starts = cu_seqlens[sequence_ids]
+    sequence_ends = cu_seqlens[sequence_ids + 1]
+    valid_rows = (global_rows >= sequence_starts) & (global_rows < sequence_ends)
+    return torch.where(valid_rows, global_rows - sequence_starts, 0)
+
+
+def apply_thd_cp_local_rope(
+    t: Tensor,
+    freqs: Tensor,
+    cu_seqlens: Tensor,
+    global_start: int,
+    config,
+    mscale: float = 1.0,
+    inverse: bool = False,
+    remove_interleaving: bool = True,
+) -> Tensor:
+    """Apply RoPE using contiguous CP local positions (not zigzag).
+
+    Unlike _apply_rotary_pos_emb_thd which uses zigzag splitting for ring
+    attention, this function computes positions based on contiguous partition:
+    each row's position = global_row_index - sequence_start.
+
+    This is used by the DSv4 CP path where sequences are split contiguously
+    across CP ranks.
+
+    Args:
+        t: Input tensor, shape (local_rows, ..., dim).
+        freqs: Full RoPE frequency table, shape (max_seq_len, ..., rot_dim).
+        cu_seqlens: Global cumulative sequence lengths.
+        global_start: First global row index on this CP rank.
+        config: TransformerConfig with rotary_interleaved and multi_latent_attention.
+        mscale: RoPE magnitude scale.
+        inverse: If True, apply inverse rotation.
+        remove_interleaving: If True, de-interleave after rotation.
+
+    Returns:
+        Tensor with RoPE applied, same shape as input.
+    """
+    local_rows = t.shape[0]
+    position_ids = _thd_cp_contiguous_position_ids(
+        cu_seqlens, global_start, local_rows
+    )
+    # Index into frequency table using computed positions
+    local_freqs = torch.index_select(freqs, 0, position_ids.long())
+
+    # Apply RoPE (add batch dim if needed for _apply_rotary_pos_emb_bshd)
+    needs_batch_dim = t.ndim == 2 or (t.ndim == 3 and t.shape[1] != 1)
+    if t.ndim == 2:
+        # (rows, dim) -> (rows, 1, dim) for bshd format
+        t_input = t.unsqueeze(1)
+    elif t.ndim == 3:
+        # (rows, heads, dim) -> (rows, 1, heads, dim) for sbhd
+        t_input = t.unsqueeze(1)
+    else:
+        t_input = t
+
+    result = _apply_rotary_pos_emb_bshd(
+        t_input,
+        local_freqs,
+        rotary_interleaved=config.rotary_interleaved,
+        multi_latent_attention=config.multi_latent_attention,
+        mscale=mscale,
+        inverse=inverse,
+        remove_interleaving=remove_interleaving,
+    )
+
+    if t.ndim == 2 or t.ndim == 3:
+        result = result.squeeze(1)
+    return result

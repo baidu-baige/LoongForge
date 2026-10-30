@@ -180,7 +180,7 @@ class ErnieTaskEncoder(BaseTaskEncoder):
         )
 
         # ---- ImageModificationProcessor (for position_ids_for_rope_3d) ----
-        # We create a lightweight config-like object for ImageModificationProcessor.
+        # We create a lightweight args-like object for ImageModificationProcessor.
         self._imp = _build_image_modification_processor(
             config, self.ernie_tokenizer, self.image_processor,
         )
@@ -390,7 +390,8 @@ class ErnieTaskEncoder(BaseTaskEncoder):
         image_type_ids_np = np.array(image_wise_type, dtype=np.int64)
 
         # ---- Align with offline torch pipeline (packing_dataloader) ----
-        # 1) Replace SEP token with EOS token in labels.
+        # 1) Replace SEP token with EOS token in labels (matches
+        #    ImageModificationProcessor.mm_example_to_feature for ernie_vl).
         vocab = self.ernie_tokenizer.get_vocab()
         sep_token = self.ernie_tokenizer.special_tokens_map.get(
             "sep_token", "<|endofprompt|>"
@@ -780,7 +781,7 @@ class ErnieTaskEncoder(BaseTaskEncoder):
 
 @dataclass
 class _ImageArgs:
-    """Minimal config-like object for ImageModificationProcessor."""
+    """Minimal args-like object for ImageModificationProcessor."""
     image_token_len: int = 64
     image_dtype: str = "float32"
     sft_shift_by_one: bool = False

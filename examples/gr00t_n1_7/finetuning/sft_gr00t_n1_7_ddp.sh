@@ -3,13 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ═══════════════════════════════════════════════════════════════
-# sft_gr00t_n1_7_ddp.sh - GR00T-N1.7 Training Launch Script (DDP)
+# run_gr00t_n1_7_ddp_finetune.sh - GR00T-N1.7 Training Launch Script (DDP)
 #
 # Usage:
-#   bash sft_gr00t_n1_7_ddp.sh
-#   TRAIN_ITERS=50 bash sft_gr00t_n1_7_ddp.sh            # override via env
-#   bash sft_gr00t_n1_7_ddp.sh --train-iters 500         # override a training param (flag form)
-#   bash sft_gr00t_n1_7_ddp.sh model.action_horizon=32   # override YAML model:/data: fields (dotlist form)
+#   bash run_gr00t_n1_7_ddp_finetune.sh
+#   TRAIN_ITERS=50 bash run_gr00t_n1_7_ddp_finetune.sh            # override via env
+#   bash run_gr00t_n1_7_ddp_finetune.sh --train-iters 500         # override a training param (flag form)
+#   bash run_gr00t_n1_7_ddp_finetune.sh model.action_horizon=32   # override YAML model:/data: fields (dotlist form)
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 

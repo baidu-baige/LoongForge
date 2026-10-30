@@ -269,7 +269,7 @@ RUN --mount=type=secret,id=source_manifest,required=false \
         # Keep the NGC PyTorch build instead of replacing it with a PyPI wheel. \
         sed -i -E 's/"torch>=([0-9][0-9.]*),<[0-9][0-9.]*"/"torch>=\1"/; s/"torchvision>=([0-9][0-9.]*),<[0-9][0-9.]*"/"torchvision>=\1"/' pyproject.toml && \
         grep -E '"torch(vision)?>=' pyproject.toml && \
-        pip --disable-pip-version-check --quiet install "transformers==5.7.0" && \
+        pip --disable-pip-version-check --quiet install "transformers==5.3.0" && \
         pip --disable-pip-version-check --quiet install --no-build-isolation . && \
         pip --disable-pip-version-check --quiet install "numpy==1.26.4" && \
         pip --disable-pip-version-check --quiet install "scipy==1.15.3" && \
