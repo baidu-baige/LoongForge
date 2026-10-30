@@ -3,12 +3,13 @@
 
 """LoongForge Embodied training entry."""
 
-from loongforge.embodied.train.parser import parse_train_args
-from loongforge.embodied.train.trainers import build_model_trainer
-
-
 def main():
     """Parse configs, build the trainer, and start the training loop."""
+    # Lazy import: spawn DataLoader workers re-import this module, and should
+    # not load the full training stack on startup.
+    from loongforge.embodied.train.parser import parse_train_args
+    from loongforge.embodied.train.trainers import build_model_trainer
+
     training_args, model_cfg, data_cfg = parse_train_args()
     trainer = build_model_trainer(training_args, model_cfg, data_cfg)
     trainer.train()

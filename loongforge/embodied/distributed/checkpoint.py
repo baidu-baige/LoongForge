@@ -1109,6 +1109,8 @@ def _get_full_state_dict(
 
 def _is_zero_optimizer(optimizer) -> bool:
     """Check if optimizer is a ZeroRedundancyOptimizer."""
+    if _owns_local_state(optimizer):
+        return True
     from torch.distributed.optim import ZeroRedundancyOptimizer
     return isinstance(optimizer, ZeroRedundancyOptimizer) or getattr(
         optimizer, "_is_multi_dtype_zero_optimizer", False
@@ -1127,13 +1129,27 @@ def _zero_optimizer_children(optimizer) -> list:
     """Return the ZeRO optimizers represented by an optimizer wrapper."""
     from torch.distributed.optim import ZeroRedundancyOptimizer
 
-    if isinstance(optimizer, ZeroRedundancyOptimizer):
+    if isinstance(optimizer, ZeroRedundancyOptimizer) or _owns_local_state(optimizer):
         return [optimizer]
     if getattr(optimizer, "_is_multi_dtype_zero_optimizer", False):
         children = optimizer._optimizers
         if all(isinstance(child, ZeroRedundancyOptimizer) for child in children):
             return children
     raise TypeError(f"Unsupported ZeRO optimizer type: {type(optimizer).__name__}")
+
+
+def _owns_local_state(optimizer) -> bool:
+    """Whether the optimizer itself (not a ``.optim``) exposes its rank-local state."""
+    return hasattr(optimizer, "local_checkpoint_state_dict")
+
+
+def _rank_local_optimizer(child):
+    """Return the object that holds a ZeRO child's rank-local state.
+
+    torch's ZeroRedundancyOptimizer keeps it in ``.optim``; the tensor_wise
+    optimizer owns its masters and optimizer state itself.
+    """
+    return child if _owns_local_state(child) else child.optim
 
 
 def _local_optimizer_state_dict(optimizer) -> dict:
@@ -1297,7 +1313,7 @@ def _load_zero_optimizer_state(checkpoint_path, optimizer, ctx) -> None:
             f"checkpoint={len(local_state)}, current={len(children)}."
         )
     for child, state_dict in zip(children, local_state):
-        _load_local_optimizer_state_dict(child.optim, state_dict)
+        _load_local_optimizer_state_dict(_rank_local_optimizer(child), state_dict)
         _copy_param_group_options(child.optim.param_groups, child.param_groups)
 
 
