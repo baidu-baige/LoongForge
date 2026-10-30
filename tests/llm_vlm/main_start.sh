@@ -11,17 +11,12 @@ export WORLD_SIZE=${WORLD_SIZE:-1}
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 
 # Resume settings (optional)
+: "${PFS_PATH:?PFS_PATH is required}"
+: "${TRAINING_LOG_PATH:?TRAINING_LOG_PATH is required}"
+: "${LOONGFORGE_PATH:?LOONGFORGE_PATH is required}"
+: "${MEGATRON_PATH:?MEGATRON_PATH is required}"
+
 if [ -z "${RESUME_STATE_FILE}" ]; then
-    COMMON_YAML="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/configs/common.yaml"
-    TRAINING_LOG_PATH=""
-    PFS_PATH=""
-    if [ -f "${COMMON_YAML}" ]; then
-        PFS_PATH=$(awk -F': *' '$1=="pfs_path" {print $2}' "${COMMON_YAML}")
-        TRAINING_LOG_PATH=$(awk -F': *' '$1=="training_log_path" {print $2}' "${COMMON_YAML}")
-    fi
-    if [ -n "${PFS_PATH}" ] && [[ "${TRAINING_LOG_PATH}" == *"$pfs_path"* ]]; then
-        TRAINING_LOG_PATH=${TRAINING_LOG_PATH//\$pfs_path/${PFS_PATH}}
-    fi
     export RESUME_STATE_FILE="${TRAINING_LOG_PATH}/e2e_resume_state.json"
 fi
 

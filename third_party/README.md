@@ -1,5 +1,6 @@
 # Third Party
 * Loong-Megatron: a fork of Megatron-LM serving as the backend training engine for LoongForge, with in-depth customizations including performance optimization strategies, XPU support, bug fixes, and other functional enhancements.
+* [patches](patches/README.md): versioned TransformerEngine patches and the patch application script used by `setup_env.py` and the GPU Dockerfile.
 
 ## Maintenance Principles
 Loong-Megatron tracks recent upstream release versions of NVIDIA/Megatron-LM. Each primary version is maintained on a dedicated loong-main/core_v* branch and updated promptly as the upstream evolves.

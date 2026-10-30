@@ -264,4 +264,3 @@ def eval(TASK_ENV: Any, model: ModelClient, observation: Dict[str, Any]) -> None
         instruction = str(TASK_ENV.get_instruction())
         action = model.step(observation, instruction=instruction, step=TASK_ENV.take_action_cnt)
         TASK_ENV.take_action(action)
-

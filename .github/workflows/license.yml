@@ -52,7 +52,7 @@ jobs:
           # the list. Piping them together hid both behind the same `|| true`.
           git diff --name-only --diff-filter=A "$BASE" "$HEAD" \
               -- '*.py' '*.sh' '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp' '*.hxx' '*.cu' '*.cuh' > added_files.txt
-          grep -vE '^(third_party|patches)/' added_files.txt > new_files.txt || true
+          grep -vE '^third_party/' added_files.txt > new_files.txt || true
           grep -Ei '\.(py|sh)$' new_files.txt > script_files.txt || true
           grep -Ei '\.(c|cc|cpp|cxx|h|hh|hpp|hxx|cu|cuh)$' new_files.txt > cpp_files.txt || true
           if [ -s new_files.txt ]; then

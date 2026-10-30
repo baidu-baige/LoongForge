@@ -42,9 +42,10 @@ def _auto_import_payload_builder_modules() -> None:
     """Import known PayloadBuilder modules so decorators fire on lookup."""
     _MODULES = [
         "loongforge.embodied.eval.payload_builders.pi05",
+        "loongforge.embodied.eval.payload_builders.vlda",
         "loongforge.embodied.eval.payload_builders.xvla",
-        "loongforge.embodied.eval.payload_builders.groot_n1_6",
-        "loongforge.embodied.eval.payload_builders.groot_n1_7",
+        "loongforge.embodied.eval.payload_builders.gr00t_n1_6",
+        "loongforge.embodied.eval.payload_builders.gr00t_n1_7",
         "loongforge.embodied.eval.payload_builders.lingbot_va",
         "loongforge.embodied.eval.payload_builders.dreamzero",
         "loongforge.embodied.eval.payload_builders.fastwam",

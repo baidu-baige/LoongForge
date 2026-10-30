@@ -101,14 +101,14 @@ class BaseTask(object):
     def _resolve_training_log_path(common_yaml: str) -> str:
         with open(common_yaml, "r") as f:
             cfg = yaml.safe_load(f) or {}
-        training_log_path = cfg.get("training_log_path")
+        training_log_path = os.environ.get("TRAINING_LOG_PATH") or cfg.get("training_log_path")
         if not training_log_path:
             return ""
-        pfs_path = cfg.get("pfs_path", "")
+        pfs_path = os.environ.get("PFS_PATH") or cfg.get("pfs_path", "")
         if pfs_path:
             training_log_path = training_log_path.replace("${pfs_path}", pfs_path)
             training_log_path = training_log_path.replace("$pfs_path", pfs_path)
-        return training_log_path
+        return os.path.expandvars(training_log_path)
 
     @classmethod
     def _record_case_result(

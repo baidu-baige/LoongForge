@@ -19,6 +19,13 @@
 #     bash run_dreamzero_wan21_14b_full_fsdp_finetune.sh
 # CACHE_MANIFEST defaults to $CACHE_DIR/manifest.json. If the cache was
 # generated with a non-default SAMPLE_TRANSFORM_SEED, pass the same value here.
+# The cache provides video and first-frame latents. For a cache generated with
+# --include-prompt-embs, set CACHE_PROMPT_EMBS=true to also skip the frozen
+# text encoder; prompt embeddings add about 4 MiB per sample, roughly tripling
+# the cache.
+# DETERMINISTIC_MODE=true adds --deterministic-mode. The regression suite sets it
+# for this model because the compiled blocks make per-iteration loss and
+# grad_norm vary by more than the 2% gate between otherwise identical runs.
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -75,6 +82,7 @@ CACHE_ARGS=()
 CACHE_DESCRIPTION="disabled (online features)"
 CACHE_DIR=${CACHE_DIR:-}
 CACHE_MANIFEST=${CACHE_MANIFEST:-}
+CACHE_PROMPT_EMBS=${CACHE_PROMPT_EMBS:-false}
 SAMPLE_TRANSFORM_SEED=${SAMPLE_TRANSFORM_SEED:-0}
 if [[ -n "$CACHE_DIR" ]]; then
     CACHE_MANIFEST=${CACHE_MANIFEST:-"$CACHE_DIR/manifest.json"}
@@ -82,13 +90,20 @@ if [[ -n "$CACHE_DIR" ]]; then
         echo "DreamZero cache manifest not found: $CACHE_MANIFEST" >&2
         exit 2
     fi
+    # Once any feature is listed the unlisted ones are disabled, so all three are
+    # explicit. Cached prompt embeddings skip the frozen text encoder, whose
+    # sharded parameters would otherwise be all-gathered in every forward.
     CACHE_ARGS=(
         model.precomputed_cache.enabled=true
         model.precomputed_cache.cache_dir="$CACHE_DIR"
         model.precomputed_cache.manifest="$CACHE_MANIFEST"
         model.precomputed_cache.strict=true
+        model.precomputed_cache.features.video_latents.enabled=true
+        model.precomputed_cache.features.first_frame_latents.enabled=true
+        model.precomputed_cache.features.prompt_embs.enabled="$CACHE_PROMPT_EMBS"
         model.precomputed_cache.validation.validate_artifact=true
         model.precomputed_cache.validation.require_success=true
+        model.precomputed_cache.validation.require_transform_config=true
         data.use_sample_transform_seed=true
         data.sample_transform_seed="$SAMPLE_TRANSFORM_SEED"
     )
@@ -154,17 +169,38 @@ TRAINING_ARGS=(
     --save-format dcp
     "${ACTIVATION_CHECKPOINT_ARGS[@]}"
 )
+DETERMINISTIC_MODE=${DETERMINISTIC_MODE:-false}
+case "${DETERMINISTIC_MODE,,}" in
+    1|true|yes|on) TRAINING_ARGS+=(--deterministic-mode) ;;
+esac
+
+# 14B keeps re-sharding after forward (parameter residency would hold every
+# block's full parameters until backward) and prefetches the adjacent block.
+# The frozen VAE is kept out of FSDP so its weights are not all-gathered.
+FSDP_FORWARD_PREFETCH_DISTANCE=${FSDP_FORWARD_PREFETCH_DISTANCE:-1}
+FSDP_BACKWARD_PREFETCH_DISTANCE=${FSDP_BACKWARD_PREFETCH_DISTANCE:-1}
+FSDP_RESHARD_DEFAULT=${FSDP_RESHARD_DEFAULT:-true}
+FSDP_IGNORE_FROZEN_MODULE_CLASSES=${FSDP_IGNORE_FROZEN_MODULE_CLASSES-"WanVideoVAE"}
+FSDP_IGNORED_FROZEN_PARAM_DTYPE=${FSDP_IGNORED_FROZEN_PARAM_DTYPE:-bf16}
 
 DISTRIBUTED_TRAINING_ARGS=(
     --distributed-strategy fsdp
     --dtype bfloat16
     --fsdp-original-param-dtype fp32
+    --fsdp-unshard-param-dtype bf16
     --fsdp-reduce-dtype bf16
     --fsdp-cast-forward-inputs
     --fsdp-wrap-modules "WanTextEncoder,VisionTransformer,CausalWanAttentionBlock"
-    --fsdp-forward-prefetch-distance 1
-    --fsdp-backward-prefetch-distance 1
+    --fsdp-forward-prefetch-distance "$FSDP_FORWARD_PREFETCH_DISTANCE"
+    --fsdp-backward-prefetch-distance "$FSDP_BACKWARD_PREFETCH_DISTANCE"
+    --fsdp-reshard-default "$FSDP_RESHARD_DEFAULT"
 )
+if [[ -n "$FSDP_IGNORE_FROZEN_MODULE_CLASSES" ]]; then
+    DISTRIBUTED_TRAINING_ARGS+=(
+        --fsdp-ignore-frozen-module-classes "$FSDP_IGNORE_FROZEN_MODULE_CLASSES"
+        --fsdp-ignored-frozen-param-dtype "$FSDP_IGNORED_FROZEN_PARAM_DTYPE"
+    )
+fi
 
 # ── Logging params ────────────────────────────────────────────
 LOGGING_ARGS=(
@@ -175,6 +211,20 @@ LOGGING_ARGS=(
 )
 
 # ── Launch ────────────────────────────────────────────────────
+# Trainer dotlists must stay after the flags, so the script's own dotlists come last and would
+# win over the user's. Drop the keys the user already passed to keep their value.
+USER_DOTLIST_KEYS=" "
+for _arg in "$@"; do
+    if [[ "$_arg" == *=* && "$_arg" != -* ]]; then
+        USER_DOTLIST_KEYS+="${_arg%%=*} "
+    fi
+done
+SCRIPT_OVERRIDES=()
+for _item in "${CACHE_ARGS[@]}"; do
+    if [[ "$USER_DOTLIST_KEYS" != *" ${_item%%=*} "* ]]; then
+        SCRIPT_OVERRIDES+=("$_item")
+    fi
+done
 echo "════════════════════════════════════════════════════════════"
 echo "  LoongForge DreamZero Wan2.1-14B Full Fine-Tuning (FSDP)"
 echo "  GPUs:       $GPUS_PER_NODE x $NNODES node(s)"
@@ -193,5 +243,5 @@ PYTHONPATH=$LOONGFORGE_PATH:${PYTHONPATH:-} \
     "${TRAINING_ARGS[@]}" \
     "${DISTRIBUTED_TRAINING_ARGS[@]}" \
     "${LOGGING_ARGS[@]}" \
-    "${CACHE_ARGS[@]}" \
-    "$@"
+    "$@" \
+    "${SCRIPT_OVERRIDES[@]}"

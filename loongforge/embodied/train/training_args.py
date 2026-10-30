@@ -205,7 +205,7 @@ class _ModelRoutingArgs:
     model_name: Optional[str] = field(
         default=None,
         metadata={
-            "help": "Model identifier (e.g. 'pi05', 'groot_n1_6'). Selects the "
+            "help": "Model identifier (e.g. 'pi05', 'gr00t_n1_6'). Selects the "
                     "ModelConfig/DataConfig classes and default YAML via "
                     "MODEL_SCHEMA. Required."
         },
@@ -508,11 +508,15 @@ class _LearningRateArgs:
                 "cosine_warmup_with_min_lr",
                 "lambda_linear",
                 "linear_warmup_cosine_annealing",
+                "cosine_decay_with_warmup",
             ],
             "help": "Learning-rate scheduler name. Most values are passed to "
                     "transformers.get_scheduler; lambda_linear uses the custom "
                     "LambdaLinearScheduler; linear_warmup_cosine_annealing is "
-                    "torch LinearLR (1/W -> 1) then CosineAnnealingLR to --min-lr."
+                    "torch LinearLR (1/W -> 1) then CosineAnnealingLR to --min-lr; "
+                    "cosine_decay_with_warmup warms up from 1/(W+1) to 1 and "
+                    "decays by cosine to --min-lr over the absolute step "
+                    "min(s, T)/T with T=--lr-decay-iters or --train-iters."
         },
     )
     lr_warmup_iters: int = field(
@@ -526,6 +530,15 @@ class _LearningRateArgs:
         default=None,
         metadata={
             "help": "Number of scheduler decay steps. Defaults to --train-iters when unset."
+        },
+    )
+    lr_decay_start_iters: int = field(
+        default=0,
+        metadata={
+            "cli_type": parse_non_negative_int,
+            "help": "Optimizer step at which custom cosine decay begins, holding "
+                    "the peak LR after warmup until then. 0 starts decay immediately "
+                    "after warmup. Requires --custom-lr-lambda."
         },
     )
     min_lr: float = field(
@@ -604,8 +617,15 @@ class _OptimizerArgs:
         default="AdamW",
         metadata={
             "help": "Optimizer name. Supported: AdamW, TorchFusedAdamW, "
-                    "TEFusedAdamW, ApexFusedAdamW, Adam, SGD, Dmuon. TEFusedAdamW "
-                    "requires TransformerEngine; ApexFusedAdamW requires Apex."
+                    "TEFusedAdamW, ApexFusedAdamW, Adam, SGD, Dmuon, "
+                    "muon. TEFusedAdamW requires TransformerEngine; "
+                    "ApexFusedAdamW requires Apex. Dmuon is the third-party "
+                    "package's FSDP2 Muon (--distributed-strategy fsdp). muon "
+                    "is LoongForge's Muon for --distributed-strategy ddp: "
+                    "2-D weights except embeddings and the output head "
+                    "use Muon, the rest (including 3-D tensors) AdamW; 3-D "
+                    "expert stacks on Muon need a tensor_wise trainer. "
+                    "Incompatible with --zero-optimizer and --lr-group."
         },
     )
     clip_grad: float = field(
@@ -717,6 +737,28 @@ class _OptimizerArgs:
                     "--dmuon-adamw-foreach."
         },
     )
+    muon_momentum: float = field(
+        default=0.95,
+        metadata={
+            "help": "Muon momentum. Used by --optimizer=muon."
+        },
+    )
+    muon_nesterov: bool = field(
+        default=True,
+        metadata={"help": "Enable Muon Nesterov momentum."},
+    )
+    muon_ns_steps: int = field(
+        default=5,
+        metadata={"help": "Number of Newton-Schulz iterations used by Muon."},
+    )
+    muon_adjust_lr_fn: str = field(
+        default="match_rms_adamw",
+        metadata={
+            "help": "Muon learning-rate adjustment function; see "
+                    "torch.optim.Muon for the accepted values."
+        },
+    )
+
 
 @dataclass(frozen=True)
 class _DataArgs:
@@ -827,6 +869,19 @@ class _DataArgs:
                     "'cyclic' (round-robin) or 'block' (contiguous shards).",
         },
     )
+    sampler_epoch_mode: str = field(
+        default="advance",
+        metadata={
+            "choices": ["advance", "fixed"],
+            "help": "Whether the sampler's epoch advances between epochs. "
+                    "'advance' (default) uses seed+epoch, so every epoch reshuffles. "
+                    "'fixed' pins the epoch to 0, so every epoch reuses the SAME "
+                    "permutation -- this reproduces standalone FastWAM, whose "
+                    "ResumableEpochSampler epoch is never advanced. Only used by "
+                    "model types that register their own sampler builder (currently "
+                    "fastwam); see data/datasets/<model>/samplers.py.",
+        },
+    )
     batch_drop_last: bool = field(
         default=False,
         metadata={
@@ -884,6 +939,14 @@ class _CheckpointArgs:
         metadata={
             "help": "Save checkpoints asynchronously in the background (dcp "
                     "format only)."
+        },
+    )
+    save_processor_config: bool = field(
+        default=False,
+        metadata={
+            "help": "Write processor_config.json (the training data config) into "
+                    "every steps_N dir for the eval loader. Required by GR00T-N1.7 "
+                    "eval; enable for models whose eval loader reads it."
         },
     )
 

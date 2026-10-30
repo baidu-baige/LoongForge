@@ -111,7 +111,7 @@ model.forward(batch)
 | 功能 | 配置项 | 默认值 | 取值 / 类型 | 说明 |
 | --- | --- | --- | --- | --- |
 | LeRobotdataset 版本 | `--lerobotdataset-version` | `v3.0` | `v2.0`, `v2.1`, `v3.0` | 解析不同 LeRobot 磁盘格式 |
-| 数据策略 | `--dataset-strategy` | `default` | `default`, `fastwam`, `groot_n1_7`, `cosmos3_droid`, `dreamzero` | 选择 LeRobot 构建策略 |
+| 数据策略 | `--dataset-strategy` | `default` | `default`, `fastwam`, `gr00t_n1_7`, `cosmos3_droid`, `dreamzero` | 选择 LeRobot 构建策略 |
 | 视频后端 | `--video-backend` | `torchcodec` | `torchcodec`, `decord`, `opencv`, `pyav`, `torchvision_av` | 视频解码实现 |
 | robot 类型 | `--robot-type` | `None` | 字符串 | 选择 embodiment / action-state layout |
 
@@ -218,11 +218,22 @@ global_batch_size = per_device_batch_size * world_size * gradient_accumulation_s
 | `ApexFusedAdamW` | Apex FusedAdam |
 | `Adam` | torch Adam |
 | `SGD` | torch SGD |
+| `muon` | LoongForge Muon，用于 `--distributed-strategy ddp`，见下文 |
 
 Fused Adam 加速实现说明：
 
 - **TEFusedAdamW**：将参数更新融合为单次 CUDA kernel，显著降低显存带宽压力，依赖 `Transformer-engine`
 - **ApexFusedAdamW**：多参数组融合更新，在大模型场景下优化器步骤耗时更低，依赖 `apex`
+
+`muon` 对 2-D 权重用 Muon，其余参数（bias、norm、3-D tensor，以及名字含 `embed` 或 `lm_head` 的权重）用 AdamW。任何 DDP trainer 都能用，例如：
+
+```bash
+--trainer-type FinetuneTrainer \
+--distributed-strategy ddp \
+--optimizer muon
+```
+
+在 `FinetuneTrainer` 下，每个 rank 用参数自身的 dtype 更新完整副本，Muon 的更新与 `torch.optim.Muon` 逐位一致。在 tensor_wise trainer（见 4.2.3）下，同一个优化器在 fp32 master 上运行，模型的参数策略还可以把 3-D 专家堆叠交给 Muon，`lingbot_vla_v2` 就是这样做的。`--zero-optimizer`、`--lr-group` 与 FSDP 会被拒绝；FSDP 下请用 `Dmuon`。超参数：`--muon-momentum`、`--muon-nesterov`、`--muon-ns-steps`、`--muon-adjust-lr-fn`。
 
 #### 3.3.3 模块级分组学习率
 
@@ -262,6 +273,7 @@ Checkpoint 模块提供以下能力：
 | 保存格式 | `--save-format` | `safetensors` | `safetensors`, `pt`, `dcp` | checkpoint 文件格式 |
 | 保存训练状态 | `--save-training-state` | `True` | 布尔开关 | 保存 optimizer、scheduler、RNG 与 DataLoader 状态 |
 | 异步保存 | `--async-save` | `False` | 布尔开关 | DCP 格式下可启用异步保存 |
+| 保存 processor 配置 | `--save-processor-config` | `False` | 布尔开关 | 在每个 `steps_N` 写入 `processor_config.json`（训练 data config），GR00T-N1.7 评测依赖此文件 |
 
 续训示例：
 
@@ -411,6 +423,39 @@ bash examples/embodied/pi05/run_pi05_ddp_finetune.sh \
 复制冻结模块类时，所有命中参数都必须满足 `requires_grad=False`。该模式与 `--init-on-meta` 不兼容；若设置 `--fsdp-ignored-frozen-param-dtype`，其值必须与 `--dtype` 选择的训练计算 dtype 一致。
 
 Delta-FP8 只改变 FSDP 参数通信精度，模型计算仍使用 FSDP 混合精度策略选择的 dtype。使用条件、启动方式、参数说明和常见问题详见 [FSDP2 Delta-FP8 Param AllGather](../features/delta_fp8_allgather.md)。
+
+#### 4.2.3 tensor_wise（Tensor-wise Distributed Optimizer）
+
+tensor_wise（`TensorWiseOptimizer`）是 DDP 下的一种分布式优化器：每个 rank 上保留完整的计算副本，不切分任何 tensor。每个参数整体指定一个 owner rank：梯度 reduce 到 owner，owner 更新自己的 fp32 master 和优化器状态，再把更新后的参数 broadcast 回各 rank。它接管梯度通信，因此替代 DDP wrapper，与 `--zero-optimizer` 是二选一的关系。相比 `ddp` + `--zero-optimizer`，它用 reduce 代替 all-reduce，参数发布可用 bf16 或 fp8，并且两段通信都与计算重叠。owner 持有整个 tensor，因此 Muon 的 Newton-Schulz 在 owner 上算一次即可，不像按元素切分的 ZeRO-1 那样需要先 gather 矩阵。"Tensor-wise" 指分配单位，与 Megatron `LayerWiseDistributedOptimizer` 中的 "layer-wise" 同义；通信仍按 owner 对齐的 bucket 进行。
+
+目前 `lingbot_vla_v2` 使用 tensor_wise。它由 trainer 启用，不需要额外开关：选择 `LingbotVlaV2Trainer` 即构建 `TensorWiseOptimizer`：
+
+```bash
+--trainer-type LingbotVlaV2Trainer \
+--distributed-strategy ddp \
+--optimizer muon
+```
+
+通信参数在模型 YAML 的 `model.tensor_wise:` 段设置，或单次运行时用 `model.tensor_wise.<字段>=...` 覆盖：
+
+| 功能 | 字段（`model.tensor_wise.*`） | 默认值 | 取值 / 类型 | 说明 |
+| --- | --- | --- | --- | --- |
+| 梯度 reduce dtype | `grad_reduce_dtype` | `bf16` | `fp32`, `bf16`, `mixed`, `compute` | 1-D tensor 始终保持 fp32 |
+| 参数发布精度 | `param_sync_precision` | `fp32` | `fp32`, `bf16`, `bf16_ef`, `bf16_ef_delta`, `fp8_e4m3_delta` | master 到副本的传输方式 |
+| 梯度通信重叠 | `grad_overlap` | `true` | 布尔 | backward 产出一个 bucket 就 reduce 一个 |
+| 参数发布重叠 | `param_overlap` | `true` | 布尔 | owner 更新完参数就立即 broadcast |
+| bucket 大小 | `comm_bucket_mb` | `256` | 整数 MB | `0` 表示按梯度重叠开关自动选择 |
+| 在途通信上限 | `grad_inflight_mb` | `3072` | 整数 MB | 显存上界，小显存卡可调低 |
+
+`param_sync_fp8_*` 与 `param_sync_bf16_with_fp8` 只在 `fp8_e4m3_delta` 下生效。
+
+要让其他模型使用 tensor_wise，先用 `--trainer-type TensorWiseTrainer`（`trainers/custom/tensor_wise_trainer.py`）。它不需要模型专属代码，已在 FastWAM 和 Pi0.5 上端到端跑通；用于其他模型前，请先核对下方约束。参数保持 `--dtype`，`--optimizer` 指定的优化器在 fp32 master 上运行，因此 loss 与 `--dtype` 下的 DDP 不一致（后者直接更新低精度参数）。需要自定义精度分类、对 3-D tensor（如 MoE 专家堆叠）用 Muon 或 compile 的模型，参照 `LingbotVlaV2Trainer` 继承它，把新的 `--trainer-type` 名加入 `TENSOR_WISE_TRAINERS`（`tensor_wise_optimizer/validation.py`），并返回 `ParameterClassPolicy` 作为参数策略。两种方式下，模型 config 里的 `tensor_wise: TensorWiseConfig` 字段都承载上述参数；没有该字段时使用默认值。
+
+约束：
+
+- 要求 `--distributed-strategy ddp`；`--zero-optimizer`、`--fp8`、`--init-on-meta` 与 `--ddp-*` 会被拒绝。
+- 训练状态 checkpoint 要求 `--save-format dcp`，且不能与 `--use-lora` 同用；只导出权重时加 `--no-save-training-state`。
+- 模块 buffer（如 BatchNorm 统计量）不会同步。迁移模型到 tensor_wise 前请先确认这一点。
 
 ### 4.3 稳定性与运行时控制
 

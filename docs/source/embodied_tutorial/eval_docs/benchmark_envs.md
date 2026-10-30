@@ -110,7 +110,7 @@ GR00T-N1.6 status:     task success (open_drawer 10/10, close_drawer 9/10,
                        spoon 7/10, eggplant 6/10, carrot 16/30, stack_cube 2/10;
                        official prepackaged_config)
                        uses the stock upstream delta controller, no env change
-                       configs: examples/embodied/groot_n1_6/eval/configs/simplerenv/*
+                       configs: examples/embodied/gr00t_n1_6/eval/configs/simplerenv/*
 pi05 configs:          only widowx_stack_cube_smoke.yaml
                        server.random_init: true (connectivity only, not task success)
                        other Bridge tasks: edit task_name in-file comments

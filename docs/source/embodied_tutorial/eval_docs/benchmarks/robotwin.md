@@ -1,6 +1,6 @@
 # RoboTwin Evaluation
 
-RoboTwin is a dual-arm tabletop manipulation benchmark. The LoongForge eval module reuses RoboTwin's official evaluator, which calls the policy through a plugin (the `action_bridge` protocol). Two model × bridge combinations reach task success.
+RoboTwin is a dual-arm tabletop manipulation benchmark. The LoongForge eval module reuses RoboTwin's official evaluator, which calls the policy through a plugin (the `action_bridge` protocol). Three model × bridge combinations reach task success.
 
 ## Step 0: Download weights
 
@@ -8,6 +8,7 @@ RoboTwin is a dual-arm tabletop manipulation benchmark. The LoongForge eval modu
 |---|---|
 | pi05 | [motus-robotics/pi0.5_robotwin2](https://huggingface.co/motus-robotics/pi0.5_robotwin2) (openpi `norm_stats`, see §2 Run evaluation below) |
 | xvla | [2toINF/X-VLA-RoboTwin2](https://huggingface.co/2toINF/X-VLA-RoboTwin2) |
+| LingBot-VA | [robbyant/lingbot-va-posttrain-robotwin](https://huggingface.co/robbyant/lingbot-va-posttrain-robotwin) (one root with `transformer/` + `vae/` + `text_encoder/` + `tokenizer/`) |
 
 ## Step 1: Environment setup
 
@@ -34,6 +35,7 @@ Run from inside the **benchmark** environment. The run scripts and eval YAMLs sh
 cd /path/to/LoongForge-VLA
 examples/embodied/pi05/eval/run_robotwin_eval.sh    # pi05, action_bridge: pi05_aloha_14d
 examples/embodied/xvla/eval/run_robotwin_eval.sh    # xvla, action_bridge: ee6d_dual
+examples/embodied/lingbot_va/eval/run_robotwin_eval.sh    # LingBot-VA, action_bridge: lingbot_va_ee_quat_16d (default config: robotwin_50tasks.yaml)
 ```
 
 Environment variables: `CONFIG`, `BENCHMARK_PYTHON`, `CUDA_VISIBLE_DEVICES`, plus the SAPIEN Vulkan variables (`LD_LIBRARY_PATH` / `VK_ICD_FILENAMES`).
@@ -46,6 +48,7 @@ Key config fields (see `examples/embodied/<model>/eval/configs/robotwin/adjust_b
 |---|---|---|
 | `pi05_aloha_14d` | pi05 | openpi Aloha joint protocol; `model.action_dim: 14`, `action_horizon: 32` |
 | `ee6d_dual` | xvla | X-VLA dual-arm end-effector protocol; `model.domain_id: 6` |
+| `lingbot_va_ee_quat_16d` | LingBot-VA | 16-D dual-arm end-effector pose relative to the episode's initial pose, no proprio input; the community protocol also needs `benchmark.instruction_type: seen` (already set in `robotwin_50tasks.yaml`, see [LingBot-VA quick start](../../quick_start_lingbot_va.md)) |
 
 - pi05 + RoboTwin additionally needs `server.dataset_statistics_path` pointing at a stats file derived from the weights' openpi `norm_stats.json`; a ready-made copy ships at `examples/embodied/pi05/eval/assets/pi05_robotwin2_dataset_stats.json`. To regenerate from another openpi-style weights:
 
@@ -64,6 +67,7 @@ Key config fields (see `examples/embodied/<model>/eval/configs/robotwin/adjust_b
 |---|---|---|
 | pi05 | ✅ task success | `adjust_bottle demo_clean`, `action_bridge=pi05_aloha_14d` |
 | xvla | ✅ task success | `adjust_bottle demo_clean`, `action_bridge=ee6d_dual`, `domain_id=6` |
+| LingBot-VA | ✅ task success | 50 tasks × 50 eps with LoongForge-trained 50000-step weights: Easy 2189/2500 (87.6%), Hard 2143/2500 (85.7%) |
 
 ## Outputs
 

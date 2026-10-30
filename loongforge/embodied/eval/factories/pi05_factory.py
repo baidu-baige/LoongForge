@@ -19,65 +19,6 @@ from loongforge.embodied.model.pi05.model_configuration_pi05 import Pi05ModelCon
 from loongforge.embodied.model.registry import build_model
 
 
-def _load_pi05_pretrained(pi05_pytorch, pretrained_path: str, device=None):
-    """Load PI05 weights, handling the extra 'model.' wrapper prefix.
-
-    Some checkpoints store PI05Pytorch weights with an extra ``model.``
-    prefix (i.e. ``model.action_in_proj.bias`` instead of
-    ``action_in_proj.bias``).  The training-side ``load_pretrained`` only
-    strips ``model.architecture.pi05_model.`` and
-    ``architecture.pi05_model.`` prefixes, so it fails on this format.
-
-    This wrapper pre-processes the state dict on the eval side to strip
-    the bare ``model.`` prefix before delegating to the standard method.
-    """
-    from pathlib import Path
-
-    from safetensors.torch import load_file
-
-    path = Path(pretrained_path)
-    safetensors_file = path / "model.safetensors" if path.is_dir() else path
-    load_kwargs = {"device": str(device)} if device is not None else {}
-    raw_sd = load_file(str(safetensors_file), **load_kwargs)
-
-    # Detect whether this checkpoint uses the bare 'model.' wrapper prefix
-    # by checking if stripping it produces keys that exist in the model.
-    model_sd_keys = set(pi05_pytorch.state_dict().keys())
-    needs_strip = any(
-        k.startswith("model.") and k[len("model."):] in model_sd_keys
-        for k in raw_sd
-    )
-    if needs_strip:
-        stripped = {}
-        for k, v in raw_sd.items():
-            stripped[k[len("model."):] if k.startswith("model.") else k] = v
-        # Write back so load_pretrained receives the corrected state dict via
-        # a temporary safetensors file would be heavy; instead call
-        # load_state_dict directly using the same remapping logic.
-        _RENAME = {
-            "action_time_mlp_in.": "time_mlp_in.",
-            "action_time_mlp_out.": "time_mlp_out.",
-        }
-        fixed = {}
-        for key, value in stripped.items():
-            new_key = key
-            for old, new in _RENAME.items():
-                new_key = new_key.replace(old, new)
-            if new_key.startswith("state_proj."):
-                continue
-            if new_key in ("paligemma_with_expert.paligemma.lm_head.weight",):
-                fixed["paligemma_with_expert.paligemma.model.language_model.embed_tokens.weight"] = value.clone()
-            fixed[new_key] = value
-        missing, unexpected = pi05_pytorch.load_state_dict(fixed, strict=True)
-        del fixed
-        if missing:
-            raise RuntimeError(f"Missing keys after strip: {missing[:5]}")
-        if unexpected:
-            raise RuntimeError(f"Unexpected keys after strip: {unexpected[:5]}")
-    else:
-        pi05_pytorch.load_pretrained(pretrained_path, device=str(device) if device is not None else None)
-
-
 @register_factory("pi05")
 class PI05ModelFactory:
     """Build a PI05 model instance that implements the common predict_action interface."""
@@ -108,11 +49,43 @@ class PI05ModelFactory:
         model = build_model(model_cfg)
         model._tokenizer_path = server_args.tokenizer_path or os.environ.get("TOKENIZER_PATH", "")
         if not server_args.random_init:
-            _load_pi05_pretrained(model.model, pretrained_path, device=resolved_device)
+            model.model.load_pretrained(pretrained_path, device=resolved_device)
         model = model.to(resolved_device)
         model.eval()
         if server_args.use_bf16 and resolved_device.type == "cuda":
             model = model.to(dtype=torch.bfloat16)
+
+        # Keep only the first N steps of each chunk so the policy replans every
+        # N steps. 0 / negative = no truncation (full action_horizon).
+        chunk_execute_steps = int(server_args.chunk_execute_steps)
+        image_norm_mode = server_args.eval_image_normalize_mode
+        norm_mode = server_args.eval_normalization_mode
+
+        from loongforge.embodied.data.datasets.transforms.utils.image_transform import ImageTransform
+        from loongforge.embodied.data.datasets.transforms.utils.normalizer import Normalizer
+
+        if image_norm_mode not in ImageTransform.NORMALIZE_MODES:
+            raise ValueError(
+                f"Invalid eval_image_normalize_mode={image_norm_mode!r}; "
+                f"expected one of {ImageTransform.NORMALIZE_MODES}"
+            )
+        if norm_mode not in Normalizer.VALID_MODES:
+            raise ValueError(
+                f"Invalid eval_normalization_mode={norm_mode!r}; "
+                f"expected one of {Normalizer.VALID_MODES}"
+            )
+
+        original_predict_action = model.predict_action
+
+        @torch.no_grad()
+        def _predict_action_wrapper(images, instructions, state=None, dataset_stats=None):
+            out = original_predict_action(
+                images, instructions, state=state, dataset_stats=dataset_stats,
+                image_normalize_mode=image_norm_mode, normalization_mode=norm_mode,
+            )
+            return out[:, :chunk_execute_steps] if chunk_execute_steps > 0 else out
+
+        model.predict_action = _predict_action_wrapper
 
         metadata: Dict[str, Any] = {
             "framework": "loongforge",
@@ -124,6 +97,7 @@ class PI05ModelFactory:
             "action_horizon": model_cfg.action_horizon,
             "dataset_statistics_path": server_args.dataset_statistics_path,
             "tokenizer_path": model._tokenizer_path,
+            "chunk_execute_steps": chunk_execute_steps if chunk_execute_steps > 0 else None,
         }
         return PredictActionModelSpec(model=model, metadata=metadata)
 

@@ -1053,7 +1053,7 @@ def _add_extra_training_args(parser: argparse.ArgumentParser):
              "capture. When None (default), dynamic padding is used. "
              "Should be set to a value slightly larger than the maximum actual token "
              "length in the dataset to minimize wasted computation. "
-             "NOTE: currently only consumed by the groot SFT pipeline "
+             "NOTE: currently only consumed by the gr00t SFT pipeline "
              "(Gr00tN1d6DataCollator); other model pipelines ignore this flag.",
     )
 

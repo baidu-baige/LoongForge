@@ -10,6 +10,8 @@ suite="${3:-}"
 container_name="${4:-}"
 host_data_root="${LOONGFORGE_HOST_DATA_ROOT:-}"
 container_data_root="${LOONGFORGE_CONTAINER_DATA_ROOT:-}"
+host_llm_data_root="${LOONGFORGE_HOST_LLM_DATA_ROOT:-}"
+container_llm_data_root="${LOONGFORGE_CONTAINER_LLM_DATA_ROOT:-}"
 host_output_root="${LOONGFORGE_HOST_OUTPUT_ROOT:-}"
 container_output_root="${LOONGFORGE_CONTAINER_OUTPUT_ROOT:-}"
 container_source="${LOONGFORGE_CONTAINER_SOURCE:-}"
@@ -17,7 +19,7 @@ container_source_mount="${LOONGFORGE_CONTAINER_SOURCE_MOUNT:-${container_source}
 docker_bin="${DOCKER_BIN:-docker}"
 gpu_device="${LOONGFORGE_GPU_DEVICE:-nvidia.com/gpu=all}"
 
-[[ -n "$image" && -d "$source_dir" && "$suite" =~ ^(llm_vlm|embodied)$ && -n "$container_name" ]] || {
+[[ -n "$image" && -d "$source_dir" && "$suite" =~ ^(llm_vlm|embodied|release)$ && -n "$container_name" ]] || {
   echo "usage: create_container.sh IMAGE SOURCE_DIR SUITE CONTAINER_NAME" >&2
   exit 2
 }
@@ -27,6 +29,16 @@ gpu_device="${LOONGFORGE_GPU_DEVICE:-nvidia.com/gpu=all}"
   echo "container data, output, and source paths are required" >&2
   exit 2
 }
+if [[ "$suite" == release ]]; then
+  [[ -d "$host_llm_data_root" ]] || {
+    echo "LOONGFORGE_HOST_LLM_DATA_ROOT is not a directory" >&2
+    exit 2
+  }
+  [[ -n "$container_llm_data_root" ]] || {
+    echo "LOONGFORGE_CONTAINER_LLM_DATA_ROOT is required" >&2
+    exit 2
+  }
+fi
 
 megatron_dir="$source_dir/third_party/Loong-Megatron"
 [[ -f "$megatron_dir/megatron/core/transformer/hyper_connection.py" ]] || {
@@ -60,8 +72,10 @@ args=(
   -v "$host_data_root:$container_data_root:ro"
   -v "$host_output_root:$container_output_root"
   -v "$source_dir:$container_source_mount:ro"
-  -v "$megatron_dir:/workspace/Loong-Megatron:ro"
 )
+if [[ "$suite" == release ]]; then
+  args+=( -v "$host_llm_data_root:$container_llm_data_root:ro" )
+fi
 
 # Proxy settings are runner-local and optional. Pass only non-empty values so
 # internal-only runners do not alter the container environment.
@@ -83,6 +97,6 @@ done
   "mkdir -p '$container_source' && \
    find '$container_source' -mindepth 1 -maxdepth 1 ! -name third_party -exec rm -rf -- {} + && \
    mkdir -p '$container_source/third_party' && \
-   find '$container_source/third_party' -mindepth 1 -maxdepth 1 ! -name Loong-Megatron -exec rm -rf -- {} + && \
-   tar -C '$container_source_mount' --exclude='./third_party/Loong-Megatron' -cf - . | \
+   find '$container_source/third_party' -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + && \
+   tar -C '$container_source_mount' -cf - . | \
      tar -C '$container_source' -xf -"

@@ -16,7 +16,18 @@ FEATURE_DEFAULTS = {
     "LINGBOT_FSDP_RESHARD": False,
     # Gradient reduce dtype: on reduces in the parameter dtype (BF16), off uses
     # FP32. Kept selectable because it is a numerics choice, not only a speed one.
-    "LINGBOT_FSDP_BF16_REDUCE": True,
+    # Off by default: BF16 reduction rounds away small action-head gradients.
+    "LINGBOT_FSDP_BF16_REDUCE": False,
+    # On: reseed with 42 + microbatch index before drawing the model's
+    # stochastic inputs, making timesteps, noise, chunk and window sizes a pure
+    # function of the step index so a patched community trainer can be compared
+    # step by step. Every rank then shares one draw, so a global batch sees a
+    # single (timestep, noise, chunk, window) realisation.
+    # Off (default): draw from the process-global streams like the unpatched
+    # community trainer, giving each rank its own realisation. Pair it with
+    # --set-seed-by-rank, or every rank starts from the same global seed and
+    # still draws identical values.
+    "LINGBOT_VA_FIXED_MICROBATCH_RNG": False,
 }
 
 # Fixed values from the accepted performance baseline.

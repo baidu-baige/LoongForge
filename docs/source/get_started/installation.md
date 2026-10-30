@@ -32,7 +32,7 @@ LoongForge uses two different strategies to manage its key upstream dependencies
 | Dependency | Strategy | Location |
 |---|---|---|
 | **Megatron-LM** | git submodule (LoongForge fork) | `third_party/Loong-Megatron/` |
-| **TransformerEngine** | patch against upstream NVIDIA tag | `patches/TransformerEngine_<tag>/` |
+| **TransformerEngine** | patch against upstream NVIDIA tag | `third_party/patches/TransformerEngine_<tag>/` |
 
 **Megatron-LM** is pinned to a specific commit of the
 [Loong-Megatron](https://github.com/baidu-baige/Loong-Megatron) fork via git
@@ -42,7 +42,7 @@ no patches are applied.
 **TransformerEngine** is cloned from the upstream NVIDIA repository, checked out
 at the specified community tag, and then patched with LoongForge-specific fixes.
 The patch directory suffix matches the upstream tag it targets
-(e.g. `patches/TransformerEngine_v2.9/`).
+(e.g. `third_party/patches/TransformerEngine_v2.9/`).
 
 ---
 
@@ -159,7 +159,7 @@ This script will automatically:
 
 1. Clone `TransformerEngine` from the upstream NVIDIA repository.
 2. Checkout the specified TE tag and create a local branch (`loongforge_<tag>`).
-3. Apply patches from `patches/TransformerEngine_<tag>/` to TransformerEngine.
+3. Apply patches from `third_party/patches/TransformerEngine_<tag>/` to TransformerEngine.
 4. Compile and install `TransformerEngine`.
 
 Tips: Some model architectures (e.g. DeepSeek-series) require additional compiled

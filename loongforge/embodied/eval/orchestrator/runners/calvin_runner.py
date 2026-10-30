@@ -10,6 +10,7 @@ import copy
 import json
 import os
 import pathlib
+import sys
 import time
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
@@ -18,7 +19,8 @@ import numpy as np
 
 from loongforge.embodied.eval.adapters.calvin import CALVIN_MAX_STEPS_PER_SUBTASK, CalvinAdapter
 from loongforge.embodied.eval.action_decoders import ActionDecoder
-from loongforge.embodied.eval.metrics import append_jsonl, load_jsonl
+from loongforge.embodied.eval.metrics import append_jsonl, is_infra_failure, load_jsonl
+from loongforge.embodied.eval.metrics import repro_metadata
 from loongforge.embodied.eval.orchestrator.config import (
     build_rpc_payload,
 )
@@ -226,10 +228,7 @@ def _failure_record(
         "trace_path": trace_path,
         "server_metadata": None,
         "repro": {
-            "git_sha": None,
-            "benchmark_commit": None,
-            "docker_image": None,
-            "python_env_hash": None,
+            **repro_metadata.repro_fields(("calvin_env", "calvin")),
             "global_seed": args.seed,
             "episode_seed": sequence_seed,
             "protocol_version": PROTOCOL_VERSION,
@@ -431,10 +430,7 @@ def run_sequence(
         "trace_path": trace_path,
         "server_metadata": client.metadata,
         "repro": {
-            "git_sha": None,
-            "benchmark_commit": None,
-            "docker_image": None,
-            "python_env_hash": None,
+            **repro_metadata.repro_fields(("calvin_env", "calvin")),
             "global_seed": args.seed,
             "episode_seed": sequence_seed,
             "protocol_version": PROTOCOL_VERSION,
@@ -462,12 +458,23 @@ def _write_summary_csv(path: pathlib.Path, records: List[Dict[str, Any]]) -> Non
             file.write(f"task_{index}_success_rate,{rate:.6f}\n")
 
 
+def _manifest_protocol(args: argparse.Namespace) -> Dict[str, Any]:
+    """Return the protocol knobs that affect the measured success rate."""
+    return {
+        "seed": args.seed,
+        "control_hz": args.control_hz,
+        "max_steps_per_subtask": args.max_steps_per_subtask,
+        "num_sequences": args.num_sequences,
+        "continuous_gripper": getattr(args, "continuous_gripper", None),
+    }
+
+
 def run_batch(args: argparse.Namespace) -> Dict[str, Any]:
     """Run CALVIN evaluation batch."""
     os.environ.setdefault("MUJOCO_GL", "osmesa")
     os.environ.setdefault("PYOPENGL_PLATFORM", "osmesa")
 
-    output_dir = pathlib.Path(args.output_dir)
+    output_dir = _common.guard_output_dir(args)
     output_dir.mkdir(parents=True, exist_ok=True)
     results_path = output_dir / "results.jsonl"
     summary_path = output_dir / "summary.csv"
@@ -476,7 +483,23 @@ def run_batch(args: argparse.Namespace) -> Dict[str, Any]:
     if args.restart and results_path.exists():
         results_path.unlink()
         existing_records = []
-    completed = {int(record["sequence_idx"]) for record in existing_records} if args.resume else set()
+    completed = (
+        {int(record["sequence_idx"]) for record in existing_records if not is_infra_failure(record)}
+        if args.resume and not args.restart
+        else set()
+    )
+
+    if args.resume and not args.restart and not getattr(args, "_manifest_checked", False):
+        repro_metadata.ensure_manifest_matches_checkpoint(output_dir, args.ckpt_path)
+    if args.restart or not args.resume or repro_metadata.load_run_manifest(output_dir) is None:
+        repro_metadata.write_run_manifest(
+            output_dir,
+            config=getattr(args, "raw_config", None),
+            args=args,
+            protocol=_manifest_protocol(args),
+            protocol_version=PROTOCOL_VERSION,
+            benchmark_modules=("calvin_env", "calvin"),
+        )
 
     with open(args.eval_sequences_path, "r", encoding="utf-8") as file:
         eval_sequences = json.load(file)
@@ -530,12 +553,19 @@ def run_batch(args: argparse.Namespace) -> Dict[str, Any]:
     avg_length = (
         sum(int(record.get("success_count", 0)) for record in all_records) / len(all_records) if all_records else 0.0
     )
+    expected_sequences = set(range(len(eval_sequences)))
+    completed_sequences = {int(record["sequence_idx"]) for record in all_records if not is_infra_failure(record)}
+    missing = sorted(expected_sequences - completed_sequences)
+    infra_failed = sum(1 for record in all_records if is_infra_failure(record))
     return {
         "benchmark": "calvin",
         "task_suite": args.task_suite_name,
         "n_records": len(all_records),
         "new_records": len(new_records),
         "avg_length": avg_length,
+        "infra_failed": infra_failed,
+        "ok": not missing,
+        "episode_floor_violations": missing,
         "results_path": str(results_path),
         "summary_path": str(summary_path),
         "elapsed_sec": time.time() - start_time,
@@ -560,7 +590,7 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--model-name", default="loongforge-pi05")
     parser.add_argument("--save-replay", action="store_true")
     parser.add_argument("--save-trace", action="store_true")
-    parser.add_argument("--resume", action="store_true", default=True)
+    parser.add_argument("--resume", action="store_true", default=False)
     parser.add_argument("--restart", action="store_true")
     parser.add_argument("--policy-call-timeout-ms", type=float, default=5000.0)
     parser.add_argument("--per-step-timeout-sec", type=float, default=30.0)
@@ -578,6 +608,8 @@ def main() -> None:
     args = build_argparser().parse_args()
     summary = run_batch(args)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
+    if summary.get("ok") is False:
+        sys.exit(2)
 
 
 if __name__ == "__main__":

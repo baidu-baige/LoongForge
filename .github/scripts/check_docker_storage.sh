@@ -14,11 +14,23 @@ min_free_gb="${1-}"
 docker_bin="${DOCKER_BIN:-docker}"
 if ! docker_root=$("$docker_bin" info --format '{{.DockerRootDir}}' 2>/dev/null) || \
     [[ -z "$docker_root" || ! -d "$docker_root" ]]; then
-  printf '%s\n' 'docker-storage: unavailable' >&2
-  exit 1
-fi
-if ! free_kb=$(df -Pk "$docker_root" 2>/dev/null | awk 'NR == 2 { print $4 }') || \
-    [[ ! "$free_kb" =~ ^[0-9]+$ ]]; then
+  # Docker may be reached over SSH. Its reported data root is a remote path
+  # and is not necessarily present on the Control Runner.
+  remote_alias="${LOONGFORGE_EXECUTION_ALIAS:-}"
+  if [[ -n "$remote_alias" && "$remote_alias" =~ ^[A-Za-z0-9._@-]+$ && \
+        "$docker_root" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
+    if ! free_kb=$(ssh -o BatchMode=yes "$remote_alias" \
+      "df -Pk '$docker_root' | awk 'NR == 2 { print \$4 }'" 2>/dev/null) || \
+       [[ ! "$free_kb" =~ ^[0-9]+$ ]]; then
+      printf '%s\n' 'docker-storage: unavailable' >&2
+      exit 1
+    fi
+  else
+    printf '%s\n' 'docker-storage: unavailable' >&2
+    exit 1
+  fi
+elif ! free_kb=$(df -Pk "$docker_root" 2>/dev/null | awk 'NR == 2 { print $4 }') || \
+       [[ ! "$free_kb" =~ ^[0-9]+$ ]]; then
   printf '%s\n' 'docker-storage: unavailable' >&2
   exit 1
 fi

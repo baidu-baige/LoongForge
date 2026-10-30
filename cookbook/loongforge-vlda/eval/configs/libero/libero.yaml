@@ -1,0 +1,80 @@
+# LoongForge-VLDA Stage 2 LIBERO evaluation. Fill /path/to/... before running.
+# Default: four suites, all tasks, 50 episodes/task.
+# Model settings below match the default LIBERO training recipe.
+# Match them to the checkpoint's vlda_config.json if using a different recipe.
+benchmark:
+  name: libero
+  suite: libero_object
+  max_tasks: 0  # <=0 means all tasks
+  episodes_per_task: 50
+  max_steps: -1  # use each suite's step limit
+  num_steps_wait: 10
+  continuous_gripper: true
+  prefer_controller_ee: false
+  control_mode: delta
+
+model:
+  backend: loongforge
+  model_type: vlda
+  name: loongforge-vlda-libero
+  stage: 2
+  action_dim: 7
+  state_dim: 8
+  action_horizon: 10
+  max_action_dim: 32
+  max_state_dim: 32
+  discrete_state_input: true
+  delta_token_num: 16
+  delta_latent_dim: 256
+  contrast_dim: 256
+  world_inference_steps: 3
+  action_inference_steps: 10
+  gradient_checkpointing: false
+  compile_model: false
+  attention_backend: eager
+  vjepa_checkpoint: ""  # encoder weights are already included in the VLDA checkpoint
+  state_encoding: libero_ee_axis_angle
+  action_encoding: axis_angle
+
+server:
+  host: 127.0.0.1
+  port: 12093
+  health_port: 12094
+  python: /path/to/LoongForge/.venv/bin/python
+  start_timeout_sec: 900
+  ckpt_path: /path/to/LoongForge/outputs/vlda/libero_stage2/checkpoints/steps_60000
+  dataset_statistics_path: /path/to/LoongForge/outputs/vlda/libero_stage2/checkpoints/steps_60000/assets/norm_stats.json
+  tokenizer_path: /path/to/paligemma_tokenizer.model
+  loongforge_root: /path/to/LoongForge
+  use_bf16: false
+
+env:
+  eval_root: /path/to/LoongForge/loongforge/embodied/eval
+  loongforge_root: /path/to/LoongForge
+  libero_config_path: /path/to/libero_config
+  mujoco_gl: egl
+  pyopengl_platform: egl
+
+run:
+  output_dir: /path/to/reports/vlda/libero
+  seed: 7
+  save_trace: true
+  save_replay: true
+  timestamped_output: false
+
+# Keep only the suites to evaluate. Results and policy_server.log go into
+# run.output_dir/<run.id>/ for each suite.
+sweep:
+  - benchmark.suite: libero_spatial
+    run.id: libero_spatial
+  - benchmark.suite: libero_object
+    run.id: libero_object
+  - benchmark.suite: libero_10
+    run.id: libero_10
+  - benchmark.suite: libero_goal
+    run.id: libero_goal
+
+timeouts:
+  policy_call_ms: 600000
+  per_step_sec: 600
+  per_episode_sec: 900

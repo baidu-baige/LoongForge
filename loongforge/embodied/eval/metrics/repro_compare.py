@@ -10,7 +10,14 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
 
-from .results import PathLike, load_jsonl, summarize_records, summarize_suites
+from .results import (
+    PathLike,
+    load_jsonl,
+    record_episode_idx,
+    record_task_id,
+    summarize_records,
+    summarize_suites,
+)
 
 _VOLATILE_KEYS = {
     "episode_time_sec",
@@ -69,14 +76,17 @@ def _canonical_records(records: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]
     return sorted(canonical, key=_record_key)
 
 
-def _record_key(record: Dict[str, Any]) -> Tuple[str, str, int, int]:
-    """Run _record_key."""
-    return (
-        str(record.get("benchmark")),
-        str(record.get("task_suite")),
-        int(record.get("task_id")),
-        int(record.get("episode_idx")),
-    )
+def _record_key(record: Dict[str, Any]) -> Tuple[Any, ...]:
+    """Return a benchmark-aware identity for one record.
+
+    LIBERO-style records use ``(task_id, episode_idx)``; CALVIN records have
+    neither and use ``sequence_idx`` instead.
+    """
+    benchmark = str(record.get("benchmark"))
+    task_suite = str(record.get("task_suite"))
+    if record.get("episode_idx") is None and record.get("sequence_idx") is not None:
+        return (benchmark, task_suite, "sequence", int(record["sequence_idx"]))
+    return (benchmark, task_suite, "episode", record_task_id(record), record_episode_idx(record))
 
 
 def build_argparser() -> argparse.ArgumentParser:

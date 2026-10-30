@@ -12,7 +12,28 @@ data_cfg (DataConfig).
 import logging
 import os
 
+from loongforge.embodied.optimizer.tensor_wise_optimizer.validation import validate_tensor_wise_args
+
 logger = logging.getLogger(__name__)
+
+
+def validate_muon_args(training_args):
+    """Reject what ``--optimizer muon`` cannot honour, under any trainer."""
+    if training_args.optimizer.lower() != "muon":
+        return
+    # Muon needs whole local tensors: no FSDP shards, no ZeRO partition.
+    if training_args.distributed_strategy != "ddp":
+        raise ValueError(
+            "--optimizer=muon needs --distributed-strategy ddp, and the default is "
+            "fsdp: add --distributed-strategy ddp to the launch command, or use "
+            "--optimizer Dmuon under fsdp."
+        )
+    if training_args.zero_optimizer:
+        raise ValueError("--optimizer=muon is incompatible with --zero-optimizer.")
+    # Muon groups by --lr-base (plus a model-supplied scale), so per-module rates
+    # would be dropped without a word.
+    if training_args.lr_group:
+        raise ValueError("--lr-group is not supported with --optimizer=muon.")
 
 
 def _validate_fsdp_ignored_frozen_args(training_args):
@@ -89,6 +110,22 @@ def validate(training_args, model_cfg, data_cfg):
     if training_args.lr_decay_iters is not None and training_args.lr_decay_iters <= 0:
         raise ValueError(f"--lr-decay-iters must be positive, got {training_args.lr_decay_iters}")
     lr_schedule_steps = int(training_args.lr_decay_iters or training_args.train_iters)
+    if training_args.lr_decay_start_iters < 0:
+        raise ValueError("--lr-decay-start-iters must be non-negative")
+    if training_args.lr_decay_style == "cosine_decay_with_warmup" and training_args.custom_lr_lambda:
+        raise ValueError(
+            "--custom-lr-lambda does not apply to --lr-decay-style=cosine_decay_with_warmup"
+        )
+    if training_args.lr_decay_start_iters:
+        if not training_args.custom_lr_lambda or training_args.lr_decay_style not in {
+            "cosine_with_min_lr", "cosine_warmup_with_min_lr"
+        }:
+            raise ValueError("--lr-decay-start-iters requires a custom cosine LR scheduler")
+        if not training_args.lr_warmup_iters <= training_args.lr_decay_start_iters < lr_schedule_steps:
+            raise ValueError(
+                "--lr-decay-start-iters must be at least --lr-warmup-iters "
+                "and less than the scheduler steps"
+            )
     if training_args.lr_warmup_iters >= lr_schedule_steps:
         logger.warning(
             f"--lr-warmup-iters ({training_args.lr_warmup_iters}) >= scheduler steps ({lr_schedule_steps})"
@@ -230,6 +267,12 @@ def validate(training_args, model_cfg, data_cfg):
                 "--dmuon-ns-coefficients=wallx_muon requires --dmuon-ns-backend=direct."
             )
 
+    # ── Muon optimizer options ──
+    validate_muon_args(training_args)
+
+    # ── tensor_wise ──
+    validate_tensor_wise_args(training_args)
+
     # ── Profiler mutual exclusion ──
     if training_args.use_pytorch_profiler and training_args.use_nsys_profiler:
         raise ValueError(
@@ -274,12 +317,6 @@ def validate(training_args, model_cfg, data_cfg):
                 "--fp8 and --use-lora are mutually exclusive. PEFT selects "
                 "targets and replaces Linear modules before FP8 conversion; "
                 "this combination has not been validated for either backend."
-            )
-        if training_args.cuda_graph_impl == "local":
-            raise ValueError(
-                "--fp8 and --cuda-graph-impl=local are mutually exclusive; "
-                "the model-managed graph runners do not capture FP8 scaling "
-                "and conversion state."
             )
         if training_args.fp8_skip_modules and not training_args.fp8_module_patterns:
             logger.warning(
