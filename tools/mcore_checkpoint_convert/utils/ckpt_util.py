@@ -24,11 +24,11 @@ def _detect_shard_pattern(path):
     """
     for name in os.listdir(path):
         # Pattern 1: model-00001-of-00016.safetensors  (split_torch_state_dict_into_shards)
-        if re.match(r"^model-\d+-of-\d+\.safetensors$", name):
-            return "model-{:05d}-of-{:05d}.safetensors"
         # Pattern 2: model.safetensors-00001-of-00016.safetensors  (original HF hub)
-        if re.match(r"^model\.safetensors-\d+-of-\d+\.safetensors$", name):
-            return "model.safetensors-{:05d}-of-{:05d}.safetensors"
+        m = re.match(r"^(model-|model\.safetensors-)(\d+)-of-(\d+)\.safetensors$", name)
+        if m:
+            # Keep the zero-padding widths used on disk, e.g. model-00001-of-000163.
+            return f"{m.group(1)}{{:0{len(m.group(2))}d}}-of-{{:0{len(m.group(3))}d}}.safetensors"
     raise FileNotFoundError(
         f"No sharded safetensors files found in {path}. "
         "Expected files matching 'model-*-of-*.safetensors' or 'model.safetensors-*-of-*.safetensors'."
