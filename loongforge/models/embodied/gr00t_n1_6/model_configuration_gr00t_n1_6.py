@@ -41,7 +41,7 @@ _DEFAULT_BASE_MODEL = "nvidia/GR00T-N1.6-3B"
 
 
 @dataclass(frozen=True)
-class Gr00tN1d6ModelConfig:
+class GrootN1d6ModelConfig:
     """GR00T-N1.6 model-structure config (maps to YAML ``model:`` section)."""
 
     model_type: str = "Gr00tN1d6"
@@ -109,7 +109,7 @@ class Gr00tN1d6ModelConfig:
     use_bf16: bool = True
 
     @classmethod
-    def from_config(cls, cfg: Any) -> "Gr00tN1d6ModelConfig":
+    def from_config(cls, cfg: Any) -> "GrootN1d6ModelConfig":
         """Return the typed ModelConfig instance (passthrough) or build from dict/obj.
 
         After the parameter-system migration, ``build_model`` receives a
@@ -124,8 +124,8 @@ class Gr00tN1d6ModelConfig:
             items = dict(cfg)
         else:
             raise TypeError(
-                "Gr00tN1d6ModelConfig.from_config expects a typed "
-                "Gr00tN1d6ModelConfig or a mapping object."
+                "GrootN1d6ModelConfig.from_config expects a typed "
+                "GrootN1d6ModelConfig or a mapping object."
             )
         values = {
             key: value

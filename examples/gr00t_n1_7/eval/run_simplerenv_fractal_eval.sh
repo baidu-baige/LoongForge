@@ -43,9 +43,9 @@ export PYTHONPATH="$LOONGFORGE_PATH:$LOONGFORGE_PATH/ops/cuda_source/gr00t_n1_7_
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false
 # Required on the render side:
 #   LD_PRELOAD mesa libGLdispatch -> otherwise `import sapien` fails with _glapi_tls_Current
-#   GR00T_DISABLE_RT_DENOISER=1   -> otherwise the OptiX denoiser fails and drawer tasks drop to 0
+#   GROOT_DISABLE_RT_DENOISER=1   -> otherwise the OptiX denoiser fails and drawer tasks drop to 0
 export LD_PRELOAD="/lib/x86_64-linux-gnu/libGLdispatch.so.0${LD_PRELOAD:+:$LD_PRELOAD}"
-export GR00T_DISABLE_RT_DENOISER=1
+export GROOT_DISABLE_RT_DENOISER=1
 
 read -ra TASK_ARR <<< "$TASKS"
 RUN_DIR="$OUT_ROOT/$RUN_TAG"

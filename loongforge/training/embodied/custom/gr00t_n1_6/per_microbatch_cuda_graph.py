@@ -97,7 +97,7 @@ def _as_output_dict(result: Any) -> dict[str, torch.Tensor]:
     raise RuntimeError(f"GR00T train forward returned unsupported type: {type(result).__name__}")
 
 
-class Gr00tN1d6PerMicrobatchCudaGraphRunner:
+class GrootN1d6PerMicrobatchCudaGraphRunner:
     """Capture one CUDAGraph per microbatch and replay with eager RNG injection."""
 
     def __init__(self, model, training_args, ctx):

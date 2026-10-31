@@ -16,7 +16,7 @@ class _EmbodiedRoutingArgs:
     trainer_type: str = field(
         default="FinetuneTrainer",
         metadata={
-            "help": "Trainer type (e.g. FinetuneTrainer, Gr00tN1d6Trainer); "
+            "help": "Trainer type (e.g. FinetuneTrainer, GrootN1d6Trainer); "
                     "selects the recipe, hooks and runner in loongforge/train.py."
         },
     )

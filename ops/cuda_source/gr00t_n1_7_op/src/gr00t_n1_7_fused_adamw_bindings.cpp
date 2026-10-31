@@ -9,7 +9,7 @@
 
 #include <vector>
 
-void gr00t_n1_7_fused_adamw_eager_cuda(
+void groot_n1_7_fused_adamw_eager_cuda(
     std::vector<at::Tensor> params,
     std::vector<at::Tensor> grads,
     std::vector<at::Tensor> exp_avgs,
@@ -23,7 +23,7 @@ void gr00t_n1_7_fused_adamw_eager_cuda(
     double bias_correction2_sqrt,
     double lr);
 
-void gr00t_n1_7_fused_adamw_capturable_cuda(
+void groot_n1_7_fused_adamw_capturable_cuda(
     std::vector<at::Tensor> params,
     std::vector<at::Tensor> grads,
     std::vector<at::Tensor> exp_avgs,
@@ -38,7 +38,7 @@ void gr00t_n1_7_fused_adamw_capturable_cuda(
     double eps,
     double weight_decay);
 
-void gr00t_n1_7_fused_adamw_capturable_grad_scaled_cuda(
+void groot_n1_7_fused_adamw_capturable_grad_scaled_cuda(
     std::vector<at::Tensor> params,
     std::vector<at::Tensor> grads,
     std::vector<at::Tensor> exp_avgs,
@@ -56,15 +56,15 @@ void gr00t_n1_7_fused_adamw_capturable_grad_scaled_cuda(
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, module) {
     module.def(
-        "gr00t_n1_7_fused_adamw_eager_step",
-        &gr00t_n1_7_fused_adamw_eager_cuda,
+        "groot_n1_7_fused_adamw_eager_step",
+        &groot_n1_7_fused_adamw_eager_cuda,
         "Precision-compatible fused AdamW eager step");
     module.def(
-        "gr00t_n1_7_fused_adamw_capturable_step",
-        &gr00t_n1_7_fused_adamw_capturable_cuda,
+        "groot_n1_7_fused_adamw_capturable_step",
+        &groot_n1_7_fused_adamw_capturable_cuda,
         "Precision-compatible fused AdamW capturable step");
     module.def(
-        "gr00t_n1_7_fused_adamw_capturable_grad_scaled_step",
-        &gr00t_n1_7_fused_adamw_capturable_grad_scaled_cuda,
+        "groot_n1_7_fused_adamw_capturable_grad_scaled_step",
+        &groot_n1_7_fused_adamw_capturable_grad_scaled_cuda,
         "Precision-compatible fused AdamW capturable step with fused gradient scale");
 }

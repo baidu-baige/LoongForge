@@ -98,4 +98,4 @@ mtp_loss_coef: 0.1
 
 model_type: deepseek_v4
 
-convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/deepseek_v4/ckpt_convert/deepseek_v4_convert.yaml
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/deepseek4/ckpt_convert/deepseek_v4_convert.yaml

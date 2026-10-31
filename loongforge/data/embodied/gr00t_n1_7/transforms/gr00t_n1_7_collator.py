@@ -19,14 +19,14 @@ from loongforge.data.embodied.transforms.collator import (
     PreparedBatch,
 )
 from loongforge.data.embodied.gr00t_n1_7.transforms.data_configuration_gr00t_n1_7 import (
-    Gr00tN1d7DataConfig,
+    GrootN1d7DataConfig,
 )
 from loongforge.data.embodied.registry import register_collator
-from loongforge.models.embodied.gr00t_n1_7.model_configuration_gr00t_n1_7 import Gr00tN1d7Config
+from loongforge.models.embodied.gr00t_n1_7.model_configuration_gr00t_n1_7 import GrootN1d7Config
 
 
 @dataclass
-class Gr00tN1d7PreparedBatch(PreparedBatch):
+class GrootN1d7PreparedBatch(PreparedBatch):
     """Model-ready batch for GR00T-N1.7."""
 
     input_ids: torch.Tensor = None
@@ -122,12 +122,12 @@ class Gr00tN1d7DataCollator:
 
 
 @register_collator("Gr00tN1d7")
-class Gr00tN1d7Collator(BaseCollator):
+class GrootN1d7Preprocessor(BaseCollator):
     """Batch-level collator for GR00T-N1.7."""
 
     def __init__(
         self,
-        policy_cfg: Gr00tN1d7Config,
+        policy_cfg: GrootN1d7Config,
         data_cfg: Any,
         max_length: Optional[int] = None,
     ):
@@ -145,10 +145,10 @@ class Gr00tN1d7Collator(BaseCollator):
         dataset_stats=None,
         dataset=None,
         runtime=None,
-    ) -> "Gr00tN1d7Collator":
+    ) -> "GrootN1d7Preprocessor":
         """Construct from LoongForge model config."""
-        policy_cfg = Gr00tN1d7Config.from_config(model_cfg)
-        data_cfg = Gr00tN1d7DataConfig() if data_cfg is None else data_cfg
+        policy_cfg = GrootN1d7Config.from_config(model_cfg)
+        data_cfg = GrootN1d7DataConfig() if data_cfg is None else data_cfg
         max_length = None
         if runtime is not None:
             graph_pad_length = runtime.graph_pad_length
@@ -180,16 +180,16 @@ class Gr00tN1d7Collator(BaseCollator):
             )
         return self._collator
 
-    def __call__(self, examples: List[Dict[str, Any]]) -> Gr00tN1d7PreparedBatch:
+    def __call__(self, examples: List[Dict[str, Any]]) -> GrootN1d7PreparedBatch:
         """Collate sample-preprocessed examples."""
         if not examples:
-            raise ValueError("Gr00tN1d7Collator received an empty batch")
+            raise ValueError("GrootN1d7Preprocessor received an empty batch")
         if "vlm_content" not in examples[0]:
             raise KeyError("GR00T-N1.7 examples must contain 'vlm_content'")
         processed = dict(self.collator(examples).data["inputs"])
         return self._to_prepared_batch(processed)
 
-    def _to_prepared_batch(self, processed: Dict[str, Any]) -> Gr00tN1d7PreparedBatch:
+    def _to_prepared_batch(self, processed: Dict[str, Any]) -> GrootN1d7PreparedBatch:
         action = processed.get("action")
         if action is None:
             raise KeyError("GR00T-N1.7 collator did not produce required 'action' tensor")
@@ -208,7 +208,7 @@ class Gr00tN1d7Collator(BaseCollator):
         else:
             embodiment_id = embodiment_id.long().flatten()
 
-        return Gr00tN1d7PreparedBatch(
+        return GrootN1d7PreparedBatch(
             input_ids=processed.get("input_ids"),
             attention_mask=processed.get("attention_mask"),
             pixel_values=processed.get("pixel_values"),

@@ -288,7 +288,7 @@ def _to_numpy(value: Any) -> np.ndarray:
     return np.array(value)
 
 
-def convert_lerobot_stats_to_gr00t_n1d7_format(
+def convert_lerobot_stats_to_groot_n1d7_format(
     dataset_stats: Dict[str, Any],
     embodiment_tag: str = "libero_sim",
     *,

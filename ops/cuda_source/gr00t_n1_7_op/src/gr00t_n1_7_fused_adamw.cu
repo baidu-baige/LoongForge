@@ -58,7 +58,7 @@ __device__ __forceinline__ void foreach_compatible_update(
   param = __fmaf_rn(step_size, quotient, param);
 }
 
-struct Gr00tN17FusedAdamWCapturableFunctor {
+struct GrootN17FusedAdamWCapturableFunctor {
   __device__ __forceinline__ void operator()(
       const int64_t chunk_size,
       TensorListMetadata<4>& metadata,
@@ -117,7 +117,7 @@ struct Gr00tN17FusedAdamWCapturableFunctor {
   }
 };
 
-struct Gr00tN17FusedAdamWEagerFunctor {
+struct GrootN17FusedAdamWEagerFunctor {
   __device__ __forceinline__ void operator()(
       const int64_t chunk_size,
       TensorListMetadata<4>& metadata,
@@ -165,7 +165,7 @@ struct Gr00tN17FusedAdamWEagerFunctor {
   }
 };
 
-struct Gr00tN17FusedAdamWCapturableGradScaledFunctor {
+struct GrootN17FusedAdamWCapturableGradScaledFunctor {
   __device__ __forceinline__ void operator()(
       const int64_t chunk_size,
       TensorListMetadata<4>& metadata,
@@ -263,7 +263,7 @@ void validate_tensor_lists(
 }  // namespace
 }  // namespace at::native
 
-void gr00t_n1_7_fused_adamw_eager_cuda(
+void groot_n1_7_fused_adamw_eager_cuda(
     std::vector<at::Tensor> params,
     std::vector<at::Tensor> grads,
     std::vector<at::Tensor> exp_avgs,
@@ -283,7 +283,7 @@ void gr00t_n1_7_fused_adamw_eager_cuda(
       std::move(exp_avg_sqs)};
   at::native::multi_tensor_apply<4>(
       tensor_lists,
-      at::native::Gr00tN17FusedAdamWEagerFunctor(),
+      at::native::GrootN17FusedAdamWEagerFunctor(),
       static_cast<float>(decay_factor),
       static_cast<float>(beta2),
       static_cast<float>(first_moment_weight),
@@ -293,7 +293,7 @@ void gr00t_n1_7_fused_adamw_eager_cuda(
       static_cast<float>(-lr / bias_correction1));
 }
 
-void gr00t_n1_7_fused_adamw_capturable_cuda(
+void groot_n1_7_fused_adamw_capturable_cuda(
     std::vector<at::Tensor> params,
     std::vector<at::Tensor> grads,
     std::vector<at::Tensor> exp_avgs,
@@ -322,7 +322,7 @@ void gr00t_n1_7_fused_adamw_capturable_cuda(
       std::move(exp_avg_sqs)};
   at::native::multi_tensor_apply<4>(
       tensor_lists,
-      at::native::Gr00tN17FusedAdamWCapturableFunctor(),
+      at::native::GrootN17FusedAdamWCapturableFunctor(),
       lr.const_data_ptr<double>(),
       step.const_data_ptr<int64_t>(),
       bias_correction1.const_data_ptr<double>(),
@@ -334,7 +334,7 @@ void gr00t_n1_7_fused_adamw_capturable_cuda(
       weight_decay);
 }
 
-void gr00t_n1_7_fused_adamw_capturable_grad_scaled_cuda(
+void groot_n1_7_fused_adamw_capturable_grad_scaled_cuda(
     std::vector<at::Tensor> params,
     std::vector<at::Tensor> grads,
     std::vector<at::Tensor> exp_avgs,
@@ -368,7 +368,7 @@ void gr00t_n1_7_fused_adamw_capturable_grad_scaled_cuda(
       std::move(exp_avg_sqs)};
   at::native::multi_tensor_apply<4>(
       tensor_lists,
-      at::native::Gr00tN17FusedAdamWCapturableGradScaledFunctor(),
+      at::native::GrootN17FusedAdamWCapturableGradScaledFunctor(),
       lr.const_data_ptr<double>(),
       step.const_data_ptr<int64_t>(),
       bias_correction1.const_data_ptr<double>(),

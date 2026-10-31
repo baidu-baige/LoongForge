@@ -1,8 +1,8 @@
-# DeepSeek-V4 Flash-Base SLICED (2 layers + 1 MTP) smoke-test model config
-# Used for SFT packing smoke tests on 8 GPUs with TP=1, PP=2, EP=4
+# DeepSeek-V4 Flash-Base SLICED (6 layers + 1 MTP) model config
+# Used for Phase 3 verification on 8 GPUs with TP=4, PP=2, EP=4
 _target_: loongforge.models.foundation.deepseek_v4.DeepseekV4Config
 
-num_layers: 2
+num_layers: 6
 hidden_size: 4096
 ffn_hidden_size: 11008
 num_attention_heads: 64
@@ -23,7 +23,7 @@ experimental_attention_variant: dsv4_hybrid
 num_experts: 256
 moe_ffn_hidden_size: 2048
 moe_shared_expert_intermediate_size: 2048
-moe_n_hash_layers: 1
+moe_n_hash_layers: 3
 actual_vocab_size: 129280
 moe_router_topk_scaling_factor: 1.5
 moe_router_score_function: sqrtsoftplus
@@ -35,10 +35,10 @@ hc_mult: 4
 hc_sinkhorn_iters: 20
 hc_eps: 1e-6
 
-# -- CSA / HCA (2 layers + 1 MTP entry) --
-# layers 0,1: sliding (0), MTP: sliding(0)
+# -- CSA / HCA (6 layers + 1 MTP entry) --
+# layers 0,1: sliding (0), layer 2: CSA(4), layer 3: HCA(128), layer 4: CSA(4), layer 5: HCA(128), MTP: sliding(0)
 csa_window_size: 128
-csa_compress_ratios: [0, 0, 0]
+csa_compress_ratios: [0, 0, 4, 128, 4, 128, 0]
 csa_compress_rotary_base: 160000.0
 
 # -- Lightning Indexer --
@@ -98,4 +98,4 @@ mtp_loss_coef: 0.1
 
 model_type: deepseek_v4
 
-convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/deepseek_v4/ckpt_convert/deepseek_v4_convert.yaml
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/deepseek4/ckpt_convert/deepseek_v4_convert.yaml

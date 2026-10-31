@@ -33,11 +33,11 @@ from loongforge.evaluation.embodied.orchestrator.config import build_rpc_payload
 from loongforge.evaluation.embodied.orchestrator.runners import _common
 from loongforge.evaluation.embodied.transport import PolicyClient
 
-GR00T_OFFICIAL_PROTOCOL = "gr00t_official"
-GR00T_OFFICIAL_MACRO_STEPS = 8
+GROOT_OFFICIAL_PROTOCOL = "gr00t_official"
+GROOT_OFFICIAL_MACRO_STEPS = 8
 
 
-class Gr00tOfficialAdapter(LiberoAdapter):
+class GrootOfficialAdapter(LiberoAdapter):
     """Keep legacy controller-state preference and gripper threshold untouched."""
 
     def obs_to_canonical(self, env_obs, context):
@@ -52,7 +52,7 @@ class Gr00tOfficialAdapter(LiberoAdapter):
         return action.tolist()
 
 
-def _make_gr00t_official_env(task, resolution):
+def _make_groot_official_env(task, resolution):
     from libero.libero import get_libero_path
     from libero.libero.envs import OffScreenRenderEnv
 
@@ -64,7 +64,7 @@ def _make_gr00t_official_env(task, resolution):
     )
 
 
-class Gr00tOfficialEnvSession:
+class GrootOfficialEnvSession:
     """One reusable env per task; no per-episode seed or init states."""
 
     def __init__(self, env, seed, max_steps, save_replay=False, save_trace=False):
@@ -88,7 +88,7 @@ class Gr00tOfficialEnvSession:
         self.trace = []
 
     def step(self, actions):
-        if len(actions) != GR00T_OFFICIAL_MACRO_STEPS:
+        if len(actions) != GROOT_OFFICIAL_MACRO_STEPS:
             raise ValueError("Official macro round requires eight actions")
         done = False
         for action in actions:
@@ -119,7 +119,7 @@ class Gr00tOfficialEnvSession:
         return self.obs, completed
 
 
-def _gr00t_official_rpc(args, fn, *pos, **kwargs):
+def _groot_official_rpc(args, fn, *pos, **kwargs):
     with _common.alarm_timeout(args.policy_call_timeout_ms / 1000, TimeoutError):
         response = fn(*pos, **kwargs)
     if not response.get("ok", False):
@@ -127,23 +127,23 @@ def _gr00t_official_rpc(args, fn, *pos, **kwargs):
     return response["data"]
 
 
-def collect_gr00t_official_task(
-    args, task, task_id, run_id, env_factory=_make_gr00t_official_env, client_factory=PolicyClient,
+def collect_groot_official_task(
+    args, task, task_id, run_id, env_factory=_make_groot_official_env, client_factory=PolicyClient,
 ):
     """Return exactly ``episodes_per_task`` completed episodes, or raise."""
-    from loongforge.evaluation.embodied.payload_builders.gr00t_n1_7 import Gr00tN1d7PayloadBuilder
+    from loongforge.evaluation.embodied.payload_builders.gr00t_n1_7 import GrootN1d7PayloadBuilder
 
     target = args.episodes_per_task
-    adapter = Gr00tOfficialAdapter(suite_name=args.task_suite_name)
+    adapter = GrootOfficialAdapter(suite_name=args.task_suite_name)
     builder, key, _ = _common.build_policy_stack(args, adapter)
-    if (not isinstance(builder, Gr00tN1d7PayloadBuilder) or key
+    if (not isinstance(builder, GrootN1d7PayloadBuilder) or key
             or builder.state_encoding != "libero_ee_axis_angle"):
         raise ValueError("gr00t_official requires GR00T N1.7 LIBERO axis-angle policy")
     seed = int(args.seed)
     episode_timeout = args.per_episode_timeout_sec
     step_timeout = args.per_step_timeout_sec
     macro_timeout = (
-        GR00T_OFFICIAL_MACRO_STEPS * step_timeout + episode_timeout
+        GROOT_OFFICIAL_MACRO_STEPS * step_timeout + episode_timeout
         if step_timeout > 0 and episode_timeout > 0 else episode_timeout
     )
     env = client = None
@@ -151,14 +151,14 @@ def collect_gr00t_official_task(
     try:
         with _common.alarm_timeout(episode_timeout, TimeoutError):
             env = env_factory(task, 256)
-            session = Gr00tOfficialEnvSession(env, seed, args.max_steps, args.save_replay, args.save_trace)
+            session = GrootOfficialEnvSession(env, seed, args.max_steps, args.save_replay, args.save_trace)
         observation = session.obs
         with _common.alarm_timeout(args.policy_call_timeout_ms / 1000, TimeoutError):
             client = client_factory(host=args.host, port=args.port)
         env_id = f"{run_id}/task{task_id}/env0"
         step = 0
         started = time.monotonic()
-        _gr00t_official_rpc(args, client.reset, env_id)
+        _groot_official_rpc(args, client.reset, env_id)
         builder.reset(env_id)
         while len(records) < target:
             if episode_timeout > 0 and time.monotonic() - started > episode_timeout:
@@ -166,31 +166,31 @@ def collect_gr00t_official_task(
             context = {"instruction": task.language, "episode_id": env_id,
                        "episode_step": step, "benchmark_name": "libero"}
             canonical = adapter.obs_to_canonical(observation, context)
-            data = _gr00t_official_rpc(args, client.predict_action, **build_rpc_payload(
+            data = _groot_official_rpc(args, client.predict_action, **build_rpc_payload(
                 builder, canonical, context, disable_action_cache=True, return_action_chunk=True,
             ))
             builder.update_from_response(data)
             chunk = np.asarray(data["actions"], dtype=np.float32)
-            if chunk.ndim != 2 or chunk.shape[0] < GR00T_OFFICIAL_MACRO_STEPS or chunk.shape[1] != 7:
+            if chunk.ndim != 2 or chunk.shape[0] < GROOT_OFFICIAL_MACRO_STEPS or chunk.shape[1] != 7:
                 raise ValueError(f"Expected >=8 x 7 action chunk, got {chunk.shape}")
             actions = [adapter.action_from_canonical({"actions": action})
-                       for action in chunk[:GR00T_OFFICIAL_MACRO_STEPS]]
+                       for action in chunk[:GROOT_OFFICIAL_MACRO_STEPS]]
             with _common.alarm_timeout(macro_timeout, TimeoutError):
                 observation, completed = session.step(actions)
             if episode_timeout > 0 and time.monotonic() - started > episode_timeout:
                 raise TimeoutError("Episode deadline exceeded during macro round")
             if completed is None:
-                step += GR00T_OFFICIAL_MACRO_STEPS
+                step += GROOT_OFFICIAL_MACRO_STEPS
                 continue
             records.append({
-                **completed, "benchmark": "libero", "protocol": GR00T_OFFICIAL_PROTOCOL,
+                **completed, "benchmark": "libero", "protocol": GROOT_OFFICIAL_PROTOCOL,
                 "task_suite": args.task_suite_name, "task_id": task_id,
                 "task": task.language, "episode_idx": len(records), "env_idx": 0,
                 "env_seed": seed, "episode_id": f"{env_id}/completion{len(records)}",
             })
             # The env autoreset inside session.step; clear the server-side
             # episode state so no unused action from the old chunk survives.
-            _gr00t_official_rpc(args, client.reset, env_id)
+            _groot_official_rpc(args, client.reset, env_id)
             builder.reset(env_id)
             step = 0
             started = time.monotonic()
@@ -208,7 +208,7 @@ def collect_gr00t_official_task(
                 logging.exception("Policy client close failed")
 
 
-def summarize_gr00t_official_tasks(tasks):
+def summarize_groot_official_tasks(tasks):
     rates = [t["success_rate"] for t in tasks
              if t["status"] == "OK" and isinstance(t.get("success_rate"), (int, float))
              and np.isfinite(t["success_rate"]) and 0 <= t["success_rate"] <= 1]
@@ -217,14 +217,14 @@ def summarize_gr00t_official_tasks(tasks):
             "failed_tasks": sum(t["status"] == "FAILED" for t in tasks)}
 
 
-def _write_gr00t_official_csv(path, rows, fields):
+def _write_groot_official_csv(path, rows, fields):
     with path.open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=fields, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(rows)
 
 
-def _run_batch_gr00t_official(args):
+def _run_batch_groot_official(args):
     if args.episodes_per_task < 1:
         raise ValueError("episodes_per_task must be positive")
     if args.num_steps_wait != 0 or getattr(args, "chunk_execute_steps", 8) != 8:
@@ -245,7 +245,7 @@ def _run_batch_gr00t_official(args):
     # Fresh namespace every invocation: never read, append to, delete or resume
     # legacy results. RNG streams cannot be reconstructed from episode records.
     run_id = uuid.uuid4().hex
-    output = pathlib.Path(args.output_dir) / GR00T_OFFICIAL_PROTOCOL / run_id
+    output = pathlib.Path(args.output_dir) / GROOT_OFFICIAL_PROTOCOL / run_id
     output.mkdir(parents=True, exist_ok=False)
     results_path = output / "results.jsonl"
     results_path.touch()
@@ -258,7 +258,7 @@ def _run_batch_gr00t_official(args):
             manager = getattr(args, "server_manager", None)
             if manager is not None:
                 manager.ensure_running()
-            task_records = collect_gr00t_official_task(args, suite.get_task(task_id), task_id, run_id)
+            task_records = collect_groot_official_task(args, suite.get_task(task_id), task_id, run_id)
             rate = sum(r["success"] for r in task_records) / len(task_records)
             entry.update(status="OK", success_rate=rate, n_episodes=len(task_records))
         except Exception as exc:
@@ -283,15 +283,15 @@ def _run_batch_gr00t_official(args):
         tasks.append(entry)
         append_jsonl(output / "tasks.jsonl", entry)
         print(json.dumps(entry, ensure_ascii=False), flush=True)
-    summary = {"benchmark": "libero", "protocol": GR00T_OFFICIAL_PROTOCOL, "task_suite": args.task_suite_name,
-               **summarize_gr00t_official_tasks(tasks), "n_records": len(records), "new_records": len(records),
-               "n_envs": 1, "model_batch_size": 1, "macro_steps": GR00T_OFFICIAL_MACRO_STEPS,
+    summary = {"benchmark": "libero", "protocol": GROOT_OFFICIAL_PROTOCOL, "task_suite": args.task_suite_name,
+               **summarize_groot_official_tasks(tasks), "n_records": len(records), "new_records": len(records),
+               "n_envs": 1, "model_batch_size": 1, "macro_steps": GROOT_OFFICIAL_MACRO_STEPS,
                "episodes_per_task": args.episodes_per_task,
                "results_path": str(results_path), "summary_path": str(output / "summary.csv"),
                "suite_summary_path": str(output / "suite_summary.csv"),
                "tasks_path": str(output / "tasks.jsonl"), "report": None}
-    _write_gr00t_official_csv(output / "summary.csv", tasks,
+    _write_groot_official_csv(output / "summary.csv", tasks,
                ["task_suite", "task_id", "status", "n_episodes", "success_rate", "error_message"])
-    _write_gr00t_official_csv(output / "suite_summary.csv", [summary],
+    _write_groot_official_csv(output / "suite_summary.csv", [summary],
                ["task_suite", "success_rate", "valid_tasks", "total_tasks", "failed_tasks", "n_records"])
     return summary

@@ -32,11 +32,11 @@ from typing import Dict, List, Optional
 
 
 @dataclass(frozen=True)
-class Gr00tN1d6DataConfig:
+class GrootN1d6DataConfig:
     """GR00T-N1.6 data-processing config (maps to YAML ``data:`` section)."""
 
     embodiment_tag: str = "libero_panda"
-    gr00t_preprocess_mode: str = "sample"
+    groot_preprocess_mode: str = "sample"
     max_token_len: Optional[int] = None
     backbone_model_type: str = "eagle"
 

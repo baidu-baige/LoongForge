@@ -30,10 +30,10 @@ from loongforge.models.embodied.gr00t_n1_7.embodiment_configs import (
     EMBODIMENT_STAT_CONFIGS,
     EMBODIMENT_TAG_TO_PROJECTOR_INDEX,
     MODALITY_CONFIGS,
-    convert_lerobot_stats_to_gr00t_n1d7_format,
+    convert_lerobot_stats_to_groot_n1d7_format,
 )
 from loongforge.models.embodied.registry import register_model
-from .model_configuration_gr00t_n1_7 import Gr00tN1d7Config
+from .model_configuration_gr00t_n1_7 import GrootN1d7Config
 from .modules.dit import AlternateVLDiT, DiT, SelfAttentionTransformer
 from .modules.embodiment_mlp import CategorySpecificMLP, MultiEmbodimentActionEncoder
 from .modules.qwen3_backbone import Qwen3Backbone
@@ -60,7 +60,7 @@ class Gr00tN1d7ActionHead(nn.Module):
 
     supports_gradient_checkpointing = True
 
-    def __init__(self, config: Gr00tN1d7Config):
+    def __init__(self, config: GrootN1d7Config):
         super().__init__()
         self.config = config
         self.hidden_size = config.hidden_size
@@ -312,7 +312,7 @@ class Gr00tN1d7(nn.Module):
 
     def __init__(
         self,
-        config: Gr00tN1d7Config,
+        config: GrootN1d7Config,
         transformers_loading_kwargs: dict | None = None,
     ):
         super().__init__()
@@ -396,12 +396,12 @@ class Gr00tN1d7(nn.Module):
 
 
 @register_model("Gr00tN1d7")
-class Gr00tN1d7Policy(nn.Module):
+class GrootN1d7Policy(nn.Module):
     """GR00T-N1.7 policy wrapper for the LoongForge Torch engine."""
 
     preserve_param_dtype = True
 
-    def __init__(self, config: Gr00tN1d7Config):
+    def __init__(self, config: GrootN1d7Config):
         super().__init__()
         self.config = config
         self._pretrained_checkpoint_path: str | None = None
@@ -464,9 +464,9 @@ class Gr00tN1d7Policy(nn.Module):
             torch.cuda.manual_seed_all(seed)
 
     @classmethod
-    def from_pretrained(cls, cfg) -> "Gr00tN1d7Policy":
+    def from_pretrained(cls, cfg) -> "GrootN1d7Policy":
         """Instantiate from config; weights are loaded by trainer via load_pretrained."""
-        return cls(Gr00tN1d7Config.from_config(cfg))
+        return cls(GrootN1d7Config.from_config(cfg))
 
     def forward(self, batch) -> tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         """Return LoongForge trainer contract: loss plus log-loss dict."""
@@ -479,7 +479,7 @@ class Gr00tN1d7Policy(nn.Module):
                 batch_inputs = batch.to_model_inputs()
             except AttributeError as exc:
                 raise TypeError(
-                    "Gr00tN1d7Policy.forward expects a batch with to_model_inputs(), "
+                    "GrootN1d7Policy.forward expects a batch with to_model_inputs(), "
                     f"got {type(batch).__name__}"
                 ) from exc
             outputs = self.model(batch_inputs)
@@ -1076,7 +1076,7 @@ class Gr00tN1d7Policy(nn.Module):
             return {self.embodiment_tag: embodiment_stats}
 
         if "observation.state" in statistics and "action" in statistics:
-            return convert_lerobot_stats_to_gr00t_n1d7_format(
+            return convert_lerobot_stats_to_groot_n1d7_format(
                 statistics,
                 self.embodiment_tag,
                 modality_meta=self.modality_meta,
@@ -1133,7 +1133,7 @@ class Gr00tN1d7Policy(nn.Module):
         remember_path: bool = True,
     ) -> None:
         """Load GR00T-N1.7 safetensors checkpoint into native LoongForge model."""
-        state_dict = _load_gr00t_n1_7_state_dict(path, device=device)
+        state_dict = _load_groot_n1_7_state_dict(path, device=device)
         model_sd = self.model.state_dict()
         filtered = {}
         skipped = []
@@ -1172,7 +1172,7 @@ class Gr00tN1d7Policy(nn.Module):
             self._reload_pretrained_once_after_precision_cast = True
 
 
-def _load_gr00t_n1_7_state_dict(
+def _load_groot_n1_7_state_dict(
     path: str,
     device: torch.device | None = None,
 ) -> Dict[str, torch.Tensor]:

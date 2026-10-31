@@ -104,7 +104,7 @@ TRAINING_ARGS=(
 * **apply_to_image_projector**：在图像投影层上启用 LoRA 训练。
 * **apply_to_image_encoder**：在图像编码器上启用 LoRA 训练。
 
-要在模型中启用 LoRA，只需在模型配置文件中包含 LoRA 配置。例如，要在 Qwen2.5-vl-3b 模型中使用 LoRA，修改 `${LoongForge}/configs/models/qwen2.5_vl/qwen2_5_vl_3b.yaml` 如下：
+要在模型中启用 LoRA，只需在模型配置文件中包含 LoRA 配置。例如，要在 Qwen2.5-vl-3b 模型中使用 LoRA，修改 `${LoongForge}/configs/models/qwen2.5vl/qwen2_5_vl_3b.yaml` 如下：
 
 ```yaml
 defaults:

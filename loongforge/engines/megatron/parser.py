@@ -20,7 +20,7 @@ from megatron.training.arguments import add_megatron_arguments, moe_freq_type
 from megatron.training.checkpointing import load_args_from_checkpoint
 from omegaconf import DictConfig, OmegaConf
 
-from loongforge.engines.megatron.get_loss_func import default_loss_func
+from loongforge.engines.megatron.get_loss_func import default_loss_func, loss_func_internvl
 from loongforge.engines.megatron.utils.global_vars import (
     get_args_dict,
     get_hydra_config,
@@ -56,6 +56,7 @@ def register_custom_resolvers():
     }
     LOSS_FUNC_MAP = {
         "default": default_loss_func,
+        "loss_func_internvl": loss_func_internvl,
     }
     OmegaConf.register_new_resolver(
         "act", lambda name: ACTIVATION_MAP[name.lower()], replace=True

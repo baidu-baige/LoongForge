@@ -34,4 +34,4 @@ apply_rope_fusion: true
 multi_latent_attention: true
 model_type: "deepseek"
 
-convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/deepseek_v3/ckpt_convert/deepseek_v3_convert.yaml
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/deepseek3/ckpt_convert/deepseek_v3_convert.yaml

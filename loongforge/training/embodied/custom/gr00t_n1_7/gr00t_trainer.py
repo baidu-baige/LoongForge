@@ -178,7 +178,7 @@ def _validate_fp8_cuda_graph_args(training_args) -> None:
             "--no-check-for-nan-in-loss-and-grad."
         )
 
-def _build_gr00t_fp8_recipe(training_args):
+def _build_groot_fp8_recipe(training_args):
     """Build the run-owned TE recipe and align TE 2.9 blockwise QParams."""
     from loongforge.engines.torch.distributed.fp8_utils.te_fp8.recipe import (
         build_fp8_recipe,
@@ -208,7 +208,7 @@ def _build_gr00t_fp8_recipe(training_args):
     return recipe
 
 @contextmanager
-def _gr00t_fp8_graph_capture_ctx(recipe):
+def _groot_fp8_graph_capture_ctx(recipe):
     """Enter TE's graph-aware autocast while recording a GR00T CUDA graph."""
     try:
         from transformer_engine.pytorch import autocast as te_autocast
@@ -237,16 +237,16 @@ def build_hooks(training_args):
     import torch
     from loongforge.engines.torch.runner import TrainerHooks
     from loongforge.training.embodied.custom.gr00t_n1_7.full_iteration_cuda_graph import (
-        Gr00tN1d7FullIterationCudaGraphRunner,
+        GrootN1d7FullIterationCudaGraphRunner,
     )
     from loongforge.training.embodied.custom.gr00t_n1_7.gr00t_optimizer import (
-        build_gr00t_optimizer,
+        build_groot_optimizer,
     )
     from loongforge.engines.torch.distributed.utils import unwrap_model
 
     _validate_fp8_cuda_graph_args(training_args)
     recipe = (
-        _build_gr00t_fp8_recipe(training_args)
+        _build_groot_fp8_recipe(training_args)
         if training_args.fp8 and training_args.fp8_backend == "te" else None
     )
 
@@ -261,7 +261,7 @@ def build_hooks(training_args):
     graph_mode = False
     if training_args.cuda_graph_impl == "local":
         if training_args.cuda_graph_scope == "full_iteration":
-            if not Gr00tN1d7FullIterationCudaGraphRunner.is_enabled(training_args):
+            if not GrootN1d7FullIterationCudaGraphRunner.is_enabled(training_args):
                 raise RuntimeError(
                     "GR00T-N1.7 full-iteration CUDA graph was requested but CUDA is unavailable; "
                     "eager fallback is forbidden."
@@ -285,7 +285,7 @@ def build_hooks(training_args):
                     metrics[key] = value.item()
 
         return TrainerHooks(
-            build_optimizer=lambda model, args, ctx: build_gr00t_optimizer(
+            build_optimizer=lambda model, args, ctx: build_groot_optimizer(
                 model, args, capturable=False,
             ),
             after_setup=lambda args: set_seed(args.seed),
@@ -310,7 +310,7 @@ def build_hooks(training_args):
         default_stream.wait_stream(graph_stream)
         torch.cuda.synchronize(ctx.device)
         state.graph_stream = graph_stream
-        state.runner = Gr00tN1d7FullIterationCudaGraphRunner(model, args, ctx, graph_stream, recipe)
+        state.runner = GrootN1d7FullIterationCudaGraphRunner(model, args, ctx, graph_stream, recipe)
         logger.info(
             "Using model-managed train step runner: %s (stream_priority=%d)",
             state.runner.__class__.__name__,
@@ -322,7 +322,7 @@ def build_hooks(training_args):
         default_stream = torch.cuda.current_stream(ctx.device)
         state.graph_stream.wait_stream(default_stream)
         with torch.cuda.stream(state.graph_stream):
-            optimizer = build_gr00t_optimizer(model, args)
+            optimizer = build_groot_optimizer(model, args)
         default_stream.wait_stream(state.graph_stream)
         return optimizer
 

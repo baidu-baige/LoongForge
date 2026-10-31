@@ -62,11 +62,11 @@ TORCH_TRAINER_TYPES: Dict[str, Tuple[str, str | None, str]] = {
         "loongforge.training.embodied.custom.vlda.vlda_finetune_trainer", None,
         "loongforge.training.embodied.custom.vlda.vlda_finetune_trainer.VLDAFinetuneTrainer",
     ),
-    "Gr00tN1d6Trainer": (
+    "GrootN1d6Trainer": (
         "loongforge.training.embodied.sft", "loongforge.training.embodied.custom.gr00t_n1_6.gr00t_trainer",
         "loongforge.engines.torch.runner.TorchRunner",
     ),
-    "Gr00tN1d7Trainer": (
+    "GrootN1d7Trainer": (
         "loongforge.training.embodied.sft", "loongforge.training.embodied.custom.gr00t_n1_7.gr00t_trainer",
         "loongforge.engines.torch.runner.TorchRunner",
     ),

@@ -40,7 +40,7 @@ from loongforge.evaluation.embodied.orchestrator.config import (
 from loongforge.evaluation.embodied.orchestrator.runners import _common
 from loongforge.evaluation.embodied.orchestrator.runners._common import StepTimeoutError, alarm_timeout, avg as _avg
 from loongforge.evaluation.embodied.orchestrator.runners.libero_gr00t_runner import (
-    GR00T_OFFICIAL_PROTOCOL, _run_batch_gr00t_official,
+    GROOT_OFFICIAL_PROTOCOL, _run_batch_groot_official,
 )
 from loongforge.evaluation.embodied.payload_builders import PayloadBuilder
 from loongforge.evaluation.embodied.protocol import PROTOCOL_VERSION
@@ -510,8 +510,8 @@ def _manifest_protocol(args: argparse.Namespace) -> Dict[str, Any]:
 def run_batch(args: argparse.Namespace) -> Dict[str, Any]:
     """Run run_batch."""
     protocol = getattr(args, "libero_protocol", "legacy")
-    if protocol == GR00T_OFFICIAL_PROTOCOL:
-        return _run_batch_gr00t_official(args)
+    if protocol == GROOT_OFFICIAL_PROTOCOL:
+        return _run_batch_groot_official(args)
     if protocol != "legacy":
         raise ValueError(f"Unknown LIBERO protocol: {protocol!r}")
     os.environ.setdefault("MUJOCO_GL", "egl")

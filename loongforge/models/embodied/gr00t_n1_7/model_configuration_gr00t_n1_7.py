@@ -18,7 +18,7 @@ _DEFAULT_BASE_MODEL = "nvidia/GR00T-N1.7-3B"
 
 
 @dataclass
-class Gr00tN1d7Config:
+class GrootN1d7Config:
     """Single flat config object consumed by model, data, and trainer code."""
 
     model_type: str = "Gr00tN1d7"
@@ -91,7 +91,7 @@ class Gr00tN1d7Config:
     max_num_embodiments: int = 32
 
     @classmethod
-    def from_config(cls, cfg: Any) -> "Gr00tN1d7Config":
+    def from_config(cls, cfg: Any) -> "GrootN1d7Config":
         """Create from OmegaConf/dict/object."""
         if isinstance(cfg, cls):
             return cfg

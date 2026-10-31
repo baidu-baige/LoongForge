@@ -168,5 +168,5 @@ Saved BF16 HuggingFace checkpoint to: $SAVE
 
 You can use this checkpoint as NVIDIA ModelOpt input for NVFP4, for example:
   BF16_HF="$SAVE" \\
-  bash "${LOONGFORGE_PATH}/examples/kimi_k2.5/checkpoint_convert/nvfp4_ptq/convert_kimi_k2.5_hf_bf16_to_nvfp4_modelopt.sh"
+  bash "${LOONGFORGE_PATH}/examples/kimi_k2.x/kimi_k2.5/checkpoint_convert/nvfp4_ptq/convert_kimi_k2.5_hf_bf16_to_nvfp4_modelopt.sh"
 EOF

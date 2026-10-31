@@ -156,7 +156,7 @@ def _encode_simpler_widowx(state_raw: Dict[str, Any]) -> Optional[np.ndarray]:
 
 
 @register_payload_builder("gr00tn1d6")
-class Gr00tN1d6PayloadBuilder(PayloadBuilder):
+class GrootN1d6PayloadBuilder(PayloadBuilder):
     """GR00T-N1.6 client-side payload assembly."""
 
     # Capability declarations (YAML-overridable via type annotations).

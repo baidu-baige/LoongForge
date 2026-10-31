@@ -21,7 +21,7 @@ export LOCAL_VLA_ARTIFACTS_ROOT=${LOCAL_VLA_ARTIFACTS_ROOT:-"/ssd2/loongforge_em
 
 GR00T_N1_7_OPS_SRC=${GR00T_N1_7_OPS_SRC:-"${LOONGFORGE_PATH}/ops/cuda_source/gr00t_n1_7_op"}
 
-build_gr00t_n1_7_ops() {
+build_groot_n1_7_ops() {
     if python -c "import gr00t_n1_7_op" > /dev/null 2>&1; then
         echo "GR00T-N1.7 CUDA operators already installed: gr00t_n1_7_op"
         return
@@ -38,7 +38,7 @@ build_gr00t_n1_7_ops() {
         pip install --no-build-isolation -e "${GR00T_N1_7_OPS_SRC}"
 }
 
-build_gr00t_n1_7_ops
+build_groot_n1_7_ops
 
 # ── Distributed ───────────────────────────────────────────────
 # Cluster schedulers commonly export WORLD_SIZE (node count) and RANK (node rank).
@@ -100,7 +100,7 @@ SAVE_INTERVAL=${SAVE_INTERVAL:-0}
 SEED=${SEED:-42}
 
 TRAINING_ARGS=(
-    --trainer-type Gr00tN1d7Trainer
+    --trainer-type GrootN1d7Trainer
     --save-processor-config
     --train-iters "$TRAIN_ITERS"
     --per-device-batch-size "$PER_DEVICE_BATCH_SIZE"

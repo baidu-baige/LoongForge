@@ -231,7 +231,7 @@ def _install_graph_safe_fa2_forward() -> None:
     import transformers.modeling_flash_attention_utils as flash_attention_utils
 
     original_forward = flash_attention_utils._flash_attention_forward
-    if getattr(original_forward, "_loongforge_gr00t_n1_7_graph_safe", False):
+    if getattr(original_forward, "_loongforge_groot_n1_7_graph_safe", False):
         return
 
     def graph_safe_forward(
@@ -317,7 +317,7 @@ def _install_graph_safe_fa2_forward() -> None:
             **kwargs,
         )
 
-    graph_safe_forward._loongforge_gr00t_n1_7_graph_safe = True
+    graph_safe_forward._loongforge_groot_n1_7_graph_safe = True
     graph_safe_forward._loongforge_original = original_forward
     flash_attention_utils._flash_attention_forward = graph_safe_forward
     flash_attention_integration._flash_attention_forward = graph_safe_forward

@@ -37,7 +37,7 @@ from loongforge.models.embodied.gr00t_n1_6.embodiment_configs import (
 )
 
 
-class Gr00tPromptTransform(BaseTransform):
+class GrootPromptTransform(BaseTransform):
     """Ensure every sample has a task prompt string."""
 
     def __init__(
@@ -61,7 +61,7 @@ class Gr00tPromptTransform(BaseTransform):
         return data
 
 
-class Gr00tStateActionTransform(BaseTransform):
+class GrootStateActionTransform(BaseTransform):
     """Validate state/action presence for GR00T samples."""
 
     def __init__(
@@ -83,7 +83,7 @@ class Gr00tStateActionTransform(BaseTransform):
         return data
 
 
-class Gr00tN1d6FeatureTransform(BaseTransform):
+class GrootN1d6FeatureTransform(BaseTransform):
     """Build model-specific GR00T single-sample features.
 
     This transform owns GR00T modality slicing, state/action normalization,
@@ -157,7 +157,7 @@ class Gr00tN1d6FeatureTransform(BaseTransform):
 
     def apply(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Apply GR00T N1.6 feature transform to a single sample."""
-        Gr00tStateActionTransform(training=self.training).apply(data)
+        GrootStateActionTransform(training=self.training).apply(data)
 
         image_keys = sorted(k for k in data if k.startswith("observation.images."))
         if not image_keys:
@@ -409,7 +409,7 @@ class Gr00tN1d6FeatureTransform(BaseTransform):
         return {"text": None, "images": pil_images, "conversation": conversation}
 
 
-class Gr00tBatchTransform(BaseTransform):
+class GrootBatchTransform(BaseTransform):
     """No-op marker transform for GR00T-specific pipeline registration."""
 
     def __init__(self, apply_to: List[str] | None = None, training: bool = True):
@@ -479,17 +479,17 @@ def _normalize_text(text_value: Any) -> str:
 
 
 @register_transform_builder("Gr00tN1d6")
-def build_gr00t_n1_6_transforms(ctx: TransformBuilderContext):
+def build_groot_n1_6_transforms(ctx: TransformBuilderContext):
     """Build GR00T-N1.6-specific per-sample transforms."""
-    preprocess_mode = ctx.data_cfg.gr00t_preprocess_mode
+    preprocess_mode = ctx.data_cfg.groot_preprocess_mode
     if preprocess_mode != "sample":
         raise ValueError(
             f"Unsupported GR00T-N1.6 preprocess mode for per-sample transforms: {preprocess_mode!r}"
         )
 
     return [
-        Gr00tPromptTransform(),
-        Gr00tN1d6FeatureTransform(
+        GrootPromptTransform(),
+        GrootN1d6FeatureTransform(
             model_cfg=ctx.model_cfg,
             data_cfg=ctx.data_cfg,
             dataset_stats=ctx.dataset_stats,

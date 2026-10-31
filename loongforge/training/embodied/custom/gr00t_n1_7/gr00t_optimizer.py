@@ -25,7 +25,7 @@ except ImportError:  # pragma: no cover
     _TEFusedAdam = None
 
 if _TEFusedAdam is not None:
-    class Gr00tCapturableAdamW(_TEFusedAdam):
+    class GrootCapturableAdamW(_TEFusedAdam):
         """CUDA-graph capturable AdamW built on Transformer Engine's FusedAdam."""
 
         def __init__(self, params, **kwargs):
@@ -133,10 +133,10 @@ if _TEFusedAdam is not None:
                     )
             return result
 else:  # pragma: no cover
-    Gr00tCapturableAdamW = None
+    GrootCapturableAdamW = None
 
 
-class Gr00tTorchCapturableAdamW(torch.optim.Optimizer):
+class GrootTorchCapturableAdamW(torch.optim.Optimizer):
     """Graph-safe AdamW matching torch's non-capturable update semantics.
 
     PyTorch's stock capturable AdamW folds the step size into the denominator.
@@ -178,7 +178,7 @@ class Gr00tTorchCapturableAdamW(torch.optim.Optimizer):
     @torch.no_grad()
     def step(self, closure=None):
         if closure is not None:
-            raise RuntimeError("Gr00tTorchCapturableAdamW does not support closures.")
+            raise RuntimeError("GrootTorchCapturableAdamW does not support closures.")
         for group in self.param_groups:
             beta1, beta2 = group["betas"]
             for parameter in group["params"]:
@@ -216,7 +216,7 @@ class Gr00tTorchCapturableAdamW(torch.optim.Optimizer):
         return None
 
 
-def build_gr00t_optimizer(model, training_args, *, capturable: bool = True):
+def build_groot_optimizer(model, training_args, *, capturable: bool = True):
     """Build GR00T's precision-compatible eager or capturable optimizer."""
     if training_args.optimizer == "AdamW" and capturable:
         groups = build_param_groups(model, training_args)
@@ -228,7 +228,7 @@ def build_gr00t_optimizer(model, training_args, *, capturable: bool = True):
         for group in groups:
             if group.get("params"):
                 group["lr"] = lr_tensor.clone()
-        optimizer = Gr00tTorchCapturableAdamW(
+        optimizer = GrootTorchCapturableAdamW(
             groups,
             lr=lr_tensor,
             betas=(training_args.adam_beta1, training_args.adam_beta2),
@@ -239,7 +239,7 @@ def build_gr00t_optimizer(model, training_args, *, capturable: bool = True):
         return optimizer
     if training_args.optimizer != "TEFusedAdamW":
         return build_generic_optimizer(model, training_args)
-    if Gr00tCapturableAdamW is None:
+    if GrootCapturableAdamW is None:
         raise ImportError(
             "TransformerEngine FusedAdam is required for the GR00T precision-compatible optimizer"
         )
@@ -251,7 +251,7 @@ def build_gr00t_optimizer(model, training_args, *, capturable: bool = True):
                 group["lr"] = torch.tensor(
                     float(group["lr"]), dtype=torch.float64, device=params[0].device
                 )
-    optimizer = Gr00tCapturableAdamW(
+    optimizer = GrootCapturableAdamW(
         groups,
         lr=training_args.lr_base,
         weight_decay=training_args.weight_decay,

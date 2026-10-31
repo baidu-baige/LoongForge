@@ -10,6 +10,7 @@ defaults:
 
 model:
   model_type: intern_vl
+  loss_func: ${loss_func:loss_func_internvl}
   
   image_projector:
     hidden_size: 4096

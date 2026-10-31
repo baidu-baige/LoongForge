@@ -110,8 +110,8 @@ CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"
 LOAD=/path/to/hf_checkpoint          # FP8 HuggingFace 权重
 SAVE=/path/to/your/save              # 转换后的 MCore FP8 权重
 
-MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/deepseek_v3/deepseek_v3.yaml
-CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/deepseek_v3/ckpt_convert/deepseek_v3_convert.yaml
+MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/deepseek3/deepseek_v3.yaml
+CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/deepseek3/ckpt_convert/deepseek_v3_convert.yaml
 
 PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
   python $CONVERT_CHECKPOINT_PATH/module_convertor/model.py \
@@ -148,7 +148,7 @@ PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
 ### 3.1 LoongForge 提供的额外参数
 除原生 Megatron 参数外，框架还添加了便捷选项（运行与数据参数定义在 `loongforge/training/megatron_args.py` 中，LLM 专属参数定义在 `loongforge/training/llm/args.py` 中）：
 
-* `--config-file` -- 包含所有模型超参数的 YAML 文件路径，例如 `configs/models/deepseek_v3/deepseek_v3.yaml`。
+* `--config-file` -- 包含所有模型超参数的 YAML 文件路径，例如 `configs/models/deepseek3/deepseek_v3.yaml`。
 * `--model-name` -- 模型简短名称，如 `deepseek-v3`；系统会自动查找对应的 YAML 文件。
 * `--training-phase` -- 训练阶段，如 `pretrain`、`sft` 等。
 * `--tokenizer-type` -- 推荐使用 `HFTokenizer` 并配合 `--hf-tokenizer-path`。

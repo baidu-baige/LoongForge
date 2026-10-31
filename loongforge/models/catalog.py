@@ -13,52 +13,52 @@ MODEL_CONFIG_REGISTRY = {
     # deepseek
     "deepseek-v2": {
         "engine": "megatron",
-        "config_path": "configs/models/deepseek_v2",
+        "config_path": "configs/models/deepseek2",
         "config_name": "deepseek_v2",
     },
     "deepseek-v2-lite": {
         "engine": "megatron",
-        "config_path": "configs/models/deepseek_v2",
+        "config_path": "configs/models/deepseek2",
         "config_name": "deepseek_v2_lite",
     },
     "deepseek-v3": {
         "engine": "megatron",
-        "config_path": "configs/models/deepseek_v3",
+        "config_path": "configs/models/deepseek3",
         "config_name": "deepseek_v3",
     },
     "deepseek-v3.2-sparse": {
         "engine": "megatron",
-        "config_path": "configs/models/deepseek_v3",
+        "config_path": "configs/models/deepseek3",
         "config_name": "deepseek_v3_2_sparse",
     },
     "deepseek-v4-flash": {
         "engine": "megatron",
-        "config_path": "configs/models/deepseek_v4",
+        "config_path": "configs/models/deepseek4",
         "config_name": "deepseek_v4_flash_base",
     },
     "deepseek-v4-flash-lite": {
         "engine": "megatron",
-        "config_path": "configs/models/deepseek_v4",
+        "config_path": "configs/models/deepseek4",
         "config_name": "deepseek_v4_flash_lite",
     },
     "deepseek-v4-flash-lite-2l": {
         "engine": "megatron",
-        "config_path": "configs/models/deepseek_v4",
+        "config_path": "configs/models/deepseek4",
         "config_name": "deepseek_v4_flash_lite_2l",
     },
     "deepseek-v4-flash-lite-4l": {
         "engine": "megatron",
-        "config_path": "configs/models/deepseek_v4",
+        "config_path": "configs/models/deepseek4",
         "config_name": "deepseek_v4_flash_lite_4l",
     },
     "deepseek-v4-flash-lite-6l": {
         "engine": "megatron",
-        "config_path": "configs/models/deepseek_v4",
+        "config_path": "configs/models/deepseek4",
         "config_name": "deepseek_v4_flash_lite_6l",
     },
     "deepseek-v4-pro": {
         "engine": "megatron",
-        "config_path": "configs/models/deepseek_v4",
+        "config_path": "configs/models/deepseek4",
         "config_name": "deepseek_v4_pro_base",
     },
     # internlm2.5
@@ -310,7 +310,7 @@ MODEL_CONFIG_REGISTRY = {
     # ernie4.5
     "ernie4.5-28b-a3b-base": {
         "engine": "megatron",
-        "config_path": "configs/models/ernie4.5",
+        "config_path": "configs/models/ernie4_5_vl",
         "config_name": "ernie4_5_28b_a3b_base",
     },
     "glm5": {
@@ -413,27 +413,27 @@ MODEL_CONFIG_REGISTRY = {
     # qwen2.5-vl
     "qwen2.5-vl-3b": {
         "engine": "megatron",
-        "config_path": "configs/models/qwen2.5_vl",
+        "config_path": "configs/models/qwen2.5vl",
         "config_name": "qwen2_5_vl_3b",
     },
     "qwen2.5-vl-3b-lora": {
         "engine": "megatron",
-        "config_path": "configs/models/qwen2.5_vl",
+        "config_path": "configs/models/qwen2.5vl",
         "config_name": "qwen2_5_vl_3b_lora",
     },
     "qwen2.5-vl-7b": {
         "engine": "megatron",
-        "config_path": "configs/models/qwen2.5_vl",
+        "config_path": "configs/models/qwen2.5vl",
         "config_name": "qwen2_5_vl_7b",
     },
     "qwen2.5-vl-32b": {
         "engine": "megatron",
-        "config_path": "configs/models/qwen2.5_vl",
+        "config_path": "configs/models/qwen2.5vl",
         "config_name": "qwen2_5_vl_32b",
     },
     "qwen2.5-vl-72b": {
         "engine": "megatron",
-        "config_path": "configs/models/qwen2.5_vl",
+        "config_path": "configs/models/qwen2.5vl",
         "config_name": "qwen2_5_vl_72b",
     },
 
@@ -489,7 +489,7 @@ MODEL_CONFIG_REGISTRY = {
     # llavaov 1.5
     "llava-onevision-1.5-4b": {
         "engine": "megatron",
-        "config_path": "configs/models/llava_onevision_1.5",
+        "config_path": "configs/models/llava_onevision",
         "config_name": "llava_onevision_1_5_4b",
     },
 
@@ -515,7 +515,7 @@ MODEL_CONFIG_REGISTRY = {
     # ernie4.5-vl
     "ernie4.5-vl-28b-a3b": {
         "engine": "megatron",
-        "config_path": "configs/models/ernie4.5",
+        "config_path": "configs/models/ernie4_5_vl",
         "config_name": "ernie4_5_vl_28b_a3b",
     },
 
@@ -565,8 +565,8 @@ MODEL_CONFIG_REGISTRY = {
         "engine": "torch",
         "config_path": "configs/models/gr00t_n1_6",
         "config_name": "gr00t_n1_6",
-        "model_config": "loongforge.models.embodied.gr00t_n1_6.model_configuration_gr00t_n1_6.Gr00tN1d6ModelConfig",
-        "data_config": "loongforge.data.embodied.gr00t_n1_6.transforms.data_configuration_gr00t_n1_6.Gr00tN1d6DataConfig",
+        "model_config": "loongforge.models.embodied.gr00t_n1_6.model_configuration_gr00t_n1_6.GrootN1d6ModelConfig",
+        "data_config": "loongforge.data.embodied.gr00t_n1_6.transforms.data_configuration_gr00t_n1_6.GrootN1d6DataConfig",
     },
     "xvla": {
         "engine": "torch",
@@ -593,8 +593,8 @@ MODEL_CONFIG_REGISTRY = {
         "engine": "torch",
         "config_path": "configs/models/gr00t_n1_7",
         "config_name": "gr00t_n1_7",
-        "model_config": "loongforge.models.embodied.gr00t_n1_7.model_configuration_gr00t_n1_7.Gr00tN1d7Config",
-        "data_config": "loongforge.data.embodied.gr00t_n1_7.transforms.data_configuration_gr00t_n1_7.Gr00tN1d7DataConfig",
+        "model_config": "loongforge.models.embodied.gr00t_n1_7.model_configuration_gr00t_n1_7.GrootN1d7Config",
+        "data_config": "loongforge.data.embodied.gr00t_n1_7.transforms.data_configuration_gr00t_n1_7.GrootN1d7DataConfig",
     },
     "cosmos3_nano": {
         "engine": "torch",

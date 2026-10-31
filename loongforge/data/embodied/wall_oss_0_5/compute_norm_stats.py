@@ -18,7 +18,7 @@ Output JSON layout::
 
 Usage::
 
-    python -m examples.wall_oss_0_5.finetuning.compute_norm_stats \\
+    python -m loongforge.data.embodied.wall_oss_0_5.compute_norm_stats \\
         --data-root /path/to/lerobot_dataset \\
         --output-path /path/to/libero_norm_stats.json
 """

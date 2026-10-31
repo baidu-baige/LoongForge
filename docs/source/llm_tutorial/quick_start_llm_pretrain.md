@@ -110,8 +110,8 @@ CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"
 LOAD=/path/to/hf_checkpoint          # FP8 HF checkpoint
 SAVE=/path/to/your/save              # will be MCore FP8
 
-MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/deepseek_v3/deepseek_v3.yaml
-CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/deepseek_v3/ckpt_convert/deepseek_v3_convert.yaml
+MODEL_CONFIG_FILE=${LOONGFORGE_PATH}/configs/models/deepseek3/deepseek_v3.yaml
+CONVERT_FILE=${LOONGFORGE_PATH}/configs/models/deepseek3/ckpt_convert/deepseek_v3_convert.yaml
 
 PYTHONPATH=$MEGATRON_PATH:$PYTHONPATH \
   python $CONVERT_CHECKPOINT_PATH/module_convertor/model.py \
@@ -148,7 +148,7 @@ See [llm_ckpt_convert.md](https://github.com/baidu-baige/LoongForge/tree/master/
 ### 3.1 Extra arguments provided by LoongForge
 Besides the native Megatron flags, the framework adds convenient options (defined in `loongforge/training/megatron_args.py` for run and data flags and in `loongforge/training/llm/args.py` for LLM-specific flags):
 
-* `--config-file` – path to a YAML file that contains all model hyper-params, e.g. `configs/models/deepseek_v3/deepseek_v3.yaml`.
+* `--config-file` – path to a YAML file that contains all model hyper-params, e.g. `configs/models/deepseek3/deepseek_v3.yaml`.
 * `--model-name` – short name such as `deepseek-v3`; the system looks up the YAML automatically.  
 * `--training-phase` – `pretrain`, `sft`, etc.  
 * `--tokenizer-type` – recommend `HFTokenizer` plus `--hf-tokenizer-path`.  

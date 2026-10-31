@@ -28,10 +28,10 @@ def build_hooks(training_args):
 
     # Lazy import: graph runner itself pulls torch, CUDA, model-specific types.
     from loongforge.training.embodied.custom.gr00t_n1_6.per_microbatch_cuda_graph import (
-        Gr00tN1d6PerMicrobatchCudaGraphRunner,
+        GrootN1d6PerMicrobatchCudaGraphRunner,
     )
 
-    if not Gr00tN1d6PerMicrobatchCudaGraphRunner.is_enabled(training_args):
+    if not GrootN1d6PerMicrobatchCudaGraphRunner.is_enabled(training_args):
         return TrainerHooks()
 
     state = SimpleNamespace(runner=None)
@@ -57,7 +57,7 @@ def build_hooks(training_args):
                     if tensor is not None and tensor.device.type == "cuda":
                         dist.broadcast(tensor, src=0)
 
-        state.runner = Gr00tN1d6PerMicrobatchCudaGraphRunner(model, args, ctx)
+        state.runner = GrootN1d6PerMicrobatchCudaGraphRunner(model, args, ctx)
         logger.info(
             "Using model-managed train step runner: %s",
             state.runner.__class__.__name__,

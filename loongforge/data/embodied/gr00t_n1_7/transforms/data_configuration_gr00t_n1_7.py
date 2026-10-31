@@ -10,11 +10,11 @@ from typing import Any, Dict, List, Optional
 
 
 @dataclass(frozen=True)
-class Gr00tN1d7DataConfig:
+class GrootN1d7DataConfig:
     """GR00T-N1.7 data-processing config (maps to YAML ``data:`` section)."""
 
     embodiment_tag: str = "libero_sim"
-    gr00t_preprocess_mode: str = "sharded"
+    groot_preprocess_mode: str = "sharded"
     max_token_len: Optional[int] = None
 
     preprocess_action_horizon: Optional[int] = None

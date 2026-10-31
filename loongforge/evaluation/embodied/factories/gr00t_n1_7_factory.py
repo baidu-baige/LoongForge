@@ -35,7 +35,7 @@ from loongforge.evaluation.embodied.factories.registry import register_factory
 from loongforge.evaluation.embodied.servers.eval_server_config import EvalServerArgs
 from loongforge.evaluation.embodied.servers.loongforge_policy import PredictActionModelSpec
 from loongforge.models.embodied.gr00t_n1_7.model_configuration_gr00t_n1_7 import (
-    Gr00tN1d7Config,
+    GrootN1d7Config,
 )
 from loongforge.models.embodied.registry import build_model
 
@@ -90,15 +90,15 @@ def _load_processor_kwargs(ckpt_path: str) -> Dict[str, Any]:
 
 
 @register_factory("gr00tn1d7")
-class Gr00tN1d7ModelFactory:
+class GrootN1d7ModelFactory:
     """Build a GR00T-N1.7 policy exposing the shared predict_action interface."""
 
-    model_config_cls = Gr00tN1d7Config
+    model_config_cls = GrootN1d7Config
 
     @classmethod
     def build(
         cls,
-        model_cfg: Gr00tN1d7Config,
+        model_cfg: GrootN1d7Config,
         server_args: EvalServerArgs,
     ) -> PredictActionModelSpec:
         """Create GrootN1d7Policy and return it with eval metadata.
@@ -159,7 +159,7 @@ class Gr00tN1d7ModelFactory:
             # this flag, GrootN1d7Policy._restore_precision_after_apply would cast
             # the trainable action head back to fp32 right after .to(bf16) below,
             # which is the training-side precision policy, not the eval behavior.
-            os.environ.setdefault("GR00T_ALLOW_TRAINABLE_PARAM_BF16", "1")
+            os.environ.setdefault("GROOT_ALLOW_TRAINABLE_PARAM_BF16", "1")
             model = model.to(dtype=torch.bfloat16)
 
         # Open-loop execution horizon: keep only the first N steps of each

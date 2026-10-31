@@ -420,8 +420,7 @@ def _add_run_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
         type=str,
         default="false",
         choices=["true", "false"],
-        help="Save an HF checkpoint at the end of training. "
-             "The adapter merge size comes from the YAML peft_config. Default: false",
+        help="Save an HF checkpoint at the end of training. Default: false",
     )
     group.add_argument(
         "--save-hf-path",

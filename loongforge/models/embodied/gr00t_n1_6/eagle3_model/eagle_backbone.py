@@ -39,7 +39,7 @@ from .configuration_eagle3_vl import Eagle3VLConfig, build_eagle_load_kwargs, re
 from .modeling_eagle3_vl import configured_graph_mode, load_eagle_model
 
 
-_GR00T_EAGLE_TORCH_INIT_FUNCTIONS = (
+_GROOT_EAGLE_TORCH_INIT_FUNCTIONS = (
     "uniform_",
     "normal_",
     "trunc_normal_",
@@ -68,7 +68,7 @@ _TRANSFORMERS_MAJOR_VERSION = _get_transformers_major_version()
 
 
 @contextlib.contextmanager
-def _gr00t_eagle_no_init_weights():
+def _groot_eagle_no_init_weights():
     """Match the Transformers 4 Eagle no-init side effects across HF versions."""
     # Transformers 4 is the base environment and exposes no_init_weights from
     # modeling_utils. Keep that exact path there; Transformers 5 moved no-init
@@ -87,7 +87,7 @@ def _gr00t_eagle_no_init_weights():
     originals = {}
     original_init_weights = PreTrainedModel.init_weights
     try:
-        for name in _GR00T_EAGLE_TORCH_INIT_FUNCTIONS:
+        for name in _GROOT_EAGLE_TORCH_INIT_FUNCTIONS:
             if hasattr(torch.nn.init, name):
                 originals[name] = getattr(torch.nn.init, name)
                 setattr(torch.nn.init, name, _skip_init)
@@ -142,7 +142,7 @@ def _load_lerobot_eager_eagle(
 
     # LeRobot builds this backbone inside HF from_pretrained's no-init context.
     # Match that construction path here; weights are loaded by the outer GR00T loader.
-    with _gr00t_eagle_no_init_weights():
+    with _groot_eagle_no_init_weights():
         model = AutoModel.from_config(config, trust_remote_code=True)
     print(f"Created Eagle model via LeRobot eager AutoModel path: {local_model_path}")
     return model

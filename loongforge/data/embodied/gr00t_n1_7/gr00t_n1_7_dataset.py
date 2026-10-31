@@ -19,13 +19,13 @@ from torch.utils.data import IterableDataset, get_worker_info
 from loongforge.data.embodied.lerobot_dataset import build_default_lerobot_dataset
 
 
-_GR00T_N1D7_SHARD_PREFETCH_DEPTH = 3
+_GROOT_N1D7_SHARD_PREFETCH_DEPTH = 3
 
 
-def build_gr00t_n1_7_lerobot_dataset(model_cfg, data_cfg, training_args, runtime):
+def build_groot_n1_7_lerobot_dataset(model_cfg, data_cfg, training_args, runtime):
     """Build and prepare a LeRobot dataset for GR00T-N1.7 sample semantics."""
     dataset = build_default_lerobot_dataset(model_cfg, data_cfg, training_args, runtime)
-    return prepare_gr00t_n1d7_lerobot_dataset(
+    return prepare_groot_n1d7_lerobot_dataset(
         dataset,
         model_cfg,
         data_cfg=data_cfg,
@@ -35,7 +35,7 @@ def build_gr00t_n1_7_lerobot_dataset(model_cfg, data_cfg, training_args, runtime
     )
 
 
-def prepare_gr00t_n1d7_lerobot_dataset(
+def prepare_groot_n1d7_lerobot_dataset(
     dataset: Any,
     model_cfg: Any,
     data_cfg: Any = None,
@@ -48,20 +48,20 @@ def prepare_gr00t_n1d7_lerobot_dataset(
     if root is not None:
         dataset.dataset_path = Path(root)
         dataset.modality = _read_json_if_exists(Path(root) / "meta" / "modality.json")
-        _load_gr00t_n1d7_stats_json(dataset, Path(root))
+        _load_groot_n1d7_stats_json(dataset, Path(root))
 
     if _is_prepared(dataset):
         return dataset
 
     data_cfg = _default_data_cfg() if data_cfg is None else data_cfg
-    dataset._gr00t_n1d7_data_cfg = data_cfg
+    dataset._groot_n1d7_data_cfg = data_cfg
     seed = _resolve_data_seed(training_args)
-    dataset._gr00t_n1d7_seed = seed
+    dataset._groot_n1d7_seed = seed
     # Shard double buffering is a data-supply fix, not a CUDA-Graph feature.
     # Keep it enabled for both Eager and full-iteration Graph; Graph additionally
     # overlaps the next batch's CPU/H2D transfer in its static input buffers.
-    dataset._gr00t_n1d7_prefetch_shards = True
-    dataset._gr00t_n1d7_shard_prefetch_depth = _GR00T_N1D7_SHARD_PREFETCH_DEPTH
+    dataset._groot_n1d7_prefetch_shards = True
+    dataset._groot_n1d7_shard_prefetch_depth = _GROOT_N1D7_SHARD_PREFETCH_DEPTH
     action_horizon = _resolve_data_action_horizon(model_cfg, data_cfg)
     if not _has_episode_index(dataset):
         raise TypeError(
@@ -69,7 +69,7 @@ def prepare_gr00t_n1d7_lerobot_dataset(
             f"got {type(dataset).__name__}"
         )
 
-    if data_cfg.gr00t_preprocess_mode == "sharded":
+    if data_cfg.groot_preprocess_mode == "sharded":
         full_step_index, shard_meta = _build_isaac_sharded_step_index(
             dataset,
             data_cfg,
@@ -77,32 +77,32 @@ def prepare_gr00t_n1d7_lerobot_dataset(
             training_args=training_args,
         )
         dataset._step_index = full_step_index
-        dataset._gr00t_n1d7_prepared = True
+        dataset._groot_n1d7_prepared = True
         dataset.already_transformed = False
-        return _Gr00tN1d7IsaacIterableDataset(
+        return _GrootN1d7IsaacIterableDataset(
             dataset,
             sharded_episodes=shard_meta["sharded_episodes"],
             shard_lengths=shard_meta["shard_lengths"],
             seed=seed,
             num_shards_per_epoch=int(data_cfg.num_shards_per_epoch),
-            prefetch_shards=dataset._gr00t_n1d7_prefetch_shards,
-            prefetch_depth=dataset._gr00t_n1d7_shard_prefetch_depth,
+            prefetch_shards=dataset._groot_n1d7_prefetch_shards,
+            prefetch_depth=dataset._groot_n1d7_shard_prefetch_depth,
             rank=rank,
             world_size=world_size,
         )
 
     dataset._step_index = _build_effective_step_index(dataset, action_horizon)
-    dataset._gr00t_n1d7_prepared = True
+    dataset._groot_n1d7_prepared = True
     dataset.already_transformed = False
     return dataset
 
 
 def _default_data_cfg():
     from loongforge.data.embodied.gr00t_n1_7.transforms.data_configuration_gr00t_n1_7 import (
-        Gr00tN1d7DataConfig,
+        GrootN1d7DataConfig,
     )
 
-    return Gr00tN1d7DataConfig()
+    return GrootN1d7DataConfig()
 
 
 def _dataset_root(dataset: Any) -> Any:
@@ -111,7 +111,7 @@ def _dataset_root(dataset: Any) -> Any:
 
 def _is_prepared(dataset: Any) -> bool:
     try:
-        return bool(dataset._gr00t_n1d7_prepared)
+        return bool(dataset._groot_n1d7_prepared)
     except AttributeError:
         return False
 
@@ -127,7 +127,7 @@ def _resolve_data_seed(training_args: Any) -> int:
     return int(training_args.seed)
 
 
-def _load_gr00t_n1d7_stats_json(dataset: Any, root: Path) -> None:
+def _load_groot_n1d7_stats_json(dataset: Any, root: Path) -> None:
     """Load GR00T-N1.7 stats.json while preserving Isaac-style JSON values.
 
     Isaac's loader keeps the raw JSON/list structure and lets NumPy perform the
@@ -215,17 +215,17 @@ def _build_isaac_sharded_step_index(
         sharded_episodes[shard_index].append((episode_index, split_step_indices))
         shard_lengths[shard_index] += len(split_step_indices)
 
-    dataset._gr00t_n1d7_sharded_episodes = sharded_episodes
-    dataset._gr00t_n1d7_shard_lengths = shard_lengths.tolist()
-    dataset._gr00t_n1d7_sharded_order = True
-    dataset._gr00t_n1d7_pair_to_dataset_index = pair_to_dataset_index
+    dataset._groot_n1d7_sharded_episodes = sharded_episodes
+    dataset._groot_n1d7_shard_lengths = shard_lengths.tolist()
+    dataset._groot_n1d7_sharded_order = True
+    dataset._groot_n1d7_pair_to_dataset_index = pair_to_dataset_index
     return full_step_index, {
         "sharded_episodes": sharded_episodes,
         "shard_lengths": shard_lengths.tolist(),
     }
 
 
-class _Gr00tN1d7IsaacIterableDataset(IterableDataset):
+class _GrootN1d7IsaacIterableDataset(IterableDataset):
     """Iterable dataset that mirrors Isaac's shard-cache preprocessing order."""
 
     def __init__(
@@ -251,8 +251,8 @@ class _Gr00tN1d7IsaacIterableDataset(IterableDataset):
         self._shard_prefetch_depth = max(1, int(prefetch_depth))
         self._rank = int(rank)
         self._world_size = int(world_size)
-        self._pair_to_dataset_index = dict(dataset._gr00t_n1d7_pair_to_dataset_index)
-        self._gr00t_n1d7_sharded_order = True
+        self._pair_to_dataset_index = dict(dataset._groot_n1d7_pair_to_dataset_index)
+        self._groot_n1d7_sharded_order = True
         self._thread_local = threading.local()
 
         if self._dataset._transform is not None:

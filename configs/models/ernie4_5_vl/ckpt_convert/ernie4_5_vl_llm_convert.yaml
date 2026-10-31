@@ -123,3 +123,4 @@ name_map:
     mtp_shared_head_norm: output_layernorm
     mtp_shared_head_head: output_head
 torch_dtype: bfloat16
+

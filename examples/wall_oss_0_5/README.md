@@ -58,7 +58,7 @@ OUTPUT_PATH=$LOONGFORGE_PATH/data/wall_oss_0_5_norm_stats/libero_norm_stats.json
 
 `STATE_KEY` (default `observation.state`) and `ACTION_KEY` (default `action`)
 select the dataset columns; extra arguments are forwarded to the underlying
-`compute_norm_stats.py`.
+[compute_norm_stats.py](../../loongforge/data/embodied/wall_oss_0_5/compute_norm_stats.py).
 
 ## Fine-Tuning (FSDP + DMuon)
 

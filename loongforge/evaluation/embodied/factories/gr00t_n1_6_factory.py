@@ -30,7 +30,7 @@ from loongforge.evaluation.embodied.factories.registry import register_factory
 from loongforge.evaluation.embodied.servers.eval_server_config import EvalServerArgs
 from loongforge.evaluation.embodied.servers.loongforge_policy import PredictActionModelSpec
 from loongforge.models.embodied.gr00t_n1_6.model_configuration_gr00t_n1_6 import (
-    Gr00tN1d6ModelConfig,
+    GrootN1d6ModelConfig,
 )
 from loongforge.models.embodied.registry import build_model
 
@@ -58,15 +58,15 @@ def _load_statistics(path: str) -> Dict[str, Any]:
 
 
 @register_factory("gr00tn1d6")
-class Gr00tN1d6ModelFactory:
+class GrootN1d6ModelFactory:
     """Build a GR00T-N1.6 policy exposing the shared predict_action interface."""
 
-    model_config_cls = Gr00tN1d6ModelConfig
+    model_config_cls = GrootN1d6ModelConfig
 
     @classmethod
     def build(
         cls,
-        model_cfg: Gr00tN1d6ModelConfig,
+        model_cfg: GrootN1d6ModelConfig,
         server_args: EvalServerArgs,
     ) -> PredictActionModelSpec:
         """Create GrootN1d6Policy and return it with eval metadata.

@@ -49,7 +49,7 @@ from loongforge.models.embodied.gr00t_n1_6.eagle3_model.image_augmentations impo
 )
 
 from .eagle3_model import EagleBackbone
-from .model_configuration_gr00t_n1_6 import Gr00tN1d6ModelConfig
+from .model_configuration_gr00t_n1_6 import GrootN1d6ModelConfig
 from .modules.dit import AlternateVLDiT, DiT
 from .modules.embodiment_mlp import (
     CategorySpecificMLP,
@@ -75,7 +75,7 @@ class Gr00tN1d6ActionHead(nn.Module):
 
     supports_gradient_checkpointing = True
 
-    def __init__(self, config: Gr00tN1d6ModelConfig):
+    def __init__(self, config: GrootN1d6ModelConfig):
         super().__init__()
         self.config = config
         self.hidden_size = config.hidden_size
@@ -493,7 +493,7 @@ class Gr00tN1d6ActionHead(nn.Module):
         return BatchFeature(data=batch)
 
 
-def get_backbone_cls(config: Gr00tN1d6ModelConfig):
+def get_backbone_cls(config: GrootN1d6ModelConfig):
     """Get backbone class based on model name in config."""
     if "NVEagle" in config.model_name or "nvidia/Eagle" in config.model_name or "eagle" in config.model_name.lower():
         return EagleBackbone
@@ -508,7 +508,7 @@ class Gr00tN1d6(nn.Module):
 
     def __init__(
         self,
-        config: Gr00tN1d6ModelConfig,
+        config: GrootN1d6ModelConfig,
         transformers_loading_kwargs: dict | None = None,
     ):
         """
@@ -893,10 +893,10 @@ class Gr00tN1d6(nn.Module):
 
 
 @register_model("Gr00tN1d6")
-class Gr00tN1d6Policy(nn.Module):
+class GrootN1d6Policy(nn.Module):
     """GR00T-N1.6 policy implementation for the embodied trainer."""
 
-    def __init__(self, config: Gr00tN1d6ModelConfig):
+    def __init__(self, config: GrootN1d6ModelConfig):
         super().__init__()
         self.config = config
         self._pretrained_checkpoint_path: str | None = None
@@ -954,15 +954,15 @@ class Gr00tN1d6Policy(nn.Module):
         return result
 
     @classmethod
-    def from_pretrained(cls, cfg) -> "Gr00tN1d6Policy":
+    def from_pretrained(cls, cfg) -> "GrootN1d6Policy":
         """Instantiate a policy from a pretrained checkpoint."""
-        return cls(Gr00tN1d6ModelConfig.from_config(cfg))
+        return cls(GrootN1d6ModelConfig.from_config(cfg))
 
     def forward(self, batch) -> Dict[str, torch.Tensor]:
         """Forward pass through the policy."""
         if not hasattr(batch, "to_model_inputs"):
             raise TypeError(
-                "Gr00tN1d6Policy.forward expects a batch with to_model_inputs(), "
+                "GrootN1d6Policy.forward expects a batch with to_model_inputs(), "
                 f"got {type(batch).__name__}"
             )
         outputs = self.model(batch.to_model_inputs())
@@ -1489,7 +1489,7 @@ class Gr00tN1d6Policy(nn.Module):
         remember_path: bool = True,
     ):
         """Load GR00T-N1.6 HF sharded/single-file checkpoints into the model."""
-        state_dict = _load_gr00t_n1_6_state_dict(path, device=device)
+        state_dict = _load_groot_n1_6_state_dict(path, device=device)
         model_sd = self.model.state_dict()
         filtered = {}
         skipped = []
@@ -1518,7 +1518,7 @@ class Gr00tN1d6Policy(nn.Module):
             self._reload_pretrained_once_after_precision_cast = True
 
 
-def _load_gr00t_n1_6_state_dict(
+def _load_groot_n1_6_state_dict(
     path: str,
     device: torch.device | None = None,
 ) -> Dict[str, torch.Tensor]:

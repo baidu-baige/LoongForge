@@ -83,6 +83,8 @@ TRAINING_ARGS=(
     --save-interval 40 
     --save-hf true
     --save-hf-path /workspace/loongforge-ckpt/qwen3-1.7b-lora-hf
+    --lora-alpha 32
+    --lora-dim 16
     --eval-interval 1000
     --eval-iters 10
     #--ckpt-step 0

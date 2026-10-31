@@ -32,7 +32,7 @@ from loongforge.data.embodied.gr00t_n1_7.gr00t_n1_7_dataset import (
     _resolve_data_action_horizon,
 )
 from loongforge.data.embodied.gr00t_n1_7.transforms.data_configuration_gr00t_n1_7 import (
-    Gr00tN1d7DataConfig,
+    GrootN1d7DataConfig,
 )
 from loongforge.data.embodied.gr00t_n1_7.transforms.image_augmentations import (
     apply_with_replay,
@@ -54,13 +54,13 @@ from loongforge.models.embodied.gr00t_n1_6.embodiment_configs import (
 from loongforge.models.embodied.gr00t_n1_7.embodiment_configs import (
     EMBODIMENT_TAG_TO_PROJECTOR_INDEX,
     MODALITY_CONFIGS,
-    convert_lerobot_stats_to_gr00t_n1d7_format,
+    convert_lerobot_stats_to_groot_n1d7_format,
 )
-from loongforge.models.embodied.gr00t_n1_7.model_configuration_gr00t_n1_7 import Gr00tN1d7Config
+from loongforge.models.embodied.gr00t_n1_7.model_configuration_gr00t_n1_7 import GrootN1d7Config
 
 
 @dataclass
-class Gr00tN1d7RuntimeSemantics:
+class GrootN1d7RuntimeSemantics:
     """Runtime modality semantics resolved from a LeRobot dataset."""
 
     embodiment_tag: str
@@ -86,9 +86,9 @@ def _resolve_runtime_semantics(
     data_cfg: Any,
     dataset_stats: Optional[Dict[str, Any]],
     dataset: Any,
-) -> Gr00tN1d7RuntimeSemantics:
-    policy_cfg = Gr00tN1d7Config.from_config(model_cfg)
-    data_cfg = Gr00tN1d7DataConfig() if data_cfg is None else data_cfg
+) -> GrootN1d7RuntimeSemantics:
+    policy_cfg = GrootN1d7Config.from_config(model_cfg)
+    data_cfg = GrootN1d7DataConfig() if data_cfg is None else data_cfg
     embodiment_tag = data_cfg.embodiment_tag
     data_action_horizon = _resolve_data_action_horizon(policy_cfg, data_cfg)
     features = _get_dataset_features(dataset)
@@ -118,7 +118,7 @@ def _resolve_runtime_semantics(
         modality_config=modality_config,
     )
     embodiment_id = _resolve_embodiment_id(policy_cfg, data_cfg)
-    return Gr00tN1d7RuntimeSemantics(
+    return GrootN1d7RuntimeSemantics(
         embodiment_tag=embodiment_tag,
         modality_meta=modality_meta,
         modality_config=modality_config,
@@ -299,7 +299,7 @@ def _resolve_video_key_mapping(
     }
 
 
-def _resolve_embodiment_id(policy_cfg: Gr00tN1d7Config, data_cfg: Any) -> int:
+def _resolve_embodiment_id(policy_cfg: GrootN1d7Config, data_cfg: Any) -> int:
     checkpoint_path = _resolve_checkpoint_path(policy_cfg)
     if checkpoint_path is not None:
         mapping = _read_json_if_exists(checkpoint_path / "embodiment_id.json")
@@ -329,7 +329,7 @@ def _build_runtime_processor_stats(
     relative_stats = _load_relative_action_stats(dataset)
     if relative_stats:
         dataset_stats_local["relative_action"] = relative_stats
-    return convert_lerobot_stats_to_gr00t_n1d7_format(
+    return convert_lerobot_stats_to_groot_n1d7_format(
         dataset_stats_local,
         embodiment_tag,
         modality_meta=modality_meta,
@@ -337,7 +337,7 @@ def _build_runtime_processor_stats(
     )
 
 
-class Gr00tN1d7FeatureTransform(BaseTransform):
+class GrootN1d7FeatureTransform(BaseTransform):
     """Build GR00T-N1.7 sample features from LoongForge LeRobot samples."""
 
     def __init__(
@@ -350,8 +350,8 @@ class Gr00tN1d7FeatureTransform(BaseTransform):
         training: bool = True,
     ):
         super().__init__(apply_to=[], training=training)
-        self.policy_cfg = Gr00tN1d7Config.from_config(model_cfg)
-        self.data_cfg = Gr00tN1d7DataConfig() if data_cfg is None else data_cfg
+        self.policy_cfg = GrootN1d7Config.from_config(model_cfg)
+        self.data_cfg = GrootN1d7DataConfig() if data_cfg is None else data_cfg
         self.embodiment_tag = self.data_cfg.embodiment_tag
         self.max_state_dim = int(self.policy_cfg.max_state_dim)
         self.max_action_dim = int(self.policy_cfg.max_action_dim)
@@ -754,12 +754,12 @@ def _extract_masks(mask_array: np.ndarray) -> list[np.ndarray]:
 
 
 @register_transform_builder("Gr00tN1d7")
-def build_gr00t_n1_7_transforms(ctx: TransformBuilderContext):
+def build_groot_n1_7_transforms(ctx: TransformBuilderContext):
     """Build GR00T-N1.7-specific per-sample transforms."""
     if ctx.dataset.already_transformed:
         return []
     return [
-        Gr00tN1d7FeatureTransform(
+        GrootN1d7FeatureTransform(
             model_cfg=ctx.model_cfg,
             data_cfg=ctx.data_cfg,
             dataset_stats=ctx.dataset_stats,

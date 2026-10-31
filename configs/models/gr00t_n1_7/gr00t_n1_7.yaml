@@ -67,7 +67,7 @@ model:
 
 data:
   embodiment_tag: new_embodiment
-  gr00t_preprocess_mode: sharded
+  groot_preprocess_mode: sharded
   max_token_len: null
 
   preprocess_action_horizon: 16

@@ -388,7 +388,7 @@ def _copy_static(
         )
 
 
-class Gr00tN1d7FullIterationCudaGraphRunner:
+class GrootN1d7FullIterationCudaGraphRunner:
     """Capture one complete GR00T-N1.7 optimizer iteration and replay it."""
 
     def __init__(
@@ -698,12 +698,12 @@ class Gr00tN1d7FullIterationCudaGraphRunner:
             return
         if isinstance(value, dict):
             for key, item in value.items():
-                Gr00tN1d7FullIterationCudaGraphRunner._walk_tensor_pointers(
+                GrootN1d7FullIterationCudaGraphRunner._walk_tensor_pointers(
                     item, f"{path}.{key}", output, seen
                 )
         elif isinstance(value, (tuple, list)):
             for index, item in enumerate(value):
-                Gr00tN1d7FullIterationCudaGraphRunner._walk_tensor_pointers(
+                GrootN1d7FullIterationCudaGraphRunner._walk_tensor_pointers(
                     item, f"{path}[{index}]", output, seen
                 )
 
@@ -783,9 +783,9 @@ class Gr00tN1d7FullIterationCudaGraphRunner:
         saved_fp8_tensors = save_fp8_tensors([module], self._fp8_recipe)
         set_capture_start()
         try:
-            from .gr00t_trainer import _gr00t_fp8_graph_capture_ctx
+            from .gr00t_trainer import _groot_fp8_graph_capture_ctx
 
-            with _gr00t_fp8_graph_capture_ctx(self._fp8_recipe):
+            with _groot_fp8_graph_capture_ctx(self._fp8_recipe):
                 yield
         finally:
             try:
@@ -826,7 +826,7 @@ class Gr00tN1d7FullIterationCudaGraphRunner:
             raise RuntimeError("GR00T-N1.7 backbone was not found for full-iteration capture.")
         return backbone
 
-    def _gr00t_model(self):
+    def _groot_model(self):
         model = getattr(self.raw_model, "model", None)
         if model is None:
             raise RuntimeError("GR00T-N1.7 core model was not found for full-iteration capture.")
@@ -871,7 +871,7 @@ class Gr00tN1d7FullIterationCudaGraphRunner:
                 f"got {type(batch).__name__}."
             ) from exc
 
-        model = self._gr00t_model()
+        model = self._groot_model()
         backbone_dtype = self._module_parameter_dtype(model.backbone)
         action_dtype = self._module_parameter_dtype(model.action_head)
         backbone_keys = (

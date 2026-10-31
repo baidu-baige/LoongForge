@@ -5,8 +5,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# The shared NVFP4 driver is version-agnostic and lives under the K2 family root.
-COMMON_NVFP4_DIR=${COMMON_NVFP4_DIR:-"$(cd "${SCRIPT_DIR}/../../../kimi_k2/checkpoint_convert/nvfp4_ptq" && pwd)"}
+COMMON_NVFP4_DIR=${COMMON_NVFP4_DIR:-"$(cd "${SCRIPT_DIR}/../../../nvfp4_ptq" && pwd)"}
 
 # Checkpoint path config
 export BF16_HF=${BF16_HF:-"/mnt/cluster/LoongForge/moonshotai/Kimi-K2.6-hf-bf16"}

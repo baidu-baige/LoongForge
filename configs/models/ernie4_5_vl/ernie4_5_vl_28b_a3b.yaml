@@ -5,7 +5,7 @@
 defaults:
   - ../../models/image_encoder@model.image_encoder: ernie4_5_vit
   - ../../models/image_projector@model.image_projector: ernie4_5_adapter
-  - ../../models/ernie4.5@model.foundation: ernie4_5_28b_a3b_base
+  - ../../models/ernie4_5_vl@model.foundation: ernie4_5_28b_a3b_base
   - _self_
 
 model:

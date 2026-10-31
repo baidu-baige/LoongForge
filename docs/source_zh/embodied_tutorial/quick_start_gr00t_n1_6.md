@@ -32,7 +32,7 @@ hf download lerobot/libero_10 --repo-type dataset --local-dir /workspace/libero_
 ```yaml
 data:
   embodiment_tag: libero_panda
-  gr00t_preprocess_mode: sample
+  groot_preprocess_mode: sample
   preprocess_action_horizon: 16
   preprocess_max_action_dim: 29
   preprocess_max_state_dim: 29

@@ -140,7 +140,7 @@ def _encode_simpler_google(state_raw: Dict[str, Any]) -> Optional[np.ndarray]:
 
 
 @register_payload_builder("gr00tn1d7")
-class Gr00tN1d7PayloadBuilder(PayloadBuilder):
+class GrootN1d7PayloadBuilder(PayloadBuilder):
     """GR00T-N1.7 client-side payload assembly."""
 
     # Capability declarations (YAML-overridable via type annotations).

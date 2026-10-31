@@ -28,7 +28,7 @@ def eager_step(
     lr: float,
 ) -> None:
     """Apply the eager update using host-computed AdamW scalars."""
-    _extension().gr00t_n1_7_fused_adamw_eager_step(
+    _extension().groot_n1_7_fused_adamw_eager_step(
         params,
         grads,
         exp_avgs,
@@ -61,7 +61,7 @@ def capturable_step(
     weight_decay: float,
 ) -> None:
     """Apply the graph-stable update using CUDA scalar inputs."""
-    _extension().gr00t_n1_7_fused_adamw_capturable_step(
+    _extension().groot_n1_7_fused_adamw_capturable_step(
         params,
         grads,
         exp_avgs,
@@ -96,7 +96,7 @@ def capturable_grad_scaled_step(
     weight_decay: float,
 ) -> None:
     """Apply the graph-stable update while scaling each loaded gradient once."""
-    _extension().gr00t_n1_7_fused_adamw_capturable_grad_scaled_step(
+    _extension().groot_n1_7_fused_adamw_capturable_grad_scaled_step(
         params,
         grads,
         exp_avgs,

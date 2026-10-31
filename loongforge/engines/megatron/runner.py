@@ -612,12 +612,6 @@ def pretrain(
             args.save_hf_path = os.path.join(args.save, "release_hf_weights/")
         if hasattr(config, 'pipeline_model_parallel_layout'):
             args.convert_pp_layout = config.pipeline_model_parallel_layout
-        # The adapter shape has a single source: the YAML peft_config. The bridge
-        # reads args.lora_alpha/lora_dim, so fill them from the training config.
-        peft_config = getattr(get_loongforge_model_config(), 'peft_config', None)
-        if peft_config is not None:
-            args.lora_alpha = peft_config.alpha
-            args.lora_dim = peft_config.dim
 
         # Save HF checkpoint
         save_hf_checkpoint_online(model, args)

@@ -15,7 +15,7 @@ from loongforge.evaluation.embodied.adapters.libero import LiberoAdapter
 from loongforge.evaluation.embodied.orchestrator.config import apply_config
 from loongforge.evaluation.embodied.orchestrator.runners import libero_gr00t_runner as gr00t
 from loongforge.evaluation.embodied.orchestrator.runners import libero_runner as legacy
-from loongforge.evaluation.embodied.payload_builders.gr00t_n1_7 import Gr00tN1d7PayloadBuilder
+from loongforge.evaluation.embodied.payload_builders.gr00t_n1_7 import GrootN1d7PayloadBuilder
 
 
 def observation():
@@ -105,9 +105,9 @@ def test_adapter_state_gripper_and_legacy_unchanged():
     obs = observation()
     ctx = {"instruction": "test", "ee_pos": np.array([99., 99., 99.]),
            "ee_ori_mat": np.eye(3)}
-    adapter = gr00t.Gr00tOfficialAdapter()
+    adapter = gr00t.GrootOfficialAdapter()
     canonical = adapter.obs_to_canonical(obs, ctx)
-    payload = Gr00tN1d7PayloadBuilder().build(canonical, ctx)
+    payload = GrootN1d7PayloadBuilder().build(canonical, ctx)
     np.testing.assert_allclose(payload["state"], [1, 2, 3, 0, 0, 0, .02, -.02])
     np.testing.assert_array_equal(canonical["images"]["primary"], obs["agentview_image"][::-1, ::-1])
     for grip, expected in [(0, 1), (.499, 1), (.5, 0), (.501, -1), (1, -1)]:
@@ -121,7 +121,7 @@ def test_adapter_state_gripper_and_legacy_unchanged():
 
 def test_session_seed_once_random_reset_reuses_env_and_interrupts():
     env = FakeEnv()
-    session = gr00t.Gr00tOfficialEnvSession(env, 42, 17)
+    session = gr00t.GrootOfficialEnvSession(env, 42, 17)
     for _ in range(3):
         _, completed = session.step([[0] * 7] * 8)
         assert completed["steps"] == 2
@@ -134,7 +134,7 @@ def test_session_seed_once_random_reset_reuses_env_and_interrupts():
 
 def test_macro_eight_actual_steps_and_exact_truncation():
     env = FakeEnv(SimpleNamespace(done_after=100))
-    session = gr00t.Gr00tOfficialEnvSession(env, 42, 17)
+    session = gr00t.GrootOfficialEnvSession(env, 42, 17)
     assert session.step([[0] * 7] * 8)[1] is None
     assert session.steps == 8
     assert session.step([[0] * 7] * 8)[1] is None
@@ -150,7 +150,7 @@ def test_autoreset_success_is_merged_into_terminal_episode():
             return self.resets >= 2 and self.steps == 0
 
     env = ResetSuccessEnv(SimpleNamespace(done_after=100))
-    session = gr00t.Gr00tOfficialEnvSession(env, 42, 1)
+    session = gr00t.GrootOfficialEnvSession(env, 42, 1)
     _, completed = session.step([[0] * 7] * 8)
     assert completed["steps"] == 1
     assert completed["success"] == 1
@@ -162,7 +162,7 @@ def test_initial_reset_success_does_not_mark_first_episode_successful():
         def check_success(self):
             return self.resets == 1 and self.steps == 0
 
-    session = gr00t.Gr00tOfficialEnvSession(InitialSuccessEnv(SimpleNamespace(done_after=100)), 42, 1)
+    session = gr00t.GrootOfficialEnvSession(InitialSuccessEnv(SimpleNamespace(done_after=100)), 42, 1)
     assert session.reset_success is True
     _, completed = session.step([[0] * 7] * 8)
     assert completed["success"] == 0
@@ -186,7 +186,7 @@ class EnvFactory:
 @pytest.mark.parametrize("requested", [1, 3, 11])
 def test_collection_exact_limit_cache_reset_and_rpc(requested):
     factory = EnvFactory()
-    records = gr00t.collect_gr00t_official_task(
+    records = gr00t.collect_groot_official_task(
         arguments(episodes_per_task=requested), SimpleNamespace(language="test"), 7, "run",
         env_factory=factory, client_factory=FakeClient)
     assert len(records) == requested
@@ -212,7 +212,7 @@ def test_collection_exact_limit_cache_reset_and_rpc(requested):
 
 def test_macro_rounds_advance_episode_step_until_completion():
     factory = EnvFactory(done_after=10)
-    records = gr00t.collect_gr00t_official_task(
+    records = gr00t.collect_groot_official_task(
         arguments(episodes_per_task=1), SimpleNamespace(language="test"), 0, "run",
         env_factory=factory, client_factory=FakeClient)
     assert [r["steps"] for r in records] == [10]
@@ -231,7 +231,7 @@ class BrokenResetEnv(FakeEnv):
 def test_failure_after_partial_completion_raises_and_closes():
     factory = EnvFactory(env_cls=BrokenResetEnv)
     with pytest.raises(RuntimeError, match="autoreset failed"):
-        gr00t.collect_gr00t_official_task(arguments(), SimpleNamespace(language="test"), 0, "run",
+        gr00t.collect_groot_official_task(arguments(), SimpleNamespace(language="test"), 0, "run",
                               env_factory=factory, client_factory=FakeClient)
     assert FakeClient.instances[-1].closed and factory.envs[-1].closed
 
@@ -248,7 +248,7 @@ def test_policy_error_and_short_chunk_fail_task():
     for client, error in [(ErrorClient, RuntimeError), (ShortClient, ValueError)]:
         factory = EnvFactory()
         with pytest.raises(error):
-            gr00t.collect_gr00t_official_task(arguments(), SimpleNamespace(language="test"), 0, "run",
+            gr00t.collect_groot_official_task(arguments(), SimpleNamespace(language="test"), 0, "run",
                                   env_factory=factory, client_factory=client)
         assert factory.envs[-1].closed
 
@@ -268,7 +268,7 @@ def test_task_failure_excluded_and_resume_cannot_pollute(tmp_path, monkeypatch):
         return [{"success": s, "frames": [], "trace": [], "episode_idx": i}
                 for i, s in enumerate([1] if task_id == 0 else [0, 0, 1])]
 
-    monkeypatch.setattr(gr00t, "collect_gr00t_official_task", collect)
+    monkeypatch.setattr(gr00t, "collect_groot_official_task", collect)
     first = legacy.run_batch(args)
     second = legacy.run_batch(args)
     assert first["success_rate"] == pytest.approx(2 / 3)
@@ -283,7 +283,7 @@ def test_task_failure_excluded_and_resume_cannot_pollute(tmp_path, monkeypatch):
 
 
 def test_all_failed_or_unparsed_has_no_rate():
-    summary = gr00t.summarize_gr00t_official_tasks([
+    summary = gr00t.summarize_groot_official_tasks([
         {"status": "FAILED", "success_rate": None},
         {"status": "OK", "success_rate": "unparsed"},
         {"status": "OK", "success_rate": float("nan")},
@@ -297,7 +297,7 @@ def test_explicit_config_routing_and_legacy_default(monkeypatch):
     assert args.libero_protocol == "legacy"
     apply_config(args, {"benchmark": {"libero_protocol": "gr00t_official"}})
     run = Mock(return_value={"official": True})
-    monkeypatch.setattr(legacy, "_run_batch_gr00t_official", run)
+    monkeypatch.setattr(legacy, "_run_batch_groot_official", run)
     assert legacy.run_batch(args) == {"official": True}
     run.assert_called_once_with(args)
     args.libero_protocol = "typo"
@@ -311,13 +311,13 @@ def test_explicit_config_routing_and_legacy_default(monkeypatch):
 ])
 def test_protocol_rejects_conflicting_configuration(overrides):
     with pytest.raises(ValueError):
-        gr00t._run_batch_gr00t_official(arguments(**overrides))
+        gr00t._run_batch_groot_official(arguments(**overrides))
 
 
 def test_other_model_rejected_only_in_opt_in_path():
     args = arguments(raw_config={"model": {"model_type": "pi05"}})
     with pytest.raises(ValueError, match="requires GR00T"):
-        gr00t.collect_gr00t_official_task(args, SimpleNamespace(language="test"), 0, "run")
+        gr00t.collect_groot_official_task(args, SimpleNamespace(language="test"), 0, "run")
 
 
 def test_legacy_episode_keeps_init_state_and_episode_seed(monkeypatch):
@@ -327,7 +327,7 @@ def test_legacy_episode_keeps_init_state_and_episode_seed(monkeypatch):
     env.env.robots[0].controller.update = Mock()
     create = Mock(return_value=(env, "test"))
     monkeypatch.setattr(legacy, "_get_libero_env", create)
-    builder = Gr00tN1d7PayloadBuilder()
+    builder = GrootN1d7PayloadBuilder()
     client = FakeClient()
     client.metadata = {}
     decoder = Mock(side_effect=lambda chunk, ctx: chunk)

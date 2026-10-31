@@ -1,7 +1,7 @@
 # Embodied Regression Test Framework
 
-Manual regression tests for the `loongforge/embodied` subframework: **serially execute the training scripts under
-`examples/embodied` directly** -> parse metrics -> compare against the baseline within tolerance -> write `results.json`.
+Manual regression tests for embodied models: **serially execute the training scripts under
+`examples/<model>/finetuning/` directly** -> parse metrics -> compare against the baseline within tolerance -> write `results.json`.
 
 This suite lives under [tests/embodied/](.) and is fully self-contained (own config, executor, and
 `baseline/`). The sibling LLM/VLM E2E suite is at [tests/llm_vlm/](../llm_vlm/); see
@@ -42,7 +42,7 @@ All environment-related paths are centralized in `config/env.sh` (sourced automa
 you invoke via `run.sh` or `cli.py`). To switch machines, you only need to change
 this one file, or temporarily override with environment variables before the command:
 
-- `EMBODIED_CI_ROOT` — default `/ssd2/loongforge_embodied_ci`; unified root directory for out-of-repo mutable state (data, logs, tools). Baselines are **no longer** derived from it by default.
+- `EMBODIED_CI_ROOT` — default `/workspace/loongforge_embodied_ci`; unified root directory for out-of-repo mutable state (data, logs, tools). Baselines are **no longer** derived from it by default.
 - `LOCAL_VLA_ARTIFACTS_ROOT` — default `${EMBODIED_CI_ROOT}/vla_artifacts`; data/ckpt root, shared by download and training scripts
 - `EMBODIED_LOG_ROOT` — default `${EMBODIED_CI_ROOT}/logs`; regression log/result root directory
 - `EMBODIED_BASELINE_ROOT` — default **in-repo** at `tests/embodied/baseline` (this suite owns its baselines; the sibling suite owns `tests/llm_vlm/baseline/`). Override to point at a shared out-of-repo collection if multiple checkouts must share baselines.
@@ -76,13 +76,13 @@ The following need to be prepared under `${EMBODIED_CI_ROOT}`:
 
 ## Regression Targets
 
-The regression targets are defined by the `config/scripts.yaml` manifest, a YAML mapping of `<name>: <script path relative to examples/embodied>`.
+The regression targets are defined by the `config/scripts.yaml` manifest, a YAML mapping of `<name>: <script path relative to examples>`.
 Scripts are **executed verbatim** (`bash <script>`) without injecting training parameters; at runtime, only the environment variables
 `OUTPUT_DIR` / `TENSORBOARD_DIR` are pointed to this run's log directory (the examples scripts all support overriding via
 `${OUTPUT_DIR:-...}`), so that the `metrics.jsonl` flushed by the trainer can be read;
 when missing, it falls back to parsing the stdout training log.
 
-To add a regression model: add an executable training script under `examples/embodied/`, then add a line in
+To add a regression model: add an executable training script under `examples/<model>/finetuning/`, then add a line in
 `config/scripts.yaml`; on the data side, you only need to upload it to the
 corresponding family directory under `${BOS_VLA_ARTIFACTS_ROOT}`, and `config/prepare.sh` will sync it as a whole.
 Also collect the baseline for the new name once with `auto_collect_baseline=true`.
@@ -95,7 +95,7 @@ tests/embodied/
 ├── cli.py                      # regression executor: parameter parsing + serial execution per manifest
 ├── config/                     # centralized configuration (the only directory that needs per-environment changes)
 │   ├── env.sh                  #   centralized path configuration (data/logs/baseline/tools)
-│   ├── scripts.yaml            #   regression script manifest: name → script under examples/embodied
+│   ├── scripts.yaml            #   regression script manifest: name → script under examples
 │   └── prepare.sh              #   regression environment preparation: bcecmd bos sync vla_artifacts
 ├── execution/                  # execution layer: load manifest → execute scripts → parse metrics
 │   ├── manifest.py             #   config/scripts.yaml manifest loading
