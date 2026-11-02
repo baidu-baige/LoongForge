@@ -4,9 +4,6 @@
 """VLDA evaluation factory with checkpoint-owned normalization and data settings."""
 
 import json
-import types
-
-import numpy as np
 from dataclasses import asdict
 from pathlib import Path
 
@@ -17,51 +14,6 @@ from loongforge.data.embodied.vlda.vlda_dataset import load_norm_stats
 from loongforge.evaluation.embodied.factories.registry import register_factory
 from loongforge.evaluation.embodied.servers.loongforge_policy import PredictActionModelSpec
 from loongforge.models.embodied.vlda.model_configuration_vlda import VLDAModelConfig
-
-
-@torch.no_grad()
-def _predict_action(self, images, instructions, state=None, dataset_stats=None):
-    """Return unnormalized environment actions with shape [B,H,action_dim]."""
-    from loongforge.data.embodied.vlda.transforms.data_configuration_vlda import VLDADataConfig
-    from loongforge.data.embodied.vlda.transforms.vlda_collator import VLDACollator
-    from loongforge.data.embodied.vlda.transforms.vlda_transform import (
-        VLDATransform,
-        decode_actions,
-        encode_state,
-    )
-
-    if self._inference_transform is None:
-        stats = dataset_stats if dataset_stats is not None else self._dataset_stats
-        if stats is None:
-            raise ValueError("VLDA inference requires the training norm_stats.json")
-        stats = stats.get("norm_stats", stats)
-        stats = {key: {name: np.asarray(value) for name, value in values.items()} for key, values in stats.items()}
-        data_cfg = self._inference_data_cfg or VLDADataConfig()
-        self._inference_transform = VLDATransform(self.config, data_cfg, stats, self._tokenizer_path)
-    transform = self._inference_transform
-    batch_size = len(instructions)
-    if state is None:
-        if self.config.discrete_state_input or transform.data_cfg.delta_joint_actions:
-            raise ValueError("This VLDA configuration requires the current robot state")
-        state = np.zeros((batch_size, self.config.state_dim), dtype=np.float32)
-    state = np.asarray(state).reshape(batch_size, self.config.state_dim)
-    examples = []
-    for views, instruction, proprio in zip(images, instructions, state, strict=True):
-        if not 1 <= len(views) <= 3:
-            raise ValueError("VLDA expects one to three views in base/left/right order")
-        examples.append(
-            transform(
-                {
-                    "images": list(views) + [None] * (3 - len(views)),
-                    "prompt": instruction,
-                    "state": proprio,
-                }
-            )
-        )
-    batch = VLDACollator()(examples).to(next(self.parameters()).device)
-    actions = transform.action_normalizer.inverse(self.predict_action_chunk(batch).cpu().float()).numpy()
-    proprio = encode_state(state, transform.data_cfg.adapt_to_pi)
-    return decode_actions(actions, proprio[:, None], transform.data_cfg).astype(np.float32)
 
 
 @register_factory("vlda")
@@ -108,7 +60,6 @@ class VLDAModelFactory:
         model._dataset_stats = load_norm_stats(stats_path)
         model._tokenizer_path = server_args.tokenizer_path
         model._inference_data_cfg = data_cfg
-        model.predict_action = types.MethodType(_predict_action, model)
         model.model.drop_training_only_modules()
         device = torch.device(server_args.device)
         model.to(device).eval()

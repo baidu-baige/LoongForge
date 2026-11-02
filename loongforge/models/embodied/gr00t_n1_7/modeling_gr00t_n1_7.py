@@ -15,7 +15,7 @@ import os
 from pathlib import Path
 import random
 import re
-from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, Optional, Tuple
+from typing import Any, Dict, Iterable, Optional, Tuple
 
 import numpy as np
 from PIL import Image
@@ -26,21 +26,26 @@ import torch.nn.functional as F
 from torch.distributions import Beta
 from transformers.feature_extraction_utils import BatchFeature
 
+from loongforge.data.embodied.gr00t_n1_6.transforms.gr00t_n1_6_processor import (
+    StateActionProcessor,
+)
+from loongforge.data.embodied.gr00t_n1_7.transforms.gr00t_n1_7_collator import (
+    Gr00tN1d7DataCollator,
+)
 from loongforge.models.embodied.gr00t_n1_7.embodiment_configs import (
     EMBODIMENT_STAT_CONFIGS,
     EMBODIMENT_TAG_TO_PROJECTOR_INDEX,
     MODALITY_CONFIGS,
     convert_lerobot_stats_to_groot_n1d7_format,
 )
+from loongforge.data.embodied.gr00t_n1_7.transforms.image_augmentations import (
+    build_image_transformations_albumentations,
+)
 from loongforge.models.embodied.registry import register_model
 from .model_configuration_gr00t_n1_7 import GrootN1d7Config
 from .modules.dit import AlternateVLDiT, DiT, SelfAttentionTransformer
 from .modules.embodiment_mlp import CategorySpecificMLP, MultiEmbodimentActionEncoder
 from .modules.qwen3_backbone import Qwen3Backbone
-
-if TYPE_CHECKING:
-    from loongforge.data.embodied.gr00t_n1_6.transforms.gr00t_n1_6_processor import StateActionProcessor
-    from loongforge.data.embodied.gr00t_n1_7.transforms.gr00t_n1_7_collator import Gr00tN1d7DataCollator
 
 logger = logging.getLogger(__name__)
 
@@ -397,7 +402,7 @@ class Gr00tN1d7(nn.Module):
 
 @register_model("Gr00tN1d7")
 class GrootN1d7Policy(nn.Module):
-    """GR00T-N1.7 policy wrapper for the LoongForge Torch engine."""
+    """GR00T-N1.7 policy wrapper for LoongForge FinetuneTrainer."""
 
     preserve_param_dtype = True
 
@@ -438,9 +443,6 @@ class GrootN1d7Policy(nn.Module):
         self._predict_action_default_processor: StateActionProcessor | None = None
         self._predict_action_processor_cache: dict[str, StateActionProcessor] = {}
         self._predict_action_eval_image_transform = None
-        # Data-side classes for inference preprocessing, given by configure_predict_action.
-        self._predict_action_collator_cls = None
-        self._predict_action_processor_cls = None
 
     @staticmethod
     def default_fp8_targets() -> Dict[str, Any]:
@@ -561,9 +563,6 @@ class GrootN1d7Policy(nn.Module):
         self,
         *,
         checkpoint_statistics: Dict[str, Any],
-        collator_cls: type,
-        processor_cls: type,
-        build_image_transforms: Callable,
         embodiment_tag: str = _DEFAULT_PREDICT_ACTION_EMBODIMENT_TAG,
         use_bf16: bool | None = None,
         validation_zero_state: bool = False,
@@ -591,8 +590,6 @@ class GrootN1d7Policy(nn.Module):
         if embodiment_tag not in EMBODIMENT_TAG_TO_PROJECTOR_INDEX:
             raise ValueError(f"No projector id registered for embodiment_tag={embodiment_tag!r}")
 
-        self._predict_action_collator_cls = collator_cls
-        self._predict_action_processor_cls = processor_cls
         self.embodiment_tag = embodiment_tag
         self.modality_config = MODALITY_CONFIGS[embodiment_tag]
         self.modality_meta = EMBODIMENT_STAT_CONFIGS[embodiment_tag]["modality_meta"]
@@ -620,7 +617,7 @@ class GrootN1d7Policy(nn.Module):
         self._predict_action_default_processor = self._build_state_action_processor(
             self._predict_action_statistics
         )
-        self.collator = collator_cls(
+        self.collator = Gr00tN1d7DataCollator(
             model_name=self.config.model_name,
             model_type=self.config.backbone_model_type,
             transformers_loading_kwargs={"trust_remote_code": True, "local_files_only": True},
@@ -632,7 +629,7 @@ class GrootN1d7Policy(nn.Module):
         crop_fraction = pk.get("crop_fraction", 0.95)
         shortest_image_edge = pk.get("shortest_image_edge", 256)
         letter_box_transform = bool(pk.get("letter_box_transform", False))
-        _, self._predict_action_eval_image_transform = build_image_transforms(
+        _, self._predict_action_eval_image_transform = build_image_transformations_albumentations(
             image_target_size,
             image_crop_size,
             int(pk.get("random_rotation_angle") or 0),
@@ -1090,7 +1087,7 @@ class GrootN1d7Policy(nn.Module):
         )
 
     def _build_state_action_processor(self, statistics: Dict[str, Any]) -> StateActionProcessor:
-        processor = self._predict_action_processor_cls(
+        processor = StateActionProcessor(
             modality_configs={self.embodiment_tag: self.modality_config},
             statistics=statistics,
             use_percentiles=self._predict_action_use_percentiles,
@@ -1119,7 +1116,7 @@ class GrootN1d7Policy(nn.Module):
     def _ensure_predict_action_collator(self) -> None:
         if self.collator is not None:
             return
-        self.collator = self._predict_action_collator_cls(
+        self.collator = Gr00tN1d7DataCollator(
             model_name=self.config.model_name,
             model_type=self.config.backbone_model_type,
             transformers_loading_kwargs={"trust_remote_code": True, "local_files_only": True},

@@ -102,31 +102,6 @@ class SFTRecipeTests(unittest.TestCase):
         self.assertEqual(batch.data, {"tokens": [1, 2]})
         upstream_collator.assert_called_once_with([{"sample": 1}])
 
-    def test_model_checkpoint_loader_restores_aliased_weights(self):
-        import torch
-
-        from loongforge.training.embodied import sft
-
-        class Model(torch.nn.Module):
-            def __init__(self):
-                super().__init__()
-                self.main = torch.nn.Linear(2, 2, bias=False)
-                self.alias = self.main
-
-            def load_pretrained(self, path, device):
-                self.load_state_dict({"main.weight": torch.ones_like(self.main.weight)}, strict=True)
-
-        for nested in (False, True):
-            with self.subTest(nested=nested):
-                model = Model()
-                trainer = sft.FinetuneTrainer(SimpleNamespace(train_iters=1), object(), object())
-                trainer.model = SimpleNamespace(model=model) if nested else model
-                trainer.ctx = SimpleNamespace(device=torch.device("cpu"))
-                trainer.logger = Mock()
-                trainer._load_pretrained("checkpoint")
-                self.assertTrue(torch.equal(model.main.weight, torch.ones_like(model.main.weight)))
-                self.assertEqual(set(model.state_dict()), {"main.weight", "alias.weight"})
-
     def test_model_factory_receives_training_args(self):
         from loongforge.training.embodied import sft
 

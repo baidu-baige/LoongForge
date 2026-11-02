@@ -455,7 +455,7 @@ class Florence2ConfigSchema:
 
 
 @dataclass
-class XVLAModelConfig:
+class XvlaModelConfig:
     """X-VLA model-structure config (maps 1:1 to YAML ``model:`` section)."""
 
     model_type: str = "xvla"

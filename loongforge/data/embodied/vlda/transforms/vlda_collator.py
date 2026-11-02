@@ -28,7 +28,7 @@ class VLDAPreparedBatch(PreparedBatch):
 
 
 @register_collator("vlda")
-class VLDACollator(BaseCollator):
+class VLDAPreprocessor(BaseCollator):
     @classmethod
     def from_config(cls, model_cfg, data_cfg, training_args=None, dataset_stats=None, dataset=None, runtime=None):
         return cls()

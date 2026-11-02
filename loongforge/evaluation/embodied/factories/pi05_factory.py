@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import os
-import types
 from pathlib import Path
 from typing import Any, Dict
 
@@ -18,81 +17,6 @@ from loongforge.evaluation.embodied.servers.loongforge_policy import (
 )
 from loongforge.models.embodied.pi05.model_configuration_pi05 import Pi05ModelConfig
 from loongforge.models.embodied.registry import build_model
-
-
-def _predict_action(
-    self, images, instructions, state=None, dataset_stats=None, *,
-    image_normalize_mode="identity", normalization_mode="q99",
-):
-    """Inference: Euler ODE denoising, returns ndarray (B, action_horizon, max_action_dim).
-
-    Bound to the PI05Policy instance as ``predict_action`` by :class:`PI05ModelFactory`;
-    the image, prompt and state preprocessing comes from the data package.
-    """
-    import torch
-
-    from loongforge.data.embodied.pi05.transforms.pi05_collator import tokenize_prompts
-    from loongforge.data.embodied.pi05.transforms.pi05_transform import StateDiscretizationTransform
-    from loongforge.data.embodied.transforms.utils.builders import convert_stats
-    from loongforge.data.embodied.transforms.utils.image_transform import ImageTransform
-    from loongforge.data.embodied.transforms.utils.normalizer import Normalizer
-
-    with torch.no_grad():
-        device = next(self.parameters()).device
-        if not isinstance(images[0], list):
-            images = [[img] for img in images]
-        B = len(images)
-        image_transform = ImageTransform(apply_to=[], image_size=self._image_size, normalize_mode=image_normalize_mode)
-        # Use the number of views provided by the eval client so LIBERO (2) and
-        # RoboTwin (3) both work without hard-coding a single camera count.
-        num_images = max(len(images[0]), 1)
-
-        images_list, img_masks = [], []
-        for v in range(num_images):
-            view = []
-            mask_vals = []
-            for im_list in images:
-                if v < len(im_list):
-                    view.append(im_list[v])
-                    mask_vals.append(True)
-                else:
-                    view.append(torch.zeros(3, self._image_size, self._image_size))
-                    mask_vals.append(False)
-            images_list.append(image_transform.process_batch(view).to(device))
-            img_masks.append(torch.tensor(mask_vals, dtype=torch.bool, device=device))
-
-        if state is not None:
-            if not isinstance(state, torch.Tensor):
-                state = torch.as_tensor(state, dtype=torch.float32)
-            if state.dim() == 1:
-                state = state.unsqueeze(0)
-            state_stats = convert_stats(dataset_stats.get("observation.state")) if dataset_stats else None
-            if normalization_mode in ("identity", "binary"):
-                state_stats = {}
-            state_transform = StateDiscretizationTransform(
-                apply_to=["prompt"], state_key="observation.state", task_key="task",
-                num_bins=256, normalization_mode=normalization_mode, statistics=state_stats,
-            )
-            prompts = [state_transform.apply({"observation.state": state[i], "task": instructions[i]})["prompt"]
-                       for i in range(B)]
-        else:
-            prompts = [f"Task: {t.strip()};\nAction: " for t in instructions]
-
-        tok = tokenize_prompts(prompts, self.tokenizer, max_length=200)
-        tokens = tok["input_ids"].to(device)
-        masks = tok["attention_mask"].bool().to(device)
-
-        actions = self.model.sample_actions(images_list, img_masks, tokens, masks)
-        action_stats = convert_stats(dataset_stats.get("action")) if dataset_stats else None
-        # Preserve stat-free inference when no action statistics are supplied.
-        if action_stats is not None or normalization_mode in ("identity", "binary"):
-            normalizer = Normalizer(mode=normalization_mode, statistics=action_stats or {})
-            normalizer.statistics = {k: v.to(actions.device) for k, v in normalizer.statistics.items()}
-            stat_key = {"q99": "q01", "mean_std": "mean", "min_max": "min", "scale": "min"}.get(normalization_mode)
-            dim = min(actions.shape[-1], normalizer.statistics[stat_key].numel()) if stat_key else self.config.action_dim
-            actions = actions.clone()
-            actions[..., :dim] = normalizer.inverse(actions[..., :dim]).to(actions.dtype)
-        return actions.cpu().numpy()
 
 
 @register_factory("pi05")
@@ -123,13 +47,9 @@ class PI05ModelFactory:
         )
 
         model = build_model(model_cfg)
-        model.predict_action = types.MethodType(_predict_action, model)
         model._tokenizer_path = server_args.tokenizer_path or os.environ.get("TOKENIZER_PATH", "")
         if not server_args.random_init:
-            from loongforge.engines.torch.distributed.checkpoint import canonical_state_dict
-
-            with canonical_state_dict(model.model):
-                model.model.load_pretrained(pretrained_path, device=resolved_device)
+            model.model.load_pretrained(pretrained_path, device=resolved_device)
         model = model.to(resolved_device)
         model.eval()
         if server_args.use_bf16 and resolved_device.type == "cuda":

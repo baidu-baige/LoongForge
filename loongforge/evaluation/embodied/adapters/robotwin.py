@@ -133,6 +133,7 @@ class RoboTwinAdapter(BaseBenchmarkAdapter):
     @staticmethod
     def _action_from_bimanual_fields(canonical_action: Dict[str, Any]) -> np.ndarray:
         """Run _action_from_bimanual_fields."""
+
         def arm_to_7d(arm: Dict[str, Any], name: str) -> np.ndarray:
             """Run arm_to_7d."""
             world_vector = np.asarray(arm["world_vector"], dtype=np.float32).reshape(-1)

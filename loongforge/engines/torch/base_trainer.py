@@ -17,7 +17,6 @@ from torch.utils.data import DataLoader
 
 from loongforge.engines.torch.distributed import DistributedContext
 from loongforge.engines.torch.distributed.checkpoint import (
-    canonical_state_dict,
     detect_checkpoint_format,
     is_lora_adapter_checkpoint,
     load_pretrained,
@@ -651,11 +650,9 @@ class BaseTrainer(ABC):
     def _load_pretrained(self, path: str):
         """Load pretrained weights, preferring model.load_pretrained if available."""
         if hasattr(self.model, "load_pretrained"):
-            with canonical_state_dict(self.model):
-                self.model.load_pretrained(path, device=self.ctx.device)
+            self.model.load_pretrained(path, device=self.ctx.device)
         elif hasattr(self.model, "model") and hasattr(self.model.model, "load_pretrained"):
-            with canonical_state_dict(self.model.model):
-                self.model.model.load_pretrained(path, device=self.ctx.device)
+            self.model.model.load_pretrained(path, device=self.ctx.device)
         else:
             load_pretrained(self.model, path, self.ctx)
         self.logger.log_pretrained_loaded(path)

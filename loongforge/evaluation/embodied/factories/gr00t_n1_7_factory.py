@@ -111,12 +111,6 @@ class GrootN1d7ModelFactory:
 
         import torch
 
-        from loongforge.data.embodied.gr00t_n1_6.transforms.gr00t_n1_6_processor import StateActionProcessor
-        from loongforge.data.embodied.gr00t_n1_7.transforms.gr00t_n1_7_collator import Gr00tN1d7DataCollator
-        from loongforge.data.embodied.gr00t_n1_7.transforms.image_augmentations import (
-            build_image_transformations_albumentations,
-        )
-
         pretrained_path = (
             str(Path(server_args.ckpt_path).expanduser()) if server_args.ckpt_path else ""
         )
@@ -139,9 +133,6 @@ class GrootN1d7ModelFactory:
         embodiment_tag = server_args.embodiment_tag
         model.configure_predict_action(
             checkpoint_statistics=statistics,
-            collator_cls=Gr00tN1d7DataCollator,
-            processor_cls=StateActionProcessor,
-            build_image_transforms=build_image_transformations_albumentations,
             embodiment_tag=embodiment_tag,
             use_bf16=server_args.use_bf16,
             # Mirror the checkpoint's own processor spec (image crop/resize) verbatim

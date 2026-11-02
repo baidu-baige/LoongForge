@@ -26,7 +26,7 @@ import logging
 import os
 import warnings
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Iterable, Tuple
+from typing import Any, Dict, Iterable, Tuple
 
 import numpy as np
 from PIL import Image
@@ -36,6 +36,10 @@ from safetensors.torch import load_file
 from torch import nn
 from transformers.feature_extraction_utils import BatchFeature
 
+from loongforge.data.embodied.gr00t_n1_6.transforms.gr00t_n1_6_processor import (
+    Gr00tN1d6DataCollator,
+    StateActionProcessor,
+)
 from loongforge.models.embodied.gr00t_n1_6.embodiment_configs import (
     EMBODIMENT_STAT_CONFIGS,
     EMBODIMENT_TAG_TO_PROJECTOR_INDEX,
@@ -55,9 +59,6 @@ from .modules.embodiment_mlp import (
     CategorySpecificMLP,
     MultiEmbodimentActionEncoder,
 )
-
-if TYPE_CHECKING:
-    from loongforge.data.embodied.gr00t_n1_6.transforms.gr00t_n1_6_processor import StateActionProcessor
 
 warnings.filterwarnings("ignore", message="torch.get_autocast_gpu_dtype", category=DeprecationWarning)
 
@@ -929,9 +930,6 @@ class GrootN1d6Policy(nn.Module):
         self._predict_action_statistics: Dict[str, Any] | None = None
         self._predict_action_default_processor: StateActionProcessor | None = None
         self._predict_action_processor_cache: dict[str, StateActionProcessor] = {}
-        # Data-side classes for inference preprocessing, given by configure_predict_action.
-        self._predict_action_collator_cls = None
-        self._predict_action_processor_cls = None
 
     @staticmethod
     def default_fp8_targets() -> Dict[str, Any]:
@@ -979,8 +977,6 @@ class GrootN1d6Policy(nn.Module):
         *,
         checkpoint_statistics: Dict[str, Any],
         eagle_assets_path: str,
-        collator_cls: type,
-        processor_cls: type,
         embodiment_tag: str = _DEFAULT_PREDICT_ACTION_EMBODIMENT_TAG,
         use_bf16: bool | None = None,
         validation_zero_state: bool = False,
@@ -991,8 +987,6 @@ class GrootN1d6Policy(nn.Module):
         if embodiment_tag not in EMBODIMENT_TAG_TO_PROJECTOR_INDEX:
             raise ValueError(f"No projector id registered for embodiment_tag={embodiment_tag!r}")
 
-        self._predict_action_collator_cls = collator_cls
-        self._predict_action_processor_cls = processor_cls
         self.embodiment_tag = embodiment_tag
         self.modality_config = MODALITY_CONFIGS[embodiment_tag]
         self.modality_meta = EMBODIMENT_STAT_CONFIGS[embodiment_tag]["modality_meta"]
@@ -1012,7 +1006,7 @@ class GrootN1d6Policy(nn.Module):
             self._predict_action_statistics
         )
         self.native_action_dim = self._compute_native_action_dim(self._predict_action_default_processor)
-        self.model.collator = collator_cls(
+        self.model.collator = Gr00tN1d6DataCollator(
             model_name=eagle_assets_path,
             vlm_tokenizer_path=eagle_assets_path,
             model_type=self.config.backbone_model_type,
@@ -1159,7 +1153,7 @@ class GrootN1d6Policy(nn.Module):
 
     def _normalize_state_batch(
         self,
-        processor: "StateActionProcessor",
+        processor: StateActionProcessor,
         raw_state_batch: np.ndarray,
     ) -> np.ndarray:
         state_dict = self._slice_state_batch(raw_state_batch)
@@ -1168,7 +1162,7 @@ class GrootN1d6Policy(nn.Module):
 
     def _decode_action_batch(
         self,
-        processor: "StateActionProcessor",
+        processor: StateActionProcessor,
         action_batch: np.ndarray,
         raw_state_batch: np.ndarray,
     ) -> np.ndarray:
@@ -1188,7 +1182,7 @@ class GrootN1d6Policy(nn.Module):
 
     def _split_action_chunk(
         self,
-        processor: "StateActionProcessor",
+        processor: StateActionProcessor,
         action_chunk: np.ndarray,
     ) -> dict[str, np.ndarray]:
         out: dict[str, np.ndarray] = {}
@@ -1347,7 +1341,7 @@ class GrootN1d6Policy(nn.Module):
         ]
         return {"text": None, "images": pil_images, "conversation": conversation}
 
-    def _get_predict_action_processor(self, dataset_stats: Dict[str, Any] | None) -> "StateActionProcessor":
+    def _get_predict_action_processor(self, dataset_stats: Dict[str, Any] | None) -> StateActionProcessor:
         if dataset_stats is None:
             if self._predict_action_default_processor is None:
                 raise RuntimeError(
@@ -1379,8 +1373,8 @@ class GrootN1d6Policy(nn.Module):
             "{'observation.state', 'action', 'relative_action'} stats."
         )
 
-    def _build_state_action_processor(self, statistics: Dict[str, Any]) -> "StateActionProcessor":
-        processor = self._predict_action_processor_cls(
+    def _build_state_action_processor(self, statistics: Dict[str, Any]) -> StateActionProcessor:
+        processor = StateActionProcessor(
             modality_configs={self.embodiment_tag: self.modality_config},
             statistics=statistics,
             apply_sincos_state_encoding=False,
@@ -1389,7 +1383,7 @@ class GrootN1d6Policy(nn.Module):
         processor.eval()
         return processor
 
-    def _compute_native_action_dim(self, processor: "StateActionProcessor") -> int:
+    def _compute_native_action_dim(self, processor: StateActionProcessor) -> int:
         norm_params = processor.norm_params[self.embodiment_tag]["action"]
         return int(sum(np.asarray(norm_params[key]["dim"]).item() for key in self.action_keys))
 
@@ -1417,7 +1411,7 @@ class GrootN1d6Policy(nn.Module):
                 "GR00T-N1.6 predict_action requires Eagle processor assets. "
                 "Call configure_predict_action(...) with a valid eagle_assets_path."
             )
-        self.model.collator = self._predict_action_collator_cls(
+        self.model.collator = Gr00tN1d6DataCollator(
             model_name=eagle_assets_path,
             vlm_tokenizer_path=eagle_assets_path,
             model_type=self.config.backbone_model_type,

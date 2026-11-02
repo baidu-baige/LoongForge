@@ -579,7 +579,7 @@ MODEL_CONFIG_REGISTRY = {
         "engine": "torch",
         "config_path": "configs/models/xvla",
         "config_name": "xvla",
-        "model_config": "loongforge.models.embodied.xvla.model_configuration_xvla.XVLAModelConfig",
+        "model_config": "loongforge.models.embodied.xvla.model_configuration_xvla.XvlaModelConfig",
         "data_config": "loongforge.data.embodied.xvla.transforms.data_configuration_xvla.XVLADataConfig",
     },
     "vlda": {

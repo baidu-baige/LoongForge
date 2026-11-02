@@ -14,7 +14,7 @@ from loongforge.evaluation.embodied.servers.loongforge_policy import (
     GenericPredictActionPolicy,
     PredictActionModelSpec,
 )
-from loongforge.models.embodied.xvla.model_configuration_xvla import XVLAModelConfig
+from loongforge.models.embodied.xvla.model_configuration_xvla import XvlaModelConfig
 from loongforge.models.embodied.registry import build_model
 
 
@@ -22,12 +22,12 @@ from loongforge.models.embodied.registry import build_model
 class XVLAModelFactory:
     """Build an XVLA model instance that implements the common predict_action interface."""
 
-    model_config_cls = XVLAModelConfig
+    model_config_cls = XvlaModelConfig
 
     @classmethod
     def build(
         cls,
-        model_cfg: XVLAModelConfig,
+        model_cfg: XvlaModelConfig,
         server_args: EvalServerArgs,
     ) -> PredictActionModelSpec:
         """Create XVLAPolicy and return it with metadata for the generic eval policy.
@@ -129,7 +129,7 @@ class LoongForgeXVLAPolicy(GenericPredictActionPolicy):
         random_init: bool = False,
     ) -> None:
         """Build XVLA through its factory and attach it to the generic eval policy."""
-        model_cfg = XVLAModelConfig(
+        model_cfg = XvlaModelConfig(
             action_horizon=action_horizon,
             max_action_dim=max_action_dim,
             real_action_dim=real_action_dim,
