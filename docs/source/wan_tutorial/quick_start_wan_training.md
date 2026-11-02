@@ -150,12 +150,12 @@ CP_RING_DEGREE = CP_SIZE / CP_ULYSSES_DEGREE
 
 ### 4. Export Checkpoints (Megatron → HF)
 
-Edit `examples/wan/checkpoint_convert/convert_wan2.2.sh` (section `mcore2hg`):
+Edit `examples/wan/checkpoint_convert/convert_wan2.2.sh` (section `mcore2hg`):  
 - `--load_path` → Megatron checkpoint after training  
 - `--save_path` → target HF folder  
 
 Run  
 ```bash
-cd examples/wan/checkpoint_convert
-bash convert_wan2.2.sh mcore2hg
+bash examples/wan/checkpoint_convert/convert_wan2.2.sh mcore2hg
 ```
+

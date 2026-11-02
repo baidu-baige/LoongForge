@@ -116,8 +116,7 @@ accelerate launch wan_preprocess.py \
 
 运行
 ```bash
-cd examples/wan/checkpoint_convert
-bash convert_wan2.2.sh hg2mcore
+bash examples/wan/checkpoint_convert/convert_wan2.2.sh hg2mcore
 ```
 对低噪声模型重复上述操作。
 
@@ -164,6 +163,5 @@ dp = (NNODES × GPUS_PER_NODE) / (pp × cp)
 
 运行
 ```bash
-cd examples/wan/checkpoint_convert
-bash convert_wan2.2.sh mcore2hg
+bash examples/wan/checkpoint_convert/convert_wan2.2.sh mcore2hg
 ```

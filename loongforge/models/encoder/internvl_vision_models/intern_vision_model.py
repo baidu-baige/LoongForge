@@ -214,6 +214,7 @@ class InternVisionModel(BaseMegatronVisionModule):
         hidden_states = hidden_states.transpose(0, 1).contiguous()  # [s, b, h] -> [b, s, h]
 
         last_hidden_state = hidden_states
+        pooled_output = last_hidden_state[:, 0, :]
 
         last_hidden_state = last_hidden_state[:, 1:, :]
         h = w = int(last_hidden_state.shape[1] ** 0.5)

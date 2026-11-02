@@ -4,27 +4,11 @@
 """Adapters"""
 
 import torch
-from dataclasses import dataclass
-
 from megatron.core.transformer.transformer_config import TransformerConfig
-from megatron.core.transformer.spec_utils import build_module
+from megatron.core.transformer.spec_utils import  build_module
+from .qwen2_vl_config import MLPAdapterConfig
 from loongforge.models.common import BaseMegatronModule
-from loongforge.models.common.base_model_config import BaseModelConfig
 from loongforge.models.utils import import_module
-
-
-@dataclass
-class MLPAdapterConfig(BaseModelConfig):
-    """configuration for adapter model
-    The fields need to be consistent with the definitions in args
-    """
-
-    normalization: str
-    activation_func: torch.nn.Module = torch.nn.functional.gelu
-    add_bias_linear: bool = False
-    layernorm_epsilon: float = 1e-06
-
-    model_type = "qwen2_5_vl_adapter"
 
 
 class Adapter(BaseMegatronModule):
@@ -86,7 +70,7 @@ class Adapter(BaseMegatronModule):
         )
         if hasattr(config, 'freeze') and config.freeze:
             self.freeze()
-
+            
     def forward(
         self, x: torch.Tensor, window_index: torch.LongTensor = None
     ) -> torch.Tensor:

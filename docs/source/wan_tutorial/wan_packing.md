@@ -35,7 +35,7 @@ Add the packing flags to the Wan pretrain script:
 Example launch:
 
 ```bash
-cd examples/wan
+cd examples/wan/pretrain
 CUDA_VISIBLE_DEVICES=0,1,2,3 \
 CP_SIZE=4 \
 CP_ULYSSES_DEGREE=2 \

@@ -316,8 +316,7 @@ Click any model for its training examples; see [`configs/models/`](./configs/mod
 <li><a href="examples/qwen3.5/">Qwen3.5</a></li>
 <li><a href="examples/qwen3.6/">Qwen3.6</a></li>
 <li><a href="examples/qwen3.8/">Qwen3.8</a></li>
-<li><a href="examples/kimi_k2.x/kimi_k2.5/">Kimi-K2.5</a></li>
-<li><a href="examples/kimi_k2.x/kimi_k2.6/">Kimi-K2.6</a></li>
+<li><a href="examples/kimi_k2.x/kimi_k2.5/">Kimi-K2.5/2.6</a></li>
 <li><a href="examples/kimi_k3/">Kimi-K3</a></li>
 <li><a href="examples/minicpm_v_4_6/">MiniCPM-V-4.6</a></li>
 <li><a href="examples/glm5.2_vit/">GLM-5.2 + MoonViT</a></li>
@@ -380,22 +379,22 @@ https://github.com/user-attachments/assets/8563afca-f79a-4a45-bb4f-36e06c0ccbcb
 LoongForge/
 ├── loongforge/                   # Core training framework
 │   ├── train.py                  # Unified training dispatcher
-│   ├── training/                 # CLI definitions, dispatch table, and per-family recipes
+│   ├── training/                 # Training arguments and per-family recipes
 │   ├── engines/                  # Training runtimes selected by train.py
 │   │   ├── megatron/             #   LLM/VLM/Diffusion runtime
 │   │   │   └── tokenizer/        #   Megatron tokenizer implementation
 │   │   └── torch/                #   Embodied Torch-native runtime
 │   ├── models/                   # Unified model abstractions
 │   │   ├── catalog.py            # Model names, engines, default YAMLs
-│   │   ├── foundation/           #   LLM backbones (LLaMA, Qwen, DeepSeek, ...)
-│   │   ├── encoder/              #   Vision encoders (ViT, Qwen-VL, InternVL, ...)
-│   │   ├── omni_models/          #   Multi-modal composition
-│   │   ├── diffusion/            #   Diffusion models (WAN, Qwen-Image)
-│   │   ├── common/               #   Shared layers and utilities
+│   │   ├── foundation/           #   LLM backbones
+│   │   ├── encoder/              #   Vision encoders
+│   │   ├── omni_models/          #   Multimodal composition (encoder + projector + decoder)
+│   │   ├── diffusion/            #   Diffusion models
+│   │   ├── common/               #   Shared base configs, layers and utilities
 │   │   └── embodied/             #   Embodied model implementations
 │   ├── data/                     # Data pipelines and chat templates
 │   │   ├── llm/ vlm/ embodied/ diffusion/
-│   │   └── chat_templates/       #   Chat template registry (template.py), plugins/, jinja/
+│   │   └── chat_templates/       #   Chat templates
 │   └── evaluation/embodied/      # Embodied evaluation
 ├── third_party/                  # Third-party dependencies and patches
 │   ├── Loong-Megatron/            # Patched Megatron-LM (git submodule)

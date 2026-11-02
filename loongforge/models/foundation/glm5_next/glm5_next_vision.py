@@ -11,7 +11,10 @@ import torch.nn.functional as F
 from torch import nn
 from megatron.core.transformer.torch_norm import WrappedTorchNorm
 
-from .glm5_next_config import Glm5NextVisionConfig
+try:
+    from .glm5_next_config import Glm5NextVisionConfig
+except ImportError:
+    from glm5_next_config import Glm5NextVisionConfig
 
 
 @dataclass

@@ -1,6 +1,6 @@
 # Support New Model
 
-This document describes how to support new models in LoongForge, covering **LLM models**, **VLM models**, and **diffusion models** (using Wan model as an example). Typically, you only need to add corresponding configuration files and complete registration without modifying core code.
+This document describes how to support new models in LoongForge, covering **LLM models**, **VLM models**, and **Custom models** (using Wan model as an example). Typically, you only need to add corresponding configuration files and complete registration without modifying core code.
 
 ## 1. Supporting LLM Models
 ### 1.1 Adding New LLM Configuration
@@ -11,10 +11,7 @@ If your LLM is a new specification of an existing architecture (e.g., from Llama
 
 ```yaml
 # Inherit the common configuration class for this model family
-_target_: loongforge.models.foundation.LLaMAConfig
-
-# Must be a LanguageModelFamilies value; selects the model family and training method
-model_type: "llama"
+_target_: loongforge.models.foundation.Llama3Config
 
 # Modify specific parameters
 num_layers: 80
@@ -31,11 +28,10 @@ Register in the MODEL_CONFIG_REGISTRY in loongforge/models/catalog.py, then you 
 MODEL_CONFIG_REGISTRY = {
     # ... existing models
     "llama3-70b": {
-        "engine": "megatron",
-        "config_path": "configs/models/llama3",
-        "config_name": "llama3_70b",
-    },
-}
+            "config_path": "configs/models/llama3",
+            "config_name": "llama3_70b",
+        },
+    }
 ```
 
 ## 2. Supporting VLM Models
@@ -43,7 +39,7 @@ VLM can be viewed as **ViT + Projector + LLM**. When adding new VLM models, the 
 
     1. **Prepare component configurations**: Define LLM base, vision encoder, and projector configurations.
     2. **Create combination configuration**: Write the top-level YAML configuration file for VLM.
-    3. **Register model name**: Register the new model in loongforge/models/catalog.py.
+    3. **Register model name**: Register the new model in catalog.py.
 
 ### 2.1 Vision Encoder (ViT) Configuration
 Define Vision Transformer parameters.
@@ -101,9 +97,6 @@ defaults:
   - _self_
 
 model:
-  # Must be a VisionLanguageModelFamilies value; selects the model family and training method
-  model_type: qwen2_5_vl
-
   # Define global model parameters
   position_idx_func: ${position_func:mrope_ids}
   loss_func: ${loss_func:default}
@@ -127,7 +120,6 @@ MODEL_CONFIG_REGISTRY = {
     
     # === Add your new model ===
     "my-custom-vlm-8b": {
-        "engine": "megatron",
         "config_path": "configs/models/<vlm_family>",       # Directory where the combination configuration file is located
         "config_name": "my_new_vlm",                        # Combination configuration file name (without .yaml)
     },
@@ -136,7 +128,7 @@ MODEL_CONFIG_REGISTRY = {
 
 After successful registration, you can reference the model directly by name (e.g., `my-custom-vlm-8b`).
 
-## 3. Supporting Diffusion Models (Using Wan as Example)
+## 3. Supporting Custom Models (Using Wan as Example)
 Wan series model configurations are located in `configs/models/wan/`, for example:
 
 * `configs/models/wan/wan2_2_i2v.yaml`
@@ -148,25 +140,13 @@ If it's a new specification or variant of Wan, it's recommended to copy the exis
 configs/models/wan/<your_wan_variant>.yaml
 ```
 
-The top-level `model_type` must be a `DiffusionModelFamilies` value, such as `wan2_2_i2v`.
-
 ### 3.2 Register Model Name
 ```python
 MODEL_CONFIG_REGISTRY = {
     # ... existing models
     "my-wan-variant": {
-        "engine": "megatron",
         "config_path": "configs/models/wan",
         "config_name": "<your_wan_variant>",
     },
 }
 ```
-
-## 4. Adding a New Architecture
-
-A new architecture needs code registration in addition to the steps above:
-
-- **Model package**: implement the config and model classes under `loongforge/models/foundation/`, `loongforge/models/encoder/`, or `loongforge/models/diffusion/`.
-- **AutoModel registration** (LLM and vision components): add `AutoModel.register(<Config>, <Model>)` in `loongforge/models/foundation/__init__.py` or `loongforge/models/encoder/__init__.py`. The YAML `_target_` selects the config class, and the config class selects the model.
-- **Model family**: add the new YAML `model_type` to `LanguageModelFamilies`, `VisionLanguageModelFamilies`, or `DiffusionModelFamilies` in `loongforge/models/catalog.py`.
-- **Training method** (only if the family has its own method): add a `FAMILY_GROUP` and `METHOD_REGISTRY` entry in `loongforge/train.py`, with the recipe under `loongforge/training/<family>/`.

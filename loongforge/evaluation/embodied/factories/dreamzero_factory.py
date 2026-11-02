@@ -190,7 +190,7 @@ class DreamZeroLiberoEvalModel:
         # Single-session state (see _episode); DreamZero's caches are global.
         self._episode_id: Optional[str] = None
         self._frames: deque = deque()
-        self._queue = deque()
+        self._queue: deque()
         self._first_call = True
 
     def reset(self) -> None:

@@ -1,6 +1,6 @@
 # 离线评测
 
-LoongForge 在 `loongforge/evaluation/embodied` 下提供了离线评测模块，通过 WebSocket / msgpack-numpy RPC 将基准测试客户端和模型策略服务器作为两个独立进程连接。目前支持 LoongForge **pi0.5**、**X-VLA** 和 **GR00T-N1.6** 作为策略后端，覆盖五个基准测试：**LIBERO**、**CALVIN**、**SimplerEnv**、**RoboTwin (2.0)** 和 **ManiSkill**。用户侧只需要一个 YAML 配置文件和一个启动脚本，无需修改 Python 入口代码。本指南涵盖支持范围、运行方法、各基准测试的配置方式，以及如何扩展新模型。
+LoongForge 在 `loongforge/evaluation/embodied` 下提供了离线评测模块，通过 WebSocket / msgpack-numpy RPC 将基准测试客户端和模型策略服务器作为两个独立进程连接。目前支持 LoongForge **pi0.5** 和 **X-VLA** 作为策略后端，覆盖五个基准测试：**LIBERO**、**CALVIN**、**SimplerEnv**、**RoboTwin (2.0)** 和 **ManiSkill**。用户侧只需要一个 YAML 配置文件和一个启动脚本，无需修改 Python 入口代码。本指南涵盖支持范围、运行方法、各基准测试的配置方式，以及如何扩展新模型。
 
 ---
 
@@ -12,7 +12,6 @@ LoongForge 在 `loongforge/evaluation/embodied` 下提供了离线评测模块�
 |---|---|---|---|---|---|
 | **pi0.5** | 任务成功（微调后） | 尚未评分 — 无匹配的开放权重 | 尚未评分 — 无匹配的开放权重 | 任务成功（`pi0.5_robotwin2` + `pi05_aloha_14d`） | 尚未评分 — 无匹配的开放权重 |
 | **X-VLA** | 任务成功（~94% object suite） | 尚未评分 — 无匹配的开放权重 | 任务成功（X-VLA-WidowX + SimplerEnv 补丁） | 任务成功（X-VLA-RoboTwin2 + `ee6d_dual`） | 尚未评分 — 无匹配的开放权重 |
-| **GR00T-N1.6** | 任务成功（GR00T-N1.6-LIBERO） | — | 任务成功（GR00T-N1.6-bridge） | — | — |
 
 "任务成功"表示至少有一个 episode 通过了官方或本地的成功判定标准。"尚未评分"的组合仍附带可运行的 YAML（设置了 `server.random_init: true`），无需加载任何模型权重即可验证 RPC 通路。
 
@@ -53,7 +52,7 @@ X-VLA + SimplerEnv 达成任务成功需要上游 SimplerEnv 的一次性补丁 
 
 GPU 要求：模型推理需要至少 1 张 NVIDIA GPU（显存 ≥16 GB，推荐 A100/A800）。基准测试侧渲染（SimplerEnv、RoboTwin、ManiSkill）同样要求 GPU 支持 Vulkan。
 
-各基准测试的依赖和已知兼容版本记录在 [benchmark_envs.md](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/embodied_tutorial/eval_docs/benchmark_envs.md) 中。
+各基准测试的依赖和已知兼容版本记录在 [benchmark_envs.md](https://github.com/baidu-baige/LoongForge/blob/master/loongforge/evaluation/embodied/benchmark_envs.md) 中。
 
 ### 2.2 运行 pi0.5 + LIBERO
 
@@ -79,7 +78,7 @@ examples/pi05/eval/run_libero_eval.sh
 
 ```bash
 cd /path/to/LoongForge
-# 编辑 examples/xvla/eval/configs/libero/libero_weight_object_smoke.yaml 中的 /path/to/...
+# 编辑 configs/libero/libero_weight_object_smoke.yaml 中的 /path/to/...
 examples/xvla/eval/run_libero_eval.sh
 ```
 
@@ -375,7 +374,7 @@ vulkaninfo
 上游 `simpler-env/SimplerEnv` 默认不提供绝对 EE 控制，但 X-VLA 输出绝对 EE 位姿。两种解决方案：
 
 - 使用 [`255isWhite/SimplerEnv`](https://github.com/255isWhite/SimplerEnv) fork（官方 X-VLA SIMPLER 评测使用的 fork），或
-- 应用 `docs/source/embodied_tutorial/eval_docs/patches/simplerenv/xvla.md` 中记录的两个本地补丁。
+- 应用 `examples/xvla/eval/SIMPLERENV_PATCH_en.md` 中记录的两个本地补丁。
 
 若两者都未应用，环境要么在构造时因缺少控制模式报错，要么静默地将绝对动作当作增量动作应用从而永远无法成功。
 
@@ -385,5 +384,5 @@ vulkaninfo
 
 本节面向需要集成新模型的开发者。如需集成 pi0.5 / X-VLA 之外的模型，核心思路是：复用共享的 `predict_action` 接口和 `GenericPredictActionPolicy`，保持基准测试协议和适配器不变，将模型差异放在一个轻量工厂中。不要 fork 基准测试运行器或直接修改 LoongForge 训练代码。详细的集成步骤、模型语义对比（动作空间、归一化归属、chunk 长度等）和最小检查清单，请参见：
 
-- [model_integration.md](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/embodied_tutorial/eval_docs/model_integration.md) — 新模型语义检查清单，含 pi0.5 与 X-VLA 的并排对比
-- [predict_action_interface.py](https://github.com/baidu-baige/LoongForge/blob/master/loongforge/evaluation/embodied/servers/predict_action_interface.py) — `predict_action` 接口契约（签名、shape、反归一化归属、后处理 vs 模型）
+- [model_integration_guide.md](https://github.com/baidu-baige/LoongForge/blob/master/loongforge/evaluation/embodied/model_integration_guide.md) — 新模型语义检查清单，含 pi0.5 与 X-VLA 的并排对比
+- [predict_action_interface.md](https://github.com/baidu-baige/LoongForge/blob/master/loongforge/evaluation/embodied/predict_action_interface.md) — `predict_action` 接口契约（签名、shape、反归一化归属、后处理 vs 模型）

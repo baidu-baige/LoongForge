@@ -444,7 +444,6 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None,
                 args.consumed_train_samples,
                 args.consumed_valid_samples,
                 args.skip_train,
-                state=load_dataloader_state(args),
             )
         )
 

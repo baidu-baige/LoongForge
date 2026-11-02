@@ -14,9 +14,9 @@
 | `configs/models/` | 模型默认 YAML 配置目录，包含 `model:` / `data:` 两个顶层配置段 |
 | `loongforge/train.py` | 训练入口，负责解析配置、构建 Trainer 并启动训练 |
 | `loongforge/training/torch_args.py` | 通用训练参数定义文件，负责生成 shell CLI |
-| `loongforge/models/catalog.py` | 统一模型路由表，将 `--model-name` 绑定到引擎、YAML，以及 Torch 所需的配置类型 |
-| `loongforge/models/embodied/` | Torch 具身模型组网与模型注册 |
-| `loongforge/data/embodied/` | 具身数据流水线：`dataloader.py`（DataLoader 入口）、`registry.py`（模型类型注册表）、所有模型共用的代码（数据集类 `lerobot_dataset.py`、`dummy_dataset.py`、`hdf5_dataset.py`，视频后端与统计；`sampler_builder.py` 采样；`transforms/` 下的 `base.py`、`collator.py` 拼批和 `utils/` 逐样本变换），以及每个模型一个目录（模型目录下带 `transforms/`） |
+| `loongforge/models/catalog.py` | 模型配置路由表，将 `--model-name` 绑定到 YAML、`ModelConfig` 与 `DataConfig` |
+| `loongforge/models/embodied/` | 模型组网、模型注册 |
+| `loongforge/data/embodied/` | 数据处理相关功能 |
 
 训练链路如下：
 
@@ -27,9 +27,9 @@ loongforge/train.py
     ↓
 parse_train_args()
     ↓
-resolve_torch_trainer()
+build_model_trainer()
     ↓
-TorchRunner(...).train()
+trainer.train()
 ```
 
 ### 1.2 启动脚本约定
@@ -85,7 +85,7 @@ Dataset
     ↓
 sample-level transform
     ↓
-collator / collate_fn
+preprocessor / collate_fn
     ↓
 PreparedBatch
     ↓
@@ -111,7 +111,7 @@ model.forward(batch)
 | 功能 | 配置项 | 默认值 | 取值 / 类型 | 说明 |
 | --- | --- | --- | --- | --- |
 | LeRobotdataset 版本 | `--lerobotdataset-version` | `v3.0` | `v2.0`, `v2.1`, `v3.0` | 解析不同 LeRobot 磁盘格式 |
-| 数据策略 | `--dataset-strategy` | `default` | `default`, `fastwam`, `lingbot_va`, `gr00t_n1_7`, `cosmos3_droid`, `dreamzero`, `wall_oss_0_5` | 选择 LeRobot 构建策略 |
+| 数据策略 | `--dataset-strategy` | `default` | `default`, `fastwam`, `gr00t_n1_7`, `cosmos3_droid`, `dreamzero` | 选择 LeRobot 构建策略 |
 | 视频后端 | `--video-backend` | `torchcodec` | `torchcodec`, `decord`, `opencv`, `pyav`, `torchvision_av` | 视频解码实现 |
 | robot 类型 | `--robot-type` | `None` | 字符串 | 选择 embodiment / action-state layout |
 
@@ -143,7 +143,7 @@ model.forward(batch)
 
 | 功能 | 配置项 | 默认值 | 取值 / 类型 | 说明 |
 | --- | --- | --- | --- | --- |
-| 选择模型 | `--model-name` | `None` | `loongforge/models/catalog.py` 中注册的模型名 | 选择训练引擎、模型 schema、默认 YAML，以及 Torch 的 `ModelConfig` 与 `DataConfig` |
+| 选择模型 | `--model-name` | `None` | `catalog.py` 中注册的模型名 | 选择模型 schema、默认 YAML、`ModelConfig` 与 `DataConfig` |
 | 指定 YAML | `--config-file` | `None` | YAML 文件路径 | 覆盖 `--model-name` 对应的默认 YAML |
 | 指定 tokenizer | `--tokenizer-path` | `None` | 本地路径或 HF repo id | 设置 tokenizer 路径，并同步到 `TOKENIZER_PATH` 环境变量 |
 
@@ -305,7 +305,7 @@ Trainer 模块负责训练生命周期编排，包括分布式上下文初始化
 
 ### 4.1 Trainer 选择
 
-通过 `--trainer-type` 选择训练器，可选值为 `loongforge/train.py` 中 `TORCH_TRAINER_TYPES` 的键，每个条目指定训练 method 模块、可选的 hooks 工厂和 runner 类。共享 method 放在 `loongforge/training/embodied/`，单模型 method、hooks 和定制 runner 放在 `loongforge/training/embodied/custom/<model>/`。默认的 `FinetuneTrainer` 使用 `TorchRunner`，适用于标准单数据流的监督微调。若涉及多数据流或特殊 loss 组合，可在对应位置新增 method 模块。若需要非标准 step 调度，可通过 `build_hooks` 返回 `TrainerHooks`，或使用定制 runner。新的 method、hooks 工厂和 runner 需登记到 `TORCH_TRAINER_TYPES`。
+通过 `--trainer-type` 选择训练器，可选值为 `loongforge/train.py` 中注册的 Trainer 类名。默认的 `FinetuneTrainer` 适用于标准单数据流的监督微调；若涉及多数据流、特殊 loss 组合或非标准 step 调度，可在 `loongforge/train.py` 中注册自定义 Trainer 类。
 
 ### 4.2 分布式策略
 

@@ -153,6 +153,9 @@ model:
   # 多模态模型类型
   model_type: intern_vl
 
+  # 基座模型的损失函数
+  loss_func: ${loss_func:loss_func_internvl}
+
   # 显式设置投影层输出维度以匹配 LLM hidden_size
   image_projector:
     hidden_size: 4096
@@ -172,6 +175,6 @@ model:
 
 * `image_encoder/`：视觉编码器配置
 * `image_projector/`：投影层配置
-* `llama3/`、`qwen2/`、`deepseek_v2/` 等：LLM 基座配置
+* `llama3/`、`qwen2/`、`deepseek2/` 等：LLM 基座配置
 
 通过这种方式，构建多模态大模型就像拼搭 LEGO 积木一样简单。

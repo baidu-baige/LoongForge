@@ -14,9 +14,9 @@ This chapter describes the directory layout and launch script convention under e
 | `configs/models/` | Default YAML configs per model, containing two top-level sections: `model:` and `data:` |
 | `loongforge/train.py` | Training entry point; parses config, builds the Trainer, and starts training |
 | `loongforge/training/torch_args.py` | Definition file for common training arguments; generates the shell CLI |
-| `loongforge/models/catalog.py` | Shared model routing table; binds `--model-name` to an engine, YAML, and (for Torch) typed config classes |
-| `loongforge/models/embodied/` | Torch embodied model architecture and model registration |
-| `loongforge/data/embodied/` | Embodied data pipeline: `dataloader.py` (DataLoader entry), `registry.py` (model-type registry), code used by every model (dataset classes `lerobot_dataset.py`, `dummy_dataset.py`, `hdf5_dataset.py`, video backends and stats; `sampler_builder.py`; `transforms/` with `base.py`, `collator.py` and per-sample transforms in `utils/`), and one directory per model with its `transforms/` subdirectory |
+| `loongforge/models/catalog.py` | Model config routing table; binds `--model-name` to a YAML, `ModelConfig`, and `DataConfig` |
+| `loongforge/models/embodied/` | Model architecture and model registration |
+| `loongforge/data/embodied/` | Data processing components |
 
 The training pipeline is:
 
@@ -27,9 +27,9 @@ loongforge/train.py
     ↓
 parse_train_args()
     ↓
-resolve_torch_trainer()
+build_model_trainer()
     ↓
-TorchRunner(...).train()
+trainer.train()
 ```
 
 ### 1.2 Launch Script Convention
@@ -85,7 +85,7 @@ Dataset
     ↓
 sample-level transform
     ↓
-collator / collate_fn
+preprocessor / collate_fn
     ↓
 PreparedBatch
     ↓
@@ -112,7 +112,7 @@ When using the LeRobot format, the following arguments give finer control over d
 | Feature | Argument | Default | Values / Type | Description |
 | --- | --- | --- | --- | --- |
 | LeRobotDataset version | `--lerobotdataset-version` | `v3.0` | `v2.0`, `v2.1`, `v3.0` | Parse different LeRobot on-disk formats |
-| Data strategy | `--dataset-strategy` | `default` | `default`, `fastwam`, `lingbot_va`, `gr00t_n1_7`, `cosmos3_droid`, `dreamzero`, `wall_oss_0_5` | Select LeRobot build strategy |
+| Data strategy | `--dataset-strategy` | `default` | `default`, `fastwam`, `gr00t_n1_7`, `cosmos3_droid`, `dreamzero` | Select LeRobot build strategy |
 | Video backend | `--video-backend` | `torchcodec` | `torchcodec`, `decord`, `opencv`, `pyav`, `torchvision_av` | Video decoding implementation |
 | Robot type | `--robot-type` | `None` | String | Select embodiment / action-state layout |
 
@@ -144,7 +144,7 @@ Supported capabilities:
 
 | Feature | Argument | Default | Values / Type | Description |
 | --- | --- | --- | --- | --- |
-| Select model | `--model-name` | `None` | Model name registered in `loongforge/models/catalog.py` | Selects the engine, schema, default YAML, and (for Torch) `ModelConfig` / `DataConfig` |
+| Select model | `--model-name` | `None` | Model name registered in `catalog.py` | Selects the model schema, default YAML, `ModelConfig`, and `DataConfig` |
 | Specify YAML | `--config-file` | `None` | YAML file path | Overrides the default YAML bound to `--model-name` |
 | Specify tokenizer | `--tokenizer-path` | `None` | Local path or HF repo id | Sets the tokenizer path and syncs it to the `TOKENIZER_PATH` environment variable |
 
@@ -306,7 +306,7 @@ The Trainer module orchestrates the training lifecycle, including distributed co
 
 ### 4.1 Trainer Selection
 
-Select the trainer with `--trainer-type`. Valid values are the keys of `TORCH_TRAINER_TYPES` in `loongforge/train.py`; each entry specifies a training method module, an optional hooks factory, and a runner class. Shared methods live under `loongforge/training/embodied/`; single-model methods, hooks, and custom runners live under `loongforge/training/embodied/custom/<model>/`. The default `FinetuneTrainer` uses `TorchRunner` for standard single-data-stream supervised fine-tuning. For multiple data streams or unusual loss combinations, add a method module at the appropriate location. For non-standard step scheduling, provide hooks through `build_hooks`, which returns `TrainerHooks`, or use a custom runner. Register the method, hooks factory, and runner in `TORCH_TRAINER_TYPES`.
+Select the trainer with `--trainer-type`. Valid values are the Trainer class names registered in `loongforge/train.py`. The default `FinetuneTrainer` covers standard single-data-stream supervised fine-tuning; for multiple data streams, unusual loss combinations, or non-standard step scheduling, register a custom Trainer class in `loongforge/train.py`.
 
 ### 4.2 Distributed Strategy
 

@@ -599,8 +599,6 @@ def train_valid_test_datasets_provider(diffusion, train_val_test_num_samples, vp
             seed=args.seed,
             max_timestep_boundary=args.max_timestep_boundary,
             min_timestep_boundary=args.min_timestep_boundary,
-            global_batch_size=args.global_batch_size,
-            consumed_samples=args.consumed_train_samples,
         )
     else:
         keep_keys = None
@@ -618,7 +616,6 @@ def train_valid_test_datasets_provider(diffusion, train_val_test_num_samples, vp
             args.num_workers,
             dp_rank=parallel_state.get_data_parallel_rank(),
             dp_size=parallel_state.get_data_parallel_world_size(),
-            consumed_samples=args.consumed_train_samples,
         )
 
     print_rank_0(f"> finished creating {args.model_name} datasets ...")

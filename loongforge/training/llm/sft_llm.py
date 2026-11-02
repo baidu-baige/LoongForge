@@ -40,7 +40,6 @@ from loongforge.data import IGNORE_INDEX
 from loongforge.engines.megatron.runner import pretrain
 
 from loongforge.data.llm.blended_hf_dataset_config import get_dataset_blend_from_list
-from loongforge.engines.megatron.checkpointing import load_dataloader_state
 from loongforge.data.llm.sft_dataloader import (
     SFTLoaderConfig,
     build_sft_cyclic_iterators,
@@ -793,7 +792,6 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
         args.consumed_train_samples,
         args.consumed_valid_samples,
         args.skip_train,
-        state=load_dataloader_state(args),
     )
     print_rank_0(f"> finished creating {args.model_name} sft datasets ...")
 

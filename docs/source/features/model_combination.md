@@ -153,6 +153,9 @@ model:
   # multimodal model type
   model_type: intern_vl
 
+  # loss function for the foundation model
+  loss_func: ${loss_func:loss_func_internvl}
+
   # explicitly set projector output dim to match LLM hidden_size
   image_projector:
     hidden_size: 4096
@@ -172,6 +175,6 @@ The current `configs/models` directory already mirrors this plug-and-play compon
 
 * `image_encoder/`: vision encoder configs  
 * `image_projector/`: projector configs  
-* `llama3/`, `qwen2/`, `deepseek_v2/`, etc.: LLM backbone configs
+* `llama3/`, `qwen2/`, `deepseek2/`, etc.: LLM backbone configs  
 
 With this approach, building a multimodal large model is as easy as snapping LEGO bricks together.

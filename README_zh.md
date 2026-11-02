@@ -316,8 +316,7 @@ bash examples/pi05/finetuning/sft_pi05_ddp.sh
 <li><a href="examples/qwen3.5/">Qwen3.5</a></li>
 <li><a href="examples/qwen3.6/">Qwen3.6</a></li>
 <li><a href="examples/qwen3.8/">Qwen3.8</a></li>
-<li><a href="examples/kimi_k2.x/kimi_k2.5/">Kimi-K2.5</a></li>
-<li><a href="examples/kimi_k2.x/kimi_k2.6/">Kimi-K2.6</a></li>
+<li><a href="examples/kimi_k2.x/kimi_k2.5/">Kimi-K2.5/2.6</a></li>
 <li><a href="examples/kimi_k3/">Kimi-K3</a></li>
 <li><a href="examples/minicpm_v_4_6/">MiniCPM-V-4.6</a></li>
 <li><a href="examples/glm5.2_vit/">GLM-5.2 + MoonViT</a></li>
@@ -380,22 +379,22 @@ https://github.com/user-attachments/assets/8563afca-f79a-4a45-bb4f-36e06c0ccbcb
 LoongForge/
 ├── loongforge/                   # 核心训练框架
 │   ├── train.py                  # 统一训练分发入口
-│   ├── training/                 # CLI 定义、训练分发表与各 family 训练配方
+│   ├── training/                 # 训练参数与各 family 训练配方
 │   ├── engines/                  # train.py 选择的训练运行时
 │   │   ├── megatron/             #   LLM/VLM/Diffusion 运行时
 │   │   │   └── tokenizer/        #   Megatron Tokenizer 实现
 │   │   └── torch/                #   具身 Torch-native 运行时
 │   ├── models/                   # 统一的模型抽象层
 │   │   ├── catalog.py            # 模型名、引擎与默认 YAML
-│   │   ├── foundation/           #   LLM 主干（LLaMA、Qwen、DeepSeek、...）
-│   │   ├── encoder/              #   视觉编码器（ViT、Qwen-VL、InternVL、...）
-│   │   ├── omni_models/          #   多模态组合
-│   │   ├── diffusion/            #   Diffusion 模型（WAN、Qwen-Image）
-│   │   ├── common/               #   公共 Layer 与工具
+│   │   ├── foundation/           #   LLM 主干
+│   │   ├── encoder/              #   视觉编码器
+│   │   ├── omni_models/          #   多模态组合（编码器 + 投影层 + 解码器）
+│   │   ├── diffusion/            #   Diffusion 模型
+│   │   ├── common/               #   公共基类配置、Layer 与工具
 │   │   └── embodied/             #   具身模型实现
 │   ├── data/                     # 数据流水线与对话模板
 │   │   ├── llm/ vlm/ embodied/ diffusion/
-│   │   └── chat_templates/       #   对话模板注册表（template.py）、plugins/、jinja/
+│   │   └── chat_templates/       #   对话模板
 │   └── evaluation/embodied/      # 具身评测
 ├── third_party/                  # 第三方依赖与补丁
 │   ├── Loong-Megatron/            # Patched Megatron-LM（git submodule）

@@ -5,10 +5,11 @@
 
 from .base_vision_models.base_vision_model import BaseVisionModel
 from .qwen2_vl_vision_models.vision_model import Qwen2VisionModelWithRMSNorm
-from .qwen2_vl_vision_models.adapter import Adapter, MLPAdapterConfig
+from .qwen2_vl_vision_models.adapter import Adapter
 from .qwen2_vl_vision_models.qwen2_vl_config import (
     Qwen2VisionModelConfig,
     Qwen2VisionRMSNormConfig,
+    MLPAdapterConfig,
 )
 from .qwen3_vl_vision_models.vision_model import Qwen3VisionModel
 from .qwen3_vl_vision_models.qwen3_vl_config import Qwen3VisionModelConfig

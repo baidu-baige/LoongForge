@@ -977,14 +977,8 @@ def build_sft_cyclic_iterators(
     consumed_train_samples: int,
     consumed_valid_samples: int,
     skip_train: bool,
-    state=None,
 ):
-    """build data iterators for sft
-
-    ``state`` restores the streaming iterator's saved position. Non-streaming SFT
-    resumes from ``consumed_samples`` in the sampler instead, so the saved step is
-    not applied there.
-    """
+    """build data iterators for sft"""
     train_iter = _build_cylic_iterator(
         train_ds, consumed_train_samples, data_collator, config, dp_rank, dp_size
     )
@@ -992,8 +986,6 @@ def build_sft_cyclic_iterators(
         valid_ds, 0 if skip_train else consumed_valid_samples, data_collator, config, dp_rank, dp_size
     )
     test_iter = _build_cylic_iterator(test_ds, 0, data_collator, config, dp_rank, dp_size)
-    if state is not None and config.sft_data_streaming and hasattr(train_iter, "load_state"):
-        train_iter.load_state(state)
     return train_iter, valid_iter, test_iter
 
 

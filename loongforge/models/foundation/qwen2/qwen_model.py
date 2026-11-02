@@ -96,8 +96,7 @@ class DynamicRotaryEmbedding(RotaryEmbedding):
         if rotary_percent < 1.0:
             self.dim = int(self.dim * rotary_percent)
         self.max_position_embeddings = max_position_embeddings
-        # forward() replaces inv_freq for long sequences; keep the parent's to restore it.
-        self.original_inv_freq = self.inv_freq
+        self.max_seq_len_cached = max_position_embeddings
 
     def forward(
         self, max_seq_len: int, offset: int = 0, packed_seq: bool = False
@@ -121,8 +120,6 @@ class DynamicRotaryEmbedding(RotaryEmbedding):
                     / self.dim
                 )
             )
-        else:
-            self.inv_freq = self.original_inv_freq
 
         return super().forward(max_seq_len, offset, packed_seq)
 
@@ -231,7 +228,6 @@ class Qwen2Model(BaseGPTModel):
             and not config.multi_latent_attention
         ):
             rotary_pos_emb = DynamicRotaryEmbedding(
-                max_position_embeddings=config.max_position_embeddings,
                 kv_channels=config.kv_channels,
                 rotary_percent=config.rotary_percent,
                 rotary_interleaved=config.rotary_interleaved,

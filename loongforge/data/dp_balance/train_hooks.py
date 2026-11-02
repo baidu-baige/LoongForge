@@ -126,6 +126,7 @@ def train_step_decorator(train_step):
         nonlocal train_step
         args_list = list(args)
         data_iterator = args_list[1]
+        timers = get_timers()
         args_train = get_args()
 
         dp_group = mpu.get_data_parallel_group_gloo(
@@ -142,7 +143,7 @@ def train_step_decorator(train_step):
 
             args = (*args[:1], new_itertor, *args[2:])
         ret = train_step(*args, **kwargs)
-        solve_computation_coef()
+        end_flag = solve_computation_coef()
         seq2_coef, seq_coef, seq_num_coef = get_seq_coefs()
         if (args_train.use_vlm_dp_balance and
                 iteration == args_train.vlm_dp_balance_warmup_iters[-1] + 1):

@@ -19,7 +19,10 @@ Output: (images_bf16, grid_thw_processed)
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers.image_utils import OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
+
+# OPENAI CLIP normalisation constants — identical to image_preprocessor.py
+_OPENAI_CLIP_MEAN = [0.48145466, 0.4578275, 0.40821073]
+_OPENAI_CLIP_STD = [0.26862954, 0.26130258, 0.27577711]
 
 
 class ErnieImagePreprocess(nn.Module):
@@ -44,8 +47,8 @@ class ErnieImagePreprocess(nn.Module):
         # flat order per patch is channel-first: R_p0..R_pN, G_p0..G_pN, B_p0..B_pN.
         # → expand each channel constant P*P times with repeat (numpy.repeat).
         pp = patch_size * patch_size
-        self._mean_flat = [v for v in OPENAI_CLIP_MEAN for _ in range(pp)]  # len C*P*P
-        self._std_flat  = [v for v in OPENAI_CLIP_STD  for _ in range(pp)]  # len C*P*P
+        self._mean_flat = [v for v in _OPENAI_CLIP_MEAN for _ in range(pp)]  # len C*P*P
+        self._std_flat  = [v for v in _OPENAI_CLIP_STD  for _ in range(pp)]  # len C*P*P
 
     def forward(
         self,

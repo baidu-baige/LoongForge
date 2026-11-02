@@ -56,3 +56,17 @@ class Qwen2VisionRMSNormConfig(Qwen2VisionModelConfig):
     normalization: str = "RMSNorm"
 
     model_type = "qwen2_5_vit_rmsnorm"
+
+
+@dataclass
+class MLPAdapterConfig(BaseModelConfig):
+    """configuration for adapter model
+    The fields need to be consistent with the definitions in args
+    """
+
+    normalization: str
+    activation_func: torch.nn.Module = torch.nn.functional.gelu
+    add_bias_linear: bool = False
+    layernorm_epsilon: float = 1e-06
+
+    model_type = "qwen2_5_vl_adapter"

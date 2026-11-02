@@ -37,11 +37,18 @@ from megatron.core.transformer.transformer_layer import (
 )
 from megatron.core.utils import get_pg_rank
 
-from .glm5_next_attention import (
-    Glm5NextTextLinearAttention,
-    KPoolDSAIndexer,
-    KPoolDSAttention,
-)
+try:
+    from .glm5_next_attention import (
+        Glm5NextTextLinearAttention,
+        KPoolDSAIndexer,
+        KPoolDSAttention,
+    )
+except ImportError:
+    from glm5_next_attention import (
+        Glm5NextTextLinearAttention,
+        KPoolDSAIndexer,
+        KPoolDSAttention,
+    )
 
 
 class NativeRMSNormFactory:

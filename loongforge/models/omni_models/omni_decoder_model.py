@@ -37,7 +37,7 @@ class OmniDecoderModel(BaseDecoderModelMixin):
         """Freeze decoder model parameters.
 
         Args:
-            modality (str, optional): Specific modality to freeze ('image', 'video', 'audio').
+            modality (str, optional): Specific modality to freeze ('image', 'video', 'audio'). 
                 If None, freeze all modality decoders.
         """
         pass

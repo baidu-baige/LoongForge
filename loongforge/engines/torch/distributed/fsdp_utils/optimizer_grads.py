@@ -98,33 +98,28 @@ def local_norm_sq(gradient_groups, device):
 
 
 def clip_optimizer_gradients(optimizer, max_norm):
-    """Clip dense DTensor gradients sharing one mesh and placement layout.
+    """Clip RAB=false optimizer-owned DTensor gradients by global L2 norm.
 
-    FSDP and HSDP sum squared norms only over shard dimensions. Replicas
-    already hold the same reduced gradient and must not be counted again.
+    FSDP2 leaves the reduced sharded gradients on the DTensor parameters held
+    by the optimizer. The model's currently materialized parameters may have
+    no ``.grad``, so this helper intentionally starts from ``param_groups``.
     """
     global _DTENSOR_CLIP_LOGGED
 
     if max_norm < 0:
         raise ValueError(f"max_norm must be non-negative, got {max_norm}.")
     parameters, gradient_groups, gradient_count = local_gradient_groups(optimizer)
-    if not parameters:
-        return 0.0
-    mesh = parameters[0].device_mesh
-    placements = parameters[0].placements
-    if any(not (p.is_shard() or p.is_replicate()) for p in placements):
-        raise RuntimeError("Gradient clipping requires reduced Shard/Replicate DTensors.")
-    for parameter in parameters:
-        for tensor in (parameter, parameter.grad):
-            if tensor is not None and (tensor.device_mesh != mesh or tensor.placements != placements):
-                raise RuntimeError("Gradient clipping requires one shared DTensor mesh and placement layout.")
-    device = parameters[0]._local_tensor.device
+    if parameters:
+        device = parameters[0]._local_tensor.device
+    else:
+        device = (
+            torch.device("cuda", torch.cuda.current_device())
+            if torch.cuda.is_available()
+            else torch.device("cpu")
+        )
     total_norm_sq = local_norm_sq(gradient_groups, device)
-    for axis, placement in enumerate(placements):
-        if placement.is_shard():
-            torch.distributed.all_reduce(
-                total_norm_sq, op=torch.distributed.ReduceOp.SUM, group=mesh.get_group(axis),
-            )
+    if torch.distributed.is_available() and torch.distributed.is_initialized():
+        torch.distributed.all_reduce(total_norm_sq, op=torch.distributed.ReduceOp.SUM)
     total_norm = total_norm_sq.sqrt()
     clip_coefficient = torch.clamp(
         torch.as_tensor(max_norm, device=device, dtype=torch.float32)

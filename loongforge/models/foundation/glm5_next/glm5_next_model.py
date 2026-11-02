@@ -22,15 +22,32 @@ from megatron.core.transformer.experimental_attention_variant.dsa import DSAInde
 from megatron.core.transformer.identity_op import IdentityOp
 from megatron.core.transformer.spec_utils import build_module
 
-from loongforge.models.foundation.language_transformer_block import TransformerBlock
-from .glm5_next_attention import (
-    Glm5NextTextLinearAttention,
-    KPoolDSAIndexer,
-    initialize_kda,
-)
-from .glm5_next_config import Glm5NextConfig
-from .glm5_next_layer_spec import _layer_spec, get_glm5_next_decoder_block_spec
-from .glm5_next_vision import Glm5NextVisionModel, Glm5NextVisionOutput
+if __package__:
+    from loongforge.models.foundation.language_transformer_block import TransformerBlock
+else:
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from language_transformer_block import TransformerBlock
+
+try:
+    from .glm5_next_attention import (
+        Glm5NextTextLinearAttention,
+        KPoolDSAIndexer,
+        initialize_kda,
+    )
+    from .glm5_next_config import Glm5NextConfig
+    from .glm5_next_layer_spec import _layer_spec, get_glm5_next_decoder_block_spec
+    from .glm5_next_vision import Glm5NextVisionModel, Glm5NextVisionOutput
+except ImportError:
+    from glm5_next_attention import (
+        Glm5NextTextLinearAttention,
+        KPoolDSAIndexer,
+        initialize_kda,
+    )
+    from glm5_next_config import Glm5NextConfig
+    from glm5_next_layer_spec import _layer_spec, get_glm5_next_decoder_block_spec
+    from glm5_next_vision import Glm5NextVisionModel, Glm5NextVisionOutput
 
 
 @dataclass

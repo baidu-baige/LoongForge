@@ -35,7 +35,7 @@ Packing 支持变长样本。在 CP 训练中，packed bin 中的每个样本会
 示例启动命令：
 
 ```bash
-cd examples/wan
+cd examples/wan/pretrain
 CUDA_VISIBLE_DEVICES=0,1,2,3 \
 CP_SIZE=4 \
 CP_ULYSSES_DEGREE=2 \

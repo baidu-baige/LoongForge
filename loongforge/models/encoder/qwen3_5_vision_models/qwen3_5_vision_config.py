@@ -50,3 +50,17 @@ class Qwen35VisionConfig(BaseModelConfig):
     mix_used_vision_projector: bool = True
 
     model_type = "qwen3_5_vit"
+
+
+@dataclass
+class MLPAdapterConfig(BaseModelConfig):
+    """configuration for adapter model
+    The fields need to be consistent with the definitions in args
+    """
+
+    normalization: str
+    activation_func: torch.nn.Module = torch.nn.functional.gelu
+    add_bias_linear: bool = False
+    layernorm_epsilon: float = 1e-06
+
+    model_type = "qwen2_5_vl_adapter"

@@ -81,7 +81,7 @@ cd examples/qwen_image/pretrain
 QWEN_IMAGE_MODEL_ROOT=/path/to/Qwen-Image-Edit-2511 \
 DATASET_BASE_PATH=/path/to/my_dataset \
 DATASET_METADATA_PATH=/path/to/my_dataset/metadata.json \
-bash preprocess.sh qwen-image-edit-2511 ./data/preprocessed
+bash preprocess.sh qwen-image-edit-2511 ../data/preprocessed
 ```
 
 Or auto-install dependencies on first run:
@@ -91,7 +91,7 @@ INSTALL_DEPS=1 \
 QWEN_IMAGE_MODEL_ROOT=/path/to/Qwen-Image-Edit-2511 \
 DATASET_BASE_PATH=/path/to/my_dataset \
 DATASET_METADATA_PATH=/path/to/my_dataset/metadata.json \
-bash preprocess.sh qwen-image-edit-2511 ./data/preprocessed
+bash preprocess.sh qwen-image-edit-2511 ../data/preprocessed
 ```
 
 Optional environment variables:

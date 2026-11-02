@@ -125,7 +125,6 @@ class PackedDataset(IterableDataset):
         seed: int = 0,
         max_timestep_boundary: float = 1.0,
         min_timestep_boundary: float = 0.0,
-        consumed_bins: int = 0,
     ):
         super().__init__()
         self.data_path = data_path
@@ -133,7 +132,6 @@ class PackedDataset(IterableDataset):
         self.seed = seed
         self.max_timestep_boundary = max_timestep_boundary
         self.min_timestep_boundary = min_timestep_boundary
-        self.consumed_bins = max(0, int(consumed_bins))
         self.scheduler = scheduler
         self.packing_buffer_size = packing_buffer_size
         self.seq_length = seq_length
@@ -227,11 +225,6 @@ class PackedDataset(IterableDataset):
             for bin_samples in bins:
                 if batch_count >= required_bins:
                     return
-                if batch_count < self.consumed_bins:
-                    # Replay skipped bins without running their transforms so the
-                    # sample stream stays identical to an uninterrupted run.
-                    batch_count += 1
-                    continue
                 processed = self._process_bin(bin_samples, self.scheduler)
                 merged = self._merge_samples(processed)
                 batch_count += 1
