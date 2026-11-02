@@ -46,33 +46,22 @@ METHOD_REGISTRY: Dict[Tuple[str, str], str] = {
 }
 
 # ---------------------------------------------------------------------------
-# Torch: trainer type -> (method, optional hooks factory, runner)
+# Torch: trainer type -> recipe class
 # ---------------------------------------------------------------------------
 
-TORCH_TRAINER_TYPES: Dict[str, Tuple[str, str | None, str]] = {
-    "FinetuneTrainer": (
-        "loongforge.training.embodied.sft", None, "loongforge.engines.torch.runner.TorchRunner",
-    ),
+TORCH_TRAINER_TYPES: Dict[str, str] = {
+    "FinetuneTrainer": "loongforge.training.embodied.sft.FinetuneTrainer",
     "VLDAFinetuneTrainer": (
-        "loongforge.training.embodied.custom.vlda.vlda_finetune_trainer", None,
-        "loongforge.training.embodied.custom.vlda.vlda_finetune_trainer.VLDAFinetuneTrainer",
+        "loongforge.training.embodied.custom.vlda.vlda_finetune_trainer.VLDAFinetuneTrainer"
     ),
     "GrootN1d6Trainer": (
-        "loongforge.training.embodied.sft", "loongforge.training.embodied.custom.gr00t_n1_6.gr00t_trainer",
-        "loongforge.engines.torch.runner.TorchRunner",
+        "loongforge.training.embodied.custom.gr00t_n1_6.gr00t_trainer.GrootN1d6Trainer"
     ),
     "GrootN1d7Trainer": (
-        "loongforge.training.embodied.sft", "loongforge.training.embodied.custom.gr00t_n1_7.gr00t_trainer",
-        "loongforge.engines.torch.runner.TorchRunner",
+        "loongforge.training.embodied.custom.gr00t_n1_7.gr00t_trainer.GrootN1d7Trainer"
     ),
     "LingBotFinetuneTrainer": (
-        "loongforge.training.embodied.custom.lingbot_va.lingbot_finetune_trainer",
-        "loongforge.training.embodied.custom.lingbot_va.lingbot_finetune_trainer",
-        "loongforge.engines.torch.runner.TorchRunner",
-    ),
-    "WallOss05Trainer": (
-        "loongforge.training.embodied.sft", "loongforge.training.embodied.custom.wall_oss_0_5.wall_oss_trainer",
-        "loongforge.engines.torch.runner.TorchRunner",
+        "loongforge.training.embodied.custom.lingbot_va.lingbot_finetune_trainer.LingBotFinetuneTrainer"
     ),
 }
 
@@ -92,7 +81,7 @@ def resolve_method(model_family: str, training_phase: str):
 
 
 def resolve_torch_trainer(trainer_type: str):
-    """Lazily import and return the Torch method module and hooks factory."""
+    """Lazily import and return the Torch recipe class."""
     if not trainer_type:
         raise ValueError(
             "--trainer-type is required. "
@@ -106,17 +95,7 @@ def resolve_torch_trainer(trainer_type: str):
             f"Available: {sorted(TORCH_TRAINER_TYPES.keys())}"
         )
 
-    method_path, factory_path, _ = entry
-    method = importlib.import_module(method_path)
-    if factory_path is None:
-        from loongforge.engines.torch.runner import TrainerHooks
-        return method, lambda _args: TrainerHooks()
-    return method, importlib.import_module(factory_path).build_hooks
-
-
-def resolve_torch_runner(trainer_type: str):
-    """Select the lifecycle for the recipe's checkpoint contract."""
-    module_path, class_name = TORCH_TRAINER_TYPES[trainer_type][2].rsplit(".", 1)
+    module_path, class_name = entry.rsplit(".", 1)
     return getattr(importlib.import_module(module_path), class_name)
 
 
@@ -129,15 +108,12 @@ def _run_megatron():
 
 
 def _run_torch():
-    """Parse the Torch arguments and run the recipe selected by ``--trainer-type``."""
+    """Parse the Torch arguments and run the trainer selected by ``--trainer-type``."""
     from loongforge.training.torch_args import parse_train_args
 
     training_args, model_cfg, data_cfg = parse_train_args()
-    method, build_hooks = resolve_torch_trainer(training_args.trainer_type)
-    runner_type = resolve_torch_runner(training_args.trainer_type)
-    return runner_type(
-        training_args, model_cfg, data_cfg, method, build_hooks(training_args)
-    ).train()
+    trainer_type = resolve_torch_trainer(training_args.trainer_type)
+    return trainer_type(training_args, model_cfg, data_cfg).train()
 
 
 def main():

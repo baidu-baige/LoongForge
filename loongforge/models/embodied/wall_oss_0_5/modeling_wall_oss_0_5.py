@@ -258,6 +258,28 @@ class WallOss05Model(nn.Module):
         """Convert to mix precision."""
         self.model.convert_to_mix_precision()
 
+    def convert_to_fsdp(
+        self,
+        *,
+        mesh,
+        mp_policy,
+        offload_policy=None,
+        reshard_after_forward: bool = True,
+        use_dmuon: bool = False,
+    ):
+        """Convert to fsdp."""
+        wrapped = self.model.convert_to_fsdp(
+            mesh=mesh,
+            mp_policy=mp_policy,
+            offload_policy=offload_policy,
+            reshard_after_forward=reshard_after_forward,
+            use_dmuon=use_dmuon,
+            norm_forward_prefetch_distance=getattr(self, "norm_forward_prefetch_distance", 0),
+        )
+        if use_dmuon and hasattr(wrapped, "_dedicated_comm_ctx"):
+            self._dedicated_comm_ctx = wrapped._dedicated_comm_ctx
+        return self
+
     def set_requires_gradient_sync(self, enabled: bool) -> None:
         """Set requires gradient sync."""
         if hasattr(self.model, "set_requires_gradient_sync"):
@@ -266,6 +288,13 @@ class WallOss05Model(nn.Module):
     @contextmanager
     def no_sync(self):
         """No sync."""
+        if hasattr(self, "_dedicated_comm_ctx"):
+            import dmuon
+
+            with dmuon.no_sync(self):
+                yield
+            return
+
         if hasattr(self.model, "no_sync"):
             with self.model.no_sync():
                 yield

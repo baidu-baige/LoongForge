@@ -9,38 +9,8 @@ import torch.nn as nn
 from dataclasses import replace as dataclass_replace
 from torch.distributed.fsdp import fully_shard
 
-from loongforge.engines.torch.distributed.fsdp_utils.builders import (
-    build_fsdp_device_mesh,
-    build_ignored_params,
-    build_mp_policy,
-)
-from loongforge.engines.torch.distributed.fsdp_utils.optimizer_grads import (
-    ensure_fsdp_param_compat,
-)
-from loongforge.engines.torch.distributed.fp8_utils import apply_fp8_linear_conversion
 from loongforge.models.embodied.lingbot_va.features import feature_enabled
 from loongforge.models.embodied.lingbot_va.modules.wan_model import WanTransformerBlock
-
-
-def _configure_lingbot_checkpoint(model, training_args):
-    """Use TE's FP8-aware checkpoint for LingBot's internal block recompute."""
-    if not (
-        getattr(training_args, "fp8", False)
-        and getattr(training_args, "fp8_backend", None) == "te"
-    ):
-        return
-
-    backbone = getattr(model, "model", None)
-    set_checkpoint = getattr(backbone, "set_block_checkpoint_fn", None)
-    if not callable(set_checkpoint):
-        raise RuntimeError(
-            "LingBot TE FP8 requires a backbone that supports "
-            "set_block_checkpoint_fn()."
-        )
-
-    from loongforge.engines.torch.distributed.fp8_utils import te_checkpoint_fn
-
-    set_checkpoint(te_checkpoint_fn())
 
 
 def module_params(
@@ -67,7 +37,7 @@ def _rank0():
     return not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0
 
 
-def _build_lingbot_mp_policy(training_args, model):
+def _build_lingbot_mp_policy(mp_policy):
     """Upstream mixed-precision policy, with the LingBot BF16-reduce switch on top.
 
     ``build_mp_policy`` resolves param/output dtypes and ``cast_forward_inputs``
@@ -78,7 +48,6 @@ def _build_lingbot_mp_policy(training_args, model):
     ``--fsdp-reduce-dtype`` says instead of relying on the launcher to keep the
     two in sync.
     """
-    mp_policy = build_mp_policy(training_args, model)
     use_bf16_reduce = feature_enabled("LINGBOT_FSDP_BF16_REDUCE")
     if use_bf16_reduce:
         mp_policy = dataclass_replace(mp_policy, reduce_dtype=mp_policy.param_dtype)
@@ -95,30 +64,12 @@ def _restore_custom_attrs(module, custom_attrs):
             setattr(param, attr_name, attr_value)
 
 
-
-def wrap_lingbot_torch_nested_fsdp2(model, training_args, ctx):
+def wrap_lingbot_torch_nested_fsdp2(model, *, mesh, mp_policy, scalar_ignored):
     """Apply the phase4 block+root FSDP2 order and mixed-precision policy."""
-    if getattr(training_args, "distributed_strategy", None) != "fsdp":
-        raise RuntimeError(
-            "LingBot native nested FSDP2 requires embodied FSDP strategy"
-        )
-
-    apply_fp8_linear_conversion(model, training_args, ctx.device)
-    _configure_lingbot_checkpoint(model, training_args)
-
-    if not getattr(ctx, "is_distributed", False):
-        return model.to(device=ctx.device)
-
-    ensure_fsdp_param_compat()
-    model.to(device=ctx.device)
-    mp_policy, use_bf16_reduce = _build_lingbot_mp_policy(training_args, model)
+    mp_policy, use_bf16_reduce = _build_lingbot_mp_policy(mp_policy)
     reshard = feature_enabled("LINGBOT_FSDP_RESHARD")
-    # 0-dim parameters cannot be sharded on dim-0; upstream collects them and
-    # moves them onto the compute device, and every group must ignore the same
-    # set, so this is built once for the whole pass.
-    scalar_ignored = build_ignored_params(training_args, model, ctx)
     fsdp_kwargs = {
-        "mesh": build_fsdp_device_mesh(training_args, ctx),
+        "mesh": mesh,
         "reshard_after_forward": reshard,
         "mp_policy": mp_policy,
     }

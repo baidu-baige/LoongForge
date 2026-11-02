@@ -1,154 +1,160 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""SFT method for embodied models (Pi05 / GR00T / etc).
+"""Shared embodied SFT recipe."""
 
-Module-level hooks that TorchRunner calls to build the model and dataloaders
-and run the forward. The method module does NOT do autocast, backward, or optimizer steps.
-"""
-
-from __future__ import annotations
-
-import functools
 import inspect
 import logging
-from typing import TYPE_CHECKING, Dict, Tuple
+from contextlib import nullcontext
+from typing import Dict, Tuple
 
-if TYPE_CHECKING:
-    import torch
-    import torch.nn as nn
-    from torch.utils.data import DataLoader
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader
+
+from loongforge.data.embodied.dataloader import build_dataloader
+from loongforge.data.embodied.registry import DataRuntime
+from loongforge.engines.torch.base_trainer import BaseTrainer
+from loongforge.engines.torch.distributed.utils import unwrap_model
+from loongforge.engines.torch.utils.utils import resolve_dtype, set_seed
+from loongforge.models.embodied import build_model
 
 logger = logging.getLogger(__name__)
 
 
-def build_model(model_cfg, training_args) -> "nn.Module":
-    """Build the embodied model from YAML model_cfg and this run's training args."""
-    from loongforge.models.embodied.registry import build_model as _build
-    return _build(model_cfg, training_args)
-
-
-def build_dataloaders(model_cfg, data_cfg, training_args, ctx) -> Dict[str, "DataLoader"]:
-    """Build dataloaders. Returns {"vla": dl}."""
-    from loongforge.data.embodied.registry import DataRuntime
-    from loongforge.data.embodied.dataloader import build_dataloader
-
-    runtime = DataRuntime(
-        rank=ctx.rank,
-        world_size=ctx.world_size,
-        is_distributed=ctx.is_distributed,
-        grad_accum_steps=training_args.gradient_accumulation_steps,
-        deterministic=training_args.deterministic_mode,
-        graph_enabled=training_args.cuda_graph_impl == "local",
-        graph_pad_length=training_args.cuda_graph_pad_length,
-    )
-    dl = build_dataloader(model_cfg, data_cfg, training_args, runtime)
-    return {"vla": dl}
-
-
-@functools.lru_cache(maxsize=16)
-def _select_forward_kwargs_info(model_type: type) -> Tuple[frozenset, bool]:
-    """Inspect forward signature and return (param_names, accepts_var_kw).
-
-    Cached by model type to avoid repeated introspection.
+class FinetuneTrainer(BaseTrainer):
     """
-    params = list(inspect.signature(model_type.forward).parameters.values())
-    names = frozenset(
-        param.name
-        for param in params
-        if param.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                          inspect.Parameter.KEYWORD_ONLY)
-    )
-    accepts_var_kw = any(
-        param.kind is inspect.Parameter.VAR_KEYWORD for param in params
-    )
-    return names, accepts_var_kw
+    Standard single-stream finetune trainer.
 
-
-def _select_forward_kwargs(model, **candidates) -> dict:
-    """Keep the candidate kwargs the model forward can actually accept."""
-    from loongforge.engines.torch.distributed.utils import unwrap_model
-    core = unwrap_model(model)
-    for attr in ("_orig_mod",):
-        core = getattr(core, attr, core)
-    names, accepts_var_kw = _select_forward_kwargs_info(type(core))
-    if accepts_var_kw:
-        return dict(candidates)
-    return {
-        name: value
-        for name, value in candidates.items()
-        if name in names
-    }
-
-
-def forward(model, batch, *, iteration: int, training_args) -> Tuple["torch.Tensor", dict]:
-    """Single forward: call model(batch) with filtered kwargs.
-
-    Returns (loss, log_loss_dict). No autocast, no backward.
+    forward(batch) → (loss, log_loss_dict) → backward → step, over the single "vla"
+    dataloader. Behaviorally equivalent to the former BCTrainer, with optional
+    model-owned hooks for pre-wrap preparation and training-time policy setup.
     """
-    fwd_kwargs = _select_forward_kwargs(model, iteration=iteration)
-    loss, log_loss_dict = model(batch, **fwd_kwargs)
-    return loss, log_loss_dict
 
+    def _build_model(self) -> nn.Module:
+        return build_model(self.model_cfg, self.training_args)
 
-def on_train_begin(model, ctx) -> None:
-    """Hook before training loop starts."""
-    from loongforge.engines.torch.distributed.utils import unwrap_model
-    raw = unwrap_model(model)
-    hook = getattr(raw, "on_train_begin", None)
-    if callable(hook):
-        hook(ctx=ctx)
-    if ctx.is_main:
-        logger.info(f"Model: {raw.__class__.__name__}")
+    def _build_dataloaders(self) -> Dict[str, DataLoader]:
+        runtime = DataRuntime(
+            rank=self.ctx.rank,
+            world_size=self.ctx.world_size,
+            is_distributed=self.ctx.is_distributed,
+            grad_accum_steps=self.training_args.gradient_accumulation_steps,
+            deterministic=self.training_args.deterministic_mode,
+            graph_enabled=self.training_args.cuda_graph_impl == "local",
+            graph_pad_length=self.training_args.cuda_graph_pad_length,
+        )
+        dl = build_dataloader(
+            self.model_cfg, self.data_cfg, self.training_args, runtime,
+        )
+        return {"vla": dl}
 
+    def _train_forward(self, batch) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+        """Single forward: call model(batch).
 
-def on_after_data_iterators_initialized(model, *, training_args, completed_steps, optimizer, ctx) -> None:
-    """Run the optional model hook after dataloader iterators are initialized."""
-    from loongforge.engines.torch.distributed.utils import unwrap_model
+        Returns (loss, log_loss_dict). ``loss`` is the single scalar that needs
+        backward; ``log_loss_dict`` carries extra scalars used only for
+        printing/reporting.
+        """
+        dtype = getattr(self, "_compute_dtype", None)
+        if dtype is None:
+            dtype = resolve_dtype(self.training_args.dtype)
+            self._compute_dtype = dtype
 
-    raw = unwrap_model(model)
-    hook = getattr(raw, "on_after_data_iterators_initialized", None)
-    if callable(hook):
-        hook(
-            args=training_args,
-            completed_steps=completed_steps,
-            optimizer=optimizer,
-            ctx=ctx,
+        fwd_kwargs = self._select_forward_kwargs(
+            iteration=self.completed_steps,
         )
 
+        autocast_ctx = (
+            nullcontext()
+            if self._cfg_bool("disable_train_autocast", False)
+            else torch.autocast("cuda", dtype=dtype)
+        )
 
-def on_after_train_batch_fetch(model, batch, *, training_args, completed_steps, micro_step) -> None:
-    """Apply the optional model RNG policy after a training batch is fetched."""
-    from loongforge.engines.torch.distributed.utils import unwrap_model
+        with self._fp8_forward_ctx(), autocast_ctx:
+            loss, log_loss_dict = self.model(batch, **fwd_kwargs)
 
-    raw = unwrap_model(model)
-    hook = getattr(raw, "on_after_train_batch_fetch", None)
-    if not callable(hook):
-        return
+        return loss, log_loss_dict
 
-    rng_reset = hook(
-        args=training_args,
-        completed_steps=completed_steps,
-        micro_step=micro_step,
-        batch=batch,
-    )
-    if rng_reset is None:
-        return
+    def _select_forward_kwargs(self, **candidates) -> Dict[str, object]:
+        """Keep the candidate kwargs the model ``forward`` can actually accept.
 
-    import torch
+        The trainer offers optional training-context values (``iteration`` today,
+        more later); a model opts in either by naming the parameter in its
+        ``forward`` signature or by declaring ``**kwargs``. The unwrapped forward
+        signature is introspected once and cached. ``*args`` is ignored -- these are
+        always passed by keyword.
 
-    from loongforge.engines.torch.utils.utils import set_seed
+        Silently dropping a value is the dangerous outcome: ``iteration`` seeds the
+        deterministic noise/timestep generators, so losing it downgrades a run to the
+        global-RNG path without any error. Hence a ``**kwargs`` model gets everything.
+        """
+        if getattr(self, "_fwd_param_names", None) is None:
+            core = self.model
+            for attr in ("_orig_mod", "module"):
+                core = getattr(core, attr, core)
+            params = list(inspect.signature(core.forward).parameters.values())
+            self._fwd_param_names = {
+                param.name
+                for param in params
+                if param.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                                  inspect.Parameter.KEYWORD_ONLY)
+            }
+            self._fwd_accepts_var_kw = any(
+                param.kind is inspect.Parameter.VAR_KEYWORD for param in params
+            )
+        if self._fwd_accepts_var_kw:
+            # **kwargs absorbs whatever is not declared by name.
+            return dict(candidates)
+        return {
+            name: value
+            for name, value in candidates.items()
+            if name in self._fwd_param_names
+        }
 
-    seed, cpu_burn = rng_reset
-    seed, cpu_burn = int(seed), int(cpu_burn)
-    if cpu_burn < 0:
-        raise ValueError("RNG reset cpu_burn must be >= 0")
-    set_seed(seed)
-    if cpu_burn:
-        torch.rand(cpu_burn)
-    logger.info(
-        "%s reset training RNG after first batch fetch: seed=%d cpu_burn=%d",
-        raw.__class__.__name__,
-        seed,
-        cpu_burn,
-    )
+    def _on_after_data_iterators_initialized(self):
+        raw = unwrap_model(self.model)
+        hook = getattr(raw, "on_after_data_iterators_initialized", None)
+        if callable(hook):
+            hook(
+                args=self.training_args,
+                completed_steps=self.completed_steps,
+                optimizer=self.optimizer,
+                ctx=self.ctx,
+            )
+
+    def _on_after_train_batch_fetch(self, batch, micro_step: int) -> None:
+        raw = unwrap_model(self.model)
+        hook = getattr(raw, "on_after_train_batch_fetch", None)
+        if not callable(hook):
+            return
+        rng_reset = hook(
+            args=self.training_args,
+            completed_steps=self.completed_steps,
+            micro_step=micro_step,
+            batch=batch,
+        )
+        if rng_reset is None:
+            return
+
+        seed, cpu_burn = rng_reset
+        seed, cpu_burn = int(seed), int(cpu_burn)
+        if cpu_burn < 0:
+            raise ValueError("RNG reset cpu_burn must be >= 0")
+        set_seed(seed)
+        if cpu_burn:
+            torch.rand(cpu_burn)
+        logger.info(
+            "%s reset training RNG after first batch fetch: seed=%d cpu_burn=%d",
+            raw.__class__.__name__,
+            seed,
+            cpu_burn,
+        )
+
+    def _on_train_begin(self):
+        model = unwrap_model(self.model)
+        hook = getattr(model, "on_train_begin", None)
+        if callable(hook):
+            hook(ctx=self.ctx)
+        if self.ctx.is_main:
+            logger.info(f"Model: {model.__class__.__name__}")

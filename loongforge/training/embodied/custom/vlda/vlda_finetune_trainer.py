@@ -12,68 +12,34 @@ import torch
 import torch.distributed as dist
 
 from loongforge.engines.torch.distributed.utils import unwrap_model
-from loongforge.engines.torch.runner import TorchRunner
+from loongforge.training.embodied.sft import FinetuneTrainer
 from loongforge.engines.torch.utils.utils import set_seed
-from loongforge.training.embodied import sft
-from loongforge.training.embodied.sft import (
-    forward,
-    on_after_train_batch_fetch,
-    on_train_begin,
-)
-
-__all__ = [
-    "build_model", "build_dataloaders", "forward", "on_train_begin",
-    "on_after_data_iterators_initialized", "on_after_train_batch_fetch", "on_step_end",
-    "VLDAFinetuneTrainer",
-]
 
 
-def build_model(model_cfg, training_args):
-    if training_args.distributed_strategy != "ddp" or training_args.init_on_meta:
-        raise ValueError("VLDA currently supports DDP and DDP + ZeRO1; FSDP teacher EMA is not implemented")
-    if training_args.use_lora or training_args.save_format not in ("safetensors", "pt"):
-        raise ValueError("VLDA uses full-model safetensors/pt checkpoints")
-    if training_args.dataset_strategy != "vlda":
-        raise ValueError("VLDA requires --dataset-strategy vlda for future frames and negative actions")
-    model = sft.build_model(model_cfg, training_args)
-    model.model.initialize_training_modules(training_args.seed)
-    return model
+class VLDAFinetuneTrainer(FinetuneTrainer):
+    """Keep the common training loop; update the teacher once per optimizer step."""
 
-
-def build_dataloaders(model_cfg, data_cfg, training_args, ctx):
-    return sft.build_dataloaders(model_cfg, data_cfg, training_args, ctx)
-
-
-def on_after_data_iterators_initialized(model, *, training_args, completed_steps, optimizer, ctx):
-    # Iterator startup must not shift the training RNG.
-    if not training_args.resume:
-        set_seed(training_args.seed, training_args.set_seed_by_rank)
-
-
-def on_step_end(metrics, completed_steps, model, *, training_args):
-    # TorchRunner increments completed_steps before this hook. The original
-    # VLDA schedule uses the just-finished step's zero-based index.
-    raw = unwrap_model(model)
-    fraction = (completed_steps - 1) / training_args.train_iters
-    momentum = raw.config.ema_start + fraction * (raw.config.ema_end - raw.config.ema_start)
-    raw.update_teacher_ema(momentum)
-    metrics["teacher_ema"] = momentum
-
-
-class VLDAFinetuneTrainer(TorchRunner):
-    """Keep the common training loop; save VLDA data assets and check them on resume."""
-
-    def _setup(self):
+    def _build_model(self):
+        args = self.training_args
+        if args.distributed_strategy != "ddp" or args.init_on_meta:
+            raise ValueError("VLDA currently supports DDP and DDP + ZeRO1; FSDP teacher EMA is not implemented")
+        if args.use_lora or args.save_format not in ("safetensors", "pt"):
+            raise ValueError("VLDA uses full-model safetensors/pt checkpoints")
+        if args.dataset_strategy != "vlda":
+            raise ValueError("VLDA requires --dataset-strategy vlda for future frames and negative actions")
         self._resume_vlda_manifest = None
-        super()._setup()
-        if self._resume_vlda_manifest is not None:
-            dataset = self.dataloaders["vla"].dataset
-            if dataset.fingerprint != self._resume_vlda_manifest["dataset_fingerprint"]:
-                raise ValueError("VLDA dataset metadata changed since the saved checkpoint")
+        model = super()._build_model()
+        model.model.initialize_training_modules(args.seed)
+        return model
 
     def _configure_backend_precision(self):
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
+
+    def _on_after_data_iterators_initialized(self):
+        # Model construction and iterator startup must not shift training RNG.
+        if not self.training_args.resume:
+            set_seed(self.training_args.seed, self.training_args.set_seed_by_rank)
 
     def _load_pretrained(self, path):
         self.model.load_pretrained(path, resume=self.training_args.resume)
@@ -138,6 +104,22 @@ class VLDAFinetuneTrainer(TorchRunner):
         self.completed_steps = step
         self.current_epoch = epoch
         self.logger.log_resume(step)
+
+    def _build_dataloaders(self):
+        loaders = super()._build_dataloaders()
+        dataset = loaders["vla"].dataset
+        if self._resume_vlda_manifest is not None:
+            if dataset.fingerprint != self._resume_vlda_manifest["dataset_fingerprint"]:
+                raise ValueError("VLDA dataset metadata changed since the saved checkpoint")
+        return loaders
+
+    def _on_step_end(self, metrics):
+        # BaseTrainer increments completed_steps before this hook. The original
+        # VLDA schedule uses the just-finished step's zero-based index.
+        fraction = (self.completed_steps - 1) / self.train_iters
+        momentum = self.model_cfg.ema_start + fraction * (self.model_cfg.ema_end - self.model_cfg.ema_start)
+        unwrap_model(self.model).update_teacher_ema(momentum)
+        metrics["teacher_ema"] = momentum
 
     def _save_checkpoint(self):
         super()._save_checkpoint()

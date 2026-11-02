@@ -8,8 +8,7 @@ from __future__ import annotations
 import gc
 import logging
 from dataclasses import replace
-from functools import partial
-from types import SimpleNamespace
+from typing import Tuple
 
 import torch
 
@@ -18,14 +17,31 @@ from loongforge.models.embodied.lingbot_va.features import (
     feature_enabled,
 )
 
-from loongforge.training.embodied.sft import (  # noqa: F401
-    build_model,
-    build_dataloaders,
-    on_train_begin,
-    on_after_data_iterators_initialized,
-    on_after_train_batch_fetch,
+from loongforge.training.embodied.sft import (
+    FinetuneTrainer,
 )
-from loongforge.training.embodied import sft
+
+
+def _configure_lingbot_checkpoint(model, training_args):
+    """Use TE's FP8-aware checkpoint for LingBot's internal block recompute."""
+    if not (
+        getattr(training_args, "fp8", False)
+        and getattr(training_args, "fp8_backend", None) == "te"
+    ):
+        return
+
+    backbone = getattr(model, "model", None)
+    set_checkpoint = getattr(backbone, "set_block_checkpoint_fn", None)
+    if not callable(set_checkpoint):
+        raise RuntimeError(
+            "LingBot TE FP8 requires a backbone that supports "
+            "set_block_checkpoint_fn()."
+        )
+
+    from loongforge.engines.torch.distributed.fp8_utils import te_checkpoint_fn
+
+    set_checkpoint(te_checkpoint_fn())
+
 
 
 def _device_loss_guard(loss, grad_accum, threshold):
@@ -65,67 +81,93 @@ def _map_loss_log_dict(log_loss_dict, *, backward_loss, gradient_accumulation_st
     return mapped_log_dict
 
 
-def forward(model, batch, *, iteration: int, training_args) -> tuple:
-    """LingBot forward: delegates to the common embodied SFT, then maps loss names."""
-    loss, logs = sft.forward(model, batch, iteration=iteration, training_args=training_args)
-    return loss, _map_loss_log_dict(
-        logs,
-        backward_loss=loss,
-        gradient_accumulation_steps=training_args.gradient_accumulation_steps,
-    )
+class LingBotFinetuneTrainer(FinetuneTrainer):
+    """LingBot-specific construction and diagnostics over the common trainer.
 
+    The optimizer-step orchestration, gradient accumulation, loss-health guard,
+    logging, checkpoint cadence, and scheduler lifecycle are inherited from
+    ``FinetuneTrainer``/``BaseTrainer``. Only LingBot's nested FSDP2, DTensor
+    gradient helper wiring, precision diagnostics, and final-checkpoint policy
+    remain here.
+    """
 
-def build_hooks(training_args):
-    """Return the TrainerHooks for LingBot-VA."""
-    from loongforge.engines.torch.runner import TrainerHooks
-    import loongforge.engines.torch.runner as ts
-
-    state = SimpleNamespace(gc_thresholds=None)
-
-    def prepare_args(args):
+    def __init__(self, training_args, model_cfg, data_cfg):
         # Match the community baseline's DistributedSampler/DataLoader epoch
         # boundary; LingBot must retain the final padded distributed sample.
-        return replace(args, batch_drop_last=False)
+        training_args = replace(training_args, batch_drop_last=False)
+        self._lingbot_post_step_reshard_hook = None
+        self._lingbot_gc_thresholds = None
+        self._lingbot_loss_guard_records = []
+        super().__init__(training_args, model_cfg, data_cfg)
 
-    def wrap_model(model, args, ctx):
-        if args.distributed_strategy != "fsdp":
+    def _wrap_model_for_training(self):
+        if self.training_args.distributed_strategy != "fsdp":
             raise RuntimeError(
                 "LingBot native nested FSDP2 requires embodied FSDP strategy"
             )
-        from loongforge.training.embodied.custom.lingbot_va.fsdp2_adapter import (
+        from loongforge.models.embodied.lingbot_va.lingbot_fsdp2_adapter import (
             wrap_lingbot_torch_nested_fsdp2,
         )
-        return wrap_lingbot_torch_nested_fsdp2(model, args, ctx)
+        from loongforge.engines.torch.distributed.fsdp_utils.builders import (
+            build_fsdp_device_mesh,
+            build_ignored_params,
+            build_mp_policy,
+        )
+        from loongforge.engines.torch.distributed.fsdp_utils.optimizer_grads import (
+            ensure_fsdp_param_compat,
+        )
+        from loongforge.engines.torch.distributed.fp8_utils import apply_fp8_linear_conversion
 
-    def build_optimizer_fn(model, args, ctx):
-        if args.distributed_strategy != "fsdp":
+        apply_fp8_linear_conversion(self.model, self.training_args, self.ctx.device)
+        _configure_lingbot_checkpoint(self.model, self.training_args)
+        if not self.ctx.is_distributed:
+            self.model = self.model.to(device=self.ctx.device)
+            return
+
+        ensure_fsdp_param_compat()
+        self.model.to(device=self.ctx.device)
+        mp_policy = build_mp_policy(self.training_args, self.model)
+        # Every nested FSDP group must ignore the same scalar parameters.
+        scalar_ignored = build_ignored_params(self.training_args, self.model, self.ctx)
+        self.model = wrap_lingbot_torch_nested_fsdp2(
+            self.model,
+            mesh=build_fsdp_device_mesh(self.training_args, self.ctx),
+            mp_policy=mp_policy,
+            scalar_ignored=scalar_ignored,
+        )
+
+    def _build_optimizer(self):
+        if self.training_args.distributed_strategy != "fsdp":
             raise RuntimeError(
                 "LingBot native nested FSDP2 requires embodied FSDP strategy"
             )
+
+        from loongforge.models.embodied.lingbot_va.lingbot_fsdp2_adapter import (
+            apply_lingbot_fsdp2_tuning,
+        )
         from loongforge.engines.torch.distributed.fsdp_utils.optimizer_grads import (
             register_post_step_reshard,
         )
-        from loongforge.training.embodied.custom.lingbot_va.fsdp2_adapter import (
-            apply_lingbot_fsdp2_tuning,
-        )
-        from loongforge.engines.torch.optimizer import build_optimizer
 
-        apply_lingbot_fsdp2_tuning(model)
-        optimizer = build_optimizer(model, args)
+        apply_lingbot_fsdp2_tuning(self.model)
+        optimizer = super()._build_optimizer()
         if feature_enabled("LINGBOT_FSDP_RESHARD"):
             reshard_module_count = sum(
                 1
-                for module in model.modules()
+                for module in self.model.modules()
                 if hasattr(module, "set_reshard_after_backward")
             )
             reshard_mode = "framework-default"
         else:
-            _, reshard_module_count = register_post_step_reshard(
-                model, optimizer,
+            self._lingbot_post_step_reshard_hook, reshard_module_count = (
+                register_post_step_reshard(
+                    self.model,
+                    optimizer,
+                )
             )
             reshard_mode = "post-step"
-        if ctx is not None and ctx.is_main:
-            logger.info("Using common TorchFusedAdamW.")
+        if self.ctx is not None and self.ctx.is_main:
+            logger.info("Using common TorchFusedAdamW through FinetuneTrainer.")
             logger.info(
                 "LingBot FSDP reshard mode=%s modules=%d.",
                 reshard_mode,
@@ -133,21 +175,13 @@ def build_hooks(training_args):
             )
         return optimizer
 
-    def clip_gradients(model, optimizer, max_norm):
-        """Clip RAB=false gradients through the DTensor helper."""
-        from loongforge.engines.torch.distributed.fsdp_utils.optimizer_grads import (
-            clip_optimizer_gradients,
-        )
-        return clip_optimizer_gradients(optimizer, max_norm)
-
-    def clean_nan_gradients(model, optimizer):
-        """Clean the optimizer-owned DTensor gradients used by LingBot."""
-        from loongforge.engines.torch.distributed.fsdp_utils.optimizer_grads import (
-            clean_optimizer_gradients,
-        )
-        clean_optimizer_gradients(optimizer)
-
-    def _device_guard_backward(records, step_ctx, loss, log_loss_dict, log_dict, health):
+    def _backward_loss(
+        self,
+        loss: torch.Tensor,
+        log_loss_dict: dict,
+        log_dict: dict,
+        grad_accum: int,
+    ) -> None:
         """Run the LingBot batched device-side loss guard.
 
         Same contract as the common trainer, except the spike/NaN check stays on
@@ -156,13 +190,12 @@ def build_hooks(training_args):
         implementation's per-microbatch ``.item()`` synchronization. Gradient
         sync gating is the caller's ``_grad_sync_ctx``, as upstream.
         """
-        grad_accum = step_ctx.training_args.gradient_accumulation_steps
-        threshold = step_ctx.training_args.loss_spike_threshold
-        with step_ctx.timers("backward-compute"):
+        threshold = self.training_args.loss_spike_threshold
+        with self._stage_timers("backward-compute"):
             loss, raw_loss, invalid, spiked = _COMPILED_DEVICE_LOSS_GUARD(
                 loss, grad_accum, threshold
             )
-            records.append(
+            self._lingbot_loss_guard_records.append(
                 (
                     raw_loss,
                     invalid,
@@ -182,10 +215,10 @@ def build_hooks(training_args):
             )
             loss.backward()
 
-    def _drain_loss_guard_records(records, step_ctx, log_dict, health):
+    def _finish_device_loss_guard(self, log_dict: dict, grad_accum: int) -> None:
+        records = self._lingbot_loss_guard_records
         if not records:
             return
-        grad_accum = step_ctx.training_args.gradient_accumulation_steps
         log_keys = tuple(key for key, _ in records[0][3])
         for _, _, _, log_items in records:
             if tuple(key for key, _ in log_items) != log_keys:
@@ -194,13 +227,13 @@ def build_hooks(training_args):
             [
                 torch.stack(
                     (
-                        loss_val.float(),
-                        inv.float(),
-                        sp.float(),
+                        loss.float(),
+                        invalid.float(),
+                        spiked.float(),
                         *(value.float() for _, value in log_items),
                     )
                 )
-                for loss_val, inv, sp, log_items in records
+                for loss, invalid, spiked, log_items in records
             ]
         )
         rows = packed.detach().cpu().tolist()
@@ -211,53 +244,76 @@ def build_hooks(training_args):
                 log_dict[key] = log_dict.get(key, 0.0) + value / grad_accum
             if not bool(spiked_value):
                 continue
-            step_ctx.log_loss_spike(step_ctx.iteration, loss_value)
+            self.logger.log_loss_spike(self.completed_steps, loss_value)
             if bool(invalid_value):
-                health.nan = True
-            health.spiked = True
+                self._step_loss_is_nan = True
+            self._step_loss_spiked = True
 
-    def forward_backward(step_ctx):
-        """Finish LingBot-only loss diagnostics after final backward."""
-        records = []
-        log_dict, health = ts.forward_backward(
-            step_ctx, backward=partial(_device_guard_backward, records)
+    def _clip_gradients(self, max_norm: float) -> float:
+        """Clip RAB=false gradients through the LingBot DTensor helper."""
+        from loongforge.engines.torch.distributed.fsdp_utils.optimizer_grads import (
+            clip_optimizer_gradients,
         )
-        _drain_loss_guard_records(records, step_ctx, log_dict, health)
-        return log_dict, health
 
-    def configure_gc(args, ctx):
+        return clip_optimizer_gradients(self.optimizer, max_norm)
+
+    def _clean_nan_gradients(self) -> None:
+        """Clean the optimizer-owned DTensor gradients used by LingBot."""
+        from loongforge.engines.torch.distributed.fsdp_utils.optimizer_grads import (
+            clean_optimizer_gradients,
+        )
+
+        clean_optimizer_gradients(self.optimizer)
+
+    def _forward_backward(self) -> dict:
+        """Finish LingBot-only loss diagnostics after final backward."""
+        # Drop anything a previous, aborted step left behind: those records hold
+        # device tensors, and mixing them into this step's drain would corrupt
+        # the averaged loss logs.
+        self._lingbot_loss_guard_records.clear()
+        log_dict = super()._forward_backward()
+        self._finish_device_loss_guard(
+            log_dict, self.training_args.gradient_accumulation_steps
+        )
+        return log_dict
+
+    def _train_forward(self, batch) -> Tuple[torch.Tensor, dict]:
+        """Map LingBot loss names onto the trainer's logging keys."""
+        loss, log_loss_dict = super()._train_forward(batch)
+        return loss, _map_loss_log_dict(
+            log_loss_dict,
+            backward_loss=loss,
+            gradient_accumulation_steps=self.training_args.gradient_accumulation_steps,
+        )
+
+
+    def _configure_manual_gc(self) -> None:
         """Suppress expensive full GC while preserving young-generation cleanup."""
-        if not args.manual_gc:
-            return
-        interval = int(args.manual_gc_interval)
+        if not self.training_args.manual_gc:
+            return super()._configure_manual_gc()
+        interval = int(self.training_args.manual_gc_interval)
         if interval < 0:
             raise ValueError("--manual-gc-interval must be >= 0")
-        state.gc_thresholds = gc.get_threshold()
+        self._lingbot_gc_thresholds = gc.get_threshold()
         gc.collect()
         gc.enable()
-        generation0, generation1, generation2 = state.gc_thresholds
+        generation0, generation1, generation2 = self._lingbot_gc_thresholds
         suppressed_generation2 = max(GC_GENERATION2_THRESHOLD, generation2 + 1)
         gc.set_threshold(generation0, generation1, suppressed_generation2)
-        if ctx.is_main:
+        if self.ctx.is_main:
             logger.info(
                 "LingBot generation-2 automatic GC suppressed (threshold=%d, manual interval=%d)",
                 suppressed_generation2,
                 interval,
             )
 
-    def close():
-        """Restore the process-wide GC policy before the common teardown."""
-        if state.gc_thresholds is not None:
-            gc.set_threshold(*state.gc_thresholds)
-            state.gc_thresholds = None
+    def _restore_lingbot_gc_thresholds(self) -> None:
+        if self._lingbot_gc_thresholds is None:
+            return
+        gc.set_threshold(*self._lingbot_gc_thresholds)
+        self._lingbot_gc_thresholds = None
 
-    return TrainerHooks(
-        prepare_args=prepare_args,
-        configure_gc=configure_gc,
-        wrap_model=wrap_model,
-        build_optimizer=build_optimizer_fn,
-        forward_backward=forward_backward,
-        clip_gradients=clip_gradients,
-        clean_nan_gradients=clean_nan_gradients,
-        close=close,
-    )
+    def _finalize(self):
+        """Restore the process-wide GC policy before the common teardown."""
+        self._restore_lingbot_gc_thresholds()
+        return super()._finalize()

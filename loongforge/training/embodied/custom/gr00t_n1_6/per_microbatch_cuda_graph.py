@@ -17,8 +17,8 @@ from typing import Any
 import torch
 import torch.distributed as dist
 
+from loongforge.data.embodied.gr00t_n1_6.transforms.gr00t_n1_6_collator import GrootN1d6PreparedBatch
 from loongforge.engines.torch.distributed.utils import unwrap_model
-from loongforge.engines.torch.runner import forward, move_batch
 
 logger = logging.getLogger(__name__)
 
@@ -100,22 +100,22 @@ def _as_output_dict(result: Any) -> dict[str, torch.Tensor]:
 class GrootN1d6PerMicrobatchCudaGraphRunner:
     """Capture one CUDAGraph per microbatch and replay with eager RNG injection."""
 
-    def __init__(self, model, training_args, ctx):
-        self.model = model
-        self.training_args = training_args
-        self.ctx = ctx
-        self.grad_accum = training_args.gradient_accumulation_steps
-        self.warmup_steps = max(int(training_args.cuda_graph_warmup_steps), 1)
+    def __init__(self, trainer):
+        self.trainer = trainer
+        self.training_args = trainer.training_args
+        self.ctx = trainer.ctx
+        self.grad_accum = trainer.training_args.gradient_accumulation_steps
+        self.warmup_steps = max(int(trainer.training_args.cuda_graph_warmup_steps), 1)
 
         self._warmup_count = 0
         self._captured = False
         self._graphs: list[torch.cuda.CUDAGraph] = []
-        self._static_batches: list[Any] = []
+        self._static_batches: list[GrootN1d6PreparedBatch] = []
         self._graph_outputs: list[dict[str, torch.Tensor]] = []
         self._noise_bufs: list[torch.Tensor] = []
         self._time_bufs: list[torch.Tensor] = []
         self._action_head = None
-        self._raw_model = unwrap_model(model)
+        self._raw_model = unwrap_model(trainer.model)
         self._grad_buffers_ready = False
         self._shared_pool = None
         self._graph_stream: torch.cuda.Stream | None = None
@@ -139,13 +139,13 @@ class GrootN1d6PerMicrobatchCudaGraphRunner:
         self._prefetch_queue: queue.Queue | None = None
         self._prefetch_thread: Thread | None = None
         self._copy_stream: torch.cuda.Stream | None = None
-        self._prefetched_gpu_batches: list[Any] | None = None
+        self._prefetched_gpu_batches: list[GrootN1d6PreparedBatch] | None = None
         self._saved_ddp_logger = None
         self._noop_ddp_logger = _NoopDdpLogger()
         self._ddp_sync_in_graph = (
             self.ctx.is_distributed
             and self.ctx.world_size > 1
-            and hasattr(model, "reducer")
+            and hasattr(trainer.model, "reducer")
             and self.training_args.cuda_graph_ddp_sync_in_graph
         )
         if self.ctx.is_main:
@@ -159,8 +159,8 @@ class GrootN1d6PerMicrobatchCudaGraphRunner:
             )
 
     @classmethod
-    def is_enabled(cls, training_args) -> bool:
-        """Return whether per-microbatch CUDA graph execution is enabled.
+    def is_enabled(cls, trainer) -> bool:
+        """Return whether per-microbatch CUDA graph execution is enabled for this trainer.
 
         Args:
             trainer: Trainer instance whose ``args`` are inspected.
@@ -169,13 +169,14 @@ class GrootN1d6PerMicrobatchCudaGraphRunner:
             ``True`` when CUDA is available, ``cuda_graph_impl`` is ``"local"``,
             and ``cuda_graph_scope`` is ``"per_microbatch"``; ``False`` otherwise.
         """
+        training_args = trainer.training_args
         return (
             torch.cuda.is_available()
             and training_args.cuda_graph_impl == "local"
             and training_args.cuda_graph_scope == "per_microbatch"
         )
 
-    def step(self, step_ctx) -> tuple[dict[str, torch.Tensor], float]:
+    def step(self) -> tuple[dict[str, torch.Tensor], float]:
         """Run one training step, dispatching between warmup, capture, and graph replay.
 
         During warmup the microbatches are executed eagerly. Once warmup is
@@ -189,14 +190,14 @@ class GrootN1d6PerMicrobatchCudaGraphRunner:
         """
         profile: dict[str, float] | None = {} if self._profile_enabled else None
         fetch_start = time.perf_counter()
-        batches = self._fetch_prefetched_batches(step_ctx)
+        batches = self._fetch_prefetched_batches()
         if profile is not None:
             torch.cuda.synchronize()
             profile["fetch_ms"] = (time.perf_counter() - fetch_start) * 1000.0
 
         if self._warmup_count < self.warmup_steps:
             run_start = time.perf_counter()
-            output, accum_loss = self._run_eager_batches(step_ctx, batches)
+            output, accum_loss = self._run_eager_batches(batches)
             if profile is not None:
                 torch.cuda.synchronize()
                 profile["runner_ms"] = (time.perf_counter() - run_start) * 1000.0
@@ -216,7 +217,7 @@ class GrootN1d6PerMicrobatchCudaGraphRunner:
 
         if not self._captured:
             run_start = time.perf_counter()
-            output, _accum_loss = self._capture_and_replay(step_ctx, batches)
+            output, _accum_loss = self._capture_and_replay(batches)
             if profile is not None:
                 torch.cuda.synchronize()
                 profile["runner_ms"] = (time.perf_counter() - run_start) * 1000.0
@@ -235,7 +236,7 @@ class GrootN1d6PerMicrobatchCudaGraphRunner:
             logger.info("CUDA graph invalidated, re-capturing: %s", exc)
             self._invalidate()
             run_start = time.perf_counter()
-            output, _accum_loss = self._capture_and_replay(step_ctx, batches)
+            output, _accum_loss = self._capture_and_replay(batches)
             if profile is not None:
                 torch.cuda.synchronize()
                 profile["runner_ms"] = (time.perf_counter() - run_start) * 1000.0
@@ -245,7 +246,7 @@ class GrootN1d6PerMicrobatchCudaGraphRunner:
             return result
 
         run_start = time.perf_counter()
-        output, _accum_loss = self._replay(step_ctx)
+        output, _accum_loss = self._replay()
         if profile is not None:
             torch.cuda.synchronize()
             profile["runner_ms"] = (time.perf_counter() - run_start) * 1000.0
@@ -284,9 +285,7 @@ class GrootN1d6PerMicrobatchCudaGraphRunner:
 
         return output, float(output["action_loss"].detach())
 
-    def _run_eager_batches(
-        self, step_ctx, batches: list[Any],
-    ) -> tuple[dict[str, torch.Tensor], float]:
+    def _run_eager_batches(self, batches: list[GrootN1d6PreparedBatch]) -> tuple[dict[str, torch.Tensor], float]:
         output = None
         accum_loss = 0.0
         self._set_graph_warmup_flag(True)
@@ -294,7 +293,7 @@ class GrootN1d6PerMicrobatchCudaGraphRunner:
         try:
             with self._graph_stream_ctx():
                 for micro_idx, batch in enumerate(batches):
-                    output = _as_output_dict(forward(step_ctx, batch))
+                    output = _as_output_dict(self.trainer._train_forward(batch))
                     loss = output["action_loss"] / self.grad_accum
                     self._backward(loss, micro_idx)
                     accum_loss += float(output["action_loss"].detach())
@@ -311,41 +310,41 @@ class GrootN1d6PerMicrobatchCudaGraphRunner:
 
     def _capture_and_replay(
         self,
-        step_ctx,
-        batches: list[Any],
+        batches: list[GrootN1d6PreparedBatch],
     ) -> tuple[dict[str, torch.Tensor], float]:
         self._static_batches = [_clone_static(batch) for batch in batches]
         self._graphs = []
         self._graph_outputs = []
         self._allocate_rng_buffers()
-        self._static_capture_warmup(step_ctx)
+        self._static_capture_warmup()
 
-        self._zero_grad_for_capture(step_ctx, set_to_none=True)
+        self._zero_grad_for_capture(set_to_none=True)
         self._set_graph_warmup_flag(False)
         with self._preserve_rng_state():
             self._shared_pool = torch.cuda.graph_pool_handle()
             for micro_idx, static_batch in enumerate(self._static_batches):
                 self._eager_rng_single(micro_idx)
-                self._capture_one_microbatch(step_ctx, micro_idx, static_batch)
+                self._capture_one_microbatch(micro_idx, static_batch)
 
         self._clear_rng_bufs_on_model()
         self._grad_buffers_ready = True
         self._captured = True
-        self._zero_grad_for_capture(step_ctx, set_to_none=False)
+        self._zero_grad_for_capture(set_to_none=False)
         logger.info(
             "Captured %d GR00T per-microbatch CUDA graph(s)",
             len(self._graphs),
         )
-        return self._replay(step_ctx)
+        return self._replay()
 
-    def _replay(self, step_ctx) -> tuple[dict[str, torch.Tensor], float]:
-        self._zero_grad_for_capture(step_ctx, set_to_none=False)
+    def _replay(self) -> tuple[dict[str, torch.Tensor], float]:
+        self._zero_grad_for_capture(set_to_none=False)
         accum_loss = 0.0
         with self._graph_stream_ctx():
             for micro_idx, graph in enumerate(self._graphs):
                 self._eager_rng_single(micro_idx)
                 self._set_rng_buf_on_model(micro_idx)
                 graph.replay()
+                output = self._graph_outputs[micro_idx]
 
         wait_start = time.perf_counter()
         self._wait_default_on_graph_stream()
@@ -362,9 +361,8 @@ class GrootN1d6PerMicrobatchCudaGraphRunner:
 
     def _capture_one_microbatch(
         self,
-        step_ctx,
         micro_idx: int,
-        static_batch: Any,
+        static_batch: GrootN1d6PreparedBatch,
     ) -> None:
         self._set_rng_buf_on_model(micro_idx)
         graph = torch.cuda.CUDAGraph()
@@ -373,7 +371,7 @@ class GrootN1d6PerMicrobatchCudaGraphRunner:
         try:
             with self._graph_stream_ctx():
                 with torch.cuda.graph(graph, pool=self._shared_pool, stream=self._get_graph_stream()):
-                    output = _as_output_dict(forward(step_ctx, static_batch))
+                    output = _as_output_dict(self.trainer._train_forward(static_batch))
                     loss = output["action_loss"] / self.grad_accum
                     loss.backward()
         finally:
@@ -384,7 +382,7 @@ class GrootN1d6PerMicrobatchCudaGraphRunner:
     def _prepare_ddp_capture(self, micro_idx: int) -> bool | None:
         if not self._ddp_sync_in_graph:
             return None
-        ddp_model = self.model
+        ddp_model = self.trainer.model
         should_sync = micro_idx == self.grad_accum - 1
         ddp_model.require_backward_grad_sync = should_sync
         ddp_model.require_forward_param_sync = should_sync
@@ -400,7 +398,7 @@ class GrootN1d6PerMicrobatchCudaGraphRunner:
     def _restore_ddp_capture(self, should_sync: bool | None) -> None:
         if should_sync is None:
             return
-        ddp_model = self.model
+        ddp_model = self.trainer.model
         ddp_model.require_backward_grad_sync = True
         ddp_model.require_forward_param_sync = True
         if self._saved_ddp_logger is not None:
@@ -408,13 +406,13 @@ class GrootN1d6PerMicrobatchCudaGraphRunner:
             self._saved_ddp_logger = None
 
     def _backward(self, loss: torch.Tensor, micro_idx: int) -> None:
-        if self.ctx.is_distributed and micro_idx < self.grad_accum - 1 and hasattr(self.model, "no_sync"):
-            with self.model.no_sync():
+        if self.ctx.is_distributed and micro_idx < self.grad_accum - 1 and hasattr(self.trainer.model, "no_sync"):
+            with self.trainer.model.no_sync():
                 loss.backward()
             return
         loss.backward()
 
-    def _load_static_batches(self, batches: list[Any]) -> None:
+    def _load_static_batches(self, batches: list[GrootN1d6PreparedBatch]) -> None:
         if len(batches) != len(self._static_batches):
             raise RuntimeError(
                 f"Microbatch count changed: {len(self._static_batches)} -> {len(batches)}"
@@ -425,7 +423,7 @@ class GrootN1d6PerMicrobatchCudaGraphRunner:
     def _find_action_head(self):
         if self._action_head is not None:
             return self._action_head
-        raw_model = unwrap_model(self.model)
+        raw_model = unwrap_model(self.trainer.model)
         for _name, mod in raw_model.named_modules():
             if hasattr(mod, "action_encoder") and hasattr(mod, "sample_time"):
                 self._action_head = mod
@@ -481,36 +479,36 @@ class GrootN1d6PerMicrobatchCudaGraphRunner:
         action_head._split_time_buf = None
 
     def _set_graph_warmup_flag(self, value: bool) -> None:
-        raw_model = unwrap_model(self.model)
+        raw_model = unwrap_model(self.trainer.model)
         for module in raw_model.modules():
             module._in_graph_warmup = value
 
-    def _static_capture_warmup(self, step_ctx) -> None:
+    def _static_capture_warmup(self) -> None:
         self._set_graph_warmup_flag(True)
         try:
             with self._preserve_rng_state():
                 with self._graph_stream_ctx():
                     for _ in range(self.warmup_steps):
-                        self._zero_grad_for_capture(step_ctx, set_to_none=True)
+                        self._zero_grad_for_capture(set_to_none=True)
                         for micro_idx, static_batch in enumerate(self._static_batches):
                             self._eager_rng_single(micro_idx)
                             self._set_rng_buf_on_model(micro_idx)
-                            output = _as_output_dict(forward(step_ctx, static_batch))
+                            output = _as_output_dict(self.trainer._train_forward(static_batch))
                             loss = output["action_loss"] / self.grad_accum
                             loss.backward()
                 self._grad_buffers_ready = self._has_any_grad_buffer()
-                self._zero_grad_for_capture(step_ctx, set_to_none=True)
+                self._zero_grad_for_capture(set_to_none=True)
         finally:
             self._clear_rng_bufs_on_model()
             self._set_graph_warmup_flag(False)
             self._wait_default_on_graph_stream()
 
-    def _zero_grad_for_capture(self, step_ctx, *, set_to_none: bool = False) -> None:
+    def _zero_grad_for_capture(self, *, set_to_none: bool = False) -> None:
         if set_to_none:
             self._materialized_sync_grad_ids.clear()
             self._grad_sync_buckets = None
             try:
-                step_ctx.optimizer.zero_grad(set_to_none=True)
+                self.trainer.optimizer.zero_grad(set_to_none=True)
             except TypeError:
                 for param in self._raw_model.parameters():
                     param.grad = None
@@ -525,13 +523,13 @@ class GrootN1d6PerMicrobatchCudaGraphRunner:
             self._materialized_sync_grad_ids.clear()
             return
         try:
-            step_ctx.optimizer.zero_grad(set_to_none=True)
+            self.trainer.optimizer.zero_grad(set_to_none=True)
         except TypeError:
-            step_ctx.optimizer.zero_grad()
+            self.trainer.optimizer.zero_grad()
 
-    def zero_grad(self, step_ctx) -> None:
+    def zero_grad(self) -> None:
         """Set all model parameters' gradients to zero."""
-        self._zero_grad_for_capture(step_ctx, set_to_none=not self._captured)
+        self._zero_grad_for_capture(set_to_none=not self._captured)
 
     def _has_any_grad_buffer(self) -> bool:
         return any(param.grad is not None for param in self._raw_model.parameters())
@@ -701,7 +699,7 @@ class GrootN1d6PerMicrobatchCudaGraphRunner:
         for dst, src in zip(dst_bucket, src_bucket):
             dst.copy_(src)
 
-    def _ensure_prefetch_thread(self, step_ctx) -> None:
+    def _ensure_prefetch_thread(self) -> None:
         if self._prefetch_queue is not None:
             return
         prefetch_count = max(int(os.environ.get("LOONGFORGE_BATCH_PREFETCH_COUNT", "2")), 0)
@@ -713,7 +711,7 @@ class GrootN1d6PerMicrobatchCudaGraphRunner:
             while True:
                 try:
                     batches = [
-                        step_ctx.fetch_cpu_batch()
+                        self.trainer._fetch_batch_cpu("vla")
                         for _ in range(self.grad_accum)
                     ]
                     self._prefetch_queue.put(batches)
@@ -724,12 +722,12 @@ class GrootN1d6PerMicrobatchCudaGraphRunner:
         self._prefetch_thread = Thread(target=_worker, daemon=True)
         self._prefetch_thread.start()
 
-    def _fetch_prefetched_batches(self, step_ctx) -> list[Any]:
+    def _fetch_prefetched_batches(self) -> list[GrootN1d6PreparedBatch]:
         if self._prefetched_gpu_batches is None:
-            self._start_gpu_prefetch(step_ctx)
+            self._start_gpu_prefetch()
         if self._prefetched_gpu_batches is None:
             return [
-                move_batch(step_ctx, step_ctx.fetch_cpu_batch())
+                self.trainer._fetch_batch("vla")
                 for _ in range(self.grad_accum)
             ]
 
@@ -737,14 +735,14 @@ class GrootN1d6PerMicrobatchCudaGraphRunner:
             torch.cuda.current_stream().wait_stream(self._copy_stream)
         batches = self._prefetched_gpu_batches
         self._prefetched_gpu_batches = None
-        self._start_gpu_prefetch(step_ctx)
+        self._start_gpu_prefetch()
         return batches
 
-    def _fetch_prefetched_cpu_batches(self, step_ctx) -> list[Any]:
-        self._ensure_prefetch_thread(step_ctx)
+    def _fetch_prefetched_cpu_batches(self) -> list[GrootN1d6PreparedBatch]:
+        self._ensure_prefetch_thread()
         if self._prefetch_queue is None:
             return [
-                step_ctx.fetch_cpu_batch()
+                self.trainer._fetch_batch_cpu("vla")
                 for _ in range(self.grad_accum)
             ]
         item = self._prefetch_queue.get()
@@ -752,14 +750,14 @@ class GrootN1d6PerMicrobatchCudaGraphRunner:
             raise item
         return item
 
-    def _start_gpu_prefetch(self, step_ctx) -> None:
+    def _start_gpu_prefetch(self) -> None:
         if self._prefetched_gpu_batches is not None:
             return
-        cpu_batches = self._fetch_prefetched_cpu_batches(step_ctx)
+        cpu_batches = self._fetch_prefetched_cpu_batches()
         stream = self._get_copy_stream()
         with torch.cuda.stream(stream):
             self._prefetched_gpu_batches = [
-                move_batch(step_ctx, batch)
+                self.trainer._move_batch_to_device(batch)
                 for batch in cpu_batches
             ]
 
@@ -769,7 +767,7 @@ class GrootN1d6PerMicrobatchCudaGraphRunner:
         return self._copy_stream
 
     def _clear_warmup_sentinels(self) -> None:
-        raw_model = unwrap_model(self.model)
+        raw_model = unwrap_model(self.trainer.model)
         for module in raw_model.modules():
             if hasattr(module, "_capture_has_invalid_images"):
                 module._capture_has_invalid_images = False

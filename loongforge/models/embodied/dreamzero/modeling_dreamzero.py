@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 from collections import deque
 from dataclasses import fields
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
 import torch
 from torch import Tensor
@@ -31,9 +31,6 @@ from loongforge.models.embodied.registry import register_model
 from .model_configuration_dreamzero import DreamZeroConfig
 from .modules.action_head_tf import WANPolicyHead, WANPolicyHeadConfig
 from .precomputed_cache import build_precomputed_cache_config
-
-if TYPE_CHECKING:
-    from loongforge.engines.torch.distributed.context import DistributedContext
 
 logger = logging.getLogger(__name__)
 
@@ -259,7 +256,7 @@ class DreamZeroPolicy(PreTrainedPolicy):
         args: Any,
         completed_steps: int,
         optimizer: torch.optim.Optimizer | None,
-        ctx: DistributedContext,
+        ctx: Any,
     ) -> None:
         """Apply one-time DreamZero FSDP initialization compatibility rounding."""
         del args

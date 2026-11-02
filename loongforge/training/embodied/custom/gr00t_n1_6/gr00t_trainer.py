@@ -1,81 +1,134 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""GR00T-N1.6 trainer hooks.
+"""GR00T-N1.6 finetune trainer.
 
-Adds an optional per-microbatch CUDA graph runner to the default TorchRunner
-behavior. When the graph runner is disabled, returns a plain TrainerHooks().
+Extends :class:`FinetuneTrainer` with the GR00T-specific per-microbatch CUDA
+graph runner. The runner itself lives next to this file
+(``per_microbatch_cuda_graph.py``) because it depends on GR00T-only types
+(``GrootN1d6PreparedBatch``) and probes for the GR00T action head via
+``action_encoder``/``sample_time``.
+
+Only the wrapping step (``_wrap_model_for_training``) and the inner
+forward/backward block (``_run_forward_backward_block``) differ from the
+generic FinetuneTrainer; all data / optimizer / checkpoint paths are inherited
+unchanged. The base trainer remains unaware of any CUDA-graph or runner
+concepts.
 """
 
 from __future__ import annotations
 
 import logging
-from types import SimpleNamespace
+
+import torch
+import torch.distributed as dist
+
+from loongforge.engines.torch.distributed.parallel import wrap_model
+from loongforge.engines.torch.utils.utils import resolve_dtype
+from loongforge.training.embodied.sft import FinetuneTrainer
+from loongforge.training.embodied.custom.gr00t_n1_6.per_microbatch_cuda_graph import (
+    GrootN1d6PerMicrobatchCudaGraphRunner,
+)
 
 logger = logging.getLogger(__name__)
 
 
-def build_hooks(training_args):
-    """Return the TrainerHooks for GR00T-N1.6."""
-    from loongforge.engines.torch.runner import TrainerHooks, LossHealth
-    from loongforge.models.embodied.gr00t_n1_6.eagle3_model import modeling_eagle3_vl
+class GrootN1d6Trainer(FinetuneTrainer):
+    """GR00T-N1.6 finetune trainer with per-microbatch CUDA graph support.
 
-    # Eagle picks its loader and attention paths when it is built; set_graph_mode runs before that.
-    modeling_eagle3_vl.set_graph_mode(
-        training_args.cuda_graph_impl == "local"
-        and training_args.cuda_graph_scope in {"full_iteration", "per_microbatch"}
-    )
+    Behavior is identical to :class:`FinetuneTrainer` except that when CUDA
+    graph is enabled (``--cuda-graph-impl local --cuda-graph-scope
+    per_microbatch``), a :class:`GrootN1d6PerMicrobatchCudaGraphRunner` takes
+    over zero_grad + forward + backward + gradient sync for each optimizer
+    step. The rest of the training loop (clipping, optimizer, scheduler,
+    logging, checkpointing) is inherited as-is from the base loop.
+    """
 
-    # Lazy import: graph runner itself pulls torch, CUDA, model-specific types.
-    from loongforge.training.embodied.custom.gr00t_n1_6.per_microbatch_cuda_graph import (
-        GrootN1d6PerMicrobatchCudaGraphRunner,
-    )
+    def __init__(self, training_args, model_cfg, data_cfg):
+        super().__init__(training_args, model_cfg, data_cfg)
+        self._train_step_runner: GrootN1d6PerMicrobatchCudaGraphRunner | None = None
 
-    if not GrootN1d6PerMicrobatchCudaGraphRunner.is_enabled(training_args):
-        return TrainerHooks()
+    def _build_model(self):
+        from loongforge.models.embodied.gr00t_n1_6.eagle3_model import modeling_eagle3_vl
 
-    state = SimpleNamespace(runner=None)
+        # Eagle selects graph-safe loading and attention before the model is built.
+        modeling_eagle3_vl.set_graph_mode(
+            self.training_args.cuda_graph_impl == "local"
+            and self.training_args.cuda_graph_scope in {"full_iteration", "per_microbatch"}
+        )
+        return super()._build_model()
 
-    def wrap_model(model, args, ctx):
-        import torch
-        import torch.distributed as dist
-        from loongforge.engines.torch.distributed.parallel import wrap_model as _wrap
-        from loongforge.engines.torch.utils.utils import resolve_dtype
+    def _wrap_model_for_training(self) -> None:
+        """Wrap the model for training, installing a CUDA graph runner when enabled.
 
+        When CUDA graph is disabled this delegates to the base implementation
+        (standard DDP/FSDP wrapping). When CUDA graph is enabled, this method
+        takes over wrapping: it either calls :func:`wrap_model` (DDP sync inside
+        the graph) or simply moves the model to the training device + dtype and
+        broadcasts parameters from rank 0 (when DDP sync is handled outside the
+        graph by the runner's manual all-reduce path). Finally it instantiates
+        the runner.
+        """
+        if not GrootN1d6PerMicrobatchCudaGraphRunner.is_enabled(self):
+            super()._wrap_model_for_training()
+            return
+
+        training_args = self.training_args
+        ctx = self.ctx
         if (
             ctx.is_distributed
             and ctx.world_size > 1
-            and args.cuda_graph_ddp_sync_in_graph
+            and training_args.cuda_graph_ddp_sync_in_graph
         ):
-            model = _wrap(model, args, ctx)
+            self.model = wrap_model(self.model, training_args, ctx)
         else:
-            model = model.to(dtype=resolve_dtype(args.dtype), device=ctx.device)
+            self.model = self.model.to(dtype=resolve_dtype(training_args.dtype), device=ctx.device)
 
-        if ctx.is_distributed and ctx.world_size > 1 and not hasattr(model, "module"):
+        # When the model is not wrapped by DDP, parameters were not broadcast
+        # from rank 0 by the framework — do it manually so every rank starts
+        # CUDA graph capture from identical weights.
+        if ctx.is_distributed and ctx.world_size > 1 and not hasattr(self.model, "module"):
             with torch.no_grad():
-                for tensor in list(model.parameters()) + list(model.buffers()):
+                for tensor in list(self.model.parameters()) + list(self.model.buffers()):
                     if tensor is not None and tensor.device.type == "cuda":
                         dist.broadcast(tensor, src=0)
 
-        state.runner = GrootN1d6PerMicrobatchCudaGraphRunner(model, args, ctx)
+        self._train_step_runner = GrootN1d6PerMicrobatchCudaGraphRunner(self)
         logger.info(
             "Using model-managed train step runner: %s",
-            state.runner.__class__.__name__,
+            self._train_step_runner.__class__.__name__,
         )
-        return model
 
-    def forward_backward(step_ctx):
-        import torch
-        with step_ctx.timers("forward-backward"):
-            state.runner.zero_grad(step_ctx)
-            output, _loss_val = state.runner.step(step_ctx)
+    def _run_forward_backward_block(self) -> dict:
+        """Route the inner forward/backward block through the CUDA graph runner.
+
+        When the runner is active, it manages zero_grad + forward + backward +
+        gradient sync internally and returns an ``output`` dict whose tensor
+        values are converted into the same ``log_dict`` shape that
+        :meth:`FinetuneTrainer._forward_backward` produces. Otherwise the base
+        implementation runs unchanged.
+        """
+        if self._train_step_runner is None:
+            return super()._run_forward_backward_block()
+
+        with self._stage_timers("forward-backward"):
+            self._train_step_runner.zero_grad()
+            output, _loss_val = self._train_step_runner.step()
         return {
             key: (value.detach().item() if isinstance(value, torch.Tensor) else float(value))
             for key, value in output.items()
-        }, LossHealth()
+        }
 
-    return TrainerHooks(
-        wrap_model=wrap_model,
-        forward_backward=forward_backward,
-        clean_nan_gradients=lambda _m, _o: None,
-    )
+    def _clean_nan_gradients(self) -> None:
+        """Skip host-side NaN/Inf gradient cleanup when the CUDA graph runner is active.
+
+        Under per-microbatch CUDA graph capture/replay the parameter ``.grad``
+        tensors are static buffers tied to the captured graphs. Mutating them
+        outside the graph (e.g. via :func:`torch.nan_to_num`) would violate the
+        static-buffer invariant. :mod:`validators` warns when CUDA graph mode is
+        enabled, so this override matches that contract by no-oping while the
+        runner is installed and otherwise delegating to the base implementation.
+        """
+        if self._train_step_runner is not None:
+            return
+        super()._clean_nan_gradients()
