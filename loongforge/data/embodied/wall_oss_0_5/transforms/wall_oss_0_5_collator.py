@@ -13,8 +13,10 @@ import numpy as np
 import torch
 from transformers import AutoProcessor
 
-from loongforge.data.embodied.transforms.collator import BaseCollator
-from loongforge.data.embodied.registry import register_collator
+from loongforge.data.embodied.transforms.collator import (
+    BasePreprocessor,
+    register_preprocessor,
+)
 from loongforge.data.embodied.wall_oss_0_5.transforms.wall_oss_0_5_utils import (
     load_norm_stats,
     preprocesser_call,
@@ -56,8 +58,8 @@ def load_wall_oss_0_5_norm_stats(data_cfg):
     return load_norm_stats(data_cfg.norm_stats_path, data_cfg.key_mappings)
 
 
-@register_collator("wall_oss_0_5")
-class WallOss05Collator(BaseCollator):
+@register_preprocessor("wall_oss_0_5")
+class WallOss05Preprocessor(BasePreprocessor):
     """DataLoader collate_fn for Wall-OSS-0.5."""
 
     _processor_cache: dict[str, Any] = {}
@@ -98,8 +100,7 @@ class WallOss05Collator(BaseCollator):
         training_args=None,
         dataset_stats=None,
         dataset=None,
-        runtime=None,
-    ) -> "WallOss05Collator":
+    ) -> "WallOss05Preprocessor":
         """From config."""
         del dataset_stats, dataset
         if training_args is None or not training_args.tokenizer_path:

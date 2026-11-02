@@ -35,12 +35,31 @@ import torchvision.transforms.functional as transforms_F
 from transformers import AutoTokenizer
 
 from loongforge.data.embodied.transforms.base import BaseTransform
-from loongforge.models.embodied.cosmos3.modeling_configuration_cosmos3 import VIDEO_RES_SIZE_INFO
 from loongforge.models.embodied.cosmos3.sequence_packing import SequencePlan
 from loongforge.data.embodied.registry import (
     TransformBuilderContext,
     register_transform_builder,
 )
+
+# ---------- VIDEO_RES_SIZE_INFO (verbatim from cosmos_framework/data/vfm/utils.py) ----------
+VIDEO_RES_SIZE_INFO: Dict[str, Dict[str, Tuple[int, int]]] = {
+    "256": {"1,1": (256, 256), "4,3": (320, 256), "3,4": (256, 320), "16,9": (320, 192), "9,16": (192, 320)},
+    "480": {"1,1": (640, 640), "4,3": (736, 544), "3,4": (544, 736), "16,9": (832, 480), "9,16": (480, 832)},
+    "704": {"1,1": (960, 960), "4,3": (1088, 832), "3,4": (832, 1088), "16,9": (1280, 704), "9,16": (704, 1280)},
+    "720": {"1,1": (960, 960), "4,3": (1104, 832), "3,4": (832, 1104), "16,9": (1280, 720), "9,16": (720, 1280)},
+    "768": {"1,1": (1024, 1024), "4,3": (1184, 880), "3,4": (880, 1184), "16,9": (1360, 768), "9,16": (768, 1360)},
+    "1080": {"1,1": (1440, 1440), "4,3": (1664, 1248), "3,4": (1248, 1664), "16,9": (1920, 1080), "9,16": (1080, 1920)},
+    "1280": {"1,1": (1712, 1712), "4,3": (1968, 1472), "3,4": (1472, 1968), "16,9": (2272, 1280), "9,16": (1280, 2272)},
+    "2048": {"1,1": (2728, 2728), "4,3": (3160, 2368), "3,4": (2368, 3160), "16,9": (3640, 2048), "9,16": (2048, 3640)},
+    "gt_2048": {
+        "1,1": (5464, 5464),
+        "4,3": (6304, 4728),
+        "3,4": (4728, 6304),
+        "16,9": (7280, 4096),
+        "9,16": (4096, 7280),
+    },
+}
+
 
 # ---------- viewpoint templates (verbatim from cosmos viewpoint_utils.py) ----------
 _VIEWPOINT_TEMPLATES: Dict[str, str] = {
@@ -209,7 +228,7 @@ def build_cosmos3_transforms(ctx: TransformBuilderContext):
     # Deterministic mode disables CFG caption dropout (decided here in the main
     # process; torch.are_deterministic_algorithms_enabled() is unreliable inside
     # spawned DataLoader workers).
-    cfg_dropout_rate = 0.0 if ctx.runtime.deterministic else data_cfg.cfg_dropout_rate
+    cfg_dropout_rate = 0.0 if training_args.deterministic_mode else data_cfg.cfg_dropout_rate
     return [Cosmos3ActionTransform(
         tokenizer_path=training_args.tokenizer_path,
         max_text_tokens=data_cfg.max_text_tokens,
@@ -217,6 +236,8 @@ def build_cosmos3_transforms(ctx: TransformBuilderContext):
         action_chunk_length=data_cfg.action_chunk_length,
         temporal_compression=model_cfg.vae_temporal_compression,
         cfg_dropout_rate=cfg_dropout_rate,
+        target_h=data_cfg.target_h,
+        target_w=data_cfg.target_w,
     )]
 
 
@@ -280,6 +301,7 @@ class Cosmos3ActionTransform(BaseTransform):
         fps = data.get("conditioning_fps", torch.tensor(15.0))
         domain_id = data.get("domain_id", torch.tensor(0, dtype=torch.long))
         idle_frames = data.get("idle_frames", torch.tensor(0, dtype=torch.long))
+        mode = data.get("mode", "policy")
         description = data.get("additional_view_description")
 
         # 1. Frame alignment: (T - 1) % temporal_compression == 0

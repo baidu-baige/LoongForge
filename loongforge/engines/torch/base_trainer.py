@@ -17,11 +17,6 @@ from torch.utils.data import DataLoader
 
 from loongforge.engines.torch.distributed import DistributedContext
 from loongforge.engines.torch.distributed.checkpoint import (
-    detect_checkpoint_format,
-    is_lora_adapter_checkpoint,
-    load_pretrained,
-    read_adapter_meta,
-    save_checkpoint,
     flush_pending_save,
     get_latest_checkpoint,
     maybe_finalize_pending_save,
@@ -29,33 +24,21 @@ from loongforge.engines.torch.distributed.checkpoint import (
     resume_training_state,
 )
 from loongforge.engines.torch.distributed.parallel import wrap_model
-from loongforge.engines.torch.distributed.utils import unwrap_model
 from loongforge.engines.torch.lora import (
     apply_lora,
     is_lora_enabled,
     load_adapter_into_model,
 )
-from loongforge.engines.torch.utils.logging import (
-    StageTimers,
-    TrainingLogger,
-    log_effective_config,
+from loongforge.engines.torch.utils.logging import TrainingLogger, StageTimers, log_effective_config
+from loongforge.engines.torch.utils.runtime import (
     log_stage,
-    setup_logging,
-)
-from loongforge.engines.torch.utils.utils import (
-    Profiler,
     set_deterministic,
     set_precision,
-    resolve_dtype,
     set_seed,
+    setup_logging,
+    Profiler,
 )
-from loongforge.engines.torch.optimizer import (
-    build_optimizer,
-    build_scheduler,
-    clean_nan_gradients,
-    clip_gradients,
-    get_grad_norm,
-)
+from loongforge.engines.torch.optimizer import get_grad_norm
 
 logger = logging.getLogger(__name__)
 
@@ -66,15 +49,20 @@ class BaseTrainer(ABC):
 
     Lifecycle: __init__(training_args) → train() → [_setup → _training_loop → _finalize]
 
-    Recipes provide model/data construction and forward computation. The base
-    class owns shared execution, optimizer/checkpoint I/O, and iterator state.
+    The base class holds ONLY:
+      - abstract methods: model/data/paradigm-dependent compute and training
+        infrastructure (subclasses must implement) — see the "Abstract methods"
+        section below.
+      - shared functions: lifecycle orchestration, timing instrumentation,
+        loss/backward routing, one-shot RNG restore, dataloader state save/load
+        — all model-independent and reused by every subclass.
 
     The training loop is split into three layers (Template Method):
       - Layer 1 `_training_loop`: fixed orchestration (shared).
       - Layer 2 `_train_step`: one optimizer-step skeleton (shared, rarely
         overridden).
       - Layer 3 `_forward_backward`: gradient-accumulation + fetch + forward +
-        backward + loss combination (shared, overridable).
+        backward + loss combination (ABSTRACT — subclass implements).
     """
 
     def __init__(self, training_args, model_cfg, data_cfg):
@@ -243,7 +231,7 @@ class BaseTrainer(ABC):
                 start_msg=f"materializing meta tensors on {self.ctx.device}",
                 end_msg="materialized in {elapsed}",
             ):
-                self.model.materialize(self.ctx.device, resolve_dtype(training_args.dtype))
+                self.model.materialize(self.ctx.device, training_args.dtype)
             if training_args.pretrained_checkpoint:
                 with log_stage(
                     "ckpt",
@@ -450,7 +438,7 @@ class BaseTrainer(ABC):
         self._step_loss_is_nan = False
         self._step_loss_spiked = False
 
-        # ── Gradient accumulation + forward + backward (Layer 3) ──
+        # ── Gradient accumulation + forward + backward (Layer 3, abstract) ──
         # Subclasses may override _run_forward_backward_block to take over the
         # zero_grad + forward + backward + grad sync block (e.g. for CUDA graph
         # runners that manage these steps internally).
@@ -528,7 +516,7 @@ class BaseTrainer(ABC):
             self.model.set_requires_gradient_sync(True)
 
     # ═══════════════════════════════════════════════
-    # Recipe methods and shared execution
+    # Abstract methods — subclass must implement
     # ═══════════════════════════════════════════════
 
     @abstractmethod
@@ -550,93 +538,66 @@ class BaseTrainer(ABC):
         """
         ...
 
-    def _prepare_model_for_train_step(self):
-        """Put model in train mode and let policies re-freeze eval-only modules."""
-        self.model.train()
-        raw = unwrap_model(self.model)
-        if hasattr(raw, "set_frozen_modules_to_eval_mode"):
-            raw.set_frozen_modules_to_eval_mode()
-
-
+    @abstractmethod
     def _forward_backward(self) -> dict:
-        """Single-stream gradient-accumulation loop (reuses base timed helpers).
+        """Run one optimizer step's gradient-accumulation loop.
 
         Returns log_dict — a per-step accumulator of model-provided reporting
-        losses; the loop feeds it straight to collect_metrics.
-        """
-        st = self._stage_timers
-        grad_accum = self.training_args.gradient_accumulation_steps
-        log_dict: Dict[str, float] = {}
-        with st("forward-backward"):
-            for micro in range(grad_accum):
-                with self._stage_timers("batch-generator"):
-                    batch = self._fetch_batch("vla")
-                self._on_after_train_batch_fetch(batch, micro)
-                self._prepare_model_for_train_step()
-                sync_grads = self._should_sync_grads(micro, grad_accum)
-                # The gate has to cover the forward, not just the backward —
-                # see BaseTrainer._grad_sync_ctx.
-                with self._grad_sync_ctx(sync_grads):
-                    with st("forward-compute"):
-                        loss, log_loss_dict = self._train_forward(batch)
-                    self._backward_loss(loss, log_loss_dict, log_dict, grad_accum)
-        return log_dict
+        losses. May call
+        shared helpers: _fetch_batch_timed / _should_sync_grads / _grad_sync_ctx /
+        _backward_loss / self._stage_timers, to reuse unified timing stages.
 
+        The forward+backward of each micro-step must run inside
+        ``_grad_sync_ctx(self._should_sync_grads(micro, grad_accum))`` so the
+        gradient all-reduce happens exactly once per optimizer step.
+        """
+        ...
+
+    @abstractmethod
     def _backward_loss(self, loss: torch.Tensor,
                        log_loss_dict: Dict[str, torch.Tensor],
                        log_dict: Dict[str, float],
                        grad_accum: int) -> None:
         """Scale + spike-guard + backward, accumulating losses into log_dict.
 
-        ``loss`` is the single scalar to backpropagate; it is scaled by
-        1/grad_accum, spike-protected, and backwarded. Cross-rank gradient sync is
-        gated by the caller's ``_grad_sync_ctx``, which also wraps the forward.
+        ``loss`` is the single scalar to backpropagate. ``log_loss_dict`` holds
+        losses used ONLY for printing/reporting (not backward). ``log_dict`` is the
+        running per-step accumulator that all scalars are summed into (in-place).
 
-        ``log_loss_dict`` contains model-provided reporting losses, which are
-        accumulated into ``log_dict`` across micro-steps.
+        Contract (subclass implementation must honor it):
+          - Scale loss by 1/grad_accum before backward.
+          - Apply NaN/Inf/threshold spike protection (log + zero-out).
+          - Run backward under the "backward-compute" timing stage
+            (self._stage_timers).
+          - Accumulate log_loss_dict scalars under their own keys, summed across
+            micro-steps.
+
+        Gradient-sync gating is NOT done here — it must wrap the forward too and is
+        owned by the caller via ``_grad_sync_ctx``.
         """
-        threshold = self.training_args.loss_spike_threshold
-        with self._stage_timers("backward-compute"):
-            # Scale + loss spike protection (zero out to prevent NaN propagation).
-            raw_loss = loss
-            loss = raw_loss / grad_accum
-            loss_val = loss.detach().item()
-            is_nan = bool(torch.isnan(loss) or torch.isinf(loss))
-            if is_nan or loss_val > threshold:
-                self.logger.log_loss_spike(self.completed_steps, loss_val)
-                if is_nan:
-                    self._step_loss_is_nan = True
-                self._step_loss_spiked = True
-                loss = loss * 0.0
+        ...
 
-            # Gradient sync is gated by the caller's _grad_sync_ctx, so the
-            # all-reduce happens once per optimizer step.
-            loss.backward()
+    # ── Infrastructure (model-independent plumbing, implemented per subclass) ──
 
-        # Print-only losses (summed across micro-steps).
-        for key, value in log_loss_dict.items():
-            v = value.detach().item() if isinstance(value, torch.Tensor) else float(value)
-            log_dict[key] = log_dict.get(key, 0.0) + v / grad_accum
-
-    # ── Infrastructure ──
-
+    @abstractmethod
     def _build_optimizer(self) -> torch.optim.Optimizer:
-        """Build AdamW with per-module LR groups."""
-        return build_optimizer(self.model, self.training_args)
+        """Build the optimizer (e.g. AdamW with per-module LR groups)."""
+        ...
 
+    @abstractmethod
     def _build_scheduler(self):
-        """Build LR scheduler."""
-        return build_scheduler(self.optimizer, self.training_args)
+        """Build the LR scheduler."""
+        ...
 
+    @abstractmethod
     def _clip_gradients(self, max_norm: float) -> float:
         """Gradient clipping. Returns the pre-clip global gradient norm."""
-        if hasattr(self.optimizer, "clip_grad_norm"):
-            return self.optimizer.clip_grad_norm(max_norm)
-        return clip_gradients(self.model, max_norm)
+        ...
 
+    @abstractmethod
     def _clean_nan_gradients(self):
         """Replace NaN/Inf gradients with 0."""
-        clean_nan_gradients(self.model)
+        ...
 
     def _compute_grad_norm(self) -> float:
         """Return the pre-clip global gradient norm when ``--clip-grad`` is off.
@@ -647,158 +608,46 @@ class BaseTrainer(ABC):
         """
         return get_grad_norm(self.model)
 
+    @abstractmethod
     def _load_pretrained(self, path: str):
-        """Load pretrained weights, preferring model.load_pretrained if available."""
-        if hasattr(self.model, "load_pretrained"):
-            self.model.load_pretrained(path, device=self.ctx.device)
-        elif hasattr(self.model, "model") and hasattr(self.model.model, "load_pretrained"):
-            self.model.model.load_pretrained(path, device=self.ctx.device)
-        else:
-            load_pretrained(self.model, path, self.ctx)
-        self.logger.log_pretrained_loaded(path)
+        """Load pretrained weights."""
+        ...
 
+    @abstractmethod
     def _handle_resume(self, path: str, step: int, epoch: int):
-        """Resume model weights from a discovered checkpoint.
+        """Resume model weights from a discovered checkpoint, set step/epoch."""
+        ...
 
-        For ``dcp`` checkpoints, weight loading is deferred until after
-        ``wrap_model`` (handled by ``resume_training_state``), since DCP needs
-        the FSDP-sharded DTensor layout to know how to reshard. Calling
-        ``load_pretrained`` here would also fail because there is no
-        consolidated single-file model in a DCP checkpoint dir.
-        """
-        if is_lora_adapter_checkpoint(path):
-            if not self.training_args.use_lora:
-                raise ValueError(
-                    "Resuming a LoRA adapter checkpoint requires --use-lora."
-                )
-            meta = read_adapter_meta(path) or {}
-            base_checkpoint = meta.get("base_checkpoint")
-            if base_checkpoint:
-                if self.ctx.is_main:
-                    logger.info(
-                        "LoRA resume: loading base weights from %s",
-                        base_checkpoint,
-                    )
-                self._load_pretrained(base_checkpoint)
-            elif self.ctx.is_main:
-                logger.info(
-                    "LoRA resume: model provider supplied base weights; "
-                    "adapter weights will load before distributed wrapping."
-                )
-            self._lora_resume_adapter_path = path
-            self.completed_steps = step
-            self.current_epoch = epoch
-            self.logger.log_resume(step)
-            return
-
-        fmt = detect_checkpoint_format(path)
-        if fmt == "dcp":
-            if self.ctx.is_main:
-                logger.info(
-                    "resume: detected DCP checkpoint at %s — deferring weight "
-                    "load until after wrap_model.", path,
-                )
-        else:
-            load_pretrained(self.model, path, self.ctx)
-        self.completed_steps = step
-        self.current_epoch = epoch
-        self.logger.log_resume(step)
-
+    @abstractmethod
     def _freeze_modules(self, freeze_str: str):
-        """Freeze specified modules by dot-path."""
-        if not freeze_str:
-            freeze_func = getattr(self.model, "freeze_modules", None)
-            if callable(freeze_func):
-                freeze_func()
-            return
-        for dot_path in [p.strip() for p in freeze_str.split(",") if p.strip()]:
-            current_module = self.model
-            successfully_traversed = []
-            try:
-                for attr_name in dot_path.split("."):
-                    current_module = getattr(current_module, attr_name)
-                    successfully_traversed.append(attr_name)
-                for param in current_module.parameters():
-                    param.requires_grad = False
-                self.logger.log_frozen_module(dot_path)
-            except AttributeError:
-                resolved_prefix = ".".join(successfully_traversed) if successfully_traversed else "<root>"
-                missing_attr = dot_path.split(".")[len(successfully_traversed)]
-                self.logger.log_freeze_not_found(dot_path, resolved_prefix, missing_attr)
+        """Freeze specified modules."""
+        ...
 
+    @abstractmethod
     def _save_checkpoint(self):
-        save_checkpoint(
-            self.model, self.optimizer, self.lr_scheduler,
-            self.completed_steps, self.checkpoint_dir, self.ctx, self.training_args,
-            epoch=self.current_epoch,
-            dataloader_state=self._get_dataloader_state(),
-            model_cfg=self.model_cfg,
-            data_cfg=self.data_cfg,
-        )
+        """Persist model/optimizer/scheduler/dataloader state to a checkpoint."""
+        ...
 
-    # ── Data / state ──
+    # ── Data / state (iterator lifecycle, implemented per subclass) ──
 
+    @abstractmethod
     def _init_data_iterator(self, name: str):
-        """Initialize iterator for named dataloader and store in self._data_iters.
+        """Initialize the iterator for the named dataloader.
 
-        Uses a per-loader epoch counter (self._epochs). The primary loader "vla"
-        mirrors self.current_epoch (set by checkpoint resume) so its shuffle
-        stream is aligned; other loaders start at 0 unless restored.
-
-        SKIP `set_epoch` when this loader's state was just restored via
-        `dl.load_state_dict()` — `StatefulDistributedSampler.set_epoch` clears
-        the `_yielded` progress counter, which would re-emit the epoch from
-        sample 0 and silently undo the in-epoch resume position.
+        Implementations should honor per-loader epoch semantics and call
+        self._maybe_restore_rng_once() once (see multi-dataloader design).
         """
-        dl = self.dataloaders[name]
-        epoch = self._epochs.get(name, self.current_epoch if name == "vla" else 0)
-        sampler = getattr(dl, "sampler", None)
-        restored_from_state = name in self._resume_dataloader_state
-        if (
-            sampler is not None
-            and hasattr(sampler, "set_epoch")
-            and not restored_from_state
-        ):
-            sampler.set_epoch(epoch)
-        self._epochs[name] = epoch
-        self._data_iters[name] = iter(dl)
-        # One-shot RNG restore (only the first loader to init triggers it).
-        self._maybe_restore_rng_once()
-        if self.ctx.is_main:
-            logger.info(f"Dataloader '{name}' positioned at epoch={epoch}")
+        ...
 
+    @abstractmethod
     def _advance_epoch(self, name: str):
-        """Move the named dataloader to the next epoch."""
-        self._epochs[name] = self._epochs.get(name, 0) + 1
-        if name == "vla":
-            self.current_epoch = self._epochs[name]
-        dl = self.dataloaders[name]
-        if hasattr(dl, "sampler") and hasattr(dl.sampler, "set_epoch"):
-            dl.sampler.set_epoch(self._epochs[name])
-        self._data_iters[name] = iter(dl)
+        """Advance the named dataloader to its next epoch and reset its iterator."""
+        ...
 
+    @abstractmethod
     def _fetch_batch(self, dl_name: str):
-        """Fetch next batch, handle epoch boundary by cycling the iterator."""
-        batch = self._fetch_batch_cpu(dl_name)
-        return self._move_batch_to_device(batch)
-
-    def _fetch_batch_cpu(self, dl_name: str):
-        """Fetch next CPU batch without moving it to the training device."""
-        try:
-            batch = next(self._data_iters[dl_name])
-        except StopIteration:
-            self._advance_epoch(dl_name)
-            batch = next(self._data_iters[dl_name])
-        return batch
-
-
-    def _move_batch_to_device(self, batch):
-        """Move a fetched batch to the current model device."""
-        device = next(self.model.parameters()).device
-        if hasattr(batch, "to"):
-            batch = batch.to(device)
-        return batch
-
+        """Fetch the next batch, cycling the iterator at epoch boundaries."""
+        ...
 
     # ═══════════════════════════════════════════════
     # Optional hooks
@@ -817,7 +666,7 @@ class BaseTrainer(ABC):
     def _run_forward_backward_block(self) -> dict:
         """Run zero_grad + one optimizer step's forward/backward block.
 
-        Default: ``optimizer.zero_grad`` followed by the shared
+        Default: ``optimizer.zero_grad`` followed by the abstract
         :meth:`_forward_backward` gradient-accumulation loop. Returns
         ``log_dict``. Subclasses may override to take over this block (e.g. a
         CUDA graph runner that fuses zero_grad + forward + backward + grad sync
@@ -827,23 +676,9 @@ class BaseTrainer(ABC):
             self.optimizer.zero_grad()
         return self._forward_backward()
 
-    def _cfg_bool(self, key: str, default: bool = False) -> bool:
-        value = getattr(self.model_cfg, key, default)
-        if isinstance(value, str):
-            return value.lower() in {"1", "true", "yes", "on"}
-        return bool(value)
-
-
-    def _configure_backend_precision(self) -> None:
-        """Apply optional CUDA backend precision policy from model config."""
-        if not self._cfg_bool("disable_reduced_precision_reduction", False):
-            return
-
-        matmul = torch.backends.cuda.matmul
-        if hasattr(matmul, "allow_bf16_reduced_precision_reduction"):
-            matmul.allow_bf16_reduced_precision_reduction = False
-        if hasattr(matmul, "allow_fp16_reduced_precision_reduction"):
-            matmul.allow_fp16_reduced_precision_reduction = False
+    def _configure_backend_precision(self):
+        """Hook for model-specific backend precision controls."""
+        pass
 
     def _fp8_forward_ctx(self):
         """Return the FP8 forward context, or a no-op when ``--fp8`` is off.
@@ -879,10 +714,6 @@ class BaseTrainer(ABC):
 
     def _on_after_data_iterators_initialized(self):
         """Hook after dataloader iterators are initialized."""
-        pass
-
-    def _on_after_train_batch_fetch(self, batch, micro_step: int) -> None:
-        """Hook after each training batch is fetched."""
         pass
 
     def _on_train_begin(self):

@@ -16,16 +16,16 @@ shuffling (map-style) or natural iteration (iterable-style).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, TYPE_CHECKING
+from typing import Any, Callable, Optional
 
 import torch
 from torch.utils.data import IterableDataset, Sampler
 from torchdata.stateful_dataloader.sampler import StatefulDistributedSampler
 
-from loongforge.data.embodied.registry import get_sampler_builder
-
-if TYPE_CHECKING:
-    from loongforge.data.embodied.registry import DataRuntime
+from loongforge.data.embodied.registry import (
+    get_sampler_builder,
+    register_sampler_builder as register_sampler_builder,
+)
 
 
 @dataclass(frozen=True)
@@ -34,7 +34,7 @@ class SamplerBuilderContext:
 
     dataset: Any
     training_args: Any
-    runtime: "DataRuntime"
+    ctx: Any  # DistributedContext
     batch_size: int
     seed: int
     shuffle: bool
@@ -119,8 +119,8 @@ def default_sampler_builder(context: SamplerBuilderContext) -> Optional[Sampler]
     if isinstance(dataset, IterableDataset):
         return None
 
-    runtime = context.runtime
-    if not (runtime.is_distributed and runtime.world_size > 1):
+    ctx = context.ctx
+    if not (ctx.is_distributed and ctx.world_size > 1):
         return None
 
     drop_last = context.training_args.batch_drop_last
@@ -128,8 +128,8 @@ def default_sampler_builder(context: SamplerBuilderContext) -> Optional[Sampler]
         return _BlockShardSampler(
             dataset,
             batch_size=context.batch_size,
-            num_replicas=runtime.world_size,
-            rank=runtime.rank,
+            num_replicas=ctx.world_size,
+            rank=ctx.rank,
             shuffle=context.shuffle,
             seed=context.seed,
             drop_last=drop_last,
@@ -137,8 +137,8 @@ def default_sampler_builder(context: SamplerBuilderContext) -> Optional[Sampler]
 
     return StatefulDistributedSampler(
         dataset,
-        num_replicas=runtime.world_size,
-        rank=runtime.rank,
+        num_replicas=ctx.world_size,
+        rank=ctx.rank,
         shuffle=context.shuffle,
         seed=context.seed,
         drop_last=drop_last,
@@ -150,17 +150,17 @@ def build_sampler(
     *,
     dataset,
     training_args,
-    runtime,
+    ctx,
     batch_size: int,
     seed: int,
     shuffle: bool = True,
 ) -> Optional[Sampler]:
     """Build the sampler for ``model_type`` via its registered builder."""
-    builder = get_sampler_builder(model_type) or default_sampler_builder
+    builder = get_sampler_builder(model_type)
     context = SamplerBuilderContext(
         dataset=dataset,
         training_args=training_args,
-        runtime=runtime,
+        ctx=ctx,
         batch_size=batch_size,
         seed=seed,
         shuffle=shuffle,

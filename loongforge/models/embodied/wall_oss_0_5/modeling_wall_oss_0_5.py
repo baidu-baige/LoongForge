@@ -27,6 +27,8 @@ from loongforge.models.embodied.wall_oss_0_5.qwen2_5 import (
     Qwen25VLMoEForAction,
 )
 
+from loongforge.training.embodied.global_vars import get_model_config, get_training_args
+
 logger = logging.getLogger(__name__)
 
 
@@ -42,8 +44,9 @@ def _load_safetensors_dir(path: str | os.PathLike[str]) -> dict[str, torch.Tenso
     return merged
 
 
-def _resolve_wall_oss_paths_from_training_args(training_args) -> tuple[str, str, str, str]:
+def _resolve_wall_oss_paths_from_training_args() -> tuple[str, str, str, str]:
     """Resolve wall oss paths from training args."""
+    training_args = get_training_args()
     pretrained_checkpoint = training_args.pretrained_checkpoint
     tokenizer_path = training_args.tokenizer_path
     if not pretrained_checkpoint:
@@ -178,7 +181,7 @@ class WallOss05Model(nn.Module):
         }
 
     @classmethod
-    def from_training_args(cls, model_cfg: WallOss05ModelConfig, training_args) -> "WallOss05Model":
+    def from_pretrained(cls, model_cfg: WallOss05ModelConfig) -> "WallOss05Model":
         """Build the model shell only; weights are loaded later via ``load_pretrained``.
 
         Config still comes from ``--pretrained-checkpoint`` because Qwen's
@@ -188,7 +191,7 @@ class WallOss05Model(nn.Module):
         this class fits the standard trainer build → _load_pretrained flow.
         """
         config_path, processor_path, pretrained_path, _ = (
-            _resolve_wall_oss_paths_from_training_args(training_args)
+            _resolve_wall_oss_paths_from_training_args()
         )
 
         if config_path.endswith(".json"):
@@ -219,11 +222,6 @@ class WallOss05Model(nn.Module):
         # perform the full two-stage load without re-reading training args.
         wrapper._qwen_pretrained_path = pretrained_path
         wrapper._tokenizer_len = len(processor.tokenizer)
-        wrapper._ddp_mix_precision = (
-            getattr(training_args, "distributed_strategy", None) == "ddp"
-            and str(getattr(training_args, "dtype", "")).lower() in {"bfloat16", "bf16"}
-        )
-        wrapper.norm_forward_prefetch_distance = getattr(model_cfg, "norm_forward_prefetch_distance", 0)
         return wrapper
 
     def load_pretrained(self, path: str, device=None):
@@ -246,7 +244,10 @@ class WallOss05Model(nn.Module):
         fp32 while casting compute modules to bf16. Under FSDP the mixed
         precision policy owns dtypes, so this only runs for DDP.
         """
-        if not self._ddp_mix_precision:
+        training_args = get_training_args()
+        if getattr(training_args, "distributed_strategy", None) != "ddp":
+            return
+        if str(getattr(training_args, "dtype", "")).lower() not in {"bfloat16", "bf16"}:
             return
         self.convert_to_mix_precision()
         logger.info(
@@ -274,7 +275,11 @@ class WallOss05Model(nn.Module):
             offload_policy=offload_policy,
             reshard_after_forward=reshard_after_forward,
             use_dmuon=use_dmuon,
-            norm_forward_prefetch_distance=getattr(self, "norm_forward_prefetch_distance", 0),
+            norm_forward_prefetch_distance=getattr(
+                get_model_config(),
+                "norm_forward_prefetch_distance",
+                0,
+            ),
         )
         if use_dmuon and hasattr(wrapped, "_dedicated_comm_ctx"):
             self._dedicated_comm_ctx = wrapped._dedicated_comm_ctx

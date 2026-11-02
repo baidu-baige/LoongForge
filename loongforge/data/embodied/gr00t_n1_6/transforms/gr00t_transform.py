@@ -17,22 +17,20 @@ from loongforge.data.embodied.registry import (
     TransformBuilderContext,
     register_transform_builder,
 )
-from loongforge.data.embodied.gr00t_n1_6.transforms.gr00t_n1_6_processor import (
+from loongforge.data.embodied.gr00t_n1_6.transforms.processor_gr00t_n1_6 import (
     StateActionProcessor,
 )
 from loongforge.data.embodied.gr00t_n1_6.transforms.utils import (
     ALBUMENTATIONS_AVAILABLE,
-    apply_with_replay,
-    build_image_transformations,
-    build_image_transformations_albumentations,
-    compute_relative_action_stats,
-)
-from loongforge.models.embodied.gr00t_n1_6.embodiment_configs import (
     EMBODIMENT_STAT_CONFIGS,
     EMBODIMENT_TAG_TO_PROJECTOR_INDEX,
     MODALITY_CONFIGS,
     EmbodimentTag,
     ModalityConfig,
+    apply_with_replay,
+    build_image_transformations,
+    build_image_transformations_albumentations,
+    compute_relative_action_stats,
     convert_lerobot_stats_to_processor_format,
 )
 

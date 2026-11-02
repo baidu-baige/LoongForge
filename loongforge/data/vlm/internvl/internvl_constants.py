@@ -5,6 +5,7 @@
 # --------------------------------------------------------
 """ constants for internvl """
 
+IMG_CONTEXT_TOKEN = '<IMG_CONTEXT>'
 IMG_START_TOKEN = '<img>'
 IMG_END_TOKEN = '</img>'
 QUAD_START_TOKEN = '<quad>'

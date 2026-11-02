@@ -24,7 +24,7 @@ from loongforge.training.embodied.custom.gr00t_n1_7.gr00t_optimizer import (
     build_groot_optimizer,
 )
 from loongforge.training.embodied.sft import FinetuneTrainer
-from loongforge.engines.torch.utils.utils import set_seed
+from loongforge.engines.torch.utils.runtime import set_seed
 
 logger = logging.getLogger(__name__)
 

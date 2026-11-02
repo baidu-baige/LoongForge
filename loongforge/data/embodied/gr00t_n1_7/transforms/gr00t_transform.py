@@ -7,7 +7,9 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
+import json
 from pathlib import Path
 import random
 import re
@@ -16,47 +18,290 @@ from typing import Any, Dict, Optional
 import numpy as np
 from PIL import Image
 import torch
+import warnings
 
-from loongforge.data.embodied.gr00t_n1_6.transforms.gr00t_n1_6_processor import (
+from loongforge.data.embodied.transforms.base import BaseTransform
+from loongforge.data.embodied.gr00t_n1_6.transforms.processor_gr00t_n1_6 import (
     StateActionProcessor,
-)
-from loongforge.data.embodied.gr00t_n1_6.transforms.gr00t_n1_6_transform import (
-    _as_size_list,
-    _extract_frames,
-    _normalize_text,
-    _to_numpy,
-)
-from loongforge.data.embodied.gr00t_n1_7.gr00t_n1_7_dataset import (
-    _read_json_if_exists,
-    _resolve_checkpoint_path,
-    _resolve_data_action_horizon,
-)
-from loongforge.data.embodied.gr00t_n1_7.transforms.data_configuration_gr00t_n1_7 import (
-    GrootN1d7DataConfig,
-)
-from loongforge.data.embodied.gr00t_n1_7.transforms.image_augmentations import (
-    apply_with_replay,
-    build_image_transformations,
-    build_image_transformations_albumentations,
 )
 from loongforge.data.embodied.registry import (
     TransformBuilderContext,
     register_transform_builder,
 )
-from loongforge.data.embodied.transforms.base import BaseTransform
-from loongforge.models.embodied.gr00t_n1_6.embodiment_configs import (
+from loongforge.data.embodied.gr00t_n1_6.transforms.utils import (
     ActionConfig,
     ActionFormat,
     ActionRepresentation,
     ActionType,
     ModalityConfig,
 )
-from loongforge.models.embodied.gr00t_n1_7.embodiment_configs import (
-    EMBODIMENT_TAG_TO_PROJECTOR_INDEX,
-    MODALITY_CONFIGS,
-    convert_lerobot_stats_to_groot_n1d7_format,
+from loongforge.data.embodied.gr00t_n1_7.transforms.image_augmentations import (
+    apply_with_replay,
+    build_image_transformations,
+    build_image_transformations_albumentations,
+)
+from loongforge.data.embodied.gr00t_n1_7.transforms.data_configuration_gr00t_n1_7 import (
+    GrootN1d7DataConfig,
 )
 from loongforge.models.embodied.gr00t_n1_7.model_configuration_gr00t_n1_7 import GrootN1d7Config
+
+
+EMBODIMENT_TAG_TO_PROJECTOR_INDEX = {
+    "oxe_droid_relative_eef_relative_joint": 24,
+    "xdof_relative_eef_relative_joint": 27,
+    "xdof_relative_eef_relative_joint_subtask": 27,
+    "real_g1_relative_eef_relative_joints": 25,
+    "real_r1_pro_sharpa_relative_eef": 26,
+    "real_r1_pro_sharpa_relative_eef_human": 26,
+    "real_r1_pro_sharpa_relative_eef_maxinsights": 26,
+    "real_r1_pro_sharpa_relative_eef_mecka": 26,
+    "unitree_g1_full_body_with_waist_height_nav_cmd": 25,
+    "simpler_env_google": 0,
+    "simpler_env_widowx": 1,
+    "libero_sim": 2,
+    "new_embodiment": 10,
+}
+
+
+LIBERO_SIM_MODALITY_META = {
+    "state": {
+        "x": {"start": 0, "end": 1},
+        "y": {"start": 1, "end": 2},
+        "z": {"start": 2, "end": 3},
+        "roll": {"start": 3, "end": 4},
+        "pitch": {"start": 4, "end": 5},
+        "yaw": {"start": 5, "end": 6},
+        # robot0_gripper_qpos is 2D (both finger joints); the official
+        # LiberoEnv declares state.gripper with shape (2,) and the released
+        # checkpoint statistics carry 2 values per stat for this group.
+        "gripper": {"start": 6, "end": 8},
+    },
+    "action": {
+        "x": {"start": 0, "end": 1},
+        "y": {"start": 1, "end": 2},
+        "z": {"start": 2, "end": 3},
+        "roll": {"start": 3, "end": 4},
+        "pitch": {"start": 4, "end": 5},
+        "yaw": {"start": 5, "end": 6},
+        "gripper": {"start": 6, "end": 7},
+    },
+}
+
+
+LIBERO_SIM_MODALITY_CONFIG = {
+    "video": ModalityConfig(delta_indices=[0], modality_keys=["image", "wrist_image"]),
+    "state": ModalityConfig(
+        delta_indices=[0],
+        modality_keys=["x", "y", "z", "roll", "pitch", "yaw", "gripper"],
+    ),
+    "action": ModalityConfig(
+        delta_indices=list(range(16)),
+        modality_keys=["x", "y", "z", "roll", "pitch", "yaw", "gripper"],
+        action_configs=[
+            ActionConfig(
+                rep=ActionRepresentation.ABSOLUTE,
+                type=ActionType.NON_EEF,
+                format=ActionFormat.DEFAULT,
+            )
+        ]
+        * 7,
+    ),
+    "language": ModalityConfig(
+        delta_indices=[0],
+        modality_keys=["annotation.human.action.task_description"],
+    ),
+}
+
+
+SIMPLER_ENV_WIDOWX_MODALITY_META = {
+    "state": {
+        "x": {"start": 0, "end": 1},
+        "y": {"start": 1, "end": 2},
+        "z": {"start": 2, "end": 3},
+        "roll": {"start": 3, "end": 4},
+        "pitch": {"start": 4, "end": 5},
+        "yaw": {"start": 5, "end": 6},
+        # Dead channel: the Bridge statistics carry q01 == q99 == 0.0 for
+        # ``pad`` and the official ``WidowXBridgeEnv`` always feeds 0. It still
+        # has to occupy index 6 so ``gripper`` lands on index 7.
+        "pad": {"start": 6, "end": 7},
+        # 1D normalized openness in [0, 1] (1.0 = fully open), unlike
+        # ``libero_sim`` whose gripper slot is the 2D finger qpos.
+        "gripper": {"start": 7, "end": 8},
+    },
+    "action": {
+        "x": {"start": 0, "end": 1},
+        "y": {"start": 1, "end": 2},
+        "z": {"start": 2, "end": 3},
+        "roll": {"start": 3, "end": 4},
+        "pitch": {"start": 4, "end": 5},
+        "yaw": {"start": 5, "end": 6},
+        "gripper": {"start": 6, "end": 7},
+    },
+}
+
+
+# Transcribed from ``processor_config.json`` of
+# ``nvidia/GR00T-N1.7-SimplerEnv-Bridge`` (``processor_kwargs.modality_configs
+# ["simpler_env_widowx"]``): a single exterior view, an 8D state whose 7th slot
+# is a dead pad channel, and an 8-step absolute action chunk.
+SIMPLER_ENV_WIDOWX_MODALITY_CONFIG = {
+    "video": ModalityConfig(delta_indices=[0], modality_keys=["image_0"]),
+    "state": ModalityConfig(
+        delta_indices=[0],
+        modality_keys=["x", "y", "z", "roll", "pitch", "yaw", "pad", "gripper"],
+    ),
+    "action": ModalityConfig(
+        delta_indices=list(range(8)),
+        modality_keys=["x", "y", "z", "roll", "pitch", "yaw", "gripper"],
+        action_configs=[
+            ActionConfig(
+                rep=ActionRepresentation.ABSOLUTE,
+                type=ActionType.NON_EEF,
+                format=ActionFormat.DEFAULT,
+            )
+        ]
+        * 7,
+    ),
+    "language": ModalityConfig(
+        delta_indices=[0],
+        modality_keys=["annotation.human.action.task_description"],
+    ),
+}
+
+
+SIMPLER_ENV_GOOGLE_MODALITY_META = {
+    "state": {
+        "x": {"start": 0, "end": 1},
+        "y": {"start": 1, "end": 2},
+        "z": {"start": 2, "end": 3},
+        "rx": {"start": 3, "end": 4},
+        "ry": {"start": 4, "end": 5},
+        "rz": {"start": 5, "end": 6},
+        "rw": {"start": 6, "end": 7},
+        "gripper": {"start": 7, "end": 8},
+    },
+    "action": {
+        "x": {"start": 0, "end": 1},
+        "y": {"start": 1, "end": 2},
+        "z": {"start": 2, "end": 3},
+        "roll": {"start": 3, "end": 4},
+        "pitch": {"start": 4, "end": 5},
+        "yaw": {"start": 5, "end": 6},
+        "gripper": {"start": 6, "end": 7},
+    },
+}
+
+
+# Fractal uses an 8D quaternion state and the same 7D absolute Euler action
+# layout as the released GR00T-N1.7 SimplerEnv policy.
+SIMPLER_ENV_GOOGLE_MODALITY_CONFIG = {
+    "video": ModalityConfig(delta_indices=[0], modality_keys=["image"]),
+    "state": ModalityConfig(
+        delta_indices=[0],
+        modality_keys=["x", "y", "z", "rx", "ry", "rz", "rw", "gripper"],
+    ),
+    "action": ModalityConfig(
+        delta_indices=list(range(8)),
+        modality_keys=["x", "y", "z", "roll", "pitch", "yaw", "gripper"],
+        action_configs=[
+            ActionConfig(
+                rep=ActionRepresentation.ABSOLUTE,
+                type=ActionType.NON_EEF,
+                format=ActionFormat.DEFAULT,
+            )
+        ]
+        * 7,
+    ),
+    "language": ModalityConfig(
+        delta_indices=[0],
+        modality_keys=["annotation.human.action.task_description"],
+    ),
+}
+
+
+NEW_EMBODIMENT_MODALITY_META = {
+    "state": {
+        "single_arm": {"start": 0, "end": 5},
+        "gripper": {"start": 5, "end": 6},
+    },
+    "action": {
+        "single_arm": {"start": 0, "end": 5},
+        "gripper": {"start": 5, "end": 6},
+    },
+}
+
+
+NEW_EMBODIMENT_MODALITY_CONFIG = {
+    "video": ModalityConfig(
+        delta_indices=[0],
+        modality_keys=["exterior_1_left", "wrist_left"],
+    ),
+    "state": ModalityConfig(
+        delta_indices=[0],
+        modality_keys=["single_arm", "gripper"],
+    ),
+    "action": ModalityConfig(
+        delta_indices=list(range(16)),
+        modality_keys=["single_arm", "gripper"],
+        action_configs=[
+            ActionConfig(
+                rep=ActionRepresentation.RELATIVE,
+                type=ActionType.NON_EEF,
+                format=ActionFormat.DEFAULT,
+            ),
+            ActionConfig(
+                rep=ActionRepresentation.ABSOLUTE,
+                type=ActionType.NON_EEF,
+                format=ActionFormat.DEFAULT,
+            ),
+        ],
+    ),
+    "language": ModalityConfig(
+        delta_indices=[0],
+        modality_keys=["annotation.language.language_instruction"],
+    ),
+}
+
+
+MODALITY_CONFIGS = {
+    "libero_sim": LIBERO_SIM_MODALITY_CONFIG,
+    "simpler_env_google": SIMPLER_ENV_GOOGLE_MODALITY_CONFIG,
+    "simpler_env_widowx": SIMPLER_ENV_WIDOWX_MODALITY_CONFIG,
+    "new_embodiment": NEW_EMBODIMENT_MODALITY_CONFIG,
+}
+
+
+EMBODIMENT_STAT_CONFIGS = {
+    "libero_sim": {
+        "modality_meta": LIBERO_SIM_MODALITY_META,
+        "modality_config": LIBERO_SIM_MODALITY_CONFIG,
+    },
+    "simpler_env_google": {
+        "modality_meta": SIMPLER_ENV_GOOGLE_MODALITY_META,
+        "modality_config": SIMPLER_ENV_GOOGLE_MODALITY_CONFIG,
+    },
+    "simpler_env_widowx": {
+        "modality_meta": SIMPLER_ENV_WIDOWX_MODALITY_META,
+        "modality_config": SIMPLER_ENV_WIDOWX_MODALITY_CONFIG,
+    },
+    "new_embodiment": {
+        "modality_meta": NEW_EMBODIMENT_MODALITY_META,
+        "modality_config": NEW_EMBODIMENT_MODALITY_CONFIG,
+    },
+}
+
+
+NEW_EMBODIMENT_GROUP_STAT_KEYS = {
+    "state": {
+        "single_arm": "observation.state.single_arm",
+        "gripper": "observation.state.gripper",
+    },
+    "action": {
+        "single_arm": "action.single_arm",
+        "gripper": "action.gripper",
+    },
+}
 
 
 @dataclass
@@ -70,6 +315,52 @@ class GrootN1d7RuntimeSemantics:
     video_key_mapping: dict[str, str]
     embodiment_id: int
     data_action_horizon: int
+
+
+def _resolve_data_action_horizon(model_cfg: Any, data_cfg: Any) -> int:
+    configured = data_cfg.preprocess_action_horizon
+    if configured is not None:
+        return int(configured)
+    return _resolve_checkpoint_action_horizon(model_cfg, data_cfg) or int(model_cfg.action_horizon)
+
+
+def _read_json_if_exists(path: Path) -> dict[str, Any]:
+    if path.exists():
+        with path.open(encoding="utf-8") as file_obj:
+            return json.load(file_obj)
+    return {}
+
+
+def _resolve_checkpoint_path(model_cfg: Any) -> Path | None:
+    path_value = model_cfg.base_model_path or model_cfg.pretrained_checkpoint
+    if path_value is None:
+        return None
+    path = Path(str(path_value))
+    return path if path.exists() else None
+
+
+def _resolve_checkpoint_action_horizon(model_cfg: Any, data_cfg: Any) -> int | None:
+    checkpoint_path = _resolve_checkpoint_path(model_cfg)
+    if checkpoint_path is None:
+        return None
+    processor_config = _read_json_if_exists(checkpoint_path / "processor_config.json")
+    processor_kwargs = processor_config.get("processor_kwargs", {})
+    if not isinstance(processor_kwargs, dict):
+        return None
+    modality_configs = processor_kwargs.get("modality_configs", {})
+    if not isinstance(modality_configs, dict):
+        return None
+    embodiment_tag = data_cfg.embodiment_tag
+    embodiment_config = modality_configs.get(embodiment_tag, {})
+    if not isinstance(embodiment_config, dict):
+        return None
+    action_config = embodiment_config.get("action", {})
+    if not isinstance(action_config, dict):
+        return None
+    delta_indices = action_config.get("delta_indices", [])
+    if not isinstance(delta_indices, list) or not delta_indices:
+        return None
+    return len(delta_indices)
 
 
 def _load_relative_action_stats(dataset: Any) -> dict[str, Any]:
@@ -723,6 +1014,14 @@ class GrootN1d7FeatureTransform(BaseTransform):
         }
 
 
+def _as_size_list(value: Any, default: list[int]) -> list[int]:
+    if value is None:
+        return list(default)
+    if isinstance(value, int):
+        return [value, value]
+    return list(value)
+
+
 def _resolve_replay_image_shape(dataset: Any) -> tuple[int, int] | None:
     info = getattr(dataset, "info", None)
     if not isinstance(info, dict):
@@ -740,6 +1039,39 @@ def _resolve_replay_image_shape(dataset: Any) -> tuple[int, int] | None:
     return None
 
 
+def _to_numpy(value: Any) -> np.ndarray:
+    if torch.is_tensor(value):
+        return value.detach().cpu().numpy()
+    if isinstance(value, np.ndarray):
+        return value
+    return np.array(value)
+
+
+def _to_uint8_hwc(frame: np.ndarray) -> np.ndarray:
+    arr = frame
+    if arr.ndim != 3:
+        raise ValueError(f"Expected image frame ndim=3, got {arr.ndim}")
+    if arr.shape[0] == 3 and arr.shape[-1] != 3:
+        arr = np.transpose(arr, (1, 2, 0))
+    if arr.shape[-1] != 3:
+        raise ValueError(f"Expected image channel size 3, got shape={arr.shape}")
+    if arr.dtype != np.uint8:
+        finite_vals = arr[np.isfinite(arr)]
+        if finite_vals.size and finite_vals.max() <= 1.0:
+            arr = arr * 255.0
+        arr = np.clip(arr, 0, 255).astype(np.uint8)
+    return np.ascontiguousarray(arr)
+
+
+def _extract_frames(image_array: np.ndarray) -> list[np.ndarray]:
+    arr = image_array
+    if arr.ndim == 3:
+        arr = arr[None, ...]
+    if arr.ndim != 4:
+        raise ValueError(f"Unsupported image shape {arr.shape}")
+    return [_to_uint8_hwc(frame) for frame in arr]
+
+
 def _extract_masks(mask_array: np.ndarray) -> list[np.ndarray]:
     arr = mask_array
     if arr.ndim == 2:
@@ -751,6 +1083,219 @@ def _extract_masks(mask_array: np.ndarray) -> list[np.ndarray]:
     if arr.ndim != 3:
         raise ValueError(f"Unsupported mask shape {arr.shape}")
     return [np.ascontiguousarray(frame) for frame in arr]
+
+
+def _normalize_text(text_value: Any) -> str:
+    value = text_value
+    if torch.is_tensor(value):
+        if value.numel() == 1:
+            value = value.item()
+        else:
+            value = value.tolist()
+    if isinstance(value, bytes):
+        value = value.decode("utf-8")
+    return value if isinstance(value, str) else str(value)
+
+
+def convert_lerobot_stats_to_groot_n1d7_format(
+    dataset_stats: Dict[str, Any],
+    embodiment_tag: str = "libero_sim",
+    *,
+    modality_meta: dict[str, dict[str, dict[str, int]]] | None = None,
+    modality_config: dict[str, ModalityConfig] | None = None,
+) -> dict:
+    """Convert flat LoongForge LeRobot stats to processor-style GR00T stats."""
+    if "statistics" in dataset_stats and isinstance(dataset_stats["statistics"], dict):
+        dataset_stats = dataset_stats["statistics"]
+    if modality_meta is None or modality_config is None:
+        if embodiment_tag not in EMBODIMENT_STAT_CONFIGS:
+            raise ValueError(f"Unsupported GR00T-N1.7 embodiment tag: {embodiment_tag}")
+        modality_meta = EMBODIMENT_STAT_CONFIGS[embodiment_tag]["modality_meta"]
+        modality_config = EMBODIMENT_STAT_CONFIGS[embodiment_tag]["modality_config"]
+    if not modality_meta or not modality_config:
+        raise ValueError(f"Unsupported GR00T-N1.7 embodiment tag: {embodiment_tag}")
+    statistics = {embodiment_tag: {}}
+
+    stats_key_map = {"state": "observation.state", "action": "action"}
+    for modality in ("state", "action"):
+        source_key = stats_key_map[modality]
+        if source_key not in dataset_stats:
+            raise KeyError(f"Missing dataset statistics key '{source_key}'")
+        source_stats = dataset_stats[source_key]
+        statistics[embodiment_tag][modality] = {}
+        for joint_group in modality_config[modality].modality_keys:
+            group_source_stats = _get_group_source_stats(
+                dataset_stats,
+                embodiment_tag,
+                modality,
+                joint_group,
+            )
+            if group_source_stats is not None:
+                statistics[embodiment_tag][modality][joint_group] = _copy_stats(group_source_stats)
+            else:
+                meta = modality_meta[modality][joint_group]
+                statistics[embodiment_tag][modality][joint_group] = _slice_stats(
+                    source_stats,
+                    meta["start"],
+                    meta["end"],
+                )
+
+    if "relative_action" in dataset_stats:
+        statistics[embodiment_tag]["relative_action"] = deepcopy(dataset_stats["relative_action"])
+    return statistics
+
+
+def get_groot_n1d7_statistics(dataset_stats: Dict[str, Any], embodiment_tag: str = "libero_sim") -> dict:
+    """Backward-compatible alias for GR00T-N1.7 statistics conversion."""
+    return convert_lerobot_stats_to_groot_n1d7_format(dataset_stats, embodiment_tag)
+
+
+def _slice_stats(stats_dict: dict[str, Any], start_idx: int, end_idx: int) -> dict[str, list]:
+    sliced = {}
+    for stat_type, values in stats_dict.items():
+        arr = _to_numpy(values)
+        sliced[stat_type] = arr[start_idx:end_idx].tolist()
+    return sliced
+
+
+def _copy_stats(stats_dict: dict[str, Any]) -> dict[str, list]:
+    copied = {}
+    for stat_type, values in stats_dict.items():
+        arr = _to_numpy(values)
+        copied[stat_type] = arr.tolist()
+    return copied
+
+
+def _get_group_source_stats(
+    dataset_stats: dict[str, Any],
+    embodiment_tag: str,
+    modality: str,
+    joint_group: str,
+) -> dict[str, Any] | None:
+    if embodiment_tag != "new_embodiment":
+        return None
+    source_key = NEW_EMBODIMENT_GROUP_STAT_KEYS.get(modality, {}).get(joint_group)
+    if source_key is None:
+        return None
+    value = dataset_stats.get(source_key)
+    return value if isinstance(value, dict) else None
+
+
+def _ensure_new_embodiment_group_stats(
+    dataset_stats: dict[str, Any],
+    dataset: Any,
+) -> dict[str, Any]:
+    root = dataset.root or dataset.dataset_path
+    if root is None:
+        return dataset_stats
+    root = Path(root)
+    required_keys = {
+        source_key
+        for modality_sources in NEW_EMBODIMENT_GROUP_STAT_KEYS.values()
+        for source_key in modality_sources.values()
+    }
+    missing_keys = [key for key in sorted(required_keys) if key not in dataset_stats]
+    if not missing_keys:
+        return dataset_stats
+    computed = _compute_dataset_feature_stats(root, missing_keys)
+    merged = dict(dataset_stats)
+    merged.update(computed)
+    return merged
+
+
+def _compute_dataset_feature_stats(root: Path, feature_keys: list[str]) -> dict[str, dict[str, list]]:
+    import pandas as pd
+
+    parquet_files = sorted((root / "data").glob("*/*.parquet"))
+    if not parquet_files:
+        raise FileNotFoundError(f"No parquet files found under {root / 'data'}")
+
+    values_by_key: dict[str, list[np.ndarray]] = {key: [] for key in feature_keys}
+    missing_by_key: dict[str, bool] = {key: True for key in feature_keys}
+    for parquet_file in parquet_files:
+        frame = pd.read_parquet(parquet_file, columns=feature_keys)
+        for key in feature_keys:
+            if key not in frame.columns:
+                continue
+            missing_by_key[key] = False
+            values_by_key[key].extend(
+                np.asarray(value, dtype=np.float32).reshape(-1)
+                for value in frame[key].to_numpy()
+            )
+
+    missing = [key for key, is_missing in missing_by_key.items() if is_missing]
+    if missing:
+        raise KeyError(f"Missing parquet columns required for new_embodiment stats: {missing}")
+
+    stats: dict[str, dict[str, list]] = {}
+    for key, values in values_by_key.items():
+        data = np.vstack(values)
+        stats[key] = {
+            "mean": np.mean(data, axis=0).tolist(),
+            "std": np.std(data, axis=0).tolist(),
+            "min": np.min(data, axis=0).tolist(),
+            "max": np.max(data, axis=0).tolist(),
+            "q01": np.quantile(data, 0.01, axis=0).tolist(),
+            "q99": np.quantile(data, 0.99, axis=0).tolist(),
+        }
+    return stats
+
+
+def _apply_qwen_chat_template(conversation: list[dict[str, Any]]) -> str:
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=UserWarning)
+        try:
+            from transformers.utils.chat_template_utils import render_jinja_template
+
+            rendered, _ = render_jinja_template(
+                conversations=[conversation],
+                tools=None,
+                documents=None,
+                chat_template=_QWEN_CHAT_TEMPLATE,
+                add_generation_prompt=False,
+                continue_final_message=False,
+                return_assistant_tokens_mask=False,
+                template_kwargs={},
+                return_dict=False,
+            )
+            return rendered[0]
+        except Exception:
+            pieces = []
+            for message in conversation:
+                content = message.get("content", [])
+                if isinstance(content, str):
+                    pieces.append(content)
+                    continue
+                for item in content:
+                    if item.get("type") == "image":
+                        pieces.append("<|vision_start|><|image_pad|><|vision_end|>")
+                    elif item.get("type") == "text":
+                        pieces.append(str(item.get("text", "")))
+            return "\n".join(pieces)
+
+
+_QWEN_CHAT_TEMPLATE = (
+    "{% set image_count = namespace(value=0) %}"
+    "{% set video_count = namespace(value=0) %}"
+    "{% for message in messages %}"
+    "{% if loop.first and message['role'] != 'system' %}<|im_start|>system\n"
+    "You are a helpful assistant.<|im_end|>\n"
+    "{% endif %}<|im_start|>{{ message['role'] }}\n"
+    "{% if message['content'] is string %}{{ message['content'] }}<|im_end|>\n"
+    "{% else %}{% for content in message['content'] %}"
+    "{% if content['type'] == 'image' or 'image' in content or 'image_url' in content %}"
+    "{% set image_count.value = image_count.value + 1 %}"
+    "{% if add_vision_id %}Picture {{ image_count.value }}: {% endif %}"
+    "<|vision_start|><|image_pad|><|vision_end|>"
+    "{% elif content['type'] == 'video' or 'video' in content %}"
+    "{% set video_count.value = video_count.value + 1 %}"
+    "{% if add_vision_id %}Video {{ video_count.value }}: {% endif %}"
+    "<|vision_start|><|video_pad|><|vision_end|>"
+    "{% elif 'text' in content %}{{ content['text'] }}{% endif %}"
+    "{% endfor %}<|im_end|>\n"
+    "{% endif %}{% endfor %}{% if add_generation_prompt %}<|im_start|>assistant\n"
+    "{% endif %}"
+)
 
 
 @register_transform_builder("Gr00tN1d7")

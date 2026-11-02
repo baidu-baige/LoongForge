@@ -47,9 +47,15 @@ from megatron.core.transformer.experimental_attention_variant.dsa import (
     DSAIndexerLossLoggingHelper as DSAIndexerLossLoggingHelperFused,
     get_dsa_index_share_topk_holder,
     is_dsa_skip_topk_layer,
-    rotate_activation,
     source_dsa_compute_layer,
 )
+
+from loongforge.engines.megatron import get_args
+
+try:
+    from fast_hadamard_transform import hadamard_transform
+except ImportError:
+    hadamard_transform = None
 
 from .dsa_fused_utils import (
     all_to_all_hp2sp_with_padding,
@@ -63,6 +69,25 @@ from .dsa_fused_kernels import (
     DSAIndexerKernel,
     fused_apply_mla_rope,
 )
+
+
+def rotate_activation(x: torch.Tensor) -> torch.Tensor:
+    """Apply Hadamard rotation activation.
+    Reference:
+        https://github.com/deepseek-ai/DeepSeek-V3.2-Exp/blob/main/inference/model.py#L424-L428
+
+    Args:
+        x: Input tensor (must be bfloat16).
+
+    Returns:
+        Rotated tensor.
+    """
+    assert (
+        x.dtype == torch.bfloat16
+    ), f"rotate_activation only support bf16 input, but got {x.dtype}"
+    assert hadamard_transform is not None, "fast_hadamard_transform is not installed."
+    hidden_size = x.size(-1)
+    return hadamard_transform(x, scale=hidden_size**-0.5)
 
 
 @dataclass
@@ -739,7 +764,8 @@ class DSAttentionFused(MegatronModule):
             # Keep MTP layers off the decoder layers' indexer-loss tracker slots.
             self.layer_number = self.layer_number + self.config.num_layers
         self.pg_collection = pg_collection
-        self.use_dsa_sp_first = getattr(self.config, "use_dsa_sp_first", False)
+        args = get_args()
+        self.use_dsa_sp_first = getattr(args, "use_dsa_sp_first", False) if args is not None else False
 
         # Cross-layer top-k index sharing (IndexShare, GLM-5.2). MTP layers always own an indexer.
         self.index_topk_freq = getattr(self.config, "dsa_indexer_topk_freq", 1)

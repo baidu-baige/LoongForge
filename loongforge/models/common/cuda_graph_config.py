@@ -21,7 +21,7 @@ from __future__ import annotations
 
 def _get_args():
     """Import and return training args."""
-    from megatron.training import get_args
+    from loongforge.engines.megatron import get_args
     return get_args()
 
 

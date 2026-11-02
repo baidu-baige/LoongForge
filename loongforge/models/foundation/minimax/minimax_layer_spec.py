@@ -30,7 +30,7 @@ from megatron.core.transformer.moe.moe_layer import MoELayer, MoESubmodules
 
 from .attention import MinimaxSelfAttention, MinimaxSelfAttentionSubmodules
 from loongforge.models.dispatch import multiacc_modules
-from megatron.core.utils import is_te_min_version
+from loongforge.engines.megatron import is_te_min_version
 
 
 

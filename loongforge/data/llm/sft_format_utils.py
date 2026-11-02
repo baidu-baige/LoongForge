@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Union, Dict, List, Any, Sequence
 
 from datasets import Features, Value
 
-from loongforge.data.chat_templates.template import DataRoles
+from loongforge.data.constants import SFTDataFormats, DataRoles
 
 
 if TYPE_CHECKING:
@@ -44,14 +44,6 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
-
-
-class SFTDataFormats(object):
-    """sft data formats"""
-
-    ALPACA = "alpaca"
-    SHAREGPT = "sharegpt"
-    OPENAI = "openai"
 
 
 def _convert_path(images: Sequence[str], dataset_dir: str):

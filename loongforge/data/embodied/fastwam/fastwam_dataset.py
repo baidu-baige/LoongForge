@@ -20,9 +20,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List
 
-from loongforge.data.embodied.lerobot_dataset import (
+from loongforge.data.embodied.datasets.lerobot_dataset import (
     LeRobotV3Dataset,
-    MultiLeRobotV2Dataset,
     _build_lerobot_dataset,
 )
 
@@ -67,7 +66,7 @@ def fastwam_delta_timestamps(dataset: LeRobotV3Dataset, info: Dict[str, Any], fp
     )
 
 
-def build_fastwam_lerobot_dataset(model_cfg, data_cfg, training_args, runtime):
+def build_fastwam_lerobot_dataset(model_cfg, data_cfg, training_args):
     """Build the FastWAM multi-frame-observation dataset via the behaviour hook.
 
     Derives ``repo_id`` from ``--dataset-path`` and dispatches through the
@@ -99,6 +98,10 @@ def build_fastwam_lerobot_dataset(model_cfg, data_cfg, training_args, runtime):
             observation_delta_indices=data_cfg.observation_delta_indices,
             delta_timestamps_fn=fastwam_delta_timestamps,
         )
+
+    from loongforge.data.embodied.datasets.lerobot_dataset import (
+        MultiLeRobotV2Dataset,
+    )
 
     return MultiLeRobotV2Dataset(
         roots=roots,

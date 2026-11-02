@@ -21,7 +21,7 @@ TASK_ENCODER_REGISTRY = {
     "vlmtaskencoder": "loongforge.data.vlm.vlm_task_encoder.VLMTaskEncoder",
     "internvltaskencoder": "loongforge.data.vlm.internvl.internvl_task_encoder.InternVLTaskEncoder",
     "llavaov15taskencoder": "loongforge.data.vlm.llava_ov_task_encoder.LLavaOv15TaskEncoder",
-    "ernietaskencoder": "loongforge.data.vlm.ernie_task_encoder.ErnieTaskEncoder",
+    "ernietaskencoder": "loongforge.data.vlm.ernie.ernie_task_encoder.ErnieTaskEncoder",
     "kimitaskencoder": "loongforge.data.vlm.kimi_task_encoder.KimiTaskEncoder",
     "minicpmv46taskencoder": (
         "loongforge.data.vlm.minicpm_v_4_6_task_encoder.MiniCPMV46TaskEncoder"
@@ -40,16 +40,16 @@ def resolve_task_encoder(name: str):
     return getattr(module, cls_name)
 
 
-def build_task_encoder(config, *encoder_args, **encoder_kwargs):
+def build_task_encoder(args, *encoder_args, **encoder_kwargs):
     """
     Factory that builds a task encoder instance based on args.task_encoder.
 
     Defaults to VLMTaskEncoder when unspecified, while keeping registry-based
     extensibility for other encoder classes.
     """
-    encoder_name = config.task_encoder or "VLMTaskEncoder"
+    encoder_name = getattr(args, "task_encoder", None) or "VLMTaskEncoder"
     encoder_cls = resolve_task_encoder(encoder_name)
-    return encoder_cls(config, *encoder_args, **encoder_kwargs)
+    return encoder_cls(args, *encoder_args, **encoder_kwargs)
 
 
 __all__ = [

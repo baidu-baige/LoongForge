@@ -6,7 +6,7 @@
 import numpy as np
 import torch
 from pathlib import Path
-class LatentDataset(torch.utils.data.Dataset):
+class TensorDataset(torch.utils.data.Dataset):
     def __init__(self, data_path, steps_per_epoch=0, seed=0, keep_keys=None, data_parallel_size=1):
         self.data_paths = []
         self.load_data(data_path)

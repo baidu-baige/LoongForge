@@ -28,9 +28,10 @@ import logging
 import random
 
 IGNORE_TOKEN_ID = -100
+IGNORE_INDEX = -100
 
-from loongforge.models.encoder.internvl_vision_models.internvl_config import IMG_CONTEXT_TOKEN
 from .internvl_constants import (
+    IMG_CONTEXT_TOKEN,
     IMG_END_TOKEN,
     IMG_START_TOKEN,
     IMAGENET_MEAN,
@@ -40,6 +41,8 @@ from .internvl_constants import (
     SIGLIP_MEAN,
     SIGLIP_STD,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def expand2square(pil_img, background_color):
@@ -70,6 +73,7 @@ def simulate_jpeg_degradation(quality):
 # Define the JPEG compression quality range, pre-create all JPEG compression functions
 qualities = list(range(75, 101))
 jpeg_degrade_functions = {quality: simulate_jpeg_degradation(quality) for quality in qualities}
+
 
 @dataclasses.dataclass
 class Conversation:
@@ -111,11 +115,9 @@ class Conversation:
         """Set the system message."""
         self.system_message = system_message
 
-
     def append_message(self, role: str, message: str):
         """Append a new message."""
         self.messages.append([role, message])
-
 
     def update_last_message(self, message: str):
         """Update the last output.
@@ -124,7 +126,6 @@ class Conversation:
         so we need to update it in-place after getting the response from a model.
         """
         self.messages[-1][1] = message
-
 
     def to_gradio_chatbot(self):
         """Convert the conversation to gradio chatbot format."""
@@ -135,7 +136,6 @@ class Conversation:
             else:
                 ret[-1][-1] = msg
         return ret
-
 
     def to_openai_api_messages(self):
         """Convert the conversation to OpenAI chat completion format."""
@@ -148,7 +148,6 @@ class Conversation:
                 if msg is not None:
                     ret.append({"role": "assistant", "content": msg})
         return ret
-
 
     def copy(self):
         """Copy the current instance"""
@@ -166,7 +165,6 @@ class Conversation:
             stop_token_ids=self.stop_token_ids,
         )
 
-
     def dict(self):
         """Convert the conversation to a dictionary"""
         return {
@@ -181,31 +179,30 @@ class Conversation:
 class InternvlPreprocess:
     """Internvl Preprocess"""
 
-    def __init__(self, config, tokenizer, *, patch_size: int):
-        """``patch_size`` comes from the image encoder config; the caller passes it explicitly."""
-        self.config = config
+    def __init__(self, args, tokenizer):
+        self.args = args
         super().__init__()
-        self.image_size = config.force_image_size
+        self.image_size = args.force_image_size
         self.is_train = False
-        self.use_thumbnail = config.use_thumbnail
-        self.pad2square = config.pad2square
-        self.normalize_type = config.normalize_type
-        self.dynamic_image_size = config.dynamic_image_size
-        self.min_dynamic_patch = config.min_dynamic_patch
-        self.template_name = config.conv_style
+        self.use_thumbnail = args.use_thumbnail
+        self.pad2square = args.pad2square
+        self.normalize_type = args.normalize_type
+        self.dynamic_image_size = args.dynamic_image_size
+        self.min_dynamic_patch = args.min_dynamic_patch
+        self.template_name = args.conv_style
         self.num_image_token = int(
-            (config.force_image_size // patch_size) ** 2
-            * (config.down_sample_ratio**2)
+            (args.force_image_size // args.patch_size) ** 2
+            * (args.down_sample_ratio**2)
         )
-        self.group_by_length = config.group_by_length and not config.packing_sft_data
-        self.packing_sft_data = config.packing_sft_data
+        self.group_by_length = args.group_by_length and not args.packing_sft_data
+        self.packing_sft_data = args.packing_sft_data
         self.tokenizer = tokenizer
-        self.num_images_expected = config.num_images_expected
-        self.max_num_frame = config.max_num_frame
-        self.min_num_frame = config.min_num_frame
+        self.num_images_expected = args.num_images_expected
+        self.max_num_frame = args.max_num_frame
+        self.min_num_frame = args.min_num_frame
         self.bos_client = None
         self.sampling_method = "rand"
-        self.max_dynamic_patch = config.max_dynamic_patch
+        self.max_dynamic_patch = args.max_dynamic_patch
 
     def video_get_item(self, data_item):
         """Process videos + texts"""
@@ -340,7 +337,9 @@ class InternvlPreprocess:
         image_end_token_id = self.tokenizer.convert_tokens_to_ids(IMG_END_TOKEN)
         assert (
             ret["input_ids"][0] == image_end_token_id
-        ).sum() == num_image, "image tokens are truncated"
+        ).sum() == num_image, (
+            f"image tokens are truncated, this dataset is {self.ds_name}"
+        )
         # Create the final return dictionary
         ret = dict(
             input_ids=ret["input_ids"][0],
@@ -381,6 +380,7 @@ class InternvlPreprocess:
         # Select the appropriate preprocessing function based on the template name
         use_pretrain = data_item["texts"][0]["from"] == "pretrain"
         preprocess_function = self.get_preprocess_function(use_pretrain=use_pretrain)
+        preprocess_function = self.get_preprocess_function()
 
         # Preprocess the texts and generate the return dictionary
         ret = preprocess_function(
@@ -836,6 +836,12 @@ class InternvlPreprocess:
                     cur_len -= 1
 
             target[cur_len:] = IGNORE_TOKEN_ID
+
+            if False:  # Inspect and check the correctness of masking
+                z = target.clone()
+                z = torch.where(z == IGNORE_TOKEN_ID, tokenizer.unk_token_id, z)
+                logger.info(tokenizer.decode(z))
+                exit()
 
             if cur_len < tokenizer.model_max_length:
                 if cur_len != total_len:

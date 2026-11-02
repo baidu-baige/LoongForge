@@ -12,29 +12,14 @@ Usage:
     model = build_model(model_cfg)   # model_cfg.model_type = "pi05"
 """
 
-from __future__ import annotations
-
 import importlib
-from typing import Dict, Type, TYPE_CHECKING
+import logging
+import pkgutil
+from typing import Dict, Type
 
-if TYPE_CHECKING:
-    import torch.nn as nn
+import torch.nn as nn
 
-# model_type -> package name. The same name is used under ``loongforge.models.embodied``
-# (``<package>/modeling_<package>.py``) and ``loongforge.data.embodied`` (``<package>/__init__.py``).
-MODEL_PACKAGES: Dict[str, str] = {
-    "vlda": "vlda",
-    "pi05": "pi05",
-    "Gr00tN1d6": "gr00t_n1_6",
-    "Gr00tN1d7": "gr00t_n1_7",
-    "xvla": "xvla",
-    "fastwam": "fastwam",
-    "cosmos3": "cosmos3",
-    "dreamzero": "dreamzero",
-    "lingbot_va": "lingbot_va",
-    "lingbot_vla_v2": "lingbot_vla_v2",
-    "wall_oss_0_5": "wall_oss_0_5",
-}
+logger = logging.getLogger(__name__)
 
 MODEL_REGISTRY: Dict[str, Type[nn.Module]] = {}
 
@@ -47,7 +32,39 @@ def register_model(model_type: str):
     return decorator
 
 
-def build_model(model_cfg, training_args=None) -> nn.Module:
+def _auto_import_model_modules():
+    """Auto-import all sub-packages under model/ to trigger @register_model decorators."""
+    import loongforge.models.embodied as _model_pkg
+    import os
+
+    model_dir = os.path.dirname(_model_pkg.__file__)
+    for _, pkg_name, is_pkg in pkgutil.iter_modules([model_dir]):
+        if is_pkg and pkg_name not in ("compose", "modules", "__pycache__"):
+            try:
+                # import modeling_<pkg_name>.py to trigger registration
+                modeling_mod = f"loongforge.models.embodied.{pkg_name}.modeling_{pkg_name}"
+                importlib.import_module(modeling_mod)
+            except ImportError as exc:
+                # Lazy import: keeps the module-level ``register_model``
+                # decorator path free of the training-side distributed stack.
+                from loongforge.engines.torch.distributed.utils import is_rank_zero
+                if is_rank_zero():   
+                    logger.warning(
+                        "Skipping optional model package during auto-registration:\n"
+                        "  - package: %s\n"
+                        "  - module: %s\n"
+                        "  - error: %s\n"
+                        "If this run is not training the '%s' model, this warning "
+                        "can be ignored. If you intend to train it, fix the missing "
+                        "or incompatible dependency.",
+                        pkg_name,
+                        modeling_mod,
+                        exc,
+                        pkg_name,
+                    )
+
+
+def build_model(model_cfg) -> nn.Module:
     """Build a model instance by model_cfg.model_type.
 
     Args:
@@ -56,22 +73,14 @@ def build_model(model_cfg, training_args=None) -> nn.Module:
     Returns:
         Initialized nn.Module.
     """
+    _auto_import_model_modules()
+
     model_type = model_cfg.model_type
-    if model_type not in MODEL_PACKAGES:
+    if model_type not in MODEL_REGISTRY:
         raise KeyError(
             f"Unknown model_type: '{model_type}'. "
-            f"Registered: {sorted(MODEL_PACKAGES)}"
+            f"Registered: {list(MODEL_REGISTRY.keys())}"
         )
-    import torch._dynamo
-
-    torch._dynamo.config.cache_size_limit = 512
-    torch._dynamo.config.accumulated_cache_size_limit = 4096
-    package = MODEL_PACKAGES[model_type]
-    importlib.import_module(f"loongforge.models.embodied.{package}.modeling_{package}")
 
     cls = MODEL_REGISTRY[model_type]
-    if hasattr(cls, "from_training_args"):
-        if training_args is None:
-            raise ValueError(f"model_type '{model_type}' needs training args to build.")
-        return cls.from_training_args(model_cfg, training_args)
     return cls.from_pretrained(model_cfg)

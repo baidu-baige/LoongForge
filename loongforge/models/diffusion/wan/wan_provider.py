@@ -4,8 +4,7 @@
 """wan model provider"""
 
 from megatron.core.transformer.spec_utils import import_module
-from megatron.training.arguments import core_transformer_config_from_args
-from megatron.training.utils import print_rank_0
+from loongforge.engines.megatron import get_args, build_transformer_config, print_rank_0
 
 from .wan_config import WanConfig
 from .wan_model import WanModel
@@ -17,8 +16,6 @@ def wan_i2v_model_provider(
     pre_process: bool = True,
     post_process: bool = True,
     parallel_output: bool = True,
-    *,
-    args,
 ) -> WanModel:
     """Builds the Wan model.
 
@@ -30,9 +27,11 @@ def wan_i2v_model_provider(
     Returns:
         WanModel: The returned model
     """
+    args = get_args()
+
     print_rank_0(f"building {args.model_name} model ...")
 
-    config = core_transformer_config_from_args(args, config_class=WanConfig)
+    config = build_transformer_config(args, config_class=WanConfig)
     config.pipeline_dtype = torch.float32
     # WAN uses RMSNorm for q/k layernorm (consistent with HuggingFace), regardless of
     # the global --normalization arg which defaults to LayerNorm from TransformerConfig.

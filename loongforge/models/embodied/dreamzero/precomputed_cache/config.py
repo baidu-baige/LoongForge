@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
-DEFAULT_CACHE_TEMPLATE = "index_{index:08d}.pt"
+from .artifact import DEFAULT_CACHE_TEMPLATE
 
 
 @dataclass(frozen=True)

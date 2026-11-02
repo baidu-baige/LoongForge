@@ -39,12 +39,10 @@ from loongforge.data.embodied.gr00t_n1_6.transforms.eagle3_model.image_processin
 from loongforge.data.embodied.gr00t_n1_6.transforms.eagle3_model.processing_eagle3_vl import (
     Eagle3VLProcessor,
 )
-from loongforge.models.embodied.gr00t_n1_6.embodiment_configs import (
+from .utils import (
     ActionRepresentation,
     ActionType,
     ModalityConfig,
-)
-from .utils import (
     apply_sin_cos_encoding,
     nested_dict_to_numpy,
     normalize_values_meanstd,

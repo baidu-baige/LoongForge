@@ -10,13 +10,13 @@
 """Module for wan2pt2_vae_4x16x16."""
 import os
 import time
-from collections.abc import Generator, Mapping, Sequence
+from collections.abc import Callable, Generator, Mapping, Sequence
 from contextlib import contextmanager, nullcontext
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Callable, Container, Optional
+from typing import Container, Optional
 from einops import rearrange
 import logging
 
@@ -26,7 +26,7 @@ if dist.is_available():
     from torch.distributed.distributed_c10d import _get_default_group
     from torch.distributed.utils import _sync_module_states, _verify_param_shape_across_processes
 
-from loongforge.models.embodied.cosmos3.modeling_configuration_cosmos3 import VIDEO_RES_SIZE_INFO
+from loongforge.data.embodied.cosmos3.transforms.cosmos3_action_transform import VIDEO_RES_SIZE_INFO
 
 
 # For sequential decoding, CACHE_T is the number of frames to cache.

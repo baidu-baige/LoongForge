@@ -8,7 +8,8 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, Un
 
 from typing_extensions import override
 
-from loongforge.data.chat_templates.plugins.mm_plugin import MMPlugin, Placeholder
+from loongforge.data.chat_templates.plugins.mm_plugin import MMPlugin
+from loongforge.data.constants import Placeholder
 
 if TYPE_CHECKING:
     import torch

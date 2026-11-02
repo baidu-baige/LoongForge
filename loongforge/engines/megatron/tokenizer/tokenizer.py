@@ -12,7 +12,7 @@ from megatron.training.tokenizer import build_tokenizer as build_megatron_tokeni
 
 from loongforge.data import TrainingPhase
 from loongforge.models.catalog import LanguageModelFamilies
-from megatron.training.utils import print_rank_0
+from loongforge.engines.megatron.utils.runtime import print_rank_0
 
 from .tokenization_hf import AutoTokenizerFromHF
 
@@ -32,7 +32,7 @@ def _update_tokenizer_with_template(
     if chat_template.replace_eos:
         assert stop_words, "EOS replacement requires stop words."
 
-        _eos_token = tokenizer.tokenizer.eos_token
+        _eos_token = tokenizer.hf_tokenizer().eos_token
         num_added = tokenizer.add_special_tokens({"eos_token": stop_words[0]})
         if _eos_token is None:
             print_rank_0(
@@ -62,7 +62,7 @@ def _update_tokenizer_with_template(
         tokenizer.pad = tokenizer.eos
         print_rank_0(
             f"WARNING: tokenizer does not have a pad token, setting to eos token"
-            f"({tokenizer.tokenizer.pad_token}) (token id: {tokenizer.pad}).",
+            f"({tokenizer.hf_tokenizer().pad_token}) (token id: {tokenizer.pad}).",
             args.rank,
         )
 

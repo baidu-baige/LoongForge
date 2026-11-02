@@ -32,7 +32,7 @@ def build_dreamzero_registered_sampler(context: SamplerBuilderContext):
         train_dataset=context.dataset,
         base_dataset=base_dataset,
         sampler_type=data_cfg.sampler_type,
-        runtime=context.runtime,
+        ctx=context.ctx,
         batch_size=context.batch_size,
         num_workers=context.training_args.num_workers,
         sampler_seed=sampler_seed,

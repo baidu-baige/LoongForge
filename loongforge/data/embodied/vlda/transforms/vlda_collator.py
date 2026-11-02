@@ -8,8 +8,7 @@ from dataclasses import dataclass
 import torch
 from torch.utils.data import default_collate
 
-from loongforge.data.embodied.transforms.collator import BaseCollator, PreparedBatch
-from loongforge.data.embodied.registry import register_collator
+from loongforge.data.embodied.transforms.collator import BasePreprocessor, PreparedBatch, register_preprocessor
 
 
 @dataclass
@@ -27,10 +26,10 @@ class VLDAPreparedBatch(PreparedBatch):
     token_loss_mask: torch.Tensor | None = None
 
 
-@register_collator("vlda")
-class VLDAPreprocessor(BaseCollator):
+@register_preprocessor("vlda")
+class VLDAPreprocessor(BasePreprocessor):
     @classmethod
-    def from_config(cls, model_cfg, data_cfg, training_args=None, dataset_stats=None, dataset=None, runtime=None):
+    def from_config(cls, model_cfg, data_cfg, training_args=None, dataset_stats=None, dataset=None):
         return cls()
 
     def __call__(self, examples):

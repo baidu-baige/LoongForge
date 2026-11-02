@@ -22,6 +22,7 @@ import torch
 import torch.nn as nn
 from copy import deepcopy
 from loongforge.models.common import BaseMegatronVisionModule
+from loongforge.engines.megatron import get_args
 
 
 class UniqueNameGuard:
@@ -98,9 +99,10 @@ class ErnieAdapter(BaseMegatronVisionModule):
         super().__init__(config)
         self.in_dim = input_size
         self.out_dim = output_size
-        self.out_dtype = torch.bfloat16 if config.bf16 else torch.float16
+        args = get_args()
+        self.out_dtype = torch.bfloat16 if args.bf16 else torch.float16
         # using unique name space start with "mm_resampler_"
-        with UniqueNameGuard("mm_resampler_"):
+        with UniqueNameGuard("mm_resampler_") as guard:
             self.mlp = nn.Linear(self.in_dim, self.out_dim)
             out_config = deepcopy(config)
             out_config.hidden_size = self.out_dim

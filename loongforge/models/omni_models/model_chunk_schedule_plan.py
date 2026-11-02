@@ -23,9 +23,16 @@ from megatron.core.pipeline_parallel.utils import (
     get_comm_stream,
     get_comp_stream,
 )
-# Identical to upstream, so imported.
-from megatron.core.models.common.model_chunk_schedule_plan import ModelChunkState
-from megatron.core.models.gpt.fine_grained_callables import PostProcessNode, TransformerLayerState
+
+
+class ModelChunkState:
+    """State shared across a model chunk.
+
+    This class holds state that is shared between different components
+    of a model chunk, such as input tensors, parameters, and configuration.
+    """
+
+    pass
 
 
 class TransformerLayerSchedulePlan:
@@ -77,6 +84,8 @@ class TransformerLayerSchedulePlan:
         The event and chunk_state are binded to the TransformerModelChunkSchedulePlan
         and shared across all layers in the model chunk.
         """
+        from .fine_grained_callables import TransformerLayerState
+
         self.layer_state = TransformerLayerState()
         self.chunk_state = chunk_state
         self.layer = layer
@@ -330,7 +339,6 @@ class TransformerModelChunkSchedulePlan(AbstractSchedulePlan):
         forward_group_id: Optional[int] = None,
         inner_group_id: Optional[int] = None,
         enable_full_hetero_dp: bool = False,
-        hetero_step=None,
     ):
         """Initialize the schedule plan of all Transformer layers' sub-modules.
 
@@ -355,7 +363,7 @@ class TransformerModelChunkSchedulePlan(AbstractSchedulePlan):
         Returns:
             The model chunk schedule plan.
         """
-        from .fine_grained_callables import PreProcessNode
+        from .fine_grained_callables import PostProcessNode, PreProcessNode
 
         self._model_chunk_state = ModelChunkState()
         self._transformer_layers = []
@@ -394,7 +402,6 @@ class TransformerModelChunkSchedulePlan(AbstractSchedulePlan):
             forward_group_id=forward_group_id,
             inner_group_id=inner_group_id,
             enable_full_hetero_dp=enable_full_hetero_dp,
-            hetero_step=hetero_step,
         )
 
         # check if encoder model has deepstack

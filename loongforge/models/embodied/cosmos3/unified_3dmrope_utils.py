@@ -151,6 +151,7 @@ def get_3d_mrope_ids_vae_tokens(
 
         # Expand temporal indices for all spatial positions
         t_index = scaled_t.view(-1, 1).expand(-1, grid_h * grid_w).flatten()  # [grid_t*grid_h*grid_w]
+        t_dtype = torch.float32
     else:
         # No FPS modulation: use integer frame indices
         # Apply start_frame_offset for cross-modality alignment (e.g., action tokens start at frame 1)
@@ -161,6 +162,7 @@ def get_3d_mrope_ids_vae_tokens(
             + int(temporal_offset)
             + start_frame_offset
         )
+        t_dtype = torch.long
 
     # Height axis: for each temporal frame, cycles through h values, each repeated w times
     h_index = (

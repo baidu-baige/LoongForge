@@ -4,7 +4,7 @@
 """Pi05 model-specific data transforms and collator."""
 
 from loongforge.data.embodied.pi05.transforms.pi05_collator import (
-    Pi05Collator,
+    Pi05Preprocessor,
     Pi05PreparedBatch,
     tokenize_prompts,
 )
@@ -18,7 +18,7 @@ from loongforge.data.embodied.pi05.transforms.pi05_transform import (
 
 __all__ = [
     "StateDiscretizationTransform",
-    "Pi05Collator",
+    "Pi05Preprocessor",
     "Pi05PreparedBatch",
     "Pi05CollateImagesTransform",
     "Pi05FallbackPromptTransform",

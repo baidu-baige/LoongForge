@@ -13,7 +13,7 @@ import torch.distributed as dist
 
 from loongforge.engines.torch.distributed.utils import unwrap_model
 from loongforge.training.embodied.sft import FinetuneTrainer
-from loongforge.engines.torch.utils.utils import set_seed
+from loongforge.engines.torch.utils.runtime import set_seed
 
 
 class VLDAFinetuneTrainer(FinetuneTrainer):

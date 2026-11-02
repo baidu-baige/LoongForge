@@ -1,18 +1,16 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""InternVL packed-batch layout for DP load balancing.
+"""depack and pack data"""
 
-``training/vlm/sft_internvl.py`` binds the image size and the image-context token
-id, and installs the layout for ``data/dp_balance``.
-"""
-
-from __future__ import annotations
-
-from functools import partial
-from typing import Any, Dict, List
+from typing import Dict, Tuple, List, Any
 
 import torch
+
+from loongforge.engines.megatron import get_args, get_tokenizer
+
+# Special token for image context and its token id
+IMG_CONTEXT_TOKEN = "<IMG_CONTEXT>"
 
 
 class InternVLDataSample(object):
@@ -42,9 +40,7 @@ class InternVLDataSample(object):
 
 
 def depack_data_for_intern_vl(
-    data: Dict[str, torch.Tensor],
-    img_size: int,
-    img_context_token_id: int,
+    data: Dict[str, torch.Tensor]
 ) -> List[InternVLDataSample]:
     """
     De-pack a packed batch into a list of InternVLDataSample objects.
@@ -74,7 +70,7 @@ def depack_data_for_intern_vl(
         loss_weights = torch.tensor(loss_weights, dtype=torch.float32)
 
     # attention_mask stores cumulative offsets, shape [N+1]
-    attention_mask = attention_mask.squeeze(0)
+    attention_mask = attention_mask.squeeze_(0)
 
     # ------------------------------------------------
     # 1) Filter out empty image entries
@@ -101,6 +97,11 @@ def depack_data_for_intern_vl(
     # ------------------------------------------------
     # 2) Slice packed tensors into per-sample segments
     # ------------------------------------------------
+    img_size = get_args().force_image_size
+    img_context_token_id = get_tokenizer().tokenizer.convert_tokens_to_ids(
+        IMG_CONTEXT_TOKEN
+    )
+
     for j in range(len(attention_mask) - 1):
         start_idx = int(attention_mask[j].item())
         end_idx = int(attention_mask[j + 1].item())
@@ -152,7 +153,7 @@ def depack_data_for_intern_vl(
 
 def pack_data_for_intern_vl(
     data_sample_list: List[InternVLDataSample],
-) -> Dict[str, Any]:
+) -> Tuple[Any, ...]:
     """
     Pack a list of InternVLDataSample objects into model-ready batch tensors.
 
@@ -210,6 +211,7 @@ def pack_data_for_intern_vl(
         device=input_ids.device if input_ids.numel() else torch.device("cpu"),
     )
 
+    use_sequence_parallel = get_args().sequence_parallel
     attention_mask.unsqueeze_(0)
 
     batch_data = {
@@ -224,22 +226,35 @@ def pack_data_for_intern_vl(
     return batch_data
 
 
-def reconstruct_llm_for_internvl(tensor):
-    """Reshape packed LLM tensors to (1, seq_len) for InternVL."""
-    return tensor.reshape(1, -1)
+class VLMDataSample:
+    """
+    Lightweight container representing a single (possibly multimodal) sample.
+    """
+
+    def __init__(
+        self,
+        tokens,
+        labels,
+        # position_ids,
+        attn_mask,
+        # loss_mask,
+        pixel_values_images=None,
+        image_thw=None,
+        pixel_values_videos=None,
+        vid_thw=None,
+    ):
+        self.tokens = tokens
+        self.labels = labels
+        # self.position_ids = position_ids
+        self.attn_mask = attn_mask
+        # self.loss_mask = loss_mask
+        self.pixel_values_images = pixel_values_images
+        self.image_thw = image_thw
+        self.pixel_values_videos = pixel_values_videos
+        self.vid_thw = vid_thw
 
 
-def reconstruct_image_flags_for_internvl(tensor):
-    """Image flag metadata; no reconstruction needed."""
-    return tensor
-
-
-def reconstruct_pixel_values_for_internvl(tensor, img_size):
-    """Reshape flattened pixels to (N, 3, H, W) using img_size."""
-    return tensor.reshape(-1, 3, img_size, img_size)
-
-
-def reorder_data_for_internvl(data, ctx, *, img_size, img_context_token_id):
+def depack_data_for_vlm(data):
     """
     Depack a packed VLM batch into per-sample VLMDataSample list.
 
@@ -248,66 +263,175 @@ def reorder_data_for_internvl(data, ctx, *, img_size, img_context_token_id):
       - images / videos are concatenated in sample order
       - cu_lengths defines text boundaries
     """
-    local_sample_list = depack_data_for_intern_vl(data, img_size, img_context_token_id)
-    local_pixel_values = []
-    local_input_ids = []
-    local_image_flags = []
-    local_loss_weights = []
-    local_labels = []
-
-    for sample in local_sample_list:
-        local_pixel_values.append(sample.pixel_values)
-        local_input_ids.append(sample.input_ids)
-        local_image_flags.append(sample.image_flags)
-        local_loss_weights.append(sample.loss_weights)
-        local_labels.append(sample.labels)
-
-    local_input_ids_lengths = torch.tensor(
-        [t.shape[-1] for t in local_input_ids],
-        dtype=torch.int,
-        device=local_input_ids[0].device,
+    assert (
+        data.get("images") is not None or data.get("pixel_values_videos") is not None
+    ), (
+        "No visual inputs found in batch data. "
+        "Expected key 'images' or 'pixel_values_videos', "
+        f"but got keys: {list(data.keys())}."
     )
 
-    dp_reorder_plan = ctx.plan(local_input_ids_lengths)
+    # -------- text packing info --------
+    cu_lengths = data["cu_lengths"][0].tolist()
+    sample_num = len(cu_lengths) - 1
 
-    if dp_reorder_plan is None:
-        return data
+    # -------- visual cursors (IMPORTANT: no in-place modification) --------
+    images = data["imgs"]
+    videos = data["pixel_values_videos"]
 
-    # LLM tensors (input_ids, labels, loss_weights) share the same sample
-    # dimensions, gather once and reuse to avoid redundant all_gather calls.
-    llm_gathered = ctx.gather(local_input_ids)
-    redistributed_input_ids = ctx.redistribute(
-        local_input_ids, dp_reorder_plan, llm_gathered, reconstruct_llm_for_internvl,
-    )
-    redistributed_labels = ctx.redistribute(
-        local_labels, dp_reorder_plan, llm_gathered, reconstruct_llm_for_internvl,
-    )
-    redistributed_loss_weights = ctx.redistribute(
-        local_loss_weights, dp_reorder_plan, llm_gathered, reconstruct_llm_for_internvl,
-    )
+    has_image = images is not None and images.numel() > 1
+    has_video = videos is not None and videos.numel() > 1
 
-    # pixel_values and image_flags have different element counts, gather separately
-    redistributed_pixel_values = ctx.redistribute_grouped(
-        local_pixel_values, dp_reorder_plan, partial(reconstruct_pixel_values_for_internvl, img_size=img_size),
-    )
-    redistributed_image_flags = ctx.redistribute_grouped(
-        local_image_flags, dp_reorder_plan, reconstruct_image_flags_for_internvl,
-    )
+    image_cursor = 0
+    video_cursor = 0
 
-    redistributed_samples = []
-    for i in range(len(redistributed_input_ids)):
-        sample = InternVLDataSample(
-            redistributed_pixel_values[i],
-            redistributed_input_ids[i],
-            redistributed_image_flags[i],
-            redistributed_loss_weights[i],
-            redistributed_labels[i],
+    vlm_samples = []
+
+    for i in range(sample_num):
+        start = cu_lengths[i]
+        end = cu_lengths[i + 1]
+
+        # -------- text --------
+        tokens = data["tokens"][:, start:end]
+        labels = data["labels"][:, start:end]
+        attn_mask = data["attn_mask"][:, start:end]
+        # loss_mask = data["loss_mask"][:, start:end]
+        # position_ids = data["position_ids"][:, 0, start:end]
+
+        # -------- image --------
+        pixel_values_images = None
+        image_thw = None
+        if has_image:
+            image_thw = data["image_grid_thw"][i]
+            img_t, img_h, img_w = image_thw
+            img_len = int(img_t * img_h * img_w)
+
+            assert images.shape[0] >= image_cursor + img_len, (
+                f"Image tokens not enough for sample {i}: "
+                f"need {img_len}, "
+                f"got {images.shape[0] - image_cursor}"
+            )
+
+            pixel_values_images = images[image_cursor : image_cursor + img_len]
+            image_cursor += img_len
+
+        # -------- video --------
+        pixel_values_videos = None
+        vid_thw = None
+        if has_video:
+            vid_thw = data["video_grid_thw"][i]
+            vid_t, vid_h, vid_w = vid_thw
+            vid_len = int(vid_t * vid_h * vid_w)
+
+            pixel_values_videos = videos[video_cursor : video_cursor + vid_len]
+            video_cursor += vid_len
+
+        # -------- build sample --------
+        vlm_sample = VLMDataSample(
+            tokens=tokens,
+            labels=labels,
+            # position_ids=position_ids,
+            # loss_mask=loss_mask,
+            attn_mask=attn_mask,
+            pixel_values_images=pixel_values_images,
+            image_thw=image_thw,
+            pixel_values_videos=pixel_values_videos,
+            vid_thw=vid_thw,
         )
-        redistributed_samples.append(sample)
 
-    new_data = pack_data_for_intern_vl(redistributed_samples)
+        vlm_samples.append(vlm_sample)
+    return vlm_samples
+
+
+def pack_data_for_vlm(vlm_samples):
+    """
+    Re-pack a list of VLMDataSample into a packed batch dict.
+
+    Returns:
+        data (dict): compatible with original packed VLM input
+    """
+
+    assert len(vlm_samples) > 0, "Empty vlm_samples"
+
+    device = vlm_samples[0].tokens.device
+    dtype = vlm_samples[0].tokens.dtype
+
+    # -------- text --------
+    tokens_list = []
+    labels_list = []
+    attn_mask_list = []
+    # loss_mask_list = []
+    # position_ids_list = []
+
+    cu_lengths = [0]
+    cur_len = 0
+
+    for sample in vlm_samples:
+        seq_len = sample.tokens.shape[1]
+
+        tokens_list.append(sample.tokens)
+        labels_list.append(sample.labels)
+        attn_mask_list.append(sample.attn_mask)
+
+        cur_len += seq_len
+        cu_lengths.append(cur_len)
+
+    tokens = torch.cat(tokens_list, dim=1)
+    labels = torch.cat(labels_list, dim=1)
+    attn_mask = torch.cat(attn_mask_list, dim=1)
+
+    cu_lengths = torch.tensor(cu_lengths, device=device, dtype=torch.int32)
+
+    # -------- images --------
+    images_list = []
+    image_grid_thw = []
+
+    for sample in vlm_samples:
+        if sample.pixel_values_images is not None:
+            images_list.append(sample.pixel_values_images)
+            image_grid_thw.append(sample.image_thw)
+
+    images = None
+
+    if len(images_list) > 0:
+        images = torch.cat(images_list, dim=0)
+        image_grid_thw = torch.stack(image_grid_thw, dim=0).squeeze()
+    else:
+        image_grid_thw = None
+
+    # -------- videos --------
+    videos_list = []
+    video_grid_thw = []
+
+    for sample in vlm_samples:
+        if sample.pixel_values_videos is not None:
+            videos_list.append(sample.pixel_values_videos)
+            video_grid_thw.append(sample.vid_thw)
+
+    pixel_values_videos = None
+    if len(videos_list) > 0:
+        pixel_values_videos = torch.cat(videos_list, dim=0)
+        video_grid_thw = torch.stack(video_grid_thw, dim=0).squeeze()
+    else:
+        video_grid_thw = None
+
+    use_sequence_parallel = get_args().sequence_parallel
+    max_lengths = (cu_lengths[1:] - cu_lengths[:-1]).max().view(1)
+    cu_lengths = cu_lengths.unsqueeze(0)
+
+    # -------- final batch --------
+    new_data = {
+        "tokens": tokens,
+        "labels": labels,
+        "max_lengths": max_lengths,
+        "cu_lengths": cu_lengths,
+        "attn_mask": attn_mask,
+        # "loss_mask": loss_mask,
+        # "position_ids": position_ids,
+        "imgs": images,
+        "pixel_values_videos": pixel_values_videos,
+        "image_grid_thw": image_grid_thw,
+        "video_grid_thw": video_grid_thw,
+    }
+
     return new_data
-
-
-def internvl_cumulative_lengths(micro_batch):
-    return micro_batch["attn_mask"]

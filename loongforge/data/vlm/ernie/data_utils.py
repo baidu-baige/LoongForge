@@ -63,10 +63,10 @@ class ErnieTensorDataset(torch.utils.data.Dataset):
         metadata_path: Path to file listing all .npy file paths
         steps_per_epoch: Total number of training steps
     """
-    def __init__(self, config, metadata_path, steps_per_epoch=0):
-        self.manual_seed = config.seed
+    def __init__(self, args, metadata_path, steps_per_epoch=0):
+        self.manual_seed = args.seed
         self.steps_per_epoch = steps_per_epoch
-        self.processor = AutoProcessor.from_pretrained(config.hf_tokenizer_path,  trust_remote_code=True)
+        self.processor = AutoProcessor.from_pretrained(args.hf_tokenizer_path,  trust_remote_code=True)
         self.file_names = []
 
         with open(metadata_path, 'r', encoding='utf-8') as f:

@@ -24,7 +24,7 @@ import torch
 import torch.distributed as dist
 
 from loongforge.engines.torch.distributed.parallel import wrap_model
-from loongforge.engines.torch.utils.utils import resolve_dtype
+from loongforge.engines.torch.utils.runtime import resolve_dtype
 from loongforge.training.embodied.sft import FinetuneTrainer
 from loongforge.training.embodied.custom.gr00t_n1_6.per_microbatch_cuda_graph import (
     GrootN1d6PerMicrobatchCudaGraphRunner,
@@ -47,16 +47,6 @@ class GrootN1d6Trainer(FinetuneTrainer):
     def __init__(self, training_args, model_cfg, data_cfg):
         super().__init__(training_args, model_cfg, data_cfg)
         self._train_step_runner: GrootN1d6PerMicrobatchCudaGraphRunner | None = None
-
-    def _build_model(self):
-        from loongforge.models.embodied.gr00t_n1_6.eagle3_model import modeling_eagle3_vl
-
-        # Eagle selects graph-safe loading and attention before the model is built.
-        modeling_eagle3_vl.set_graph_mode(
-            self.training_args.cuda_graph_impl == "local"
-            and self.training_args.cuda_graph_scope in {"full_iteration", "per_microbatch"}
-        )
-        return super()._build_model()
 
     def _wrap_model_for_training(self) -> None:
         """Wrap the model for training, installing a CUDA graph runner when enabled.

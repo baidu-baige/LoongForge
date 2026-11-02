@@ -16,7 +16,6 @@ from collections import deque
 
 import torch
 
-from loongforge.engines.torch.optimizer.tensor_wise_optimizer.precision_policy import ParameterClassPolicy
 from loongforge.training.embodied.custom.lingbot_vla_v2.batch_enricher import (
     LingbotVlaV2BatchEnricher,
 )
@@ -29,7 +28,7 @@ from loongforge.models.embodied.lingbot_vla_v2.moe_load_balance import (
     register_moe_load_balance_hook,
 )
 from loongforge.models.embodied.lingbot_vla_v2.parameter_policy import (
-    parameter_policy_kwargs,
+    LingbotVlaV2ParameterPolicy,
 )
 from loongforge.training.embodied.custom.tensor_wise_trainer import (
     TensorWiseTrainer,
@@ -59,7 +58,7 @@ class LingbotVlaV2Trainer(TensorWiseTrainer):
     # -- TensorWiseTrainer extension points --------------------------------------
 
     def _build_parameter_policy(self):
-        return ParameterClassPolicy(**parameter_policy_kwargs(self.model_cfg))
+        return LingbotVlaV2ParameterPolicy(self.model_cfg)
 
     def _prepare_module(self):
         module = self.model.policy.to(self.ctx.device)

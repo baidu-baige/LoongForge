@@ -13,8 +13,7 @@ from megatron.energon import (
     VQASample,
 )
 from importlib.metadata import version
-from packaging.version import Version
-if Version(version("megatron-energon")) < Version("7.0.0"):
+if version('megatron-energon') < "7.0.0":
     from megatron.energon.flavors.webdataset import VideoData as AVData
     _ENERGON_NEEDS_SUBFLAVOR = True
 else:
@@ -24,7 +23,8 @@ else:
 from megatron.energon.task_encoder.base import stateless
 from transformers import AutoProcessor
 from transformers.processing_utils import ProcessorMixin
-from loongforge.data import IGNORE_INDEX, TrainingPhase
+from loongforge.data import constants
+from loongforge.engines.megatron import get_chat_template
 from qwen_vl_utils.vision_process import smart_nframes, smart_resize
 from torchvision import transforms
 from torchvision.transforms import InterpolationMode
@@ -35,7 +35,7 @@ from .base.task_encoder import (
     BaseTaskBatchPacked,
     _parse_messages,
 )
-from loongforge.data.chat_templates.template import DataRoles, HFChatTemplate
+from loongforge.data.chat_templates.template import HFChatTemplate
 from loongforge.data.vlm import (
     MultiMixQASample,
     PackedCaptioningSample,
@@ -45,6 +45,7 @@ from loongforge.data.vlm import (
     ChatMixSample,
 )
 
+IGNORE_INDEX = -100  # ID for labels that should be ignored.
 IMAGE_TOKEN = "<|image_pad|>"
 VIDEO_TOKEN = "<|video_pad|>"
 VISION_TAGS = ["<|vision_start|>", "<|vision_end|>"]
@@ -125,10 +126,11 @@ class VLMTaskBatchPacked(BaseTaskBatchPacked):
 class VLMTaskEncoder(BaseTaskEncoder):
     """A simple task encoder for VLMs."""
 
-    def __init__(self, config, tokenizer, chat_template=None):
-        super().__init__(config, tokenizer)
-        self.chat_template = chat_template
-        processor_path = self.config.hf_processor_path
+    def __init__(self, args):
+        super().__init__()
+        if args.training_phase in ['sft']:
+            self.chat_template = get_chat_template()
+        processor_path = getattr(self.args, "hf_processor_path", None)
         if processor_path:
             # Transformers 5.3 logs this processor via repr; Kimi's repr is not pickle-safe.
             original_repr = ProcessorMixin.__repr__
@@ -141,20 +143,20 @@ class VLMTaskEncoder(BaseTaskEncoder):
                 ProcessorMixin.__repr__ = original_repr
         else:
             self.processor = AutoProcessor.from_pretrained(
-                self.config.hf_tokenizer_path, trust_remote_code=True
+                self.args.hf_tokenizer_path, trust_remote_code=True
             )
-        if config.image_resolution:
-            setattr(self.processor, "image_resolution", config.image_resolution)
+        if args.image_resolution:
+            setattr(self.processor, "image_resolution", args.image_resolution)
         # video
-        self.frame_min_pixels = config.frame_min_pixels
-        self.frame_max_pixels = config.frame_max_pixels
-        self.video_max_pixels = config.video_max_pixels
-        self.fps = config.fps
-        self.fps_min_frames = config.fps_min_frames
-        self.fps_max_frames = config.fps_max_frames
+        self.frame_min_pixels = args.frame_min_pixels
+        self.frame_max_pixels = args.frame_max_pixels
+        self.video_max_pixels = args.video_max_pixels
+        self.fps = args.fps
+        self.fps_min_frames = args.fps_min_frames
+        self.fps_max_frames = args.fps_max_frames
         # image
-        self.min_pixels = config.min_pixels
-        self.max_pixels = config.max_pixels
+        self.min_pixels = args.min_pixels
+        self.max_pixels = args.max_pixels
 
     def _resize_video(self, vision: AVData, image_factor=28, frame_factor=2):
         """Resize video: frame number, height, width"""
@@ -331,19 +333,19 @@ class VLMTaskEncoder(BaseTaskEncoder):
             hf_messages = list(messages)
             has_system_message = (
                 hf_messages
-                and hf_messages[0].get("role") == DataRoles.SYSTEM
+                and hf_messages[0].get("role") == constants.DataRoles.SYSTEM
             )
             if system and not has_system_message:
                 hf_messages = [
-                    {"role": DataRoles.SYSTEM, "content": system},
+                    {"role": constants.DataRoles.SYSTEM, "content": system},
                     *hf_messages,
                 ]
             input_ids, target, _, _ = self.chat_template.encode_openai(
                 tokenizer=self.tokenizer,
                 messages=hf_messages,
                 tools=tools,
-                train_on_prompt=self.config.train_on_prompt,
-                history_mask_loss=self.config.history_mask_loss,
+                train_on_prompt=getattr(self.args, "train_on_prompt", False),
+                history_mask_loss=getattr(self.args, "history_mask_loss", False),
                 ignore_index=IGNORE_INDEX,
             )
         else:
@@ -387,7 +389,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
         https://github.com/NVIDIA/Megatron-Energon/blob/develop/src/megatron/energon/flavors/captioning.py
         """
 
-        assert self.config.training_phase == TrainingPhase.PRETRAIN, "Only support PRETRAIN phase"
+        assert self.args.training_phase == constants.TrainingPhase.PRETRAIN, "Only support PRETRAIN phase"
 
         text = (
             IMAGE_TOKEN_WITH_TAGS + sample.caption + self.tokenizer.tokenizer.eos_token
@@ -398,10 +400,10 @@ class VLMTaskEncoder(BaseTaskEncoder):
         )
         num_tiles = [len(image_grid_thw)]
 
-        if self.config.enable_discard_sample:
-            assert len(input_ids) <= self.config.seq_length, f"{sample.__key__} input length {len(input_ids)}"
+        if self.args.enable_discard_sample:
+            assert len(input_ids) <= self.args.seq_length, f"{sample.__key__} input length {len(input_ids)}"
         else:
-            assert image_grid_thw.prod() / 4 <= self.config.seq_length, f"{sample.__key__} thw {image_grid_thw}"
+            assert image_grid_thw.prod() / 4 <= self.args.seq_length, f"{sample.__key__} thw {image_grid_thw}"
 
         return self._make_sample_from(
             sample,
@@ -416,8 +418,8 @@ class VLMTaskEncoder(BaseTaskEncoder):
 
     def encode_vqa(self, sample: VQASample) -> BaseTaskSample:
         """Encode pretrain sample in Qwen2VL style."""
-        if self.config.training_phase == TrainingPhase.PRETRAIN:
-            if self.config.add_question_in_pretrain:
+        if self.args.training_phase == constants.TrainingPhase.PRETRAIN:
+            if self.args.add_question_in_pretrain:
                 text = (sample.context + sample.answers).replace(
                     "<image>", IMAGE_TOKEN_WITH_TAGS
                 )
@@ -425,18 +427,18 @@ class VLMTaskEncoder(BaseTaskEncoder):
                 text = IMAGE_TOKEN_WITH_TAGS + sample.answers
             text = text + self.tokenizer.tokenizer.eos_token
             input_ids, target, imgs, image_grid_thw, attn_mask = self._process(sample.image, text)
-        elif self.config.training_phase == TrainingPhase.SFT:
+        elif self.args.training_phase == constants.TrainingPhase.SFT:
             input_ids, target, attn_mask, imgs, image_grid_thw = self.process_sft_vqa(sample.context, \
                                         sample.answers, sample.image)
         else:
-            raise NotImplementedError(f"Unknown training phase {self.config.training_phase}")
+            raise NotImplementedError(f"Unknown training phase {self.args.training_phase}")
 
         num_tiles = [len(image_grid_thw)]
 
-        if self.config.enable_discard_sample:
-            assert len(input_ids) <= self.config.seq_length, f"{sample.__key__} input length {len(input_ids)}"
+        if self.args.enable_discard_sample:
+            assert len(input_ids) <= self.args.seq_length, f"{sample.__key__} input length {len(input_ids)}"
         else:
-            assert image_grid_thw.prod() / 4 <= self.config.seq_length, f"{sample.__key__} grid_thw: {image_grid_thw}"
+            assert image_grid_thw.prod() / 4 <= self.args.seq_length, f"{sample.__key__} grid_thw: {image_grid_thw}"
 
         return self._make_sample_from(
             sample,
@@ -451,7 +453,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
 
     def encode_multi_vid_qa(self, sample: VQASample) -> BaseTaskSample:
         """Encode sample in Qwen2VL style."""
-        if self.config.training_phase == TrainingPhase.SFT:
+        if self.args.training_phase == constants.TrainingPhase.SFT:
             (
                 input_ids,
                 target,
@@ -469,16 +471,16 @@ class VLMTaskEncoder(BaseTaskEncoder):
             )
         else:
             raise NotImplementedError(
-                f"Unknown training phase {self.config.training_phase}"
+                f"Unknown training phase {self.args.training_phase}"
             )
 
-        if self.config.enable_discard_sample:
+        if self.args.enable_discard_sample:
             assert (
-                len(input_ids) <= self.config.seq_length
+                len(input_ids) <= self.args.seq_length
             ), f"{sample.__key__} input length {len(input_ids)}"
         else:
             assert (
-                video_grid_thw.prod(dim=-1).sum() / 4 <= self.config.seq_length
+                video_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length
             ), f"{sample.__key__} grid_thw: {video_grid_thw}"
 
 
@@ -498,7 +500,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
 
     def encode_multi_mix_qa(self, sample: MultiMixQASample) -> BaseTaskSample:
         """Encode sample in Qwen2VL style."""
-        if self.config.training_phase == TrainingPhase.SFT:
+        if self.args.training_phase == constants.TrainingPhase.SFT:
             num_tiles = []
 
             (
@@ -522,20 +524,20 @@ class VLMTaskEncoder(BaseTaskEncoder):
                 num_tiles = [len(image_grid_thw)]
         else:
             raise NotImplementedError(
-                f"Unknown training phase {self.config.training_phase}"
+                f"Unknown training phase {self.args.training_phase}"
             )
 
-        if self.config.enable_discard_sample:
+        if self.args.enable_discard_sample:
             assert (
-                len(input_ids) <= self.config.seq_length
+                len(input_ids) <= self.args.seq_length
             ), f"{sample.__key__} input length {len(input_ids)}"
         elif sample.video is not None:
             assert (
-                video_grid_thw.prod(dim=-1).sum() / 4 <= self.config.seq_length
+                video_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length
             ), f"{sample.__key__} grid_thw: {video_grid_thw}"
         elif sample.image is not None:
             assert (
-                image_grid_thw.prod(dim=-1).sum() / 4 <= self.config.seq_length
+                image_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length
             ), f"{sample.__key__} grid_thw: {image_grid_thw}"
 
 
@@ -554,9 +556,9 @@ class VLMTaskEncoder(BaseTaskEncoder):
 
     def encode_chat_mix(self, sample: ChatMixSample) -> Optional[BaseTaskSample]:
         """Encode chat-format multimodal sample (with optional tool calling)."""
-        if self.config.training_phase != TrainingPhase.SFT:
+        if self.args.training_phase != constants.TrainingPhase.SFT:
             raise NotImplementedError(
-                f"encode_chat_mix only supports SFT, got {self.config.training_phase}"
+                f"encode_chat_mix only supports SFT, got {self.args.training_phase}"
             )
 
         (
@@ -581,17 +583,17 @@ class VLMTaskEncoder(BaseTaskEncoder):
         elif sample.image is not None:
             num_tiles = [len(image_grid_thw)]
 
-        if self.config.enable_discard_sample:
+        if self.args.enable_discard_sample:
             assert (
-                len(input_ids) <= self.config.seq_length
+                len(input_ids) <= self.args.seq_length
             ), f"{sample.__key__} input length {len(input_ids)}"
         elif sample.video is not None:
             assert (
-                video_grid_thw.prod(dim=-1).sum() / 4 <= self.config.seq_length
+                video_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length
             ), f"{sample.__key__} grid_thw: {video_grid_thw}"
         elif sample.image is not None:
             assert (
-                image_grid_thw.prod(dim=-1).sum() / 4 <= self.config.seq_length
+                image_grid_thw.prod(dim=-1).sum() / 4 <= self.args.seq_length
             ), f"{sample.__key__} grid_thw: {image_grid_thw}"
 
         return self._make_sample_from(
@@ -818,7 +820,7 @@ class VLMTaskEncoder(BaseTaskEncoder):
                     "has neither `messages` nor `texts`."
                 )
 
-            messages, system = _parse_messages(raw_messages, self.config)
+            messages, system = _parse_messages(raw_messages)
             tools = raw_sample.get("tools")
             if tools and not isinstance(self.chat_template, HFChatTemplate):
                 raise ValueError(

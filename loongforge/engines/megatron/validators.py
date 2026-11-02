@@ -6,35 +6,35 @@
 import importlib
 import os
 import warnings
-from importlib.metadata import version
-from typing import Optional
 
 import torch
 from megatron.core.rerun_state_machine import RerunStateMachine
 from megatron.core.transformer.enums import AttnBackend
-from megatron.core.utils import is_torch_min_version
+from megatron.training.utils import warn_rank_0
 from megatron.training.arguments import validate_args
-from megatron.training.utils import get_device_arch_version, print_rank_0, warn_rank_0
 from packaging.version import Version as PkgVersion
 
 from loongforge.engines.megatron.tokenizer import get_default_tokenizer
-from loongforge.models.catalog import VisionLanguageModelFamilies
+from loongforge.data import TrainingPhase
+from loongforge.models.catalog import DiffusionModelFamilies, VisionLanguageModelFamilies
+from loongforge.engines.megatron import (
+    get_device_arch_version,
+    is_torch_min_version,
+    print_rank_0,
+    convert_custom_pipeline_to_layout,
+)
+from loongforge.engines.megatron.utils.runtime import get_default_sft_dataset_config, get_transformers_version
 
-_transformers_version = None
 
-
-def validate_loongforge_extra_args(args, config, validate_training_args=None):
-    """Validate LoongForge extra arguments.
-
-    ``validate_training_args`` runs after the tokenizer checks and before the
-    backend training and parallel checks.
-    """
+def validate_loongforge_extra_args(args, config):
+    """ "Validate LoongForge extra arguments"""
     _validate_extra_model_args(args, config)
     _validate_extra_tokenizer_args(args)
-    if validate_training_args is not None:
-        validate_training_args(args)
+    _validate_extra_sft_args(args)
     _validate_extra_training_args(args)
-    _validate_extra_parallel_args(args)
+    _validate_extra_multimodal_args(args)
+    _validata_extra_custom_args(args)
+    _validata_extra_parallel_args(args)
 
     # megatron one_logger is not supported in loongforge
     args.enable_one_logger = False
@@ -42,6 +42,7 @@ def validate_loongforge_extra_args(args, config, validate_training_args=None):
 
 def validate_megatron_args(args):
     """Validate Megatron arguments"""
+    _align_wan_packing_seq_length(args)
     _validate_legacy_pipeline_args(args)
     validate_args(args)
 
@@ -51,27 +52,34 @@ def validate_custom_model_args(name, args):
     _validate_custom_model_args(name, args)
 
 
+def _get_wan_packing_cp_alignment(cp_size):
+    """Return WAN packing sequence alignment required by CP split."""
+    return 2 * cp_size
+
+
+def _align_wan_packing_seq_length(args):
+    """Align WAN packing seq-length before Megatron validation."""
+    if getattr(args, "model_name", None) != "wan2-2-i2v":
+        return
+    if not getattr(args, "packing_sft_data", False):
+        return
+    cp_size = getattr(args, "context_parallel_size", 1)
+    seq_length = getattr(args, "seq_length", None)
+    if cp_size <= 1 or seq_length is None:
+        return
+    alignment = _get_wan_packing_cp_alignment(cp_size)
+    aligned_seq_length = ((seq_length + alignment - 1) // alignment) * alignment
+    args.seq_length = aligned_seq_length
+    if getattr(args, "encoder_seq_length", None) is not None:
+        args.encoder_seq_length = aligned_seq_length
+    args.max_position_embeddings = max(args.max_position_embeddings, aligned_seq_length)
+
+
 # YAML key → args attribute name, for cases where TransformerConfig field
 # names diverge from argparse destinations (e.g. fp8_param vs fp8_param_gather).
 _YAML_KEY_ALIASES = {
     "fp8_param": "fp8_param_gather",
 }
-
-
-def get_transformers_version():
-    """Get transformers version (cached)."""
-    import transformers
-
-    global _transformers_version
-
-    if _transformers_version is None:
-        # prefer module __version__ to avoid importlib.metadata lookup issues in editable installs
-        ver = getattr(transformers, "__version__", None)
-        if ver is None:
-            ver = version("transformers")
-        _transformers_version = PkgVersion(ver)
-
-    return _transformers_version
 
 
 def _validate_extra_model_args(args, config):
@@ -137,6 +145,194 @@ def _validate_extra_tokenizer_args(args):
         ]
 
 
+def _validate_extra_sft_args(args):
+    """Validate SFT arguments"""
+    if args.training_phase != TrainingPhase.SFT:
+        return
+
+    if args.tokenizer_type != "HFTokenizer":
+        raise ValueError(
+            "--tokenizer-type should be HFTokenizer when training phase is sft"
+        )
+
+    args.dataloader_type = "external"
+    print_rank_0(
+        "INFO: Set dataloader type to external since --training-phase=SFT", args.rank
+    )
+
+    if args.chat_template is None:
+        raise ValueError("--chat-template is required when training phase is sft")
+
+    if args.train_on_prompt and args.history_mask_loss:
+        raise ValueError(
+            "--train-on-prompt and --history-mask-loss cannot both be True at the same time"
+        )
+
+    if args.sft_dataset_config is None:
+        # set default sft-dataset-config
+        default_config = get_default_sft_dataset_config()
+        if default_config is not None:
+            args.sft_dataset_config = default_config
+            print_rank_0(
+                f"WARNING: --sft-dataset-config is not specified, setup to default config ({default_config})",
+                args.rank,
+            )
+        else:
+            raise ValueError(
+                "--sft-dataset-config is not specified, and "
+                "the default config does not exist, please setup it"
+            )
+    if args.sft_data_streaming:
+        assert (
+            args.sft_sort_batch is None or not args.sft_sort_batch
+        ), '--sft-sort-batch" cannot be used together with --sft-data-streaming'
+
+    if args.use_fixed_seq_lengths:
+        args.variable_seq_lengths = False
+    else:
+        # Defaults to True but enforced as fixed-length for specific features (e.g., tp-comm-overlap/ moe allgather)
+        args.variable_seq_lengths = True
+        if args.tp_comm_overlap:
+            # tp_comm_overlap requires fixed-length
+            args.variable_seq_lengths = False
+
+        if (
+            args.num_experts is not None
+            and args.num_experts > 0
+            and args.moe_token_dispatcher_type in ["allgather", "alltoall_seq"]
+        ):
+            # allgather or alltoall_seq requires fixed-length
+            args.variable_seq_lengths = False
+
+    if args.packing_sft_data:
+        if args.micro_batch_size > 1:
+            args.micro_batch_size = 1
+            print_rank_0(
+                "WARING: Setting args.micro_batch_size to 1 since packing_sft_data is enabled",
+                args.rank,
+            )
+
+        if args.context_parallel_size > 1:
+            if (
+                args.context_parallel_ulysses_degree < args.context_parallel_size
+                and args.cp_comm_type == "allgather"
+            ):
+                args.cp_comm_type = "p2p"
+                print_rank_0(
+                    "WARNING: Setting args.cp_comm_type to p2p since ring attention "
+                    "does not support all gather while packing_sft_data is enabled",
+                    args.rank,
+                )
+
+    if args.padding_side == "left":
+        args.padding_side = "right"
+        print_rank_0(
+            "WARING: Setting args.padding_side to right when run sft.", args.rank
+        )
+
+    # NOTE on ordering: this validator runs BEFORE megatron's `validate_args`,
+    # so `args.sft_chunkpipe_mode` and `args.data_parallel_size` are not yet
+    # populated. We are already inside the SFT branch (early-return above),
+    # which is exactly the condition under which `sft_chunkpipe_mode` is later
+    # set to True in megatron arguments.py, so we don't need to re-check it.
+    # `data_parallel_size` is recomputed locally with megatron's formula.
+    if getattr(args, "enable_chunkpipe", False):
+        # A-series (Ampere / sm80) fused-DSA backend only supports ChunkPipe in
+        # pretrain; the SFT ChunkPipe path is not implemented for it yet.
+        from loongforge.models.common.experimental_attention_variant.dsa_kernel_backend import (
+            BACKEND_SM80,
+            resolve_backend_name,
+        )
+
+        if resolve_backend_name(args) == BACKEND_SM80:
+            raise NotImplementedError(
+                "SFT ChunkPipe is not supported on the sm80 (A-series / Ampere) "
+                "fused-DSA backend yet; only pretrain is supported. Use "
+                "--training-phase pretrain, or select a non-sm80 "
+                "--dsa-kernel-backend."
+            )
+        if args.sft_data_streaming:
+            raise NotImplementedError(
+                "SFT chunkpipe does not support --sft-data-streaming."
+            )
+        if getattr(args, "dataloader_save", None):
+            raise NotImplementedError(
+                "SFT chunkpipe does not support --dataloader-save. "
+                "Please resume from iteration checkpoints via consumed_train_samples."
+            )
+        if args.context_parallel_size != 1:
+            raise NotImplementedError(
+                "SFT chunkpipe temporarily requires context_parallel_size == 1. "
+                f"Got context_parallel_size={args.context_parallel_size}."
+            )
+        if args.sequence_parallel and args.chunksize % args.tensor_model_parallel_size != 0:
+            raise ValueError(
+                "SFT chunkpipe requires chunksize to be divisible by "
+                "tensor_model_parallel_size when sequence_parallel is enabled. "
+                f"Got chunksize={args.chunksize}, "
+                f"tensor_model_parallel_size={args.tensor_model_parallel_size}."
+            )
+        if getattr(args, "mtp_num_layers", 0) and args.mtp_num_layers > 0:
+            if args.overlap_grad_reduce:
+                raise NotImplementedError(
+                    "SFT chunkpipe + MTP temporarily does not support "
+                    "--overlap-grad-reduce because MTP checkpoint/recompute can "
+                    "trigger duplicate grad-ready marking on output/shared embedding weights."
+                )
+
+        # SFT chunkpipe per-sample loss path: default when
+        # --calculate-per-token-loss is not set. Requires the new 2-tuple
+        # reporting format (legacy_reporting_loss_reduction=False); the new
+        # path returns a scalar S/(N*G), not the 2-tuple [loss, num_tokens]
+        # the legacy path expects.
+        if not args.calculate_per_token_loss:
+            assert not args.legacy_reporting_loss_reduction, (
+                "SFT chunkpipe per-sample loss path requires "
+                "legacy_reporting_loss_reduction=False. "
+                "Either drop --legacy-reporting-loss-reduction or pass "
+                "--calculate-per-token-loss to fall back to the "
+                "token-weighted path."
+            )
+            print_rank_0(
+                "INFO: SFT chunkpipe per-sample loss path enabled (default). "
+                "Pass --calculate-per-token-loss to fall back to the "
+                "token-weighted loss path.",
+                args.rank,
+            )
+
+        # Decide whether to enable the heterogeneous-DP synthesis path.
+        # attn_dp != expert_dp happens when EP > 1 or ETP differs from TP, in
+        # which case the LPT partition cannot guarantee identical group-size
+        # multisets across DP ranks; without synthesis the MoE All2All would
+        # desync. The sampler reads `args.chunkpipe_enable_synthesis` at
+        # construction time and switches to `_equal_size_partition`.
+        tp = args.tensor_model_parallel_size
+        pp = args.pipeline_model_parallel_size
+        cp = args.context_parallel_size
+        ep = getattr(args, "expert_model_parallel_size", 1) or 1
+        etp = getattr(args, "expert_tensor_parallel_size", None)
+        if etp is None:
+            etp = tp
+        attn_dp = args.world_size // (tp * pp * cp)
+        expert_dp = args.world_size // (etp * pp * ep)
+        vpp = args.num_virtual_stages_per_pipeline_rank or 1
+        if vpp != 1 and attn_dp != expert_dp:
+            raise NotImplementedError(
+                f"SFT chunkpipe with virtual pipeline parallelism (vpp={vpp}) is temporarily not supported "
+                f"when attn_dp ({attn_dp}) != expert_dp ({expert_dp}). "
+                f"Please set vpp=1, or ensure attn_dp == expert_dp."
+            )
+        args.chunkpipe_enable_synthesis = (attn_dp != expert_dp)
+        if args.chunkpipe_enable_synthesis:
+            print_rank_0(
+                f"INFO: SFT chunkpipe synthesis path enabled "
+                f"(attn_dp={attn_dp}, expert_dp={expert_dp}). "
+                f"Group-size multisets will be aligned across DP ranks via "
+                f"short-pool synthesis with all-or-nothing rollback.",
+                args.rank,
+            )
+
+
 def _validate_extra_training_args(args):
     """Validate training arguments"""
 
@@ -193,7 +389,46 @@ def _validate_extra_training_args(args):
         )
 
 
-def _validate_extra_parallel_args(args):
+def _validate_extra_multimodal_args(args):
+    """Validate multimodal arguments"""
+    if args.model_family not in VisionLanguageModelFamilies.names():
+        return
+
+    args.variable_seq_lengths = True
+
+    if not (args.packing_pretrain_data or args.packing_sft_data):
+        args.packing_buffer_size = None
+
+    # [DEPRECATED] --max-packed-tokens is redundant with --seq-length. In
+    # LoongForge seq_length IS the post-concatenation packed-sequence window: it
+    # drives every downstream shape / position-embedding / parallel init, so the
+    # packed length can never diverge from it. The flag defaults to None and is
+    # always resolved to seq_length; only warn when the user passes a value that
+    # differs. Guard on seq_length being set (it always is for VLM) to avoid
+    # assigning None before Megatron finalizes seq_length.
+    if args.seq_length is not None:
+        if args.max_packed_tokens is not None and args.max_packed_tokens != args.seq_length:
+            print_rank_0(
+                "WARNING: --max-packed-tokens is deprecated and ignored; using "
+                f"--seq-length ({args.seq_length}) instead "
+                f"(you passed {args.max_packed_tokens}).",
+                args.rank,
+            )
+        args.max_packed_tokens = args.seq_length
+
+
+def _validata_extra_custom_args(args):
+    """Validate multimodal arguments"""
+    if args.model_family not in DiffusionModelFamilies.names():
+        return
+
+    # make text length divisible by cp size
+    if args.max_text_length is not None and args.context_parallel_size > 1:
+        while (args.max_text_length % args.context_parallel_size) != 0:
+            args.max_text_length += 1
+
+
+def _validata_extra_parallel_args(args):
     """Validate parallel arguments"""
     # check cp, NOTE: maybe removed in the future
     if args.context_parallel_size > 1:
@@ -248,103 +483,6 @@ def _validate_extra_parallel_args(args):
             )
 
 
-def convert_custom_pipeline_to_layout(
-    custom_pipeline_layers: Optional[str] = None,
-    custom_virtual_pipeline_layers: Optional[str] = None,
-    num_virtual_stages_per_pipeline_rank: Optional[int] = None,
-    mtp_num_layers: Optional[int] = None,
-) -> str:
-    """
-    Convert custom-pipeline-layers format to pipeline-model-parallel-layout format.
-
-    Args:
-        custom_pipeline_layers: Comma-separated string of decoder layer counts per PP stage.
-                                Example: "6,5,7,9" means 4 PP stages with 6,5,7,9 decoder layers.
-                                Cannot be used together with custom_virtual_pipeline_layers.
-        custom_virtual_pipeline_layers: Optional. Comma-separated string specifying exact layer
-                                       counts for each VPP stage. Format: all PP's VPP0, then all PP's VPP1.
-                                       Example: "3,2,3,4,3,3,4,5" for PP=4, VPP=2
-                                       Cannot be used together with custom_pipeline_layers.
-        num_virtual_stages: Number of virtual pipeline stages (VPP) per PP rank.
-                        If None, defaults to 1 (no virtual pipeline).
-        mtp_num_layers: Number of MTP layers. If None, no MTP layers are added.
-                        MTP layers are placed in the last stage with loss.
-
-    Returns:
-        Layout string in pipeline-model-parallel-layout format.
-    """
-    # Handle None case: default to 1 (no virtual pipeline)
-    vp_size = num_virtual_stages_per_pipeline_rank if num_virtual_stages_per_pipeline_rank is not None else 1
-
-    splits = []
-    # Determine PP size based on which parameter is provided
-    if custom_virtual_pipeline_layers is not None:
-        if custom_virtual_pipeline_layers.find(',') != -1:
-            splits = [int(s) for s in custom_virtual_pipeline_layers.split(',') if s.strip()]
-        pp_size = len(splits) // vp_size
-    elif custom_pipeline_layers is not None:
-        if custom_pipeline_layers.find(',') != -1:
-            splits = [int(s) for s in custom_pipeline_layers.split(',') if s.strip()]
-        pp_size = len(splits)
-    else:
-        raise ValueError(
-            "One of custom_pipeline_layers or custom_virtual_pipeline_layers must be provided.")
-
-    # Symbol mapping
-    from megatron.core.transformer.enums import LayerType
-    symbols = {
-        LayerType.embedding: 'E',
-        LayerType.decoder: 't',
-        LayerType.mtp: 'm',
-        LayerType.loss: 'L',
-    }
-
-    # Build layout for each PP rank and VPP rank
-    # Layout order: All PP ranks' VPP0, then all PP ranks' VPP1, etc.
-    layout_stages = []
-
-    for vp_rank in range(vp_size):
-        for pp_rank in range(pp_size):
-            stage_layers = []
-
-            # First stage of first PP rank: add embedding
-            if pp_rank == 0 and vp_rank == 0:
-                stage_layers.append(symbols[LayerType.embedding])
-
-            # Determine number of decoder layers for this stage
-            if custom_virtual_pipeline_layers is not None:
-                # Directly get the layer count from custom_virtual_pipeline_layers
-                num_layers_this_stage = splits[vp_rank * pp_size + pp_rank]
-            else:
-                # Calculate layers per VPP stage using the formula:
-                # num_layers_to_build = ([q] * (vp_size - r) + [q + 1] * r)[vp_rank]
-                num_layers = splits[pp_rank]
-                q = num_layers // vp_size
-                r = num_layers % vp_size
-
-                if vp_rank < (vp_size - r):
-                    num_layers_this_stage = q
-                else:
-                    num_layers_this_stage = q + 1
-
-            # Add decoder layers for this VPP stage
-            stage_layers.extend([symbols[LayerType.decoder]] * num_layers_this_stage)
-
-            # Last stage of last PP rank: add MTP (if applicable) and loss
-            if pp_rank == pp_size - 1 and vp_rank == vp_size - 1:
-                if mtp_num_layers is not None and mtp_num_layers > 0:
-                    stage_layers.extend(
-                        [symbols[LayerType.mtp]] * mtp_num_layers)
-                stage_layers.append(symbols[LayerType.loss])
-
-            layout_stages.append(''.join(stage_layers))
-
-    # Join all stages with '|'
-    layout_str = '|'.join(layout_stages)
-
-    return layout_str
-
-
 def _validate_legacy_pipeline_args(args):
     """Validate parallel arguments"""
     # Uneven virtual pipeline parallelism
@@ -392,15 +530,15 @@ def _validate_legacy_pipeline_args(args):
                 "num_virtual_stages_per_pipeline_rank should be set when custom_virtual_pipeline_layers is set"
         assert args.custom_pipeline_layers is None, \
                 "custom_pipeline_layers should not be set when custom_virtual_pipeline_layers is set"
-        
+
         custom_vpp_splits = []
         if args.custom_virtual_pipeline_layers.find(',') != -1:
             custom_vpp_splits = [int(s) for s in args.custom_virtual_pipeline_layers.split(',') if s.strip()]
-        
+
         assert sum(custom_vpp_splits) == args.num_layers, (
             f"the sum of --custom-virtual-pipeline-layers must be equal to {args.num_layers}"
         )
-        
+
         assert len(custom_vpp_splits) == args.pipeline_model_parallel_size * \
             args.num_virtual_stages_per_pipeline_rank, (
             f"the number of elements in --custom-virtual-pipeline-layers must be equal to "
@@ -498,7 +636,7 @@ def _validate_custom_model_args(name, args, defaults={}):
     if args.non_persistent_ckpt_type == 'local':
         try:
             from nvidia_resiliency_ext.checkpointing.local.ckpt_managers.local_manager import \
-                LocalCheckpointManager
+                LocalCheckpointManager  # noqa: F401
         except ModuleNotFoundError as e:
             raise RuntimeError('nvidia_resiliency_ext is required for local checkpointing') from e
 
@@ -542,6 +680,20 @@ def _validate_custom_model_args(name, args, defaults={}):
     if "a2a+p2p" in args.cp_comm_type:
         assert args.hierarchical_context_parallel_sizes is not None, \
         "--hierarchical-context-parallel-sizes must be set when a2a+p2p is used in cp comm"
+
+    # Set input defaults.
+    for key in defaults:
+        # For default to be valid, it should not be provided in the
+        # arguments that are passed to the program. We check this by
+        # ensuring the arg is set to None.
+        if getattr(args, key, None) is not None:
+            if args.rank == 0:
+                print('WARNING: overriding default arguments for {key}:{v} \
+                       with {key}:{v2}'.format(key=key, v=defaults[key],
+                                               v2=getattr(args, key)),
+                                               flush=True)
+        else:
+            setattr(args, key, defaults[key])
 
     if args.data_path is not None and args.split is None:
         legacy_default_split_value = '969, 30, 1'

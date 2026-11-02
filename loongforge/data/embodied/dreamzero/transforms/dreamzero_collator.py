@@ -31,8 +31,8 @@ from transformers.feature_extraction_utils import BatchFeature
 from loongforge.data.embodied.transforms.collator import (
     _move_to_device,
     _pin_memory,
+    register_preprocessor,
 )
-from loongforge.data.embodied.registry import register_collator
 
 from ..schema import (
     EmbodimentTag,
@@ -305,13 +305,13 @@ class DreamZeroPreparedBatch(dict):
         return self
 
 
-@register_collator("dreamzero")
+@register_preprocessor("dreamzero")
 class DefaultDataCollator(DataCollatorMixin):
     """Data collator registry entry for DreamZero batches."""
 
     @classmethod
-    def from_config(cls, model_cfg, data_cfg, training_args=None, dataset_stats=None, dataset=None, runtime=None):
-        """Build the DreamZero collator from typed configs (collator registry entry).
+    def from_config(cls, model_cfg, data_cfg, training_args=None, dataset_stats=None, dataset=None):
+        """Build the DreamZero collator from typed configs (preprocessor registry entry).
 
         Produces a ``DreamZeroPreparedBatch`` (dict-backed, ``.to(device)``-capable);
         tensor values are unchanged relative to the legacy dataloader-builder path.

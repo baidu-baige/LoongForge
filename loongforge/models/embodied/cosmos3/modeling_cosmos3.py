@@ -19,7 +19,7 @@ import pathlib as _pathlib_mod
 import pickle
 import sys
 import types
-from typing import TYPE_CHECKING, Dict
+from typing import Dict
 
 import numpy as np
 import torch
@@ -44,9 +44,8 @@ from loongforge.models.embodied.cosmos3.sequence_packing import (
 from loongforge.models.embodied.cosmos3.data_and_condition import GenerationDataClean
 from loongforge.models.embodied.cosmos3.unified_mot import Qwen3VLMoTConfig, Qwen3VLTextForCausalLM
 from loongforge.models.embodied.cosmos3.wan2pt2_vae_4x16x16 import Wan2pt2VAEInterface
-
-if TYPE_CHECKING:
-    from loongforge.data.embodied.cosmos3.transforms.cosmos3_collator import Cosmos3Batch
+from loongforge.data.embodied.cosmos3.transforms.cosmos3_preprocessor import Cosmos3Batch
+from loongforge.engines.torch.utils.runtime import resolve_dtype
 
 logger = logging.getLogger(__name__)
 
@@ -216,7 +215,7 @@ class Cosmos3(nn.Module):
         each submodule's init_weights to populate them. Mirrors cosmos's
         ``hf_model._apply(empty_like, ...) + tie_embeddings``.
         """
-        self.net.to(dtype)
+        self.net.to(resolve_dtype(dtype))
         self.net.to_empty(device=device)
         self.net.init_weights(buffer_device=device)
         logger.info("Cosmos3 materialized on %s", device)
@@ -262,7 +261,7 @@ class Cosmos3(nn.Module):
         """Not implemented; call ``forward`` directly during training."""
         raise NotImplementedError("Use forward() directly.")
 
-    def forward(self, batch: "Cosmos3Batch", iteration=None, **kwargs) -> Dict[str, torch.Tensor]:
+    def forward(self, batch: Cosmos3Batch, iteration=None, **kwargs) -> Dict[str, torch.Tensor]:
         """Training forward: online VAE encode → noise → pack → MoT → loss.
 
         Accepts Cosmos3Batch (raw videos) from cosmos3_dataset.py.

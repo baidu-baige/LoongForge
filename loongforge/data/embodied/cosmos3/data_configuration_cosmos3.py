@@ -35,7 +35,7 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
-class Cosmos3DataConfig:
+class Cosmos3DroidConfig:
     """Cosmos3 data-processing config (maps 1:1 to YAML ``data:`` section)."""
 
     action_chunk_length: int = 32
@@ -47,3 +47,6 @@ class Cosmos3DataConfig:
     video_backend: str = "torchcodec"
     use_image_augmentation: bool = False
     colorjitter_on_gpu: bool = False
+
+    def __post_init__(self) -> None:
+        pass

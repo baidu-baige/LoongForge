@@ -17,14 +17,14 @@ from transformers import AutoImageProcessor, AutoTokenizer
 from transformers.dynamic_module_utils import get_class_from_dynamic_module
 from transformers.processing_utils import ProcessorMixin
 
-from loongforge.data.chat_template import MAPPING_NAME_TO_TEMPLATE
-from loongforge.data.kimi_plugin import KimiPlugin
-from loongforge.data.multimodal import dataloader_provider
-from loongforge.data.multimodal.base.task_encoder import BaseTaskEncoder
-from loongforge.data.multimodal.kimi_task_encoder import KimiTaskEncoder
-from loongforge.data.multimodal.vlm_task_encoder import VLMTaskEncoder
+from loongforge.data.chat_templates.template import MAPPING_NAME_TO_TEMPLATE
+from loongforge.data.chat_templates.plugins.kimi_plugin import KimiPlugin
+from loongforge.data.vlm import dataloader_provider
+from loongforge.data.vlm.base.task_encoder import BaseTaskEncoder
+from loongforge.data.vlm.kimi_task_encoder import KimiTaskEncoder
+from loongforge.data.vlm.vlm_task_encoder import VLMTaskEncoder
 from loongforge.models.omni_models.omni_encoder_model import OmniEncoderModel
-from loongforge.utils import constants
+from loongforge.data import constants
 
 
 class Glm52KimiVitPluginTest(unittest.TestCase):
@@ -239,7 +239,7 @@ class VLMTaskEncoderCompatibilityTest(unittest.TestCase):
                     "__init__",
                     lambda encoder: setattr(encoder, "args", args),
                 ), patch(
-                    "loongforge.data.multimodal.vlm_task_encoder.AutoProcessor.from_pretrained",
+                    "loongforge.data.vlm.vlm_task_encoder.AutoProcessor.from_pretrained",
                     side_effect=load_processor,
                 ):
                     VLMTaskEncoder(args)
@@ -262,24 +262,17 @@ class VLMValidationDatasetTest(unittest.TestCase):
     def _get_val_dataset(self, args):
         dataset = object()
         with patch.object(
-            dataloader_provider, "get_args", return_value=args
-        ), patch.object(
-            dataloader_provider.parallel_state,
-            "get_data_parallel_rank",
-            return_value=0,
-        ), patch.object(
-            dataloader_provider.parallel_state,
-            "get_data_parallel_world_size",
-            return_value=1,
-        ), patch.object(
-            dataloader_provider.parallel_state,
-            "get_data_parallel_group",
-            return_value=None,
-        ), patch.object(
             dataloader_provider.energon, "WorkerConfig", return_value=object()
         ), patch.object(
             dataloader_provider.energon, "get_val_dataset", return_value=dataset
-        ) as get_val_dataset:
+        ) as get_val_dataset, patch.object(
+            dataloader_provider, "get_args", return_value=args
+        ), patch.multiple(
+            dataloader_provider.parallel_state,
+            get_data_parallel_rank=Mock(return_value=0),
+            get_data_parallel_world_size=Mock(return_value=1),
+            get_data_parallel_group=Mock(return_value=None),
+        ):
             result = dataloader_provider.get_val_dataset(Mock())
         return result, dataset, get_val_dataset
 

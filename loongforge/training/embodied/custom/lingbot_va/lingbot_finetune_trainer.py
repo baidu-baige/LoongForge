@@ -22,28 +22,6 @@ from loongforge.training.embodied.sft import (
 )
 
 
-def _configure_lingbot_checkpoint(model, training_args):
-    """Use TE's FP8-aware checkpoint for LingBot's internal block recompute."""
-    if not (
-        getattr(training_args, "fp8", False)
-        and getattr(training_args, "fp8_backend", None) == "te"
-    ):
-        return
-
-    backbone = getattr(model, "model", None)
-    set_checkpoint = getattr(backbone, "set_block_checkpoint_fn", None)
-    if not callable(set_checkpoint):
-        raise RuntimeError(
-            "LingBot TE FP8 requires a backbone that supports "
-            "set_block_checkpoint_fn()."
-        )
-
-    from loongforge.engines.torch.distributed.fp8_utils import te_checkpoint_fn
-
-    set_checkpoint(te_checkpoint_fn())
-
-
-
 def _device_loss_guard(loss, grad_accum, threshold):
     scaled = loss / grad_accum
     detached = scaled.detach()
@@ -108,32 +86,9 @@ class LingBotFinetuneTrainer(FinetuneTrainer):
         from loongforge.models.embodied.lingbot_va.lingbot_fsdp2_adapter import (
             wrap_lingbot_torch_nested_fsdp2,
         )
-        from loongforge.engines.torch.distributed.fsdp_utils.builders import (
-            build_fsdp_device_mesh,
-            build_ignored_params,
-            build_mp_policy,
-        )
-        from loongforge.engines.torch.distributed.fsdp_utils.optimizer_grads import (
-            ensure_fsdp_param_compat,
-        )
-        from loongforge.engines.torch.distributed.fp8_utils import apply_fp8_linear_conversion
 
-        apply_fp8_linear_conversion(self.model, self.training_args, self.ctx.device)
-        _configure_lingbot_checkpoint(self.model, self.training_args)
-        if not self.ctx.is_distributed:
-            self.model = self.model.to(device=self.ctx.device)
-            return
-
-        ensure_fsdp_param_compat()
-        self.model.to(device=self.ctx.device)
-        mp_policy = build_mp_policy(self.training_args, self.model)
-        # Every nested FSDP group must ignore the same scalar parameters.
-        scalar_ignored = build_ignored_params(self.training_args, self.model, self.ctx)
         self.model = wrap_lingbot_torch_nested_fsdp2(
-            self.model,
-            mesh=build_fsdp_device_mesh(self.training_args, self.ctx),
-            mp_policy=mp_policy,
-            scalar_ignored=scalar_ignored,
+            self.model, self.training_args, self.ctx
         )
 
     def _build_optimizer(self):
@@ -144,9 +99,7 @@ class LingBotFinetuneTrainer(FinetuneTrainer):
 
         from loongforge.models.embodied.lingbot_va.lingbot_fsdp2_adapter import (
             apply_lingbot_fsdp2_tuning,
-        )
-        from loongforge.engines.torch.distributed.fsdp_utils.optimizer_grads import (
-            register_post_step_reshard,
+            register_lingbot_post_step_reshard,
         )
 
         apply_lingbot_fsdp2_tuning(self.model)
@@ -160,7 +113,7 @@ class LingBotFinetuneTrainer(FinetuneTrainer):
             reshard_mode = "framework-default"
         else:
             self._lingbot_post_step_reshard_hook, reshard_module_count = (
-                register_post_step_reshard(
+                register_lingbot_post_step_reshard(
                     self.model,
                     optimizer,
                 )
@@ -251,19 +204,19 @@ class LingBotFinetuneTrainer(FinetuneTrainer):
 
     def _clip_gradients(self, max_norm: float) -> float:
         """Clip RAB=false gradients through the LingBot DTensor helper."""
-        from loongforge.engines.torch.distributed.fsdp_utils.optimizer_grads import (
-            clip_optimizer_gradients,
+        from loongforge.models.embodied.lingbot_va.lingbot_fsdp2_adapter import (
+            clip_lingbot_optimizer_gradients,
         )
 
-        return clip_optimizer_gradients(self.optimizer, max_norm)
+        return clip_lingbot_optimizer_gradients(self.optimizer, max_norm)
 
     def _clean_nan_gradients(self) -> None:
         """Clean the optimizer-owned DTensor gradients used by LingBot."""
-        from loongforge.engines.torch.distributed.fsdp_utils.optimizer_grads import (
-            clean_optimizer_gradients,
+        from loongforge.models.embodied.lingbot_va.lingbot_fsdp2_adapter import (
+            clean_lingbot_optimizer_gradients,
         )
 
-        clean_optimizer_gradients(self.optimizer)
+        clean_lingbot_optimizer_gradients(self.optimizer)
 
     def _forward_backward(self) -> dict:
         """Finish LingBot-only loss diagnostics after final backward."""

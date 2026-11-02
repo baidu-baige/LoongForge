@@ -7,42 +7,17 @@ Patchify variable-length latents, pad text to fixed
 max length, apply CP padding, then concatenate across samples in each bin.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import List, Dict, Any
 
 import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.utils.data import IterableDataset
+from megatron.core import parallel_state
 
-from loongforge.data.diffusion.latent_dataset import LatentDataset
+from loongforge.data.diffusion.latent_dataset import TensorDataset
+from loongforge.data.diffusion.sequence_packing_utils import first_fit
 
-
-def first_fit(seqlens: List[int], pack_size: int) -> List[List[int]]:
-    """
-    Packs sequences of varying lengths into bins using the First-Fit algorithm.
-
-    Args:
-      seqlens: A list of integers, representing the lengths of the sequences to be packed.
-      pack_size: The maximum capacity of each bin.
-
-    Returns:
-      A list of lists, where each inner list represents a bin and contains the indices
-        of the sequences assigned to that bin.
-    """
-    bins = []  # each bin: {"indices": [...], "used": total_size}
-    for i, s in enumerate(seqlens):
-        # Find first bin that fits
-        found = False
-        for bin_info in bins:
-            if bin_info["used"] + s <= pack_size:
-                bin_info["indices"].append(i)
-                bin_info["used"] += s
-                found = True
-                break
-        if not found:  # open a new bin
-            bins.append({"indices": [i], "used": s})
-    # Return only the indices
-    return [bin_info["indices"] for bin_info in bins]
 
 
 def _get_cp_sample_alignment(cp_world_size: int) -> int:
@@ -54,7 +29,7 @@ def _get_cp_sample_alignment(cp_world_size: int) -> int:
 # Patchify utilities (Wan: patch_size=(1,2,2))
 # ---------------------------------------------------------------------------
 
-def patchify_latent(latent: torch.Tensor, patch_size=(1, 2, 2)):
+def _patchify_latent(latent: torch.Tensor, patch_size=(1, 2, 2)):
     """Convert [C, T, H, W] → [num_patches, pT * pH * pW * C].
 
     Output is in **(pT, pH, pW, C)** order within each patch.
@@ -74,7 +49,7 @@ def patchify_latent(latent: torch.Tensor, patch_size=(1, 2, 2)):
     return x.reshape(num_patches, c * pT * pH * pW)
 
 
-def patchify_for_conv3d(latent: torch.Tensor, patch_size=(1, 2, 2)):
+def _patchify_for_conv3d(latent: torch.Tensor, patch_size=(1, 2, 2)):
     """Convert [C, T, H, W] → [num_patches, C * pT * pH * pW].
 
     Output is in **(C, pT, pH, pW)** order within each patch — the same
@@ -95,10 +70,6 @@ def patchify_for_conv3d(latent: torch.Tensor, patch_size=(1, 2, 2)):
     return x.reshape(num_patches, c * pT * pH * pW)
 
 
-
-
-
-
 class PackedDataset(IterableDataset):
     """A dataset that packs variable-length diffusion samples.
 
@@ -114,52 +85,46 @@ class PackedDataset(IterableDataset):
         self,
         data_path: str,
         steps_per_epoch: int,
-        scheduler,
-        cp_world_size: int,
+        args,
+        scheduler=None,
         packing_buffer_size: int = 512,
         seq_length: int = 8192,
         dp_rank: int = 0,
         dp_world_size: int = 1,
-        context_max_len: int = 512,
-        model_name: Optional[str] = None,
-        seed: int = 0,
-        max_timestep_boundary: float = 1.0,
-        min_timestep_boundary: float = 0.0,
     ):
         super().__init__()
         self.data_path = data_path
         self.steps_per_epoch = steps_per_epoch
-        self.seed = seed
-        self.max_timestep_boundary = max_timestep_boundary
-        self.min_timestep_boundary = min_timestep_boundary
+        self.args = args
         self.scheduler = scheduler
         self.packing_buffer_size = packing_buffer_size
         self.seq_length = seq_length
         self.dp_rank = dp_rank
         self.dp_world_size = dp_world_size
 
-        self.context_max_len = context_max_len
+        self.context_max_len = getattr(args, "context_max_len", 512)
 
+        cp_world_size = parallel_state.get_context_parallel_world_size()
         self.cp_world_size = cp_world_size
         self.cp_chunk_factor = _get_cp_sample_alignment(cp_world_size)
         self.sharding_factor = self.cp_chunk_factor if cp_world_size > 1 else 0
 
         # Initialize the base dataset
         keep_keys = None
-        if model_name in ("wan2-1-i2v", "wan2-2-i2v"):
+        if getattr(args, "model_name", None) in ("wan2-1-i2v", "wan2-2-i2v"):
             keep_keys = {
                 "context", "input_latents", "y", "clip_feature",
                 "height", "width", "num_frames",
                 "max_timestep_boundary", "min_timestep_boundary",
             }
-        self.base_dataset = LatentDataset(
-            data_path, steps_per_epoch, seed=seed, keep_keys=keep_keys,
+        self.base_dataset = TensorDataset(
+            data_path, steps_per_epoch, seed=args.seed, keep_keys=keep_keys,
             data_parallel_size=self.dp_world_size,
         )
 
         # Validate timestep boundaries
-        max_ts = max_timestep_boundary
-        min_ts = min_timestep_boundary
+        max_ts = args.max_timestep_boundary
+        min_ts = args.min_timestep_boundary
         assert 0 <= max_ts <= 1, "max_timestep should range from 0 to 1"
         assert 0 <= min_ts <= 1, "min_timestep should range from 0 to 1"
         assert min_ts <= max_ts, f"min_timestep: {min_ts} should <= max_timestep: {max_ts}"
@@ -203,6 +168,13 @@ class PackedDataset(IterableDataset):
     # ------------------------------------------------------------------
 
     def __iter__(self):
+        from loongforge.models.diffusion.wan.wan_flow_match import FlowMatchScheduler
+
+        scheduler = self.scheduler
+        if scheduler is None:
+            scheduler = FlowMatchScheduler(shift=5, sigma_min=0.0, extra_one_step=True)
+            scheduler.set_timesteps(1000, training=True)
+
         required_bins = self.steps_per_epoch
         buffer = []
         sample_idx = self.dp_rank
@@ -225,7 +197,7 @@ class PackedDataset(IterableDataset):
             for bin_samples in bins:
                 if batch_count >= required_bins:
                     return
-                processed = self._process_bin(bin_samples, self.scheduler)
+                processed = self._process_bin(bin_samples, scheduler)
                 merged = self._merge_samples(processed)
                 batch_count += 1
                 yield merged
@@ -241,8 +213,8 @@ class PackedDataset(IterableDataset):
     def _process_bin(self, bin_samples, scheduler):
         """Process all samples in a bin: patchify, pad, gen noise."""
         processed = []
-        max_ts = self.max_timestep_boundary
-        min_ts = self.min_timestep_boundary
+        max_ts = self.args.max_timestep_boundary
+        min_ts = self.args.min_timestep_boundary
         max_ts_boundary = int(max_ts * scheduler.num_train_timesteps)
         min_ts_boundary = int(min_ts * scheduler.num_train_timesteps)
 

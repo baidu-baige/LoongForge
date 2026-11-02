@@ -12,19 +12,40 @@ Main functions:
 - gather_sample_info_across_dp: Gather sample information across DP ranks
 - solve_sample_dp_reorder_plan: Compute optimal redistribution plan
 - redistribute_tensors: Execute tensor redistribution
-- data.vlm.internvl.dp_balance_layout.reorder_data_for_internvl: Reorder InternVL model data
-- data.vlm.dp_balance_layout.reorder_data_for_vlm: Reorder VLM data
+- reorder_data_for_internvl: Reorder InternVL model data
+- reorder_data_for_vlm: Reorder VLM data
 - reorder_data_across_dp: Main entry point for data reordering
 """
 
 import torch
+from functools import partial
 from megatron.core import mpu
 import torch.distributed as dist
 
 from megatron.training import get_args
-from loongforge.data.dp_balance.rebalance.layout import (
-    get_batch_layout,
+from loongforge.models import catalog as constants
+from loongforge.data.dp_balance.rebalance.pack import (
+    # intern_vl
+    InternVLDataSample,
+    depack_data_for_intern_vl,
+    pack_data_for_intern_vl,
+    # vlm
+    VLMDataSample,
+    depack_data_for_vlm,
+    pack_data_for_vlm,
 )
+
+from loongforge.data.dp_balance.rebalance.reconstruct import (
+    # intern_vl
+    reconstruct_llm_for_internvl,
+    reconstruct_image_flags_for_internvl,
+    reconstruct_pixel_values_for_internvl,
+    # vlm
+    reconstruct_llm_for_vlm,
+    reconstruct_visual_grid_thw_for_vlm,
+    reconstruct_visual_for_vlm,
+)
+
 from loongforge.data.dp_balance.rebalance.warmup import (
     load_estimate_per_sample,
 )
@@ -92,48 +113,6 @@ class _MicroBatchLoadTracker:
 
 
 _load_tracker = _MicroBatchLoadTracker()
-
-class RebalanceContext:
-    """Helpers a batch layout uses to reorder one micro-batch.
-
-    Bundles dp_balance's gather, plan, and redistribution primitives so a
-    layout owns only its packed-batch format, not the process groups.
-    """
-
-    def __init__(self, max_len_ratio: float, caller: str):
-        self.max_len_ratio = max_len_ratio
-        self.caller = caller
-
-    def gather(self, tensor_list):
-        lengths = torch.tensor(
-            [t.numel() for t in tensor_list],
-            dtype=torch.int,
-            device=tensor_list[0].device,
-        )
-        return gather_sample_info_across_dp(lengths)
-
-    def plan(self, local_lengths: torch.Tensor):
-        global_lengths, local_index, src_rank = gather_sample_info_across_dp(local_lengths)
-        dp_size = get_dp_group_by_device(local_lengths).size()
-        dp_reorder_plan, micro_batch_costs = solve_sample_dp_reorder_plan(
-            global_lengths,
-            local_index,
-            src_rank,
-            cost_fn=load_estimate_per_sample,
-            pack_len_ratio=self.max_len_ratio,
-            dp_historical_costs=_load_tracker.get_historical_costs(dp_size),
-            caller=self.caller,
-        )
-        _load_tracker.update(micro_batch_costs)
-        return dp_reorder_plan
-
-    def redistribute(self, tensor_list, dp_reorder_plan, gathered, reconstruct_func):
-        return redistribute_tensor_helper(
-            tensor_list, dp_reorder_plan, *gathered, reconstruct_func,
-        )
-
-    def redistribute_grouped(self, tensor_list, dp_reorder_plan, reconstruct_func):
-        return redistribute_tensors(tensor_list, dp_reorder_plan, reconstruct_func)
 
 
 def get_dp_group_by_device(tensor):
@@ -390,7 +369,7 @@ def solve_sample_dp_reorder_plan(
     max_seq_load = max([item[0] for item in items])
 
     imbalance_ratio = (max_dp_load / dp_average_load) - 1 if dp_average_load > 0 else 0
-
+    
 
     tag = f"[DP Balance][{caller}] " if caller else "[DP Balance] "
 
@@ -799,6 +778,295 @@ def redistribute_tensors(local_tensor_list, dp_reorder_plan, reconstruct_func):
     )
 
 
+def reorder_data_for_internvl(data):
+    """
+    Reorder data across DP ranks for InternVL models.
+
+    This function performs load balancing for InternVL models by:
+    1. Depacking the data into individual samples
+    2. Computing optimal redistribution plan
+    3. Redistributing samples across DP ranks
+    4. Repacking the redistributed samples
+
+    Args:
+        data: Packed data batch from InternVL dataloader.
+
+    Returns:
+        Reordered data batch with samples redistributed across DP ranks.
+    """
+    from megatron.training import get_args
+    args = get_args()
+    local_sample_list = depack_data_for_intern_vl(data)
+    local_pixel_values = []
+    local_input_ids = []
+    local_image_flags = []
+    local_loss_weights = []
+    local_labels = []
+
+    for sample in local_sample_list:
+        local_pixel_values.append(sample.pixel_values)
+        local_input_ids.append(sample.input_ids)
+        local_image_flags.append(sample.image_flags)
+        local_loss_weights.append(sample.loss_weights)
+        local_labels.append(sample.labels)
+
+    local_input_ids_lengths = torch.tensor(
+        [t.shape[-1] for t in local_input_ids],
+        dtype=torch.int,
+        device=local_input_ids[0].device,
+    )
+
+    (
+        global_seq_lengths,
+        local_sample_index,
+        sample_src_dp_rank,
+    ) = gather_sample_info_across_dp(local_input_ids_lengths)
+
+    dp_group = get_dp_group_by_device(local_input_ids[0])
+    dp_size = dp_group.size()
+
+    # Get accumulated costs from previous micro-batches in this iteration
+    historical_costs = _load_tracker.get_historical_costs(dp_size)
+
+    dp_reorder_plan, micro_batch_costs = solve_sample_dp_reorder_plan(
+        global_seq_lengths,
+        local_sample_index,
+        sample_src_dp_rank,
+        cost_fn=load_estimate_per_sample,
+        pack_len_ratio=args.dp_balance_max_len_ratio_vlm,
+        dp_historical_costs=historical_costs,
+        caller="InternVL",
+    )
+
+    # Accumulate this micro-batch's costs for future micro-batches
+    _load_tracker.update(micro_batch_costs)
+
+    if dp_reorder_plan is None:
+        return data
+
+    # LLM tensors (input_ids, labels, loss_weights) share the same sample
+    # dimensions, gather once and reuse to avoid redundant all_gather calls.
+    llm_lengths = torch.tensor(
+        [t.numel() for t in local_input_ids],
+        dtype=torch.int,
+        device=local_input_ids[0].device,
+    )
+    llm_global_lengths, llm_local_idx, llm_src_rank = (
+        gather_sample_info_across_dp(llm_lengths)
+    )
+    redistributed_input_ids = redistribute_tensor_helper(
+        local_input_ids, dp_reorder_plan,
+        llm_global_lengths, llm_local_idx, llm_src_rank,
+        reconstruct_llm_for_internvl,
+    )
+    redistributed_labels = redistribute_tensor_helper(
+        local_labels, dp_reorder_plan,
+        llm_global_lengths, llm_local_idx, llm_src_rank,
+        reconstruct_llm_for_internvl,
+    )
+    redistributed_loss_weights = redistribute_tensor_helper(
+        local_loss_weights, dp_reorder_plan,
+        llm_global_lengths, llm_local_idx, llm_src_rank,
+        reconstruct_llm_for_internvl,
+    )
+
+    # pixel_values and image_flags have different element counts, gather separately
+    redistributed_pixel_values = redistribute_tensors(
+        local_pixel_values, dp_reorder_plan, reconstruct_pixel_values_for_internvl,
+    )
+    redistributed_image_flags = redistribute_tensors(
+        local_image_flags, dp_reorder_plan, reconstruct_image_flags_for_internvl,
+    )
+
+    redistributed_samples = []
+    for i in range(len(redistributed_input_ids)):
+        sample = InternVLDataSample(
+            redistributed_pixel_values[i],
+            redistributed_input_ids[i],
+            redistributed_image_flags[i],
+            redistributed_loss_weights[i],
+            redistributed_labels[i],
+        )
+        redistributed_samples.append(sample)
+
+    new_data = pack_data_for_intern_vl(redistributed_samples)
+    return new_data
+
+
+def reorder_data_for_vlm(data):
+    """
+    Reorder data across DP ranks for VLM (Vision-Language Model) models.
+
+    This function performs load balancing for VLM models by:
+    1. Depacking the data into individual samples (LLM tokens, labels, attention masks,
+       pixel values for images and videos)
+    2. Computing optimal redistribution plan based on sequence lengths
+    3. Redistributing samples across DP ranks
+    4. Repacking the redistributed samples
+
+    Args:
+        data: Packed data batch from VLM dataloader.
+
+    Returns:
+        Reordered data batch with samples redistributed across DP ranks.
+    """
+    args = get_args()
+    local_sample_list = depack_data_for_vlm(data)
+
+    # llm_input
+    local_tokens = []
+    local_attn_mask = []
+    local_labels = []
+
+    # visual_input
+    local_pixel_values_images = []
+    local_pixel_values_videos = []
+    local_image_thws = []
+    local_vid_thws = []
+
+    for sample in local_sample_list:
+        local_tokens.append(sample.tokens)
+        local_labels.append(sample.labels)
+        local_attn_mask.append(sample.attn_mask)
+        if sample.pixel_values_images is not None:
+            local_pixel_values_images.append(sample.pixel_values_images)
+            local_image_thws.append(sample.image_thw)
+        if sample.pixel_values_videos is not None:
+            local_pixel_values_videos.append(sample.pixel_values_videos)
+            local_vid_thws.append(sample.vid_thw)
+
+    local_token_lengths = torch.tensor(
+        [t.shape[-1] for t in local_tokens],
+        dtype=torch.int,
+        device=local_tokens[0].device,
+    )
+
+    (
+        global_seq_lengths,
+        local_sample_index,
+        sample_src_dp_rank,
+    ) = gather_sample_info_across_dp(local_token_lengths)
+
+    dp_group = get_dp_group_by_device(local_tokens[0])
+    dp_size = dp_group.size()
+
+    # Get accumulated costs from previous micro-batches in this iteration
+    historical_costs = _load_tracker.get_historical_costs(dp_size)
+
+    dp_reorder_plan, micro_batch_costs = solve_sample_dp_reorder_plan(
+        global_seq_lengths,
+        local_sample_index,
+        sample_src_dp_rank,
+        cost_fn=load_estimate_per_sample,
+        pack_len_ratio=args.dp_balance_max_len_ratio_vlm,
+        dp_historical_costs=historical_costs,
+        caller="VLM",
+    )
+
+    # Accumulate this micro-batch's costs for future micro-batches
+    _load_tracker.update(micro_batch_costs)
+
+    if dp_reorder_plan is None:
+        return data
+
+    # Helper to redistribute a tensor list, reusing the shared gather results
+    def _redistribute(tensor_list, reconstruct_fn):
+        local_lengths = torch.tensor(
+            [t.numel() for t in tensor_list],
+            dtype=torch.int,
+            device=tensor_list[0].device,
+        )
+        global_lengths, local_idx, src_rank = gather_sample_info_across_dp(
+            local_lengths
+        )
+        return redistribute_tensor_helper(
+            tensor_list,
+            dp_reorder_plan,
+            global_lengths,
+            local_idx,
+            src_rank,
+            reconstruct_fn,
+        )
+
+    # LLM tensors share the same sample count, gather once and reuse
+    llm_lengths = torch.tensor(
+        [t.numel() for t in local_tokens],
+        dtype=torch.int,
+        device=local_tokens[0].device,
+    )
+    llm_global_lengths, llm_local_idx, llm_src_rank = (
+        gather_sample_info_across_dp(llm_lengths)
+    )
+    redistributed_tokens = redistribute_tensor_helper(
+        local_tokens, dp_reorder_plan,
+        llm_global_lengths, llm_local_idx, llm_src_rank,
+        reconstruct_llm_for_vlm,
+    )
+    redistributed_labels = redistribute_tensor_helper(
+        local_labels, dp_reorder_plan,
+        llm_global_lengths, llm_local_idx, llm_src_rank,
+        reconstruct_llm_for_vlm,
+    )
+    redistributed_attn_mask = redistribute_tensor_helper(
+        local_attn_mask, dp_reorder_plan,
+        llm_global_lengths, llm_local_idx, llm_src_rank,
+        reconstruct_llm_for_vlm,
+    )
+
+    redistributed_pixel_values_images = None
+    redistributed_image_thws = None
+
+    if local_pixel_values_images:
+        visual_size = local_pixel_values_images[0].shape[-1]
+        redistributed_pixel_values_images = _redistribute(
+            local_pixel_values_images,
+            partial(reconstruct_visual_for_vlm, visual_size=visual_size),
+        )
+        redistributed_image_thws = _redistribute(
+            local_image_thws,
+            reconstruct_visual_grid_thw_for_vlm,
+        )
+
+    redistributed_pixel_values_videos = None
+    redistributed_video_thws = None
+    if local_pixel_values_videos:
+        visual_size = local_pixel_values_videos[0].shape[-1]
+        redistributed_pixel_values_videos = _redistribute(
+            local_pixel_values_videos,
+            partial(reconstruct_visual_for_vlm, visual_size=visual_size),
+        )
+        redistributed_video_thws = _redistribute(
+            local_vid_thws,
+            reconstruct_visual_grid_thw_for_vlm,
+        )
+
+    redistributed_samples = []
+    for i in range(len(redistributed_tokens)):
+        redistributed_pixel_values_image = None
+        redistributed_image_thw = None
+        redistributed_pixel_values_video = None
+        redistributed_video_thw = None
+        if redistributed_pixel_values_images is not None:
+            redistributed_pixel_values_image = redistributed_pixel_values_images[i]
+            redistributed_image_thw = redistributed_image_thws[i]
+        if redistributed_pixel_values_videos is not None:
+            redistributed_pixel_values_video = redistributed_pixel_values_videos[i]
+            redistributed_video_thw = redistributed_video_thws[i]
+        sample = VLMDataSample(
+            redistributed_tokens[i],
+            redistributed_labels[i],
+            redistributed_attn_mask[i],
+            redistributed_pixel_values_image,
+            redistributed_image_thw,
+            redistributed_pixel_values_video,
+            redistributed_video_thw,
+        )
+        redistributed_samples.append(sample)
+    new_data = pack_data_for_vlm(redistributed_samples)
+
+    return new_data
+
+
 def reorder_data_across_dp(data):
     """
     Reorder data across DP ranks for load balancing.
@@ -820,6 +1088,16 @@ def reorder_data_across_dp(data):
             'intern_vl' and those defined in constants.VisionLanguageModelFamilies.
     """
     args = get_args()
-    layout = get_batch_layout(args.model_family)
-    ctx = RebalanceContext(args.dp_balance_max_len_ratio_vlm, caller=layout.caller)
-    return data[:-1] + [layout.reorder(data[-1], ctx)]
+    if args.model_family == "intern_vl":
+        result = data[:-1] + [reorder_data_for_internvl(data[-1])]
+        return result
+    elif args.model_family in constants.VisionLanguageModelFamilies.names():
+        result = data[:-1] + [reorder_data_for_vlm(data[-1])]
+        return result
+    else:
+        raise ValueError(
+            f"Unsupported model_family '{args.model_family}'. "
+            f"Expected one of: "
+            f"['intern_vl', "
+            f"{', '.join(constants.VisionLanguageModelFamilies.names())}]"
+        )

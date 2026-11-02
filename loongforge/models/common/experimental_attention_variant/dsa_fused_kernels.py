@@ -23,7 +23,6 @@ from megatron.core.fusions.fused_mla_yarn_rope_apply import _get_thd_token_idx
 # therefore MLASelfAttentionFused, via the package __init__ -- fail outright on the
 # COMPILE_ENV=ampere image, which deliberately skips FlashMLA.
 from .dsa_kernel_backend import get_dsa_backend
-from .dsa_fused_utils import _unscale_indexer_grad
 
 _DSA_FUSED_DEPS_HINT = (
     "dsa_fused requires optional dependencies. "
@@ -2122,8 +2121,6 @@ class DSADotProductAttention(MegatronModule):
         super().__init__(config=config)
 
         self.config: TransformerConfig = config
-        # Fix the process-wide kernel backend from this config before any kernel call.
-        get_dsa_backend(config)
         self.qkv_format: str = 'sbhd'
         # layer_number is not used.
         # attention_type is not used.
@@ -2442,7 +2439,11 @@ class DSAIndexerKernelFunction(torch.autograd.Function):
         if ctx.indexer_is_fp8:
             d_weights = d_weights * q_scale * ctx.softmax_scale
             # Same kernel + same blockwise FP8 dequant as the CSA indexer, hence
-            # the same eps-floor hazard; reuse the shared unscale helper.
+            # the same eps-floor hazard; reuse its unscale helper.
+            from loongforge.models.foundation.deepseek_v4.deepseek_v4_csa import (
+                _unscale_indexer_grad,
+            )
+
             d_q = _unscale_indexer_grad(d_q, q_scale)
             d_k = _unscale_indexer_grad(d_k, k_scale)
         else:

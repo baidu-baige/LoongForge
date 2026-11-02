@@ -28,10 +28,11 @@ from typing import TYPE_CHECKING, Union, Dict, List, Any, Sequence, Optional, Tu
 import datasets
 from datasets import Dataset, IterableDataset
 
-from loongforge.data import IGNORE_INDEX
+from loongforge.data import constants
 from loongforge.data.chat_templates.template import HFChatTemplate
 
 if TYPE_CHECKING:
+    from datasets import Dataset, IterableDataset
     from .sft_dataset import SFTDatasetConfig
 
 
@@ -430,7 +431,7 @@ def _preprocess_supervised_dataset(
                         config, input_ids, pad_to_multiple_of, config.tokenizer.pad
                     )
                     labels = _pad_sequence_to_multiple(
-                        config, labels, pad_to_multiple_of, IGNORE_INDEX
+                        config, labels, pad_to_multiple_of, constants.IGNORE_INDEX
                     )
                     loss_mask = _pad_sequence_to_multiple(
                         config, loss_mask, pad_to_multiple_of, 0

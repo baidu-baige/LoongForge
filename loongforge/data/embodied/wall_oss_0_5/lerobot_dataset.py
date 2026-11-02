@@ -10,7 +10,7 @@ import logging
 import torch
 from torch.utils.data import random_split
 
-from loongforge.data.embodied.lerobot_dataset import LeRobotV3Dataset
+from loongforge.data.embodied.datasets.lerobot_dataset import LeRobotV3Dataset
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ def _wall_oss_split_index(dataset, idx):
     return dataset._wall_oss_split_indices[int(idx)]
 
 
-def build_wall_oss_0_5_lerobot_dataset(model_cfg, data_cfg, training_args, runtime):
+def build_wall_oss_0_5_lerobot_dataset(model_cfg, data_cfg, training_args):
     """Build the small Wall-OSS-0.5 LeRobot dataset used by smoke/parity runs."""
     repo_id = training_args.dataset_path
     if not repo_id:

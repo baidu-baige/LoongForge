@@ -39,7 +39,7 @@ def _to_list(value):
     return list(value) if value is not None else []
 
 
-def build_lingbot_vla_v2_dataset(model_cfg, data_cfg, training_args, runtime):
+def build_lingbot_vla_v2_dataset(model_cfg, data_cfg, training_args):
     """Build the upstream MultiVLADataset from typed LoongForge configs."""
     from transformers import AutoProcessor
 

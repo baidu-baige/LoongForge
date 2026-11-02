@@ -1512,16 +1512,31 @@ class CSAIndexerKernelFunction(torch.autograd.Function):
         )
 
         d_weights = d_weights * q_scale * ctx.softmax_scale
-        from loongforge.models.common.experimental_attention_variant.dsa_fused_utils import (
-            _unscale_indexer_grad,
-        )
-
         d_q = _unscale_indexer_grad(d_q, q_scale)
         d_k = _unscale_indexer_grad(d_k[:ctx.sk_orig], k_scale[:ctx.sk_orig])
 
         # Unsqueeze batch dim back: [sq, 1, h, d], [sk, 1, d], [sq, 1, h]
         # Last 4 None: index_topk, compress_ratio, sq_offset, packed_seq_params (no grad)
         return d_q.unsqueeze(1), d_k.unsqueeze(1), d_weights.unsqueeze(1), None, None, None, None
+
+
+def _unscale_indexer_grad(grad, scale_inv):
+    """Dequantize an indexer grad by its per-row FP8 scale (grad / scale_inv).
+
+    Rows with amax 0 sit on the quantizer's epsilon floor (scale_inv = 2^-48
+    vs ~1.56e-2 for real rows); dividing amplifies kernel residue by ~2.8e14
+    into finite-but-huge values that overflow the fp32 grad-norm sum of
+    squares. Zero rows are routine (k %128 padding, empty packed segments,
+    padded q positions) and their true gradient is 0 — emit that.
+    """
+    epsilon_scale_floor = 2.0 ** -48 * 1.5  # 1.5x margin over the 2^-48 floor
+    scale_inv = scale_inv.unsqueeze(-1)
+    usable = (
+        torch.isfinite(scale_inv)
+        & (scale_inv > epsilon_scale_floor)
+    )
+    safe_scale_inv = torch.where(usable, scale_inv, torch.ones_like(scale_inv))
+    return (grad / safe_scale_inv).masked_fill(~usable.expand_as(grad), 0.0)
 
 
 class CSAIndexerKernel(torch.nn.Module):

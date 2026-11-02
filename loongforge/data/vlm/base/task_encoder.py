@@ -4,7 +4,6 @@
 """Tasks related to vision models."""
 
 import dataclasses
-import functools
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,13 +32,13 @@ from megatron.energon import (
     Cooker,
 )
 from megatron.energon.task_encoder.base import stateless
+from loongforge.engines.megatron import get_args, get_tokenizer
 from .packer import Packer
 
-from loongforge.data import IGNORE_INDEX
+IGNORE_INDEX = -100  # ID for labels that should be ignored.
 from importlib.metadata import version as _energon_version
-from packaging.version import Version
 try:
-    _ENERGON_NEEDS_SUBFLAVOR = Version(_energon_version("megatron-energon")) < Version("7.0.0")
+    _ENERGON_NEEDS_SUBFLAVOR = _energon_version("megatron-energon") < "7.0.0"
 except Exception:
     _ENERGON_NEEDS_SUBFLAVOR = False
 
@@ -191,12 +190,7 @@ _IMAGE_EXTS: Tuple[str, ...] = (".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"
 _VIDEO_EXTS: Tuple[str, ...] = (".mp4", ".avi", ".mov", ".webm")
 
 
-def bind_config(cooker, config):
-    """Bind *config* to a cooker, keeping the attributes Energon reads (``__stateless__`` etc.)."""
-    return functools.update_wrapper(functools.partial(cooker, config=config), cooker)
-
-
-def _load_vlm_tags(config, section: Optional[str] = None) -> Dict[str, any]:
+def _load_vlm_tags(section: Optional[str] = None) -> Dict[str, any]:
     """Load and cache the VLM message tags from the dataset config file.
 
     Reads the ``tags`` block under the given *section* in ``--sft-dataset-config``.
@@ -224,15 +218,16 @@ def _load_vlm_tags(config, section: Optional[str] = None) -> Dict[str, any]:
             function_tag: function
     """
     global _vlm_tags_cache
+    args = get_args()
     if section is None:
-        section = config.sft_dataset[0] if config.sft_dataset else "multimodal"
+        section = args.sft_dataset[0] if args.sft_dataset else "multimodal"
 
     if _vlm_tags_cache is not None and section in _vlm_tags_cache:
         return _vlm_tags_cache[section]
 
     tags: Dict[str, any] = {}
-    if config.sft_dataset_config:
-        p = Path(config.sft_dataset_config)
+    if args.sft_dataset_config:
+        p = Path(args.sft_dataset_config)
         if p.exists():
             with open(p) as f:
                 cfg = yaml.safe_load(f) or {}
@@ -244,7 +239,7 @@ def _load_vlm_tags(config, section: Optional[str] = None) -> Dict[str, any]:
     return tags
 
 
-def _parse_messages(raw_messages, config, section: Optional[str] = None) -> Tuple[List[Dict], Optional[str]]:
+def _parse_messages(raw_messages, section: Optional[str] = None) -> Tuple[List[Dict], Optional[str]]:
     """Parse a list of raw message dicts into (messages, system).
 
     Field names and role aliases are read directly from the ``tags`` block of
@@ -258,7 +253,7 @@ def _parse_messages(raw_messages, config, section: Optional[str] = None) -> Tupl
         messages: list of dicts with keys ``role`` and ``content``
         system:   system prompt string, or None
     """
-    tags = _load_vlm_tags(config, section)
+    tags = _load_vlm_tags(section)
     role_tag = tags.get("role_tag", "role")
     content_tag = tags.get("content_tag", "content")
     role_map = {
@@ -296,9 +291,9 @@ def _attach_tools(sample_obj, json_data: dict):
 
 
 @stateless
-def cooker_multi_mix_qa(sample: dict, config):
+def cooker_multi_mix_qa(sample: dict):
     """Convert raw sample dict into a MultiMixQASample. """
-    messages, system = _parse_messages(sample["json"]["texts"], config)
+    messages, system = _parse_messages(sample["json"]["texts"])
     video = []
     image = []
     if sample["json"]["media"] == "video":
@@ -331,7 +326,7 @@ def cooker_multi_mix_qa(sample: dict, config):
         ), sample["json"])
 
 @stateless
-def cooker_chat_mix(sample: dict, config) -> ChatMixSample:
+def cooker_chat_mix(sample: dict) -> ChatMixSample:
     """Convert raw sample dict into a ChatMixSample.
 
     Expected json layout (one chat session per sample):
@@ -351,7 +346,7 @@ def cooker_chat_mix(sample: dict, config) -> ChatMixSample:
             "Completions-style `messages`."
         )
 
-    messages, system = _parse_messages(raw_messages, config)
+    messages, system = _parse_messages(raw_messages)
     tools = data.get("tools")
 
     video: List = []
@@ -388,9 +383,9 @@ def cooker_chat_mix(sample: dict, config) -> ChatMixSample:
 
 
 @stateless
-def cooker_multi_vid_vqa(sample: dict, config):
+def cooker_multi_vid_vqa(sample: dict):
     """Convert raw sample dict into a MultiVidQASample. """
-    messages, system = _parse_messages(sample["json"]["texts"], config)
+    messages, system = _parse_messages(sample["json"]["texts"])
 
     video = []
     image = []
@@ -714,21 +709,22 @@ def cooker_packed_caption(sample: dict):
         )
 
 
-def cooker_default(sample: dict, config):
+def cooker_default(sample: dict):
     """Fallback cooker when no subflavor matches, selected by user-defined sample_type."""
-    if config.sample_type == "multi_mix_qa":
-        return cooker_multi_mix_qa(sample, config)
-    elif config.sample_type == "chat_mix":
-        return cooker_chat_mix(sample, config)
-    elif config.sample_type == "feature_vqa":
+    args = get_args()
+    if args.sample_type == "multi_mix_qa":
+        return cooker_multi_mix_qa(sample)
+    elif args.sample_type == "chat_mix":
+        return cooker_chat_mix(sample)
+    elif args.sample_type == "feature_vqa":
         return cooker_feature_qa(sample)
-    elif config.sample_type == "packed_captioning":
+    elif args.sample_type == "packed_captioning":
         return cooker_packed_caption(sample)
-    elif config.sample_type == "packed_vqa":
+    elif args.sample_type == "packed_vqa":
         return cooker_packed_vqa(sample)
-    elif config.sample_type == "packed_multi_mix_qa":
+    elif args.sample_type == "packed_multi_mix_qa":
         return cooker_packed_multi_mix_qa(sample)
-    elif config.sample_type == "packed_chat_mix":
+    elif args.sample_type == "packed_chat_mix":
         return cooker_packed_chat_mix(sample)
     else:
         raise NotImplementedError("Sample format not supported", sample)
@@ -736,34 +732,35 @@ def cooker_default(sample: dict, config):
 
 class BaseTaskEncoder(DefaultTaskEncoder[BaseTaskSample, BaseTaskSamplePacked, BaseTaskBatchPacked, dict]):
     """A simple task encoder for VLMs."""
+    cookers = [
+        Cooker(cooker_multi_mix_qa, has_subflavors={"sample_type": "multi_mix_qa"}),
+        Cooker(cooker_chat_mix, has_subflavors={"sample_type": "chat_mix"}),
+        Cooker(cooker_multi_vid_vqa, has_subflavors={"sample_type": "multi_vid_vqa"}),
+        Cooker(cooker_feature_qa, has_subflavors={"sample_type": "feature_vqa"}),
+        Cooker(cooker_packed_caption, has_subflavors={"sample_type": "packed_captioning"}),
+        Cooker(cooker_packed_vqa, has_subflavors={"sample_type": "packed_vqa"}),
+        Cooker(cooker_packed_multi_mix_qa, has_subflavors={"sample_type": "packed_multi_mix_qa"}),
+        Cooker(cooker_packed_chat_mix, has_subflavors={"sample_type": "packed_chat_mix"}),
+        Cooker(cooker_default,)
+    ]
 
-    def __init__(self, config, tokenizer, chat_template=None):
+    def __init__(self):
         super().__init__()
-        self.cookers = [
-            Cooker(bind_config(cooker_multi_mix_qa, config), has_subflavors={"sample_type": "multi_mix_qa"}),
-            Cooker(bind_config(cooker_chat_mix, config), has_subflavors={"sample_type": "chat_mix"}),
-            Cooker(bind_config(cooker_multi_vid_vqa, config), has_subflavors={"sample_type": "multi_vid_vqa"}),
-            Cooker(cooker_feature_qa, has_subflavors={"sample_type": "feature_vqa"}),
-            Cooker(cooker_packed_caption, has_subflavors={"sample_type": "packed_captioning"}),
-            Cooker(cooker_packed_vqa, has_subflavors={"sample_type": "packed_vqa"}),
-            Cooker(cooker_packed_multi_mix_qa, has_subflavors={"sample_type": "packed_multi_mix_qa"}),
-            Cooker(cooker_packed_chat_mix, has_subflavors={"sample_type": "packed_chat_mix"}),
-            Cooker(bind_config(cooker_default, config)),
-        ]
-        self.config = config
 
-        self.packer = Packer(self.config)
-        self.tokenizer = tokenizer
-        self.is_packing_enabled = self.config.packing_pretrain_data or self.config.packing_sft_data
-        self.max_packed_tokens = self.config.max_packed_tokens
-        self.num_images_expected = self.config.num_images_expected
-        self.max_buffer_size = self.config.max_buffer_size
+        self.args = get_args()
+
+        self.packer = Packer(self.args)
+        self.tokenizer = get_tokenizer()
+        self.is_packing_enabled = self.args.packing_pretrain_data or self.args.packing_sft_data
+        self.max_packed_tokens = self.args.max_packed_tokens
+        self.num_images_expected = self.args.num_images_expected
+        self.max_buffer_size = self.args.max_buffer_size
 
     @stateless(restore_seeds=True)
     def encode_sample(self, sample: Union[CaptioningSample, VQASample, MultiVidQASample, MultiMixQASample]):
         """Generates an encoded sample from a raw sample."""
         assert not (
-            self.config.packing_sft_data
+            self.args.packing_sft_data
             and isinstance(sample, (
                 PackedCaptioningSample,
                 PackedVQASample,
@@ -863,7 +860,7 @@ class BaseTaskEncoder(DefaultTaskEncoder[BaseTaskSample, BaseTaskSamplePacked, B
         pixel_values_videos = self.process_videos(samples)
 
         max_seq_len = max(len(s.tokens) for s in samples)
-        max_seq_len = min(max_seq_len, self.config.seq_length)
+        max_seq_len = min(max_seq_len, self.args.seq_length)
 
         tokens = np.full((len(samples), max_seq_len), self.tokenizer.pad, dtype=np.int64)
         labels = np.full((len(samples), max_seq_len), IGNORE_INDEX, dtype=np.int64)
@@ -938,7 +935,7 @@ class BaseTaskEncoder(DefaultTaskEncoder[BaseTaskSample, BaseTaskSamplePacked, B
             BaseTaskSamplePacked instance.
         """
 
-        packing_seq_len = self.config.seq_length
+        packing_seq_len = self.args.seq_length
 
         packed_tokens = []
         packed_labels = []

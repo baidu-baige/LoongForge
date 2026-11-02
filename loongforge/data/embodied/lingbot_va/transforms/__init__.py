@@ -6,17 +6,17 @@
 from loongforge.data.embodied.lingbot_va.transforms.data_configuration_lingbot_va import (
     LingBotVADataConfig,
 )
-from loongforge.data.embodied.lingbot_va.transforms.lingbot_va_collator import (
+from loongforge.data.embodied.lingbot_va.transforms.lingbot_collator import (
     LingBotVAPreparedBatch,
-    LingBotVACollator,
+    LingBotVAPreprocessor,
 )
-from loongforge.data.embodied.lingbot_va.transforms.lingbot_va_transform import (
+from loongforge.data.embodied.lingbot_va.transforms.lingbot_transform import (
     build_lingbot_va_transforms,
 )
 
 __all__ = [
     "LingBotVADataConfig",
     "LingBotVAPreparedBatch",
-    "LingBotVACollator",
+    "LingBotVAPreprocessor",
     "build_lingbot_va_transforms",
 ]

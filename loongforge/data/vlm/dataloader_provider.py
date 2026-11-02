@@ -3,12 +3,11 @@
 
 """Dataset and DataLoader related utilities"""
 
-import logging
 import os
 import tempfile
 from dataclasses import dataclass
 from math import gcd
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import torch
 import torch.nn.functional as F
@@ -16,107 +15,18 @@ import yaml
 from transformers.utils import PaddingStrategy
 
 from megatron import energon
+from megatron.core import parallel_state
 from megatron.core.datasets.utils import get_blend_from_list
 from megatron.core.models.multimodal import context_parallel
-from megatron.core.utils import log_single_rank
-from loongforge.data import IGNORE_INDEX, TrainingPhase
+from megatron.training import get_args
+from megatron.training.checkpointing import get_checkpoint_name
+from loongforge.data import constants
+from loongforge.engines.megatron import get_model_config, print_rank_0
 from .base.task_encoder import print_error_handler
 from loongforge.models.omni_models.get_position_idx_func import get_position_ids
 
-logger = logging.getLogger(__name__)
-
+IGNORE_INDEX = constants.IGNORE_INDEX
 PAD_TOKEN_ID = 151643
-
-
-@dataclass(frozen=True)
-class VLMDataConfig:
-    """Data-recipe fields needed to build the Energon datasets and task encoders.
-
-    Built by the training method; the data layer never reads backend arguments.
-    Defaults match the CLI definitions in ``training/megatron_args.py`` and
-    ``training/vlm/args.py``.
-    """
-
-    # Loader inputs.
-    data_path: List[str]
-    micro_batch_size: int
-    num_workers: int
-    seed: int
-    seq_length: int
-    valid_data_path: Optional[List[str]] = None
-    packing_buffer_size: int = 10000
-    data_shuffle_buffer_size: int = 0
-    data_max_samples_per_sequence: int = 0
-
-    # Dataset shape and preprocessing.
-    add_question_in_pretrain: bool = False
-    conv_style: str = "internvl2_5"
-    down_sample_ratio: float = 0.5
-    dynamic_image_size: bool = False
-    enable_discard_sample: bool = False
-    energon_pack_algo: str = "balanced"
-    force_image_size: int = 448
-    fps: float = 2.0
-    fps_max_frames: int = 768
-    fps_min_frames: int = 4
-    frame_max_pixels: int = 768 * 28 * 28
-    frame_min_pixels: int = 128 * 28 * 28
-    group_by_length: bool = False
-    hf_processor_path: Optional[str] = None
-    hf_tokenizer_path: Optional[str] = None
-    history_mask_loss: bool = False
-    image_resolution: Optional[int] = None
-    loss_reduction: str = "square"
-    max_buffer_size: int = 20
-    max_dynamic_patch: int = 12
-    max_num_frame: int = 32
-    max_packed_tokens: Optional[int] = None
-    max_pixels: int = 16384 * 28 * 28
-    min_dynamic_patch: int = 1
-    min_num_frame: int = 8
-    min_pixels: int = 4 * 28 * 28
-    normalize_type: str = "imagenet"
-    num_images_expected: int = 48
-    packing_pretrain_data: bool = False
-    packing_sft_data: bool = False
-    pad2square: bool = False
-    sample_type: Optional[str] = None
-    sft_dataset: Optional[List[str]] = None
-    sft_dataset_config: Optional[str] = None
-    strict_mode: bool = False
-    task_encoder: Optional[str] = None
-    train_on_prompt: bool = False
-    training_phase: str = TrainingPhase.PRETRAIN
-    training_rice_vl_max_answer_length: int = 4096
-    use_thumbnail: bool = False
-    video_max_pixels: int = 65536 * 28 * 28
-
-    @classmethod
-    def from_args(cls, args) -> "VLMDataConfig":
-        """Build the config from the training arguments."""
-        encoder_fields = {
-            name: getattr(args, name, None)
-            for name in cls.__dataclass_fields__
-            if name not in {
-                "data_path",
-                "valid_data_path",
-                "micro_batch_size",
-                "num_workers",
-                "packing_buffer_size",
-                "data_shuffle_buffer_size",
-                "data_max_samples_per_sequence",
-            }
-        }
-        return cls(
-            data_path=args.data_path,
-            valid_data_path=getattr(args, "valid_data_path", None),
-            micro_batch_size=args.micro_batch_size,
-            num_workers=args.num_workers,
-            packing_buffer_size=getattr(args, "packing_buffer_size", 0),
-            data_shuffle_buffer_size=getattr(args, "data_shuffle_buffer_size", 0),
-            data_max_samples_per_sequence=getattr(args, "data_max_samples_per_sequence", 0),
-            **encoder_fields,
-        )
 
 
 def _lcm(lhs, rhs):
@@ -149,6 +59,21 @@ def _has_packed_cu_lengths(batch: Dict[str, Any]) -> bool:
     if not torch.is_tensor(cu_lengths):
         cu_lengths = torch.as_tensor(cu_lengths)
     return cu_lengths.ndim >= 2 and cu_lengths.shape[-1] > 1
+
+
+def _needs_packed_alignment(args, batch: Optional[Dict[str, Any]] = None):
+    is_packed = args.packing_sft_data
+    if batch is not None:
+        is_packed = is_packed or _has_packed_cu_lengths(batch)
+
+    return is_packed and (
+        args.context_parallel_size > 1
+        or args.sequence_parallel
+        or (
+            bool(getattr(args, "fp8", None))
+            and getattr(args, "fp8_recipe", None) == "blockwise"
+        )
+    )
 
 
 def seq_padding_for_cp(
@@ -263,13 +188,6 @@ class VLMPretrainCollator:
     """Collator that performs multimodal padding plus mask/position preprocessing."""
 
     tokenizer: Any
-    model_config: Any
-    tp_size: int
-    cp_size: int
-    has_sp: bool
-    fp8_enabled: bool
-    fp8_recipe: Optional[str]
-    packing_sft_data: bool
     model: Optional[Any] = None
     padding: Optional[PaddingStrategy] = None
     max_length: Optional[int] = None
@@ -285,19 +203,15 @@ class VLMPretrainCollator:
         """Normalize raw Energon batch tensors, pad for TP/CP configs, then build masks/positions."""
         batch = self._ensure_tensor(batch)
         self._pad_sequences(batch)
-        is_packed = self.packing_sft_data or _has_packed_cu_lengths(batch)
-        if is_packed and (
-            self.cp_size > 1
-            or self.has_sp
-            or (self.fp8_enabled and self.fp8_recipe == "blockwise")
-        ):
+        args = get_args()
+        if _needs_packed_alignment(args, batch):
             seq_padding_for_cp(
                 batch,
-                tp_size=self.tp_size,
-                cp_size=self.cp_size,
-                has_sp=self.has_sp,
-                fp8_enabled=self.fp8_enabled,
-                fp8_recipe=self.fp8_recipe,
+                tp_size=args.tensor_model_parallel_size,
+                cp_size=args.context_parallel_size,
+                has_sp=args.sequence_parallel,
+                fp8_enabled=bool(getattr(args, "fp8", None)),
+                fp8_recipe=getattr(args, "fp8_recipe", None),
                 pad_token_id=self._resolve_pad_token_id(),
             )
         self._build_masks_and_positions(batch)
@@ -360,11 +274,11 @@ class VLMPretrainCollator:
         labels = batch["labels"]
         attention_mask = batch["attn_mask"]
         cu_lengths = batch["cu_lengths"]
-        model_config = self.model_config
+        model_config = get_model_config()
         get_position_ids_func = getattr(
             model_config, "position_idx_func", get_position_ids
         )
-        position_ids, _ = get_position_ids_func(batch, model_config)
+        position_ids, _ = get_position_ids_func(batch)
         batch["position_ids"] = position_ids.to(dtype=torch.long)
 
         # Shift labels left for next-token prediction and build a loss mask aligned to the shifted labels.
@@ -392,7 +306,7 @@ class VLMPretrainCollator:
         batch["loss_mask"] = loss_mask
 
 
-def _energon_read_order_kwargs(config):
+def _energon_read_order_kwargs(args):
     """Resolve optional Energon sample-order controls from CLI flags.
 
     ``shuffle_buffer_size`` adds sample-level shuffling before cooking and
@@ -402,8 +316,8 @@ def _energon_read_order_kwargs(config):
     giving Energon more sequences to mix through its parallel shard iterators.
     Disabled values are passed as ``None`` to preserve Energon's defaults.
     """
-    shuffle_buffer_size = getattr(config, "data_shuffle_buffer_size", 0) or 0
-    max_samples_per_sequence = getattr(config, "data_max_samples_per_sequence", 0) or 0
+    shuffle_buffer_size = getattr(args, "data_shuffle_buffer_size", 0) or 0
+    max_samples_per_sequence = getattr(args, "data_max_samples_per_sequence", 0) or 0
     return {
         "shuffle_buffer_size": shuffle_buffer_size if shuffle_buffer_size > 1 else None,
         "max_samples_per_sequence": (
@@ -422,47 +336,47 @@ def _validate_energon_data_paths(paths):
             )
 
 
-def get_train_dataset(task_encoder, config: "VLMDataConfig", dp_rank, dp_size, dp_group):
+def get_train_dataset(task_encoder):
     """Get the training dataset"""
+    args = get_args()
     worker_config = energon.WorkerConfig(
-        rank=dp_rank,
-        world_size=dp_size,
-        num_workers=config.num_workers,
-        data_parallel_group=dp_group,
+        rank=parallel_state.get_data_parallel_rank(),
+        world_size=parallel_state.get_data_parallel_world_size(),
+        num_workers=args.num_workers,
+        data_parallel_group=parallel_state.get_data_parallel_group(),
         worker_debug_path=None,
         worker_log_level=0,
     )
-    shuffle_kwargs = _energon_read_order_kwargs(config)
-    log_single_rank(
-        logger,
-        logging.INFO,
+    shuffle_kwargs = _energon_read_order_kwargs(args)
+    print_rank_0(
         f"> Energon read order: shuffle_buffer_size="
         f"{shuffle_kwargs['shuffle_buffer_size']}, max_samples_per_sequence="
         f"{shuffle_kwargs['max_samples_per_sequence']}",
+        args.rank,
     )
 
-    if len(config.data_path) == 1:
-        _validate_energon_data_paths(config.data_path)
+    if len(args.data_path) == 1:
+        _validate_energon_data_paths(args.data_path)
         train_ds = energon.get_train_dataset(
-            config.data_path[0],
-            batch_size=config.micro_batch_size,
+            args.data_path[0],
+            batch_size=args.micro_batch_size,
             task_encoder=task_encoder,
             worker_config=worker_config,
-            packing_buffer_size=config.packing_buffer_size,
+            packing_buffer_size=args.packing_buffer_size,
             handler=print_error_handler,
             image_decode="pil",
             **shuffle_kwargs,
         )
     else:
-        data_paths, data_weights = get_blend_from_list(config.data_path)
+        data_paths, data_weights = get_blend_from_list(args.data_path)
         _validate_energon_data_paths(data_paths)
         yaml_path = create_metadataset_yaml(data_paths, data_weights, split="train")
         train_ds = energon.get_train_dataset(
             yaml_path,
-            batch_size=config.micro_batch_size,
+            batch_size=args.micro_batch_size,
             task_encoder=task_encoder,
             worker_config=worker_config,
-            packing_buffer_size=config.packing_buffer_size,
+            packing_buffer_size=args.packing_buffer_size,
             handler=print_error_handler,
             image_decode="pil",
             **shuffle_kwargs,
@@ -470,9 +384,10 @@ def get_train_dataset(task_encoder, config: "VLMDataConfig", dp_rank, dp_size, d
     return train_ds
 
 
-def get_val_dataset(task_encoder, config: "VLMDataConfig", dp_rank, dp_size, dp_group):
+def get_val_dataset(task_encoder):
     """Build the validation split from the configured Energon dataset."""
-    paths = config.valid_data_path or config.data_path
+    args = get_args()
+    paths = getattr(args, "valid_data_path", None) or args.data_path
     if not isinstance(paths, (list, tuple)):
         paths = [paths]
 
@@ -485,20 +400,20 @@ def get_val_dataset(task_encoder, config: "VLMDataConfig", dp_rank, dp_size, dp_
         path = create_metadataset_yaml(data_paths, data_weights, split="val")
 
     worker_config = energon.WorkerConfig(
-        rank=dp_rank,
-        world_size=dp_size,
-        num_workers=config.num_workers,
-        data_parallel_group=dp_group,
+        rank=parallel_state.get_data_parallel_rank(),
+        world_size=parallel_state.get_data_parallel_world_size(),
+        num_workers=args.num_workers,
+        data_parallel_group=parallel_state.get_data_parallel_group(),
         worker_debug_path=None,
         worker_log_level=0,
     )
     return energon.get_val_dataset(
         path,
         split_part="val",
-        batch_size=config.micro_batch_size,
+        batch_size=args.micro_batch_size,
         task_encoder=task_encoder,
         worker_config=worker_config,
-        packing_buffer_size=config.packing_buffer_size,
+        packing_buffer_size=args.packing_buffer_size,
         handler=print_error_handler,
         image_decode="pil",
     )
@@ -542,20 +457,35 @@ def create_metadataset_yaml(data_paths, data_weights, split="train"):
     return yaml_path
 
 
-def get_train_loader(train_ds, collator=None, state=None):
+def get_train_loader(train_ds, collator=None, restore_state=True):
     """Get the training loader"""
+    args = get_args()
     from importlib.metadata import version
-    from packaging.version import Version
-    if Version(version("megatron-energon")) < Version("7.0.0"):
+    if version('megatron-energon') < "7.0.0":
         train_dataloader = energon.get_savable_loader(train_ds)
     else:
         train_dataloader = energon.get_savable_loader(train_ds, watchdog_initial_timeout_seconds=600)
-
-    if state is not None:
-        try:
-            train_dataloader.restore_state_rank(state)
-        except Exception as e:
-            print("loading dataset state failed. Skipping. " + str(e))
+    
+    if restore_state and args.load is not None:
+        if getattr(args, "dataloader_save", None):
+            dp_rank = parallel_state.get_data_parallel_rank()
+            data_save_name = get_checkpoint_name(
+                args.dataloader_save,
+                args.iteration,
+                pipeline_rank=0,  # Only the first pipeline parallel rank stores the dataloader checkpoint.
+                basename=f"train_dataloader_dprank{dp_rank:03d}.pt",
+            )
+            if os.path.exists(data_save_name):
+                try:
+                    dataset_state_dict = torch.load(data_save_name, map_location="cpu")
+                    train_dataloader.restore_state_rank(
+                        dataset_state_dict["dataloader_state_dict"]
+                    )
+                    print(f"restored dataset state from {data_save_name}")
+                except Exception as e:
+                    print("loading dataset state failed. Skipping. " + str(e))
+            else:
+                print(f"dataset state {data_save_name} does not exist")
     return EnergonDataloader(train_dataloader, collator)
 
 
@@ -607,27 +537,27 @@ def cyclic_iter(iter):
 
 
 def build_full_hetero_encoder_energon_iterator(
-    energon_dataloader,
-    *,
-    pp_rank,
-    tp_size,
-    model_size,
-    num_real_microbatch,
-    prefetch_count,
+    task_encoder, collator, pp_rank, tp_size, model_size, num_real_microbatch
 ):
     """Build encoder iterator for full_hetero_dp with Energon dataloader.
 
-    Receives a separate EnergonDataloader (same dataset config as decoder) and
+    Creates a separate EnergonDataloader (same dataset config as decoder) and
     wraps it with EncoderStridedIterator to yield only microbatches assigned
     to this PP rank.
     """
-    from loongforge.data.vlm.encoder_strided_sampler import EncoderStridedIterator, PrefetchIterator
+    from loongforge.data.encoder_strided_sampler import EncoderStridedIterator, PrefetchIterator
+    from loongforge.engines.megatron.initialize import get_num_micro_batches_per_decoder_dp
+
+    encoder_dataset = get_train_dataset(task_encoder)
+    encoder_dataloader = get_train_loader(encoder_dataset, collator)
 
     strided_iter = EncoderStridedIterator(
-        energon_dataloader=energon_dataloader,
+        energon_dataloader=encoder_dataloader,
         pp_rank=pp_rank,
         tp_size=tp_size,
         model_size=model_size,
         num_real_microbatch=num_real_microbatch,
     )
+    _, encoder_rounds = get_num_micro_batches_per_decoder_dp()
+    prefetch_count = tp_size * encoder_rounds
     return PrefetchIterator(strided_iter, prefetch_count=prefetch_count)

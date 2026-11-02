@@ -7,8 +7,10 @@ from __future__ import annotations
 
 from torch.utils.data import DistributedSampler
 
-from loongforge.data.embodied.registry import register_sampler_builder
-from loongforge.data.embodied.sampler_builder import SamplerBuilderContext
+from loongforge.data.embodied.sampler_builder import (
+    SamplerBuilderContext,
+    register_sampler_builder,
+)
 
 
 @register_sampler_builder("wall_oss_0_5")
@@ -16,8 +18,8 @@ def wall_oss_0_5_sampler_builder(context: SamplerBuilderContext):
     """Wall oss 0 5 sampler builder."""
     return DistributedSampler(
         context.dataset,
-        num_replicas=context.runtime.world_size,
-        rank=context.runtime.rank,
+        num_replicas=context.ctx.world_size,
+        rank=context.ctx.rank,
         shuffle=context.shuffle,
         seed=context.seed,
         drop_last=True,

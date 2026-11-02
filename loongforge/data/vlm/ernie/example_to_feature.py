@@ -26,7 +26,6 @@ from copy import deepcopy
 
 import numpy as np
 
-from loongforge.data import IGNORE_INDEX
 from . import data_adaptive as _data_adaptive_mod
 from . import data_process as _data_process_mod
 from .data_utils import merge_list
@@ -41,6 +40,7 @@ from .utils.io_utils import image_info_2_hash
 import logging
 
 logger = logging.getLogger(__name__)
+from .utils.processor_base import ProcessorBase
 from .utils.video_utils import group_frame_by_video
 from .tokenizer_vl import (
     NOT_FOUND_TOKEN_ID,
@@ -70,7 +70,7 @@ class SlidingWindowsContextManager:
         self.tokenizer.model_max_length = self.ori_max_length
 
 
-class ExampleToFeature:
+class ExampleToFeature(ProcessorBase):
     """Example To Feature
 
     Args:
@@ -98,8 +98,7 @@ class ExampleToFeature:
         drop_untrainble_sample=False,
         chat_template="ernie",
     ):
-        self.is_training = True
-        self.is_pretraining = True
+        super().__init__(None)
 
         # for utterance, fake a dataset_config
         dataset_config = {
@@ -240,7 +239,7 @@ class ExampleToFeature:
         self.token_type_mapping = self._get_token_type_mapping()
 
         # lossmask
-        self.tokenizer.ignored_index = IGNORE_INDEX
+        self.tokenizer.ignored_index = -100
 
         self.prompt_rng = random.Random(seed)
 
@@ -897,7 +896,6 @@ class ExampleToFeature:
                 ids_token_type[i] = self.token_type_mapping[ids]
 
         return ids_token_type
-
 
     def process(self, *args, **kwargs):
         """

@@ -41,7 +41,7 @@ from torch.utils.data import Dataset, get_worker_info
 
 try:
     from lerobot.datasets.lerobot_dataset import LeRobotDatasetMetadata
-    from loongforge.data.embodied.lerobot_dataset import LeRobotV3Dataset
+    from loongforge.data.embodied.datasets.lerobot_dataset import LeRobotV3Dataset
 except ImportError:
     LeRobotV3Dataset = object
     LeRobotDatasetMetadata = None
@@ -769,7 +769,7 @@ def _as_int_list(value: Any) -> List[int]:
     return [int(item) for item in _as_list(value)]
 
 
-def build_lingbot_dataset(model_cfg, data_cfg, training_args, runtime):
+def build_lingbot_dataset(model_cfg, data_cfg, training_args):
     """Build the LingBot-VA latent dataset for the embodied data engine."""
     config = LingBotVALatentDatasetConfig.from_configs(
         model_cfg, data_cfg, training_args

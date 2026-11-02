@@ -242,7 +242,7 @@ class PackedAttentionMoT(nn.Module):
         attention_mask: AttentionMaskType,
         packed_position_embeddings: tuple[FactoredSequencePack, FactoredSequencePack],
         natten_metadata: dict | None = None,
-    ) -> FactoredSequencePack:
+    ) -> tuple[FactoredSequencePack, "KVToStore | None"]:
         """Forward pass with dual-pathway QKV projection and attention."""
         q_und_in = self.q_proj(get_und_seq(pack))
         q_gen_in = self.q_proj_moe_gen(get_gen_seq(pack))

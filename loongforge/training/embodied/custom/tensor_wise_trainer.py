@@ -38,7 +38,7 @@ from loongforge.engines.torch.optimizer.tensor_wise_optimizer.tensor_wise_optimi
 from loongforge.training.embodied.sft import (
     FinetuneTrainer,
 )
-from loongforge.engines.torch.utils.utils import resolve_dtype
+from loongforge.engines.torch.utils.runtime import resolve_dtype
 
 logger = logging.getLogger(__name__)
 

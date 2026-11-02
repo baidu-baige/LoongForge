@@ -14,12 +14,12 @@ from torch.utils.data import Dataset, IterableDataset
 from torchdata.stateful_dataloader import StatefulDataLoader
 
 from loongforge.data.embodied.registry import (
-    DataRuntime,
-    build_collator,
+    build_preprocessor,
     build_dataset,
     build_transforms_from_args,
 )
 from loongforge.data.embodied.sampler_builder import build_sampler
+from loongforge.engines.torch.distributed import DistributedContext
 
 logger = logging.getLogger(__name__)
 
@@ -78,12 +78,8 @@ class _TransformedIterableDataset(IterableDataset):
         return getattr(dataset, name)
 
 
-def build_dataloader(model_cfg, data_cfg, training_args, runtime: DataRuntime) -> StatefulDataLoader:
-    """Build DataLoader with model-specific collator as collate_fn.
-
-    ``runtime`` carries the execution facts the training method resolved. The
-    loader reads data-recipe values from ``training_args`` but must not query
-    backend distributed state or call global readers.
+def build_dataloader(model_cfg, data_cfg, training_args, ctx: DistributedContext) -> StatefulDataLoader:
+    """Build DataLoader with model-specific preprocessor as collate_fn.
 
     The returned DataLoader yields PreparedBatch objects on CPU. Call
     ``batch.to(device)`` before passing a batch to ``model.forward``.
@@ -92,26 +88,24 @@ def build_dataloader(model_cfg, data_cfg, training_args, runtime: DataRuntime) -
     num_workers = training_args.num_workers
     mp_context = training_args.dataloader_multiprocessing_context or ("spawn" if num_workers > 0 else None)
 
-    dataset = build_dataset(model_cfg, data_cfg, training_args, runtime)
+    dataset = build_dataset(model_cfg, data_cfg, training_args)
     dataset_stats = _get_dataset_stats(dataset)
 
-    transform = build_transforms_from_args(
-        model_cfg, data_cfg, training_args, dataset, dataset_stats, runtime
-    )
+    transform = build_transforms_from_args(model_cfg, data_cfg, training_args, dataset, dataset_stats)
     if transform is not None:
         dataset = _apply_transform(dataset, transform)
 
-    collator = _build_collator(model_cfg, data_cfg, training_args, dataset_stats, dataset, runtime)
+    preprocessor = _build_preprocessor(model_cfg, data_cfg, training_args, dataset_stats, dataset)
 
     return _build_stateful_dataloader(
         dataset=dataset,
-        collator=collator,
+        preprocessor=preprocessor,
         model_type=model_cfg.model_type or "dummy",
         batch_size=batch_size,
         num_workers=num_workers,
         mp_context=mp_context,
         training_args=training_args,
-        runtime=runtime,
+        ctx=ctx,
     )
 
 
@@ -133,13 +127,13 @@ def _apply_transform(dataset, transform):
 def _build_stateful_dataloader(
     *,
     dataset,
-    collator,
+    preprocessor,
     model_type: str,
     batch_size: int,
     num_workers: int,
     mp_context,
     training_args,
-    runtime: DataRuntime,
+    ctx: DistributedContext,
 ) -> StatefulDataLoader:
     """_build_stateful_dataloader."""
     seed = training_args.seed
@@ -153,7 +147,7 @@ def _build_stateful_dataloader(
             dataset,
             batch_size=batch_size,
             num_workers=num_workers,
-            collate_fn=collator,
+            collate_fn=preprocessor,
             pin_memory=True,
             drop_last=drop_last,
             prefetch_factor=prefetch_factor,
@@ -167,7 +161,7 @@ def _build_stateful_dataloader(
         model_type,
         dataset=dataset,
         training_args=training_args,
-        runtime=runtime,
+        ctx=ctx,
         batch_size=batch_size,
         seed=seed,
         shuffle=training_args.sampler_shuffle,
@@ -179,7 +173,7 @@ def _build_stateful_dataloader(
         sampler=sampler,
         shuffle=shuffle,
         num_workers=num_workers,
-        collate_fn=collator,
+        collate_fn=preprocessor,
         pin_memory=True,
         drop_last=drop_last,
         prefetch_factor=prefetch_factor,
@@ -192,18 +186,17 @@ def _build_stateful_dataloader(
     return dl
 
 
-def _build_collator(model_cfg, data_cfg, training_args, dataset_stats, dataset, runtime):
-    """Build batch-level collator from the collator registry."""
+def _build_preprocessor(model_cfg, data_cfg, training_args, dataset_stats, dataset):
+    """Build batch-level preprocessor from the collator registry."""
     model_type = model_cfg.model_type or "dummy"
-    collator = build_collator(
+    preprocessor = build_preprocessor(
         model_type,
         model_cfg,
         data_cfg,
         training_args=training_args,
         dataset_stats=dataset_stats,
         dataset=dataset,
-        runtime=runtime,
     )
 
-    logger.info(f"Using collator: {model_type}")
-    return collator
+    logger.info(f"Using preprocessor: {model_type}")
+    return preprocessor

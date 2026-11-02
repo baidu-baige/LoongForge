@@ -205,3 +205,7 @@ class AutoTokenizerFromHF(MegatronLegacyTokenizer):
     def padding_side(self) -> str:
         """padding side"""
         return self.tokenizer.padding_side
+
+    def hf_tokenizer(self):
+        """return low level hf tokenizer"""
+        return self.tokenizer

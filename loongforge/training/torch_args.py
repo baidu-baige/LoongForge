@@ -36,10 +36,11 @@ from dataclasses import dataclass, field
 from functools import partial
 from typing import Any, List, Optional, Union, get_args, get_origin
 
+import torch
+
 from omegaconf import OmegaConf
 
-from loongforge.engines.torch.utils.utils import parse_module_key_patterns
-from loongforge.engines.torch.validators import validate_engine_args
+from loongforge.engines.torch.validators import validate
 from loongforge.models.catalog import get_config_path, get_config_types
 from loongforge.training.cli_utils import (
     parse_class_names,
@@ -48,6 +49,11 @@ from loongforge.training.cli_utils import (
     parse_positive_int,
 )
 from loongforge.training.embodied.args import _EmbodiedDataArgs, _EmbodiedRoutingArgs
+from loongforge.training.embodied.global_vars import (
+    set_data_config,
+    set_model_config,
+    set_training_args,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +111,51 @@ def parse_reshard_after_forward_map(raw_map: str):
             raise argparse.ArgumentTypeError("empty class name in reshard map")
         class_to_reshard[class_name] = parse_reshard_after_forward(reshard_value)
     return class_to_reshard
+
+
+def parse_module_key_patterns(
+    value: str | list[str] | None,
+    *,
+    option_name: str,
+) -> list[str]:
+    """Parse comma-separated qualified module-key patterns.
+
+    Accepts a raw CLI string or an already-split list so the same helper can
+    serve both argparse ``type=`` and the later wrap-time re-parse.
+    """
+    if isinstance(value, (list, tuple)):
+        value = ",".join(value)
+    normalized_patterns = (value or "").strip()
+    if not normalized_patterns:
+        return []
+
+    patterns = [
+        pattern.strip()
+        for pattern in normalized_patterns.split(",")
+        if pattern.strip()
+    ]
+    if any(
+        any(not segment for segment in pattern.split("."))
+        for pattern in patterns
+    ):
+        raise ValueError(f"{option_name} cannot contain empty segments")
+    return patterns
+
+def parse_dtype_from_str(dtype_name: str) -> torch.dtype:
+    """Map a canonical FSDP CLI dtype name to ``torch.dtype``."""
+    DTYPE_MAP_BY_STR = {
+        "fp32": torch.float32,
+        "float32": torch.float32,
+        "bf16": torch.bfloat16,
+        "bfloat16": torch.bfloat16,
+        "fp16": torch.float16,
+        "float16": torch.float16,
+    }
+
+    try:
+        return DTYPE_MAP_BY_STR[dtype_name]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported FSDP dtype {dtype_name!r}") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -1623,6 +1674,9 @@ class TrainingArgs(
     """
 
     def __post_init__(self):
+        if self.dmuon_adamw_foreach_bucket_mib <= 0:
+            raise ValueError("--dmuon-adamw-foreach-bucket-mib must be positive")
+
         # Deterministic mode needs a seeded dataloader (sampler shuffle +
         # per-worker RNG); otherwise data ordering and augmentation are not
         # reproducible run-to-run. Force it on and warn when left off.
@@ -1702,97 +1756,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 
 # ---------------------------------------------------------------------------
-# Validation
-# ---------------------------------------------------------------------------
-
-
-def validate(training_args, model_cfg, data_cfg):
-    """Validate the combination of TrainingArgs + ModelConfig + DataConfig.
-
-    Raises ValueError on hard errors, logs warnings for soft issues.
-    """
-    # ── Learning rate ──
-    if training_args.lr_base <= 0:
-        raise ValueError(f"--lr-base must be positive, got {training_args.lr_base}")
-    if training_args.min_lr < 0:
-        raise ValueError(f"--min-lr must be >= 0, got {training_args.min_lr}")
-    if training_args.min_lr >= training_args.lr_base:
-        logger.warning(
-            f"--min-lr ({training_args.min_lr}) >= --lr-base ({training_args.lr_base}); "
-            f"cosine decay will have no effect."
-        )
-
-    # ── Steps ──
-    if training_args.train_iters <= 0:
-        raise ValueError(f"--train-iters must be positive, got {training_args.train_iters}")
-    if training_args.save_interval < 0:
-        raise ValueError(
-            f"--save-interval must be >= 0, got {training_args.save_interval}"
-        )
-    if training_args.lr_decay_iters is not None and training_args.lr_decay_iters <= 0:
-        raise ValueError(f"--lr-decay-iters must be positive, got {training_args.lr_decay_iters}")
-    lr_schedule_steps = int(training_args.lr_decay_iters or training_args.train_iters)
-    if training_args.lr_decay_start_iters < 0:
-        raise ValueError("--lr-decay-start-iters must be non-negative")
-    if training_args.lr_decay_style == "cosine_decay_with_warmup" and training_args.custom_lr_lambda:
-        raise ValueError(
-            "--custom-lr-lambda does not apply to --lr-decay-style=cosine_decay_with_warmup"
-        )
-    if training_args.lr_decay_start_iters:
-        if not training_args.custom_lr_lambda or training_args.lr_decay_style not in {
-            "cosine_with_min_lr", "cosine_warmup_with_min_lr"
-        }:
-            raise ValueError("--lr-decay-start-iters requires a custom cosine LR scheduler")
-        if not training_args.lr_warmup_iters <= training_args.lr_decay_start_iters < lr_schedule_steps:
-            raise ValueError(
-                "--lr-decay-start-iters must be at least --lr-warmup-iters "
-                "and less than the scheduler steps"
-            )
-    if training_args.lr_warmup_iters >= lr_schedule_steps:
-        logger.warning(
-            f"--lr-warmup-iters ({training_args.lr_warmup_iters}) >= scheduler steps ({lr_schedule_steps})"
-        )
-    if training_args.manual_gc_interval < 0:
-        raise ValueError(
-            f"--manual-gc-interval must be >= 0, got {training_args.manual_gc_interval}"
-        )
-    if training_args.dataloader_prefetch_factor <= 0:
-        raise ValueError(
-            "--dataloader-prefetch-factor must be positive, got "
-            f"{training_args.dataloader_prefetch_factor}"
-        )
-
-    # ── Tokenizer ──
-    if training_args.tokenizer_path is None and not os.environ.get("TOKENIZER_PATH"):
-        logger.warning(
-            "Neither --tokenizer-path nor TOKENIZER_PATH env var is set. "
-            "Model initialization may fail if a tokenizer is required."
-        )
-
-    # ── Profiler mutual exclusion ──
-    if training_args.use_pytorch_profiler and training_args.use_nsys_profiler:
-        raise ValueError(
-            "--use-pytorch-profiler and --use-nsys-profiler are mutually exclusive."
-        )
-    if training_args.use_pytorch_profiler or training_args.use_nsys_profiler:
-        if training_args.profile_step_end < training_args.profile_step_start:
-            raise ValueError(
-                f"--profile-step-end ({training_args.profile_step_end}) must be greater than "
-                f"--profile-step-start ({training_args.profile_step_start})."
-            )
-
-    # ── Model config sanity ──
-    if not model_cfg.model_type:
-        raise ValueError("ModelConfig.model_type must be set (from YAML model.model_type).")
-
-    validate_engine_args(training_args, model_cfg)
-    if training_args.use_lora and training_args.save_interval == 0:
-        logger.warning(
-            "--save-interval=0 disables both checkpoints and LoRA adapter saving."
-        )
-
-
-# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
@@ -1830,15 +1793,8 @@ def parse_train_args():
     yaml_cfg = OmegaConf.load(config_path)
 
     # ── 3. ModelConfig / DataConfig: structured schema ← YAML section ──
-    model_schema = OmegaConf.structured(model_config_cls)
-    if "tensor_wise" in model_schema:
-        from loongforge.engines.torch.optimizer.tensor_wise_optimizer.config import TensorWiseConfig
-
-        model_schema = OmegaConf.merge(
-            model_schema, {"tensor_wise": OmegaConf.structured(TensorWiseConfig)},
-        )
     model_dc = OmegaConf.merge(
-        model_schema,
+        OmegaConf.structured(model_config_cls),
         yaml_cfg.get("model", {}),
     )
     data_dc = OmegaConf.merge(
@@ -1867,6 +1823,11 @@ def parse_train_args():
     training_args = OmegaConf.to_object(training_dc)
     model_cfg = OmegaConf.to_object(model_dc)
     data_cfg = OmegaConf.to_object(data_dc)
+
+    # ── 7. Store globally + return ──
+    set_training_args(training_args)
+    set_model_config(model_cfg)
+    set_data_config(data_cfg)
     return training_args, model_cfg, data_cfg
 
 

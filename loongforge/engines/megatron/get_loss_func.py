@@ -5,13 +5,12 @@
 
 """Generic loss function"""
 
-import os
-
-import torch
-import torch.distributed as dist
-from megatron.core import mpu
-
 from loongforge.engines.megatron import get_args
+import torch
+import os
+from megatron.core import mpu
+import torch.distributed as dist
+
 
 def default_loss_func(
     loss_mask: torch.Tensor,

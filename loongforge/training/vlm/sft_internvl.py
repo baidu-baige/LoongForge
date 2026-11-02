@@ -4,9 +4,10 @@
 """ sft for internvl model """
 
 
+import os
 import torch
+from datasets import load_from_disk
 from functools import partial
-from loongforge.training.vlm import pretrain_vlm
 from transformers import DataCollatorForSeq2Seq
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.training import get_timers
@@ -19,27 +20,14 @@ from loongforge.engines.megatron import (get_args, get_tokenizer, get_model_conf
 from megatron.core.enums import ModelType
 from loongforge.engines.megatron.runner import pretrain
 from loongforge.data.vlm.internvl.internvl_task_encoder import InternVLTaskEncoder
-from loongforge.data.vlm.internvl.dp_balance_layout import (
-    internvl_cumulative_lengths,
-    reorder_data_for_internvl,
-)
-from loongforge.data.dp_balance.rebalance.layout import (
-    BatchLayout,
-    install_batch_layout,
-)
-from loongforge.data.llm.sft_dataloader import (
-    SFTLoaderConfig,
+from loongforge.data.utils import (
     build_sft_cyclic_iterators,
     build_sft_data_collator,
-    llm_pad_to_multiple_of,
-    load_pretokenized_dataset,
 )
 from loongforge.data.vlm.dataloader_provider import (
-    VLMDataConfig,
     get_train_dataset,
     get_train_loader,
 )
-from loongforge.engines.megatron.checkpointing import load_dataloader_state
 from loongforge.models.omni_models.omni_model_provider import (
     omni_model_provider,
 )
@@ -58,15 +46,7 @@ def model_provider(pre_process=True, post_process=True, vp_stage: int = None):
     Returns:
         MCoreModel: The returned model
     """
-    args = get_args()
-    return omni_model_provider(
-        pre_process,
-        post_process,
-        vp_stage=vp_stage,
-        args=args,
-        model_config=get_model_config(),
-        runtime=pretrain_vlm.build_omni_runtime(args),
-    )
+    return omni_model_provider(pre_process, post_process, vp_stage=vp_stage)
 
 
 def get_packed_seq_params(attention_mask):
@@ -212,8 +192,6 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
     """Train_valid_test_datasets_provider """
     import loongforge.data.dp_balance.patches
     args = get_args()
-    loader_config = SFTLoaderConfig.from_args(args)
-    data_config = VLMDataConfig.from_args(args)
     if mpu.get_tensor_model_parallel_rank() != 0:
         return None, None, None
 
@@ -227,66 +205,25 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
 
     # create dataloader
     if args.is_tokenized_data:
-        dpr = parallel_state.get_data_parallel_rank()
-        dpw = parallel_state.get_data_parallel_world_size()
-        train_ds = load_pretokenized_dataset(args.data_path, dpr)
-        collator = build_sft_data_collator(
-            DataCollatorForSeq2Seq,
-            loader_config,
-            get_tokenizer(),
-            pad_to_multiple_of=llm_pad_to_multiple_of(args),
-        )
+        rank = parallel_state.get_data_parallel_rank()
+        save_path = os.path.join(args.data_path[0], "preprocess", str(rank))
+        print(f"[rank{rank}] loading preprocessed dataset from {save_path}")
+        train_ds = load_from_disk(save_path)
+        collator = build_sft_data_collator(DataCollatorForSeq2Seq)
         train_data_iterator, valid_data_iterator, test_data_iterator = (
-            build_sft_cyclic_iterators(
-                train_ds,
-                None,
-                None,
-                collator,
-                loader_config,
-                dpr,
-                dpw,
-                args.consumed_train_samples,
-                args.consumed_valid_samples,
-                args.skip_train,
-            )
+            build_sft_cyclic_iterators(train_ds, None, None, collator)
         )
         return train_data_iterator, None, None
     else:
         tokenizer = get_tokenizer().tokenizer
-        task_encoder = InternVLTaskEncoder(
-            data_config, tokenizer, patch_size=get_model_config().image_encoder.patch_size
-        )
-        train_dataset = get_train_dataset(
-            task_encoder,
-            data_config,
-            dp_rank=parallel_state.get_data_parallel_rank(),
-            dp_size=parallel_state.get_data_parallel_world_size(),
-            dp_group=parallel_state.get_data_parallel_group(),
-        )
-        train_dataloader = get_train_loader(train_dataset, state=load_dataloader_state(args))
+        task_encoder = InternVLTaskEncoder(args, tokenizer)
+        train_dataset = get_train_dataset(task_encoder)
+        train_dataloader = get_train_loader(train_dataset)
         return train_dataloader, None, None
-
-
-def _reorder_internvl_batch(data, ctx):
-    """Bind this run's image size and image-context token id to the InternVL layout."""
-    return reorder_data_for_internvl(
-        data,
-        ctx,
-        img_size=get_args().force_image_size,
-        img_context_token_id=get_tokenizer().tokenizer.convert_tokens_to_ids(IMG_CONTEXT_TOKEN),
-    )
-
-
-INTERNVL_BATCH_LAYOUT = BatchLayout(
-    reorder=_reorder_internvl_batch,
-    cumulative_lengths=internvl_cumulative_lengths,
-    caller="InternVL",
-)
 
 
 def train(args):
     """Run InternVL SFT."""
-    install_batch_layout(args.model_family, INTERNVL_BATCH_LAYOUT)
     train_valid_test_datasets_provider.is_distributed = True
     pretrain(
         args,

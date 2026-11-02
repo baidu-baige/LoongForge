@@ -12,14 +12,14 @@ from loongforge.data.vlm.vlm_task_encoder import (
     IGNORE_INDEX,
     VLMTaskEncoder,
 )
-from loongforge.data.chat_templates.plugins.mm_plugin import Placeholder
+from loongforge.data.constants import Placeholder
 
 
 class MiniCPMV46TaskEncoder(VLMTaskEncoder):
     """Use MiniCPM-native image sizing and placeholders in the Energon path."""
 
-    def __init__(self, config, tokenizer, chat_template=None):
-        super().__init__(config, tokenizer, chat_template)
+    def __init__(self, args):
+        super().__init__(args)
         self.minicpm_plugin = MiniCPMV46Plugin()
 
     def _resize_image(self, image, size_factor=28):

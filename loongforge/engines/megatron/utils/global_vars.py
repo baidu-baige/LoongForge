@@ -12,6 +12,7 @@ from megatron.training.global_vars import (
 )
 
 from loongforge.engines.megatron.tokenizer import build_tokenizer
+
 from loongforge.data import TrainingPhase
 
 
@@ -26,7 +27,6 @@ _GLOBAL_LOONGFORGE_TOKENIZER: Optional["MegatronLegacyTokenizer"] = None
 _GLOBAL_MODEL_CONFIG = None
 _GLOBAL_HYDRA_CONFIG = None
 _GLOBAL_DATA_CONFIG = None
-
 _GLOBAL_ARGS_DICT = None
 
 
@@ -88,7 +88,7 @@ def set_loongforge_extra_global_vars(args, build_tokenizer=True) -> None:
 
 def _build_chat_template(args) -> Optional["ChatTemplate"]:
     """Build the chat template."""
-    # Lazy import: the registry reads the Jinja resources, so load it only when SFT builds a template.
+    # Lazy import to avoid a circular import with the chat template registry.
     from loongforge.data.chat_templates.template import (
         ChatTemplate,
         HFChatTemplate,

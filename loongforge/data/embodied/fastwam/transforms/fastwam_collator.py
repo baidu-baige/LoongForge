@@ -11,8 +11,7 @@ from typing import Any, Dict, List, Optional
 
 import torch
 
-from loongforge.data.embodied.transforms.collator import BaseCollator, PreparedBatch
-from loongforge.data.embodied.registry import register_collator
+from loongforge.data.embodied.transforms.collator import BasePreprocessor, PreparedBatch, register_preprocessor
 
 
 def _ensure_fastwam_on_path() -> None:
@@ -63,8 +62,8 @@ class FastWAMPreparedBatch(PreparedBatch):
         return sample
 
 
-@register_collator("fastwam")
-class FastWAMCollator(BaseCollator):
+@register_preprocessor("fastwam")
+class FastWAMPreprocessor(BasePreprocessor):
     """Collate LeRobot-style samples into upstream FastWAM sample dicts."""
 
     def __init__(self, model_cfg: Any, data_cfg: Any):
@@ -84,9 +83,8 @@ class FastWAMCollator(BaseCollator):
         training_args=None,
         dataset_stats=None,
         dataset=None,
-        runtime=None,
-    ) -> "FastWAMCollator":
-        """Construct a ``FastWAMCollator`` from typed configs."""
+    ) -> "FastWAMPreprocessor":
+        """Construct a ``FastWAMPreprocessor`` from typed configs."""
         return cls(model_cfg, data_cfg)
 
     def __call__(self, examples: List[Dict[str, Any]]) -> FastWAMPreparedBatch:

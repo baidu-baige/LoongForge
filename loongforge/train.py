@@ -105,9 +105,9 @@ def resolve_torch_trainer(trainer_type: str):
 
 def _run_megatron():
     """Parse the Megatron arguments and run the recipe for their family and phase."""
-    from loongforge.training.megatron_args import parse_megatron_train_args
+    from loongforge.engines.megatron.parser import parse_train_args
 
-    args = parse_megatron_train_args()
+    args = parse_train_args()
     return resolve_method(args.model_family, args.training_phase).train(args)
 
 

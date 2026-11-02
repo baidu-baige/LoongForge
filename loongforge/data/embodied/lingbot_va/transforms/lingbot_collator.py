@@ -11,10 +11,10 @@ import torch
 import torch.nn.functional as F
 
 from loongforge.data.embodied.transforms.collator import (
-    BaseCollator,
+    BasePreprocessor,
     PreparedBatch,
+    register_preprocessor,
 )
-from loongforge.data.embodied.registry import register_collator
 
 
 @dataclass
@@ -38,9 +38,9 @@ class LingBotVAPreparedBatch(PreparedBatch):
         }
 
 
-@register_collator("lingbot_va")
-class LingBotVACollator(BaseCollator):
-    """Pad and stack LingBot-VA samples into a ``LingBotVAPreparedBatch``."""
+@register_preprocessor("lingbot_va")
+class LingBotVAPreprocessor(BasePreprocessor):
+    """Batch-level LingBot-VA preprocessor backed by the existing collator."""
 
     def __init__(self, pad_to_multiple: int = 1):
         """Initialize the instance.
@@ -58,8 +58,19 @@ class LingBotVACollator(BaseCollator):
         training_args=None,
         dataset_stats=None,
         dataset=None,
-        runtime=None,
-    ) -> "LingBotVACollator":
+    ) -> "LingBotVAPreprocessor":
+        """Run from config.
+
+        Args:
+            model_cfg: Input value for this operation.
+            data_cfg: Input value for this operation.
+            training_args: Input value for this operation.
+            dataset_stats: Input value for this operation.
+            dataset: Input value for this operation.
+
+        Returns:
+            The computed result.
+        """
         return cls(pad_to_multiple=int(data_cfg.pad_to_multiple))
 
     def __call__(
@@ -74,7 +85,7 @@ class LingBotVACollator(BaseCollator):
             The computed result.
         """
         if not examples:
-            raise ValueError("LingBotVACollator received an empty example list")
+            raise ValueError("LingBotVAPreprocessor received an empty example list")
         return LingBotVAPreparedBatch(
             latents=_pad_stack(
                 [item["latents"] for item in examples], self.pad_to_multiple

@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 from collections import deque
 from dataclasses import fields
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
 from torch import Tensor
@@ -32,9 +32,12 @@ from .model_configuration_dreamzero import DreamZeroConfig
 from .modules.action_head_tf import WANPolicyHead, WANPolicyHeadConfig
 from .precomputed_cache import build_precomputed_cache_config
 
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from loongforge.engines.torch.distributed.context import DistributedContext
 
 __all__ = ["DreamZeroPolicy", "DreamZeroConfig", "build_action_head_config"]
+
+logger = logging.getLogger(__name__)
 
 
 def build_action_head_config(model_config: DreamZeroConfig) -> WANPolicyHeadConfig:
@@ -256,7 +259,7 @@ class DreamZeroPolicy(PreTrainedPolicy):
         args: Any,
         completed_steps: int,
         optimizer: torch.optim.Optimizer | None,
-        ctx: Any,
+        ctx: DistributedContext,
     ) -> None:
         """Apply one-time DreamZero FSDP initialization compatibility rounding."""
         del args
@@ -305,8 +308,7 @@ class DreamZeroPolicy(PreTrainedPolicy):
 
         self._initial_param_rounding_done = True
 
-        rank_zero = not torch.distributed.is_available() or not torch.distributed.is_initialized()
-        if rank_zero or torch.distributed.get_rank() == 0:
+        if ctx.is_main:
             logger.info(
                 "DreamZero initial FSDP param rounding: dtype=%s "
                 "local_params=%d local_numel=%d fallback_params=%d "
@@ -358,17 +360,17 @@ class DreamZeroPolicy(PreTrainedPolicy):
         completed_steps: int,
         micro_step: int,
         batch: Any = None,
-    ) -> tuple[int, int] | None:
-        """Decide DreamZero's first-forward RNG policy after the first batch fetch."""
+    ) -> None:
+        """Apply DreamZero's first-forward RNG policy after the first batch fetch."""
         del micro_step, batch
         if self._train_rng_reset_after_first_batch_done:
-            return None
+            return
         if not self.config.train_rng_reset_after_first_batch:
             self._train_rng_reset_after_first_batch_done = True
-            return None
+            return
         if args.resume or completed_steps != 0:
             self._train_rng_reset_after_first_batch_done = True
-            return None
+            return
 
         seed = self.config.train_rng_seed
         if seed is None:
@@ -379,8 +381,17 @@ class DreamZeroPolicy(PreTrainedPolicy):
         if cpu_burn < 0:
             raise ValueError("DreamZeroConfig.train_rng_cpu_burn must be >= 0")
 
+        from loongforge.engines.torch.utils.runtime import set_seed
+
+        set_seed(seed)
+        if cpu_burn:
+            torch.rand(cpu_burn)
         self._train_rng_reset_after_first_batch_done = True
-        return seed, cpu_burn
+        logger.info(
+            "DreamZero reset training RNG after first batch fetch: seed=%d cpu_burn=%d",
+            seed,
+            cpu_burn,
+        )
 
     def forward(
         self, batch: dict[str, Tensor], reduction: str = "mean"

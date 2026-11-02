@@ -163,10 +163,8 @@ def _resolve_policy_path(policy_path: str) -> str:
     if os.path.isabs(policy_path):
         return policy_path
     # Project root = parent of the loongforge package directory
-    # __file__ is loongforge/engines/megatron/fp8_dynamic_policy.py.
-    _project_root = os.path.dirname(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    )
+    # __file__ is loongforge/engines/megatron/fp8_dynamic_policy.py → up 4 levels to project root
+    _project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
     return os.path.join(_project_root, policy_path)
 
 

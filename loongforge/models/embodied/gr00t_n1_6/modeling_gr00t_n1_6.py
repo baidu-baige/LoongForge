@@ -36,11 +36,11 @@ from safetensors.torch import load_file
 from torch import nn
 from transformers.feature_extraction_utils import BatchFeature
 
-from loongforge.data.embodied.gr00t_n1_6.transforms.gr00t_n1_6_processor import (
+from loongforge.data.embodied.gr00t_n1_6.transforms.processor_gr00t_n1_6 import (
     Gr00tN1d6DataCollator,
     StateActionProcessor,
 )
-from loongforge.models.embodied.gr00t_n1_6.embodiment_configs import (
+from loongforge.data.embodied.gr00t_n1_6.transforms.utils import (
     EMBODIMENT_STAT_CONFIGS,
     EMBODIMENT_TAG_TO_PROJECTOR_INDEX,
     MODALITY_CONFIGS,
@@ -48,7 +48,7 @@ from loongforge.models.embodied.gr00t_n1_6.embodiment_configs import (
 )
 from loongforge.models.embodied.registry import register_model
 
-from loongforge.models.embodied.gr00t_n1_6.eagle3_model.image_augmentations import (
+from loongforge.data.embodied.gr00t_n1_6.transforms.eagle3_model.image_augmentations import (
     build_image_transformations_albumentations,
 )
 

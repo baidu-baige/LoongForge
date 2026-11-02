@@ -4,48 +4,104 @@
 # Modified from Megatron-LM under the BSD 3-Clause License.
 # Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
 
-"""Fine-grained callables for MoE EP communication overlap (``--overlap-moe-expert-parallel-comm``).
+"""Fine-grained callables."""
 
-Modified copy of ``megatron/core/models/gpt/fine_grained_callables.py`` (Loong-Megatron b10469fc8).
-Classes and functions identical to upstream are imported from it. The copies here differ:
-
-- ``PreProcessNode``: multimodal encoder forward, including encoder hetero DP and full hetero DP embedding
-  gather/scatter with gradient hooks.
-- ``TransformerLayerNode``: ``layer_idx`` from ``extra_args``.
-- ``build_transformer_layer_callables``: all-to-all dispatcher metadata save/restore; DeepStack forward;
-  final layernorm from ``foundation_model.decoder``.
-- ``build_mtp_layer_callables``: DeepStack entry in ``forward_funcs``; ``foundation_model.embedding`` for VLMs.
-- ``build_layer_callables``: same code as upstream, kept because it calls the two local builders above.
-"""
-
+import weakref
 from contextlib import nullcontext
 from functools import partial
 from typing import Callable
 
 import torch
 
-from megatron.core import mpu, tensor_parallel
+from megatron.core import tensor_parallel
 from megatron.core.pipeline_parallel.fine_grained_activation_offload import (
     fine_grained_offloading_group_commit,
     fine_grained_offloading_group_start,
     get_fine_grained_offloading_context,
+    set_offload_tag,
 )
 from megatron.core.pipeline_parallel.utils import ScheduleNode, make_viewless
+from megatron.core.transformer.module import float16_to_fp32
 from megatron.core.transformer.moe.moe_layer import MoELayer
 from megatron.core.transformer.multi_token_prediction import (
     MultiTokenPredictionLayer,
     get_mtp_layer_offset,
 )
 from megatron.core.transformer.transformer_layer import TransformerLayer, make_viewless_tensor
-# Identical to upstream, so imported.
-from megatron.core.models.gpt.fine_grained_callables import (
-    maybe_set_offload_tag,
-    should_free_input,
-    weak_method,
-)
-
 from loongforge.models.omni_models.utils import get_inputs_on_this_cp_rank
+from loongforge.engines.megatron.initialize import mpu
 
+def maybe_set_offload_tag(tensor_name: str, tensor: torch.Tensor, config):
+    """
+    Set offload tag to tensor if its name matches the selector.
+    
+    Args:
+        tensor_name: str, the type/name of the tensor (e.g., 'dispatched_input')
+        tensor: torch.Tensor, the actual tensor
+        config: configuration object containing tensor_offload_selector
+    """
+    if config.fine_grained_activation_offloading and tensor_name in config.offload_tensors:
+        set_offload_tag(tensor)
+
+
+def weak_method(method):
+    """Creates a weak reference to a method to prevent circular references.
+
+    This function creates a weak reference to a method and returns a wrapper function
+    that calls the method when invoked. This helps prevent memory leaks from circular
+    references.
+    """
+    method_ref = weakref.WeakMethod(method)
+    del method
+
+    def wrapped_func(*args, **kwarg):
+        # nonlocal object_ref
+        return method_ref()(*args, **kwarg)
+
+    return wrapped_func
+
+
+def should_free_input(name, is_moe, enable_deepep, enable_hybridep):
+    """Determine if the node should free its input memory.
+
+    Args:
+        name: Node name
+        is_moe: Whether it's a MoE model
+        enable_deepep: Whether to use DeepEP dispatcher
+        enable_hybridep: Whether to use HybridEP dispatcher
+    
+    Returns:
+        bool: Whether to free input memory
+    """
+    # For dense layers [attn, fake, mlp, fake], the input is needed during backward pass
+    if not is_moe:
+        return False
+    # Define which nodes should free input memory
+    # Since we split the computing graph into multiple nodes, we can manually control
+    # when and how to free the input memory.
+    # The input and output of A2A are not needed anymore after the forward pass,
+    # so we can free the input memory after the forward pass.
+    free_input_nodes = {
+        "mlp": not enable_hybridep,
+        "moe_combine": True,
+        "post_combine": enable_deepep or enable_hybridep,
+        # For non-deepep mode, the input is the un-dispatched tokens and probs before dispatch A2A
+        # and it's not needed anymore after the forward pass
+        # For deepep mode, they are both needed in backward pass, so they cannot be freed.
+        "moe_dispatch": not (enable_deepep or enable_hybridep),
+    }
+
+    return free_input_nodes.get(name, False)
+
+
+class TransformerLayerState:
+    """State shared within a transformer layer.
+
+    This class holds state that is shared between different nodes
+    within a transformer layer.
+    """
+
+    pass
 
 class PreProcessNode(ScheduleNode):
     """Node responsible for preprocessing operations in the model.
@@ -57,7 +113,7 @@ class PreProcessNode(ScheduleNode):
     def __init__(self, gpt_model, chunk_state, event, stream,
                  enable_encoder_hetero_dp=False, batch_list=None,
                  forward_group_id=None, inner_group_id=None,
-                 enable_full_hetero_dp=False, hetero_step=None):
+                 enable_full_hetero_dp=False):
         """Initializes a preprocessing node.
 
         Args:
@@ -79,7 +135,6 @@ class PreProcessNode(ScheduleNode):
         self.forward_group_id = forward_group_id
         self.inner_group_id = inner_group_id
         self.enable_full_hetero_dp = enable_full_hetero_dp
-        self.hetero_step = hetero_step
         # Cache the model chunk state reference for backward
         self.model_chunk_state = chunk_state
 
@@ -100,8 +155,9 @@ class PreProcessNode(ScheduleNode):
         packed_seq_params = self.chunk_state.packed_seq_params
         image_inputs = self.chunk_state.image_inputs
         video_inputs = self.chunk_state.video_inputs
+        audio_inputs = self.chunk_state.audio_inputs
         decoder_input = self.chunk_state.decoder_input
-
+        
         has_encoder_model = hasattr(model, "encoder_model")
         combined_embeddings = None
         visual_pos_masks = None
@@ -111,8 +167,18 @@ class PreProcessNode(ScheduleNode):
         # TODO: remove inference_params?
         inference_params = None
         if has_encoder_model:
+            use_inference_kv_cache = (
+                inference_params is not None
+                and "image_tokens_count" in inference_params.key_value_memory_dict
+            )
+            if use_inference_kv_cache:
+                vision_embeddings = None
+
             if model.add_encoder and mpu.is_pipeline_first_stage()  and self.enable_encoder_hetero_dp:
-                _ImageEncoderDataParallelSize = model.runtime.encoder_dp_size
+                from loongforge.engines.megatron.initialize import (
+                    get_encoder_dp_size,
+                )
+                _ImageEncoderDataParallelSize = get_encoder_dp_size('image_encoder')
                 inner_group_id = self.inner_group_id
                 forward_group_id = self.forward_group_id
                 batch_list = self.batch_list
@@ -269,26 +335,35 @@ class PreProcessNode(ScheduleNode):
                             deepstack_visual_embeds.append(tmp_deepstack_visual_embeds)
 
             elif model.add_encoder and mpu.is_pipeline_first_stage()  and self.enable_full_hetero_dp:
+                from loongforge.engines.megatron.initialize import get_model_size
                 if mpu.is_pipeline_first_stage():
-                    step = self.hetero_step
+                    from loongforge.training.vlm.pretrain_vlm import (
+                        get_grad_list, get_embedding_list,
+                        get_visual_pos_masks_list, get_deepstack_visual_embeds_list,
+                        get_deepstack_grad_list, get_cpu_offload_manager,
+                    )
 
                     group = mpu.get_tensor_model_parallel_group()
                     src_rank = torch.distributed.get_global_rank(group, 0)
                     local_rank = torch.distributed.get_rank()
 
-                    embedding_list = step.embedding_list
-                    visual_pos_masks_list = step.visual_pos_masks_list
-                    deepstack_visual_embeds_list = step.deepstack_visual_embeds_list
-                    model_size = model.runtime.model_size
+                    embedding_list = get_embedding_list()
+                    visual_pos_masks_list = get_visual_pos_masks_list()
+                    deepstack_visual_embeds_list = get_deepstack_visual_embeds_list()
+                    model_size = get_model_size()
                     forward_group_id = self.forward_group_id
                     round_num = forward_group_id // model_size
                     inner_num = forward_group_id % model_size
 
-                    _offload_mgr = step.offload
+                    _offload_mgr = get_cpu_offload_manager()
 
                     # Reload embedding from CPU if offloaded
                     if _offload_mgr.enabled and local_rank == src_rank:
-                        step.reload(embedding_list[round_num], inner_num, f"emb_r{round_num}")
+                        from loongforge.engines.megatron.full_hetero_cpu_offload import reload_list_item
+                        reload_list_item(
+                            _offload_mgr, embedding_list[round_num], inner_num,
+                            f"emb_r{round_num}"
+                        )
 
                     ref_tensor = model.vit_contexts[round_num]["local_embedding"]
                     local_tensor = embedding_list[round_num][inner_num] if local_rank == src_rank else ref_tensor
@@ -304,7 +379,7 @@ class PreProcessNode(ScheduleNode):
                         def hook(grad):
                             if torch.distributed.get_rank(group=group) == 0:
                                 grad = grad.clone()
-                                grad_list = step.grad_list
+                                grad_list = get_grad_list()
                                 grad_idx = len(grad_list)
                                 grad_list.append(grad)
                                 if offload_mgr.enabled:
@@ -326,7 +401,11 @@ class PreProcessNode(ScheduleNode):
                     if model.vit_contexts[round_num]["local_visual_pos_masks"] is not None:
                         # Reload visual_pos_masks from CPU if offloaded
                         if _offload_mgr.enabled and local_rank == src_rank:
-                            step.reload(visual_pos_masks_list[round_num], inner_num, f"vpm_r{round_num}")
+                            from loongforge.engines.megatron.full_hetero_cpu_offload import reload_list_item
+                            reload_list_item(
+                                _offload_mgr, visual_pos_masks_list[round_num], inner_num,
+                                f"vpm_r{round_num}"
+                            )
 
                         ref_masks = model.vit_contexts[round_num]["local_visual_pos_masks"]
                         local_masks = (
@@ -348,16 +427,17 @@ class PreProcessNode(ScheduleNode):
                         def full_hetero_dp_deepstack_grad_hook_factory(group, round_num, inner_num, i):
                             def hook(grad):
                                 if torch.distributed.get_rank(group=group) == 0:
-                                    step.deepstack_grad_list[round_num][i][inner_num] = grad.clone()
+                                    get_deepstack_grad_list()[round_num][i][inner_num] = grad.clone()
                             return hook
 
                         deepstack_visual_embeds = []
                         for i in range(len(ref_embeds)):
                             # Reload deepstack embed from CPU if offloaded
                             if _offload_mgr.enabled and local_rank == src_rank:
-                                step.reload(
-                                    deepstack_visual_embeds_list[round_num][i], inner_num,
-                                    f"ds_r{round_num}_l{i}"
+                                from loongforge.engines.megatron.full_hetero_cpu_offload import reload_list_item
+                                reload_list_item(
+                                    _offload_mgr, deepstack_visual_embeds_list[round_num][i],
+                                    inner_num, f"ds_r{round_num}_l{i}"
                                 )
 
                             local_embed = (
@@ -445,7 +525,7 @@ class PreProcessNode(ScheduleNode):
             )
         else:
             sequence_len_offset = None
-
+        
         # saved for later use
         self.chunk_state.decoder_input = decoder_input
         self.chunk_state.visual_pos_masks = visual_pos_masks
@@ -455,6 +535,66 @@ class PreProcessNode(ScheduleNode):
         self.chunk_state.rotary_pos_sin = rotary_pos_sin
         self.chunk_state.sequence_len_offset = sequence_len_offset
         return decoder_input
+
+
+class PostProcessNode(ScheduleNode):
+    """Node responsible for postprocessing operations in the model.
+
+    This node handles final layer normalization and output layer computation
+    after the main transformer layers.
+    """
+
+    def __init__(self, gpt_model, chunk_state, event, stream):
+        """Initializes a postprocessing node.
+
+        Args:
+            gpt_model: The GPT model instance.
+            chunk_state (TransformerChunkState): State shared within a chunk
+            event: CUDA event for synchronization.
+            stream: CUDA stream for execution.
+        """
+        super().__init__(weak_method(self.forward_impl), stream, event, name="post_process")
+        self.gpt_model = gpt_model
+        self.chunk_state = chunk_state
+
+    def forward_impl(self, hidden_states):
+        """Implements the forward pass for postprocessing.
+
+        This method handles:
+        1. Output layer computation
+        2. Loss computation if labels are provided
+
+        Args:
+            hidden_states: The hidden states from the transformer layers.
+
+        Returns:
+            The logits or loss depending on whether labels are provided.
+        Note:
+            Final layernorm now has been moved from the post-process stage to the
+            last decoder layer, so we don't need to run the final layer norm here.
+        """
+
+        # Run GPTModel._postprocess
+        loss = self.gpt_model._postprocess(
+            hidden_states=hidden_states,
+            input_ids=self.chunk_state.input_ids,
+            position_ids=self.chunk_state.position_ids,
+            labels=self.chunk_state.labels,
+            decoder_input=self.chunk_state.decoder_input,
+            rotary_pos_emb=self.chunk_state.rotary_pos_emb,
+            rotary_pos_cos=self.chunk_state.rotary_pos_cos,
+            rotary_pos_sin=self.chunk_state.rotary_pos_sin,
+            mtp_in_postprocess=False,
+            loss_mask=self.chunk_state.loss_mask,
+            attention_mask=self.chunk_state.attention_mask,
+            packed_seq_params=self.chunk_state.packed_seq_params,
+            sequence_len_offset=self.chunk_state.sequence_len_offset,
+            runtime_gather_output=self.chunk_state.runtime_gather_output,
+            extra_block_kwargs=self.chunk_state.extra_block_kwargs,
+        )
+
+        # For now, 1f1b only supports fp16 module
+        return float16_to_fp32(loss)
 
 
 class TransformerLayerNode(ScheduleNode):

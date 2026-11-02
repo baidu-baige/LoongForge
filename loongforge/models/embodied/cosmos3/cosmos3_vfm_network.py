@@ -392,7 +392,7 @@ class Cosmos3VFMNetwork(PreTrainedModel):
                 w_patches = w_padded // p
             else:
                 # Fallback: use token shapes directly (assumes no padding was needed)
-                h_orig, w_orig = h_c * p, w_c * p
+                t_orig, h_orig, w_orig = t_c, h_c * p, w_c * p
                 h_patches, w_patches = h_c, w_c
 
             # noisy_frame_indexes_vision is a list of tensors, each with shape (T,),

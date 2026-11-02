@@ -95,7 +95,10 @@ class MLASelfAttentionFused(MLASelfAttention):
             self.v_channels = self.config.v_head_dim
             self.padding_v_head_dim = False
 
-        self.absorb_backend = getattr(self.config, 'absorb_backend', 'te')
+        self.absorb_backend = getattr(self.config, 'absorb_backend', None)
+        if self.absorb_backend is None:
+            from megatron.training import get_args
+            self.absorb_backend = getattr(get_args(), 'absorb_backend', 'te')
 
         if self.absorb_backend == "torch":
             # torch backend: use einsum with sliced weights from linear_kv_up_proj
@@ -155,7 +158,8 @@ class MLASelfAttentionFused(MLASelfAttention):
             )
 
         # SP-First: convert all 4 linear modules from TP-sharded to duplicated.
-        self.use_dsa_sp_first = getattr(self.config, "use_dsa_sp_first", False)
+        args = get_args()
+        self.use_dsa_sp_first = getattr(args, "use_dsa_sp_first", False) if args is not None else False
         if self.use_dsa_sp_first:
             self._convert_to_sp_first()
             if self.absorb_backend == "te":

@@ -567,8 +567,8 @@ class DROIDLeRobotDataset(Dataset):
         return self._root / rel
 
 
-def build_droid_dataset(model_cfg, data_cfg, training_args, runtime) -> DROIDLeRobotDataset:
-    """Dataset strategy ``cosmos3_droid`` (see ``DATASET_STRATEGIES`` in ``registry.py``).
+def build_droid_dataset(model_cfg, data_cfg, training_args) -> DROIDLeRobotDataset:
+    """Factory wired up by the dataloader_module dispatch in ``data/__init__.py``.
 
     Reads the chunk length from ``model_cfg.cosmos3.action_chunk_length`` (with
     a CLI override via ``args.action_chunk_length``) and falls back to 32, the
@@ -581,5 +581,5 @@ def build_droid_dataset(model_cfg, data_cfg, training_args, runtime) -> DROIDLeR
         video_backend=data_cfg.video_backend,
         use_image_augmentation=data_cfg.use_image_augmentation,
         colorjitter_on_gpu=data_cfg.colorjitter_on_gpu,
-        deterministic=runtime.deterministic,
+        deterministic=training_args.deterministic_mode,
     )

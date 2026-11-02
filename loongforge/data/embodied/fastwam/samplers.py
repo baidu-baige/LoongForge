@@ -33,10 +33,10 @@ from typing import Any, Iterator
 
 from torch.utils.data import Sampler
 
-from loongforge.data.embodied.registry import register_sampler_builder
 from loongforge.data.embodied.sampler_builder import (
     SamplerBuilderContext,
     default_sampler_builder,
+    register_sampler_builder,
 )
 
 # Announced (pid, class, mode) triples, so the construction line is printed once.
@@ -136,7 +136,7 @@ def build_fastwam_sampler(context: SamplerBuilderContext) -> Sampler | None:
         print(
             f"[fastwam-sampler] mode={mode} sampler={type(sampler).__name__} "
             f"seed={context.seed} shuffle={context.shuffle} "
-            f"world_size={context.runtime.world_size} rank={context.runtime.rank} "
+            f"world_size={context.ctx.world_size} rank={context.ctx.rank} "
             f"sampler_epoch_mode={mode!r}",
             flush=True,
         )

@@ -10,14 +10,12 @@ definitions, optional system prompt, and optional image / video media.
 
 from dataclasses import dataclass
 from importlib.metadata import version
-
-from packaging.version import Version
 from typing import Any, Dict, List, Optional
 
 import torch
 from megatron.energon.flavors.base_dataset import Sample
 
-if Version(version("megatron-energon")) < Version("7.0.0"):
+if version("megatron-energon") < "7.0.0":
     from megatron.energon.flavors.webdataset import VideoData as AVData
 else:
     from megatron.energon.flavors.webdataset import AVData

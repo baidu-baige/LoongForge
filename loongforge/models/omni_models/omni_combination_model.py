@@ -14,8 +14,10 @@ from .utils import get_inputs_on_this_cp_rank
 from transformers.models.auto.modeling_auto import AutoModel
 from loongforge.models.common import BaseMegatronModule, BaseModelConfig
 from megatron.core import InferenceParams, tensor_parallel
-from megatron.core import parallel_state as mpu
-from loongforge.models.omni_models.runtime import OmniRuntime
+from loongforge.engines.megatron.initialize import (
+    mpu,
+    get_encoder_dp_size,
+)
 from megatron.core.pipeline_parallel.fine_grained_activation_offload import (
     fine_grained_offloading_init_chunk_handler,
 )
@@ -44,14 +46,8 @@ class OmniCombinationModel(BaseMegatronModule):
         seq_len_interpolation_factor: float = None,
         scatter_embedding_sequence_parallel=False,
         vp_stage: Optional[int] = None,
-        *,
-        use_vit_dp_balance: bool,
-        enable_encoder_hetero_dp: bool,
-        enable_full_hetero_dp: bool,
-        runtime: OmniRuntime,
     ) -> None:
         super().__init__(config.foundation)
-        self.runtime = runtime
         self.pre_process = pre_process
         self.post_process = post_process
         self.add_encoder = add_encoder
@@ -67,11 +63,6 @@ class OmniCombinationModel(BaseMegatronModule):
                 scatter_embedding_sequence_parallel=scatter_embedding_sequence_parallel,
                 allow_missing_adapter_checkpoint=allow_missing_adapter_checkpoint,
                 vp_stage=vp_stage,
-                use_vit_dp_balance=use_vit_dp_balance,
-                enable_encoder_hetero_dp=enable_encoder_hetero_dp,
-                enable_full_hetero_dp=enable_full_hetero_dp,
-                parallel_state_switch=runtime.parallel_state_switch,
-                vit_balance=runtime.vit_balance,
             )
             self.vit_contexts = {}
         else:
@@ -243,95 +234,6 @@ class OmniCombinationModel(BaseMegatronModule):
 
         return tensor
 
-    def hetero_encoder_forward(self, batch_list, round_idx):
-        """Encode this TP rank's micro-batch of one full-hetero-DP round.
-
-        Every TP rank embeds the text of all ``batch_list`` entries, because the word
-        embedding is vocab-parallel. The outputs stay in ``vit_contexts`` until
-        ``hetero_encoder_backward`` runs for the same round.
-        """
-        input_embeds_list = []
-        for i in range(len(batch_list)):
-            input_embeds = self.encoder_model.text_forward(
-                batch_list[i]["tokens"],
-                batch_list[i]["position_ids"]
-            )
-            input_embeds_list.append(input_embeds)
-
-        batch_id = mpu.get_tensor_model_parallel_rank()
-        (
-            local_images,
-            local_image_grid_thw,
-            local_pixel_values_videos,
-            local_video_grid_thw,
-            local_input_ids,
-            local_attn_mask,
-            local_labels,
-            local_cu_lengths,
-            local_max_lengths,
-            local_position_ids,
-            local_loss_mask,
-            local_packed_seq_params,
-        ) = batch_list[batch_id].values()
-
-        (
-            combined_embeddings,
-            decode_input,
-            visual_pos_masks,
-            deepstack_visual_embeds,
-        ) = self.encoder_model(
-            input_ids=local_input_ids,
-            position_ids=local_position_ids,
-            image_inputs=dict(
-                images=local_images,
-                image_grid_thw=local_image_grid_thw,
-            ) if local_images is not None else None,
-            video_inputs=dict(
-                pixel_values_videos=local_pixel_values_videos,
-                video_grid_thw=local_video_grid_thw,
-            ) if local_pixel_values_videos is not None else None,
-            inference_params=None,
-            inputs_embeds=input_embeds_list[batch_id],
-            enable_encoder_hetero_dp=True,
-        )
-
-        self.vit_contexts.setdefault(round_idx, {
-            "local_embedding": combined_embeddings,
-            "grads": None,
-            "local_visual_pos_masks": visual_pos_masks,
-            "local_deepstack_visual_embeds": deepstack_visual_embeds,
-            "local_deepstack_visual_embeds_grads": None,
-        })
-        return combined_embeddings, visual_pos_masks, deepstack_visual_embeds
-
-    def hetero_encoder_backward(self, round_idx, grads, deepstack_grads):
-        """Backpropagate one full-hetero-DP round through the encoder.
-
-        ``grads`` and ``deepstack_grads`` are this rank's slices of the decoder
-        gradients; ``deepstack_grads`` is None when the round has no DeepStack outputs.
-        """
-        ctx = self.vit_contexts[round_idx]
-        ctx["grads"] = grads
-        if deepstack_grads is not None:
-            ctx["local_deepstack_visual_embeds_grads"] = deepstack_grads
-
-        backward_tensors = [ctx["local_embedding"]]
-        backward_grads = [ctx["grads"]]
-        if ctx["local_deepstack_visual_embeds_grads"] is not None:
-            backward_tensors += ctx["local_deepstack_visual_embeds"]
-            backward_grads += ctx["local_deepstack_visual_embeds_grads"]
-
-        torch.autograd.backward(
-            tensors=backward_tensors,
-            grad_tensors=backward_grads,
-            retain_graph=False,
-        )
-        del self.vit_contexts[round_idx]
-
-    def clear_hetero_contexts(self):
-        """Drop the encoder contexts left from this step."""
-        self.vit_contexts.clear()
-
     def forward(
         self,
         image_inputs: Optional[Dict[str, torch.Tensor]] = None,
@@ -352,7 +254,6 @@ class OmniCombinationModel(BaseMegatronModule):
         forward_group_id: Optional[int] = None,
         inner_group_id: Optional[int] = None,
         enable_full_hetero_dp: bool = False,
-        hetero_step=None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Forward pass supporting multiple execution paths.
@@ -363,7 +264,7 @@ class OmniCombinationModel(BaseMegatronModule):
             3. Offline foundation model: use preprocessed output_embeddings
             4. Decoder only: freeze encoder and foundation
         """
-        _ImageEncoderDataParallelSize = self.runtime.encoder_dp_size
+        _ImageEncoderDataParallelSize = get_encoder_dp_size('image_encoder')
 
         if self.config.fine_grained_activation_offloading:
             self.preprocess_for_fine_grained_offloading()
@@ -372,7 +273,9 @@ class OmniCombinationModel(BaseMegatronModule):
             inference_params is not None
             and "image_tokens_count" in inference_params.key_value_memory_dict
         )
-        if not use_inference_kv_cache and self.add_encoder:
+        if use_inference_kv_cache:
+            vision_embeddings = None
+        elif self.add_encoder:
             if not enable_encoder_hetero_dp and not enable_full_hetero_dp:
                 combined_embeddings, decode_input, visual_pos_masks, deepstack_visual_embeds = self.encoder_model(
                     input_ids=input_ids,
@@ -549,22 +452,32 @@ class OmniCombinationModel(BaseMegatronModule):
                     deepstack_visual_embeds.append(tmp_deepstack_visual_embeds)
 
         if self.add_encoder and mpu.is_pipeline_first_stage() and enable_full_hetero_dp:
+            from loongforge.training.vlm.pretrain_vlm import (
+                get_grad_list, get_embedding_list,
+                get_visual_pos_masks_list, get_deepstack_visual_embeds_list,
+                get_deepstack_grad_list, get_cpu_offload_manager,
+            )
+            from loongforge.engines.megatron.initialize import get_model_size
             group = mpu.get_tensor_model_parallel_group()
             src_rank = torch.distributed.get_global_rank(group, 0)
             local_rank = torch.distributed.get_rank()
 
-            embedding_list = hetero_step.embedding_list
-            visual_pos_masks_list = hetero_step.visual_pos_masks_list
-            deepstack_visual_embeds_list = hetero_step.deepstack_visual_embeds_list
-            model_size = self.runtime.model_size
+            embedding_list = get_embedding_list()
+            visual_pos_masks_list = get_visual_pos_masks_list()
+            deepstack_visual_embeds_list = get_deepstack_visual_embeds_list()
+            model_size = get_model_size()
             round_num = forward_group_id // model_size
             inner_num = forward_group_id % model_size
 
-            _offload_mgr = hetero_step.offload
+            _offload_mgr = get_cpu_offload_manager()
 
             # Reload embedding from CPU if offloaded
             if _offload_mgr.enabled and local_rank == src_rank:
-                hetero_step.reload(embedding_list[round_num], inner_num, f"emb_r{round_num}")
+                from loongforge.engines.megatron.full_hetero_cpu_offload import reload_list_item
+                reload_list_item(
+                    _offload_mgr, embedding_list[round_num], inner_num,
+                    f"emb_r{round_num}"
+                )
 
             # src rank broadcasts its actual embedding; other ranks supply only a
             # dtype/ndim reference so the helpers can allocate the right buffer.
@@ -582,7 +495,7 @@ class OmniCombinationModel(BaseMegatronModule):
                 def hook(grad):
                     if torch.distributed.get_rank(group=group) == 0:
                         grad = grad.clone()
-                        grad_list = hetero_step.grad_list
+                        grad_list = get_grad_list()
                         grad_idx = len(grad_list)
                         grad_list.append(grad)
                         if offload_mgr.enabled:
@@ -607,7 +520,11 @@ class OmniCombinationModel(BaseMegatronModule):
             if self.vit_contexts[round_num]["local_visual_pos_masks"] is not None:
                 # Reload visual_pos_masks from CPU if offloaded
                 if _offload_mgr.enabled and local_rank == src_rank:
-                    hetero_step.reload(visual_pos_masks_list[round_num], inner_num, f"vpm_r{round_num}")
+                    from loongforge.engines.megatron.full_hetero_cpu_offload import reload_list_item
+                    reload_list_item(
+                        _offload_mgr, visual_pos_masks_list[round_num], inner_num,
+                        f"vpm_r{round_num}"
+                    )
 
                 ref_masks = self.vit_contexts[round_num]["local_visual_pos_masks"]
                 local_masks = visual_pos_masks_list[round_num][inner_num] if local_rank == src_rank else ref_masks
@@ -625,16 +542,17 @@ class OmniCombinationModel(BaseMegatronModule):
                 def full_hetero_dp_deepstack_grad_hook_factory(group, round_num, inner_num, i):
                     def hook(grad):
                         if torch.distributed.get_rank(group=group) == 0:
-                            hetero_step.deepstack_grad_list[round_num][i][inner_num] = grad.clone()
+                            get_deepstack_grad_list()[round_num][i][inner_num] = grad.clone()
                     return hook
 
                 deepstack_visual_embeds = []
                 for i in range(len(ref_embeds)):
                     # Reload deepstack embed from CPU if offloaded
                     if _offload_mgr.enabled and local_rank == src_rank:
-                        hetero_step.reload(
-                            deepstack_visual_embeds_list[round_num][i], inner_num,
-                            f"ds_r{round_num}_l{i}"
+                        from loongforge.engines.megatron.full_hetero_cpu_offload import reload_list_item
+                        reload_list_item(
+                            _offload_mgr, deepstack_visual_embeds_list[round_num][i],
+                            inner_num, f"ds_r{round_num}_l{i}"
                         )
 
                     local_embed = (
@@ -689,7 +607,6 @@ class OmniCombinationModel(BaseMegatronModule):
         forward_group_id: Optional[int] = None,
         inner_group_id: Optional[int] = None,
         enable_full_hetero_dp: bool = False,
-        hetero_step=None,
         **kwargs: Any,
     ):
 
@@ -714,6 +631,5 @@ class OmniCombinationModel(BaseMegatronModule):
             forward_group_id=forward_group_id,
             inner_group_id=inner_group_id,
             enable_full_hetero_dp=enable_full_hetero_dp,
-            hetero_step=hetero_step,
             **kwargs,
         )

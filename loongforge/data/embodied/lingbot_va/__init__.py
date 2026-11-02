@@ -14,7 +14,7 @@ __all__ = [
     "build_lingbot_va_distributed_sampler",
     "LingBotVADataConfig",
     "LingBotVAPreparedBatch",
-    "LingBotVACollator",
+    "LingBotVAPreprocessor",
     "build_lingbot_va_transforms",
 ]
 
@@ -41,7 +41,7 @@ def __getattr__(name):
     if name in {
         "LingBotVADataConfig",
         "LingBotVAPreparedBatch",
-        "LingBotVACollator",
+        "LingBotVAPreprocessor",
         "build_lingbot_va_transforms",
     }:
         from loongforge.data.embodied.lingbot_va import (

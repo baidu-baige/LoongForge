@@ -6,8 +6,8 @@
 import torch
 from dataclasses import dataclass
 from ...common.base_model_config import BaseModelConfig
-
-IMG_CONTEXT_TOKEN = '<IMG_CONTEXT>'
+from loongforge.engines.megatron import get_tokenizer
+from loongforge.data.vlm.internvl.internvl_constants import IMG_CONTEXT_TOKEN
 
 
 @dataclass
@@ -50,10 +50,16 @@ class InternVisionConfig(BaseModelConfig):
     original_num_query_groups: int = None
     model_spec = None
     image_token_id: int = None
-    # Unlike the other vision towers, the id of this token depends on the tokenizer in use;
-    # parser.py resolves image_token_id from it when image_token_id is None.
-    image_token: str = IMG_CONTEXT_TOKEN
     model_type: str = "intern_vit"
+
+    def __post_init__(self, **kwargs):
+        super().__post_init__(**kwargs)
+        if self.image_token_id is None:
+            # Unlike the other vision towers, InternVL's context-image token has no
+            # fixed id: it is whatever the tokenizer in use assigns to IMG_CONTEXT_TOKEN.
+            self.image_token_id = get_tokenizer().tokenizer.convert_tokens_to_ids(
+                IMG_CONTEXT_TOKEN
+            )
 
 
 @dataclass

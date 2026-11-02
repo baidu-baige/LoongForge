@@ -14,6 +14,7 @@ from megatron.core.models.common.vision_module.vision_module import VisionModule
 from megatron.core.transformer.spec_utils import ModuleSpec
 from .wan_transformer_block import WanTransformerBlock
 
+from loongforge.engines.megatron import get_args
 from .communications import (
     split_forward_gather_backward,
     gather_forward_split_backward,
@@ -216,6 +217,7 @@ class WanModel(VisionModule):
         super().__init__(config=config)
         self.require_clip_embedding = config.require_clip_embedding
         self.require_vae_embedding = require_vae_embedding
+        self.args = get_args()
         self.pre_process = pre_process
         self.post_process = post_process
         self.freq_dim = config.freq_dim

@@ -23,7 +23,7 @@ from loongforge.data.chat_templates.template import (
 )
 from loongforge.engines.megatron.tokenizer import build_tokenizer
 from loongforge.data import IGNORE_INDEX, TrainingPhase
-from loongforge.data.llm.blended_hf_dataset_config import get_dataset_blend_from_list
+from loongforge.data.utils import get_dataset_blend_from_list
 
 
 def build_sft_dataset(args):

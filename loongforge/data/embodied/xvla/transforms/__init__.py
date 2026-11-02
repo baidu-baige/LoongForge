@@ -5,7 +5,7 @@
 
 from loongforge.data.embodied.xvla.transforms.xvla_collator import (
     XVLABatch,
-    XVLACollator,
+    XVLAPreprocessor,
 )
 from loongforge.data.embodied.xvla.transforms.xvla_transform import (
     XVLADomainIdTransform,
@@ -15,7 +15,7 @@ from loongforge.data.embodied.xvla.transforms.xvla_transform import (
 
 __all__ = [
     "XVLABatch",
-    "XVLACollator",
+    "XVLAPreprocessor",
     "XVLADomainIdTransform",
     "XVLAEncodeImageTransform",
     "XVLATokenizeTransform",

@@ -6,13 +6,16 @@
 import logging
 from typing import Callable, List, Optional, Union, Tuple
 
+import torch
 
 from datasets import concatenate_datasets, interleave_datasets, Dataset, IterableDataset
 
 from megatron.core.utils import log_single_rank
 from megatron.core.datasets.utils import Split, normalize
+from megatron.core.parallel_state import get_virtual_pipeline_model_parallel_rank
 
 from .blended_hf_dataset_config import BlendedHuggingFaceDatasetConfig
+from .hf_dataset import HuggingFaceDataset
 
 
 logger = logging.getLogger(__name__)
@@ -36,21 +39,15 @@ class BlendedHuggingFaceDatasetBuilder(object):
 
     def __init__(
         self,
-        cls: type,
+        cls: HuggingFaceDataset,
         sizes: List[int],
         is_built_on_rank: Callable,
         config: BlendedHuggingFaceDatasetConfig,
-        vp_rank: Optional[int],
-        distributed: bool = False,
-        is_global_rank_0: bool = True,
-        global_rank: int = 0,
     ):
         self.cls = cls
         self.sizes = sizes  # Note: the sizes not use now
         self.is_built_on_rank = is_built_on_rank
         self.config = config
-        self.distributed = distributed
-        self.global_rank = global_rank
 
         log_single_rank(
             logger,
@@ -74,10 +71,13 @@ class BlendedHuggingFaceDatasetBuilder(object):
                         weights_are_none
                     ), f"size_is_none => weights_are_none fails for {split.name} split"
 
-        if self.distributed and is_global_rank_0 and (vp_rank == 0 or vp_rank is None):
-            assert (
-                self.is_built_on_rank()
-            ), "is_built_on_rank must return True when global rank = 0 and vp rank = 0"
+        if torch.distributed.is_initialized():
+            gb_rank = torch.distributed.get_rank()
+            vp_rank = get_virtual_pipeline_model_parallel_rank()
+            if gb_rank == 0 and (vp_rank == 0 or vp_rank is None):
+                assert (
+                    self.is_built_on_rank()
+                ), "is_built_on_rank must return True when global rank = 0 and vp rank = 0"
 
     def build(self) -> List[Optional[Union[Dataset, IterableDataset]]]:
         """Build all dataset splits according to the provided blend(s)
@@ -205,17 +205,12 @@ class BlendedHuggingFaceDatasetBuilder(object):
         split_datasets = [None] * len(Split)
 
         # only build on the needed rank
-        if self.distributed and not self.is_built_on_rank():
-            return split_datasets
+        if torch.distributed.is_initialized():
+            if not self.is_built_on_rank():
+                return split_datasets
 
         # build low-level dataset
-        hf_dataset = self.cls(
-            dataset_name,
-            dataset_path,
-            self.config,
-            rank=self.global_rank,
-            distributed=self.distributed,
-        )
+        hf_dataset = self.cls(dataset_name, dataset_path, self.config)
         split_datasets = hf_dataset.split(split)
         return split_datasets
 
@@ -234,8 +229,9 @@ class BlendedHuggingFaceDatasetBuilder(object):
             Optional[Union[Dataset, IterableDataset]]: A mixed dataset instance (or None)
 
         """
-        if self.distributed and not self.is_built_on_rank():
-            return None
+        if torch.distributed.is_initialized():
+            if not self.is_built_on_rank():
+                return None
 
         if len(datasets) == 1:
             return datasets[0]

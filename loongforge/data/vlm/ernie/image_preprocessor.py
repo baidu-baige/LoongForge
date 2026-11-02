@@ -36,8 +36,6 @@ from transformers.image_transforms import (
     to_channel_dimension_format,
 )
 from transformers.image_utils import (
-    OPENAI_CLIP_MEAN,
-    OPENAI_CLIP_STD,
     ChannelDimension,
     PILImageResampling,
     get_image_size,
@@ -88,6 +86,9 @@ def resize(image, size, resample=None, data_format=None, **kwargs):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+
+OPENAI_CLIP_MEAN = [0.48145466, 0.4578275, 0.40821073]
+OPENAI_CLIP_STD = [0.26862954, 0.26130258, 0.27577711]
 
 IMAGE_FACTOR = 28
 MIN_PIXELS = 4 * 28 * 28

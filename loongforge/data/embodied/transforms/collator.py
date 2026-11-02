@@ -14,7 +14,11 @@ from typing import Any, Dict, List
 
 import torch
 
-from loongforge.data.embodied.registry import register_collator
+from loongforge.data.embodied.registry import (
+    build_preprocessor as build_preprocessor,
+    get_preprocessor as get_preprocessor,
+    register_preprocessor,
+)
 
 
 @dataclass
@@ -79,7 +83,7 @@ def _pin_memory(value: Any) -> Any:
     return value
 
 
-class BaseCollator:
+class BasePreprocessor:
     """Abstract base for model-specific DataLoader collate functions."""
 
     @classmethod
@@ -90,9 +94,8 @@ class BaseCollator:
         training_args=None,
         dataset_stats=None,
         dataset=None,
-        runtime=None,
-    ) -> "BaseCollator":
-        """Construct collator from typed configs."""
+    ) -> "BasePreprocessor":
+        """Construct preprocessor from typed configs."""
         raise NotImplementedError(
             f"{cls.__name__} must implement from_config(model_cfg, data_cfg, ...) classmethod"
         )
@@ -102,9 +105,9 @@ class BaseCollator:
         raise NotImplementedError
 
 
-@register_collator("dummy")
-class DummyCollator(BaseCollator):
-    """Pass-through collator that returns examples as-is in a PreparedBatch."""
+@register_preprocessor("dummy")
+class DummyPreprocessor(BasePreprocessor):
+    """Pass-through preprocessor that returns examples as-is in a PreparedBatch."""
 
     @classmethod
     def from_config(
@@ -114,8 +117,7 @@ class DummyCollator(BaseCollator):
         training_args=None,
         dataset_stats=None,
         dataset=None,
-        runtime=None,
-    ) -> "DummyCollator":
+    ) -> "DummyPreprocessor":
         return cls()
 
     def __call__(self, examples: List[Dict[str, Any]]) -> PreparedBatch:

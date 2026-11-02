@@ -1,7 +1,7 @@
 """FastWAM model-specific data transforms and collator."""
 
 from loongforge.data.embodied.fastwam.transforms.fastwam_collator import (
-    FastWAMCollator,
+    FastWAMPreprocessor,
     FastWAMPreparedBatch,
 )
 from loongforge.data.embodied.fastwam.transforms.fastwam_transform import (
@@ -10,7 +10,7 @@ from loongforge.data.embodied.fastwam.transforms.fastwam_transform import (
 )
 
 __all__ = [
-    "FastWAMCollator",
+    "FastWAMPreprocessor",
     "FastWAMPreparedBatch",
     "FastWAMKeyMappingTransform",
     "build_fastwam_transforms",

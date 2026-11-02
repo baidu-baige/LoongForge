@@ -633,6 +633,7 @@ class MultiLeRobotV2Dataset(Dataset):
             pass
         m = _Meta()
         m.stats = self.stats
+        m.camera_keys = self._video_keys
         return m
 
     @property
@@ -811,7 +812,7 @@ def _build_lerobot_dataset(
     return dataset
 
 
-def build_default_lerobot_dataset(model_cfg, data_cfg, training_args, runtime):
+def build_default_lerobot_dataset(model_cfg, data_cfg, training_args):
     """Default lerobot dataset build strategy (stock loongforge behaviour).
 
     This is the strategy selected by ``training_args.dataset_strategy == "default"``

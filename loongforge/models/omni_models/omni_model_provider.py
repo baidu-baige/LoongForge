@@ -10,8 +10,10 @@ from __future__ import annotations
 from typing import Optional
 
 from .omni_combination_model import OmniCombinationModel
+from loongforge.engines.megatron import get_args
 from megatron.core import mpu
 import torch
+from loongforge.engines.megatron import get_model_config
 from loongforge.models.common import BaseModelConfig
 
 
@@ -28,15 +30,11 @@ def omni_model_provider(
     post_process: bool = True,
     parallel_output: bool = True,
     vp_stage: Optional[int] = None,
-    *,
-    args,
-    model_config,
-    runtime,
 ) -> OmniCombinationModel:
     """
     Construct and return an Omni combination model instance.
-
-    This function builds a multimodal combination model based on provided parameters
+    
+    This function builds a multimodal combination model based on provided parameters 
     and global args configuration. Model configuration is obtained from args.model_name,
     with support for parallel processing and pre/post-processing options.
 
@@ -53,6 +51,8 @@ def omni_model_provider(
         - Supports encoder pipeline parallel processing
         - Includes language model related parameter configuration
     """
+    args = get_args()
+    model_config = get_model_config()
     # check_model_config(model_config)
     # build_transformer_config(args)
     # FIXME: Need to handle when model_type is encoder_and_decoder
@@ -93,10 +93,6 @@ def omni_model_provider(
         seq_len_interpolation_factor=args.rotary_seq_len_interpolation_factor,
         allow_missing_adapter_checkpoint=args.allow_missing_adapter_checkpoint,
         vp_stage=vp_stage,
-        use_vit_dp_balance=args.use_vit_dp_balance,
-        enable_encoder_hetero_dp=args.enable_encoder_hetero_dp,
-        enable_full_hetero_dp=args.enable_full_hetero_dp,
-        runtime=runtime,
     )
 
     return model

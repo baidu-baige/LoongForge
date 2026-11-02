@@ -12,13 +12,13 @@ from typing import Any, Dict, List, Optional
 import torch
 
 from loongforge.data.embodied.transforms.collator import (
-    BaseCollator,
+    BasePreprocessor,
     PreparedBatch,
+    register_preprocessor,
 )
-from loongforge.data.embodied.gr00t_n1_6.transforms.gr00t_n1_6_processor import (
+from loongforge.data.embodied.gr00t_n1_6.transforms.processor_gr00t_n1_6 import (
     Gr00tN1d6DataCollator,
 )
-from loongforge.data.embodied.registry import register_collator
 
 
 @dataclass
@@ -58,9 +58,9 @@ def _vlm_tokenizer_path(model_cfg: Any) -> str:
     )
 
 
-@register_collator("Gr00tN1d6")
-class GrootN1d6Preprocessor(BaseCollator):
-    """Batch-level GR00T collator.
+@register_preprocessor("Gr00tN1d6")
+class GrootN1d6Preprocessor(BasePreprocessor):
+    """Batch-level GR00T preprocessor.
 
     Per-sample transforms are expected to produce ``vlm_content``, normalized
     ``state``/``action`` arrays, masks, and embodiment IDs. This collator only
@@ -91,10 +91,9 @@ class GrootN1d6Preprocessor(BaseCollator):
         training_args=None,
         dataset_stats: Optional[Dict[str, Any]] = None,
         dataset: Any = None,
-        runtime=None,
     ) -> "GrootN1d6Preprocessor":
         """Construct GrootN1d6Preprocessor from typed ModelConfig + DataConfig."""
-        max_length = runtime.graph_pad_length if runtime is not None else None
+        max_length = training_args.cuda_graph_pad_length if training_args is not None else None
         if max_length == 0:
             max_length = None
         if max_length is None:
@@ -127,7 +126,8 @@ class GrootN1d6Preprocessor(BaseCollator):
             raise ValueError("GrootN1d6Preprocessor received an empty batch")
         if self.preprocess_mode != "sample":
             raise ValueError(
-                "groot_preprocess_mode must be 'sample'; "
+                "groot_preprocess_mode must be 'sample' after GR00T preprocessing "
+                "was moved into per-sample transforms; "
                 f"got {self.preprocess_mode!r}"
             )
         processed = self._call_sample_preprocessed(examples)
@@ -145,7 +145,7 @@ class GrootN1d6Preprocessor(BaseCollator):
     def _to_prepared_batch(self, processed: Dict[str, Any]) -> GrootN1d6PreparedBatch:
         action = processed.get("action")
         if action is None:
-            raise KeyError("GR00T collator did not produce required 'action' tensor")
+            raise KeyError("GR00T preprocessor did not produce required 'action' tensor")
 
         action_mask = processed.get("action_mask")
         if action_mask is None:

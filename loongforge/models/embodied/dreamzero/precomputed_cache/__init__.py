@@ -3,6 +3,7 @@
 
 """DreamZero structured cache configuration and artifact helpers."""
 
+from .artifact import DreamZeroPrecomputedFeatureArtifact
 from .config import (
     DreamZeroPrecomputedCacheConfig,
     DreamZeroPrecomputedFeatureConfig,
@@ -13,6 +14,7 @@ from .config import (
 
 __all__ = [
     "DreamZeroPrecomputedCacheConfig",
+    "DreamZeroPrecomputedFeatureArtifact",
     "DreamZeroPrecomputedFeatureConfig",
     "DreamZeroPrecomputedValidationConfig",
     "apply_precomputed_cache_config",

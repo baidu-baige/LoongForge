@@ -6,7 +6,7 @@
 """LLavA-OneVision TaskEncoder class."""
 
 import re
-from typing import Callable, List, Tuple, Union, Optional, TypeVar
+from typing import List, Tuple, Union, Optional, Callable, TypeVar
 
 import numpy as np
 import torch
@@ -16,7 +16,8 @@ from transformers import AutoProcessor
 from typing_extensions import override
 
 from loongforge.data.vlm.length_sort_dataset import LengthPoolSortDataset
-from loongforge.data import IGNORE_INDEX, TrainingPhase
+from loongforge.data import constants
+from loongforge.engines.megatron import get_chat_template
 
 from .base.task_encoder import (
     BaseTaskSample,
@@ -42,13 +43,20 @@ from megatron.energon.wrappers import (
 # from .batch_dataset import BatchDataset
 from megatron.energon.wrappers.repeat_dataset import RepeatDataset
 
+T = TypeVar("T")
+V = TypeVar("V")
 T_sample = TypeVar("T_sample")
+T_encoded_sample = TypeVar("T_encoded_sample")
+T_raw_batch = TypeVar("T_raw_batch")
 T_batch = TypeVar("T_batch")
 
+
+IGNORE_INDEX = -100  # ID for labels that should be ignored.
 IMAGE_TOKEN = "<|image_pad|>"
 VIDEO_TOKEN = "<|video_pad|>"
 VISION_TAGS = ["<|vision_start|>", "<|vision_end|>"]
 IMAGE_TOKEN_WITH_TAGS = VISION_TAGS[0] + IMAGE_TOKEN + VISION_TAGS[1]
+VIDEO_TOKEN_WITH_TAGS = VISION_TAGS[0] + VIDEO_TOKEN + VISION_TAGS[1]
 
 
 def get_stateless(fn: Callable[..., T_sample]) -> bool:
@@ -59,29 +67,31 @@ def get_stateless(fn: Callable[..., T_sample]) -> bool:
 class LLavaOv15TaskEncoder(VLMTaskEncoder):
     """A task encoder for LLava OV 1.5 that extends VLMTaskEncoder."""
 
-    def __init__(self, config, tokenizer, chat_template=None):
-        super().__init__(config, tokenizer, chat_template)
+    def __init__(self, args):
+        super().__init__(args=args)
+        if args.training_phase in ["sft"]:
+            self.chat_template = get_chat_template()
         self.processor = AutoProcessor.from_pretrained(
-            self.config.hf_tokenizer_path, trust_remote_code=True
+            self.args.hf_tokenizer_path, trust_remote_code=True
         )
 
-        if config.image_resolution:
-            setattr(self.processor, "image_resolution", config.image_resolution)
+        if args.image_resolution:
+            setattr(self.processor, "image_resolution", args.image_resolution)
         # video
-        self.frame_min_pixels = config.frame_min_pixels
-        self.frame_max_pixels = config.frame_max_pixels
-        self.video_max_pixels = config.video_max_pixels
-        self.fps = config.fps
-        self.fps_min_frames = config.fps_min_frames
-        self.fps_max_frames = config.fps_max_frames
+        self.frame_min_pixels = args.frame_min_pixels
+        self.frame_max_pixels = args.frame_max_pixels
+        self.video_max_pixels = args.video_max_pixels
+        self.fps = args.fps
+        self.fps_min_frames = args.fps_min_frames
+        self.fps_max_frames = args.fps_max_frames
         # image
-        self.min_pixels = config.min_pixels
-        self.max_pixels = config.max_pixels
+        self.min_pixels = args.min_pixels
+        self.max_pixels = args.max_pixels
 
     def encode_vqa(self, sample: VQASample) -> BaseTaskSample:
         """Encode pretrain sample in Qwen2VL style."""
-        if self.config.training_phase == TrainingPhase.PRETRAIN:
-            if self.config.add_question_in_pretrain:
+        if self.args.training_phase == constants.TrainingPhase.PRETRAIN:
+            if self.args.add_question_in_pretrain:
                 text = (sample.context + sample.answers).replace(
                     "<image>", IMAGE_TOKEN_WITH_TAGS
                 )
@@ -91,7 +101,7 @@ class LLavaOv15TaskEncoder(VLMTaskEncoder):
             input_ids, target, imgs, image_grid_thw, attn_mask = self._process(
                 sample.image, text
             )
-        elif self.config.training_phase == TrainingPhase.SFT:
+        elif self.args.training_phase == constants.TrainingPhase.SFT:
 
             if len(sample.answers) < 1:
                 raise ValueError("sample.answers < 1!")
@@ -104,7 +114,7 @@ class LLavaOv15TaskEncoder(VLMTaskEncoder):
                     raise ValueError("Image pixels are all zero!")
 
             # Truncate answer to the last full sentence if it exceeds the max length.
-            max_answer_length = self.config.training_rice_vl_max_answer_length
+            max_answer_length = self.args.training_rice_vl_max_answer_length
             if len(sample.answers) > max_answer_length:
                 original_length = len(sample.answers)
 
@@ -155,18 +165,18 @@ class LLavaOv15TaskEncoder(VLMTaskEncoder):
             # print(target[-1])
         else:
             raise NotImplementedError(
-                f"Unknown training phase {self.config.training_phase}"
+                f"Unknown training phase {self.args.training_phase}"
             )
 
         num_tiles = [len(image_grid_thw)]
 
-        if self.config.enable_discard_sample:
+        if self.args.enable_discard_sample:
             assert (
-                len(input_ids) <= self.config.seq_length
+                len(input_ids) <= self.args.seq_length
             ), f"{sample.__key__} input length {len(input_ids)}"
         else:
             assert (
-                image_grid_thw.prod() / 4 <= self.config.seq_length
+                image_grid_thw.prod() / 4 <= self.args.seq_length
             ), f"{sample.__key__} grid_thw: {image_grid_thw}"
 
         return VLMTaskSample(
@@ -277,14 +287,14 @@ class LLavaOv15TaskEncoder(VLMTaskEncoder):
 
         # Insert pool sorting before entering BatchDataset
         if (
-            getattr(self.config, "length_sort_pool_size", 0)
-            and self.config.length_sort_pool_size > 0
+            getattr(self.args, "length_sort_pool_size", 0)
+            and self.args.length_sort_pool_size > 0
         ):
             dataset = LengthPoolSortDataset(
                 dataset,
-                pool_size=self.config.length_sort_pool_size,
+                pool_size=self.args.length_sort_pool_size,
                 key_fn=lambda s: getattr(s, "total_len", len(getattr(s, "tokens"))),
-                ascending=not getattr(self.config, "length_sort_desc", False),
+                ascending=not getattr(self.args, "length_sort_desc", False),
                 worker_config=worker_config,
             )
         dataset = self.build_batch(

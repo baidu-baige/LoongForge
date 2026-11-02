@@ -12,9 +12,9 @@ from megatron.energon import (
     CaptioningSample,
     VQASample,
 )
-from loongforge.data import IGNORE_INDEX, TrainingPhase
-from loongforge.data.chat_templates.template import DataRoles, HFChatTemplate
-from loongforge.data.chat_templates.plugins.mm_plugin import Placeholder
+from loongforge.data import constants
+from loongforge.engines.megatron import get_chat_template
+from loongforge.data.chat_templates.template import HFChatTemplate
 from megatron.energon.task_encoder.base import stateless
 from loongforge.data.vlm import (
     ChatMixSample,
@@ -26,6 +26,7 @@ from .base.task_encoder import (
 )
 from .vlm_task_encoder import VLMTaskSample
 
+IGNORE_INDEX = -100  # ID for labels that should be ignored.
 
 # Kimi multimodal special tokens
 MEDIA_BEGIN = "<|media_begin|>"
@@ -35,10 +36,8 @@ MEDIA_PAD = "<|media_pad|>"
 
 # For image: <|media_begin|>image<|media_content|><|media_pad|><|media_end|>
 IMAGE_TOKEN_WITH_TAGS = f"{MEDIA_BEGIN}image{MEDIA_CONTENT}{MEDIA_PAD}{MEDIA_END}"
-
 # For video chunk: timestamp<|media_begin|>video<|media_content|><|media_pad|><|media_end|>
 VIDEO_TOKEN_WITH_TAGS = f"{MEDIA_BEGIN}video{MEDIA_CONTENT}{MEDIA_PAD}{MEDIA_END}"
-
 
 # Kimi chat template special tokens
 IM_USER = "<|im_user|>"
@@ -63,9 +62,12 @@ class KimiTaskEncoder(VLMTaskEncoder):
     the functionality of the Kimi processor's media-token merge step.
     """
 
-    def __init__(self, config, tokenizer, chat_template=None):
-        super().__init__(config, tokenizer, chat_template)
+    def __init__(self, args):
+        super().__init__(args)
 
+        # Initialize chat_template for SFT phase
+        if args.training_phase in ['sft']:
+            self.chat_template = get_chat_template()
 
         # Get merge_kernel_size from processor config, default to [2, 2]
         merge_kernel_size = 2  # default
@@ -114,9 +116,9 @@ class KimiTaskEncoder(VLMTaskEncoder):
         raising, so upstream pipelines do not need ``except AssertionError``
         to recover.
         """
-        if self.config.enable_discard_sample:
-            sequence_limit = self.config.seq_length
-            packed_limit = getattr(self.config, "max_packed_tokens", None)
+        if self.args.enable_discard_sample:
+            sequence_limit = self.args.seq_length
+            packed_limit = getattr(self.args, "max_packed_tokens", None)
             if self.is_packing_enabled and packed_limit is not None:
                 sequence_limit = min(sequence_limit, packed_limit)
             if len(input_ids) > sequence_limit:
@@ -135,13 +137,13 @@ class KimiTaskEncoder(VLMTaskEncoder):
             if image_grid_thw is not None:
                 for thw in image_grid_thw:
                     visual_tokens += self._compute_image_tokens_from_grid_thw(thw)
-            if visual_tokens > self.config.seq_length:
+            if visual_tokens > self.args.seq_length:
                 logging.warning(
                     "discard sample %s: visual tokens %s > seq_length %s "
                     "(video_grid_thw=%s, image_grid_thw=%s)",
                     sample.__key__,
                     visual_tokens,
-                    self.config.seq_length,
+                    self.args.seq_length,
                     video_grid_thw,
                     image_grid_thw,
                 )
@@ -407,11 +409,11 @@ class KimiTaskEncoder(VLMTaskEncoder):
             input_ids, target, attn_mask, imgs, image_grid_thw
         """
         if isinstance(self.chat_template, HFChatTemplate):
-            if image is not None and Placeholder.IMAGE not in context:
-                context = Placeholder.IMAGE + context
+            if image is not None and constants.Placeholder.IMAGE not in context:
+                context = constants.Placeholder.IMAGE + context
             messages = [
-                {"role": DataRoles.USER, "content": context},
-                {"role": DataRoles.ASSISTANT, "content": answer},
+                {"role": constants.DataRoles.USER, "content": context},
+                {"role": constants.DataRoles.ASSISTANT, "content": answer},
             ]
             (
                 input_ids,
@@ -443,7 +445,7 @@ class KimiTaskEncoder(VLMTaskEncoder):
     def encode_captioning(self, sample: CaptioningSample) -> BaseTaskSample:
         """Encode a captioning sample for a Kimi multimodal model."""
         assert (
-            self.config.training_phase == TrainingPhase.PRETRAIN
+            self.args.training_phase == constants.TrainingPhase.PRETRAIN
         ), "Only support PRETRAIN phase"
 
         # Format: <|media_begin|>image<|media_content|><|media_pad|><|media_end|>{caption}<eos>
@@ -476,8 +478,8 @@ class KimiTaskEncoder(VLMTaskEncoder):
 
     def encode_vqa(self, sample: VQASample) -> BaseTaskSample:
         """Encode a VQA sample for a Kimi multimodal model."""
-        if self.config.training_phase == TrainingPhase.PRETRAIN:
-            if self.config.add_question_in_pretrain:
+        if self.args.training_phase == constants.TrainingPhase.PRETRAIN:
+            if self.args.add_question_in_pretrain:
                 # Replace <image> placeholder with Kimi format
                 text = (sample.context + sample.answers).replace(
                     "<image>", IMAGE_TOKEN_WITH_TAGS
@@ -488,13 +490,13 @@ class KimiTaskEncoder(VLMTaskEncoder):
             input_ids, target, imgs, image_grid_thw, attn_mask = self._process(
                 sample.image, text
             )
-        elif self.config.training_phase == TrainingPhase.SFT:
+        elif self.args.training_phase == constants.TrainingPhase.SFT:
             input_ids, target, attn_mask, imgs, image_grid_thw = self.process_sft_vqa(
                 sample.context, sample.answers, sample.image
             )
         else:
             raise NotImplementedError(
-                f"Unknown training phase {self.config.training_phase}"
+                f"Unknown training phase {self.args.training_phase}"
             )
 
         num_tiles = [len(image_grid_thw)] if image_grid_thw is not None else [0]
@@ -600,7 +602,7 @@ class KimiTaskEncoder(VLMTaskEncoder):
 
     def encode_multi_mix_qa(self, sample) -> BaseTaskSample:
         """Encode a mixed image/video QA sample for Kimi SFT."""
-        if self.config.training_phase == TrainingPhase.SFT:
+        if self.args.training_phase == constants.TrainingPhase.SFT:
             num_tiles = []
 
             (
@@ -624,7 +626,7 @@ class KimiTaskEncoder(VLMTaskEncoder):
                 num_tiles = [len(image_grid_thw)] if image_grid_thw is not None else []
         else:
             raise NotImplementedError(
-                f"Unknown training phase {self.config.training_phase}"
+                f"Unknown training phase {self.args.training_phase}"
             )
 
         if self._gate_overlong(
@@ -650,7 +652,7 @@ class KimiTaskEncoder(VLMTaskEncoder):
 
     def encode_multi_vid_qa(self, sample) -> BaseTaskSample:
         """Encode a video QA sample for Kimi SFT."""
-        if self.config.training_phase == TrainingPhase.SFT:
+        if self.args.training_phase == constants.TrainingPhase.SFT:
             (
                 input_ids,
                 target,
@@ -668,7 +670,7 @@ class KimiTaskEncoder(VLMTaskEncoder):
             )
         else:
             raise NotImplementedError(
-                f"Unknown training phase {self.config.training_phase}"
+                f"Unknown training phase {self.args.training_phase}"
             )
 
         if self._gate_overlong(
@@ -700,9 +702,9 @@ class KimiTaskEncoder(VLMTaskEncoder):
         Overlong samples are dropped via ``_gate_overlong`` (logs a warning
         and returns ``None``).
         """
-        if self.config.training_phase != TrainingPhase.SFT:
+        if self.args.training_phase != constants.TrainingPhase.SFT:
             raise NotImplementedError(
-                f"encode_chat_mix only supports SFT, got {self.config.training_phase}"
+                f"encode_chat_mix only supports SFT, got {self.args.training_phase}"
             )
 
         (

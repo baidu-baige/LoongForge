@@ -27,7 +27,7 @@ import yaml
 from loongforge.models.embodied.dreamzero.precomputed_cache import (
     DreamZeroPrecomputedCacheConfig,
 )
-from ..precomputed_artifact import (
+from loongforge.models.embodied.dreamzero.precomputed_cache.artifact import (
     DreamZeroPrecomputedFeatureArtifact,
 )
 

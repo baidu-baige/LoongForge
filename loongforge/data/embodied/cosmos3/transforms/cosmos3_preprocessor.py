@@ -12,8 +12,7 @@ from typing import Any, Dict, List, Optional
 
 import torch
 
-from loongforge.data.embodied.transforms.collator import BaseCollator
-from loongforge.data.embodied.registry import register_collator
+from loongforge.data.embodied.transforms.collator import BasePreprocessor, register_preprocessor
 from loongforge.models.embodied.cosmos3.sequence_packing import SequencePlan
 
 
@@ -158,7 +157,7 @@ class DeferredVideoTail:
             format_video_uint8,
         )
 
-        from .cosmos3_transform import _reflection_pad_to_target
+        from .cosmos3_action_transform import _reflection_pad_to_target
 
         target_t, target_w, target_h = ops
         # uint8 -> float on the k/255 grid: exactly what the worker decoded.
@@ -171,8 +170,8 @@ class DeferredVideoTail:
         return video
 
 
-@register_collator("cosmos3")
-class Cosmos3Collator(BaseCollator):
+@register_preprocessor("cosmos3")
+class Cosmos3Preprocessor(BasePreprocessor):
     """Cosmos3 collate_fn: applies per-sample transform and assembles Cosmos3Batch."""
 
     def __init__(self, video_pipeline: Optional[DeferredVideoTail] = None) -> None:
@@ -187,7 +186,6 @@ class Cosmos3Collator(BaseCollator):
         training_args=None,
         dataset_stats=None,
         dataset=None,
-        runtime=None,
     ):
         """from_config."""
         # The dataset always does decode + crop/resize. When ColorJitter is

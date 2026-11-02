@@ -35,6 +35,8 @@ from typing import (
 import numpy as np
 from typing_extensions import override
 
+from loongforge.data.constants import Placeholder
+
 from PIL import Image
 
 logger = logging.getLogger(__name__)
@@ -55,13 +57,6 @@ if TYPE_CHECKING:
 
     ImageInput = Union[str, EncodedImage, ImageObject]
     VideoInput = str
-
-
-class Placeholder(object):
-    """Placeholders"""
-
-    IMAGE = "<image>"
-    VIDEO = "<video>"
 
 
 class MMPlugin:

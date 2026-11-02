@@ -34,8 +34,10 @@ from typing import Any, Dict, List
 
 import torch
 
-from loongforge.data.embodied.transforms.collator import BaseCollator
-from loongforge.data.embodied.registry import register_collator
+from loongforge.data.embodied.transforms.collator import (
+    BasePreprocessor,
+    register_preprocessor,
+)
 from loongforge.data.embodied.xvla.transforms.xvla_transform import (
     XVLAEncodeImageTransform,
     XVLATokenizeTransform,
@@ -63,8 +65,8 @@ class XVLABatch(dict):
         return self
 
 
-@register_collator("xvla")
-class XVLACollator(BaseCollator):
+@register_preprocessor("xvla")
+class XVLAPreprocessor(BasePreprocessor):
     """DataLoader collate_fn for XVLA.
 
     Uses :class:`XVLAEncodeImageTransform` and :class:`XVLATokenizeTransform`
@@ -88,9 +90,8 @@ class XVLACollator(BaseCollator):
     @classmethod
     def from_config(
         cls, model_cfg, data_cfg=None, training_args=None, dataset_stats=None, dataset=None,
-        runtime=None,
-    ) -> "XVLACollator":
-        """Construct an XVLACollator from typed ModelConfig + DataConfig."""
+    ) -> "XVLAPreprocessor":
+        """Construct an XVLAPreprocessor from typed ModelConfig + DataConfig."""
         num_views = (
             (data_cfg.num_image_views if data_cfg is not None else None)
             or model_cfg.num_image_views

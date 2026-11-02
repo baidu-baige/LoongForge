@@ -240,18 +240,13 @@ def get_embedding_ranks(pp_ranks: List[int]):
     embedding_ranks = sorted(embedding_ranks)
     return embedding_ranks
 
-def model_provider(pre_process=True, post_process=True, vp_stage=None):
-    """Build the LLM with this run's args and model config."""
-    return llm_model_provider(pre_process, post_process, vp_stage=vp_stage,
-                              args=get_args(), config=get_model_config())
-
 def train(args):
     """Run LLM pretraining."""
     train_valid_test_datasets_provider.is_distributed = True
     pretrain(
         args,
         train_valid_test_datasets_provider,
-        model_provider,
+        llm_model_provider,
         ModelType.encoder_or_decoder,
         forward_step,
         get_embedding_ranks=get_embedding_ranks,

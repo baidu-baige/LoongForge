@@ -21,7 +21,7 @@ from loongforge.models.embodied.gr00t_n1_7.modules.cuda_graph_flash_attention im
     maybe_install_graph_safe_fa2_patches,
     prime_graph_safe_fa2_buffers,
 )
-from loongforge.engines.torch.utils.utils import resolve_dtype
+from loongforge.engines.torch.utils.runtime import resolve_dtype
 logger = logging.getLogger(__name__)
 
 

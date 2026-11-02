@@ -18,8 +18,7 @@ from typing import Any, Dict, List, Optional
 import torch
 from transformers import AutoTokenizer
 
-from loongforge.data.embodied.transforms.collator import BaseCollator, PreparedBatch
-from loongforge.data.embodied.registry import register_collator
+from loongforge.data.embodied.transforms.collator import BasePreprocessor, PreparedBatch, register_preprocessor
 
 def tokenize_prompts(
     prompts: list,
@@ -57,9 +56,9 @@ class Pi05PreparedBatch(PreparedBatch):
     actions: torch.Tensor = None             # (B, T, D)
 
 
-@register_collator("pi05")
-class Pi05Collator(BaseCollator):
-    """DataLoader collate_fn for pi05.
+@register_preprocessor("pi05")
+class Pi05Preprocessor(BasePreprocessor):
+    """DataLoader collate_fn for PaliGemmaPi05.
 
     Only handles batch-level collation. Per-sample transforms (image, action,
     state discretization) are applied via the injected `transform` pipeline.
@@ -82,8 +81,7 @@ class Pi05Collator(BaseCollator):
     @classmethod
     def from_config(
         cls, model_cfg, data_cfg, training_args=None, dataset_stats=None, dataset=None,
-        runtime=None,
-    ) -> "Pi05Collator":
+    ) -> "Pi05Preprocessor":
         """Construct from typed ModelConfig + DataConfig (+ TrainingArgs).
 
         Tokenizer path: training_args.tokenizer_path (--tokenizer-path) > TOKENIZER_PATH env.

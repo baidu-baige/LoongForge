@@ -60,6 +60,16 @@ class TrainingEntryTests(unittest.TestCase):
     "SFT imports require Python >=3.10 and the Torch training dependencies",
 )
 class SFTRecipeTests(unittest.TestCase):
+    def setUp(self):
+        from loongforge.training.embodied import global_vars
+
+        for name in (
+            "_EMBODIED_TRAINING_ARGS", "_EMBODIED_MODEL_CONFIG", "_EMBODIED_DATA_CONFIG",
+        ):
+            patcher = patch.object(global_vars, name, None)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
     def test_tensor_wise_config_and_trainer_wiring(self):
         from omegaconf.errors import ConfigKeyError
 
@@ -85,44 +95,49 @@ class SFTRecipeTests(unittest.TestCase):
             with self.assertRaises(ConfigKeyError):
                 parse_train_args()
 
-    def test_lingbot_data_registry_accepts_runtime(self):
+    def test_lingbot_data_registry_uses_master_signature(self):
         import inspect
 
         from loongforge.data.embodied.lingbot_vla_v2 import build_lingbot_vla_v2_dataset
-        from loongforge.data.embodied.registry import DataRuntime, build_collator, get_transform_builder
+        from loongforge.data.embodied.registry import build_preprocessor, get_transform_builder
         from loongforge.models.embodied.lingbot_vla_v2 import upstream_adapter
 
-        runtime = DataRuntime(rank=1, world_size=2, is_distributed=True)
-        inspect.signature(build_lingbot_vla_v2_dataset).bind(object(), object(), object(), runtime)
+        inspect.signature(build_lingbot_vla_v2_dataset).bind(object(), object(), object())
         self.assertEqual(get_transform_builder("lingbot_vla_v2")(object()), [])
         upstream_collator = Mock(return_value={"tokens": [1, 2]})
         with patch.object(upstream_adapter, "resolve_vla_data_collator", return_value=lambda: upstream_collator):
-            collator = build_collator("lingbot_vla_v2", object(), object(), runtime=runtime)
+            collator = build_preprocessor("lingbot_vla_v2", object(), object())
         batch = collator([{"sample": 1}])
         self.assertEqual(batch.data, {"tokens": [1, 2]})
         upstream_collator.assert_called_once_with([{"sample": 1}])
 
-    def test_model_factory_receives_training_args(self):
+    def test_model_factory_receives_model_config(self):
         from loongforge.training.embodied import sft
 
         trainer = sft.FinetuneTrainer(SimpleNamespace(train_iters=1), object(), object())
         with patch.object(sft, "build_model") as build:
             self.assertIs(trainer._build_model(), build.return_value)
-        build.assert_called_once_with(trainer.model_cfg, trainer.training_args)
+        build.assert_called_once_with(trainer.model_cfg)
 
-    def test_model_rng_instruction_is_applied_once(self):
+    def test_model_batch_hook_receives_training_context(self):
         from loongforge.training.embodied import sft
 
         trainer = sft.FinetuneTrainer(SimpleNamespace(train_iters=1), object(), object())
-        hook = Mock(side_effect=[(17, 5), None])
+        hook = Mock(return_value=None)
         trainer.model = SimpleNamespace(on_after_train_batch_fetch=hook)
         batch = object()
-        with patch.object(sft, "set_seed") as seed, patch.object(sft.torch, "rand") as rand:
+        with patch.object(sft.torch, "rand") as rand:
             trainer._on_after_train_batch_fetch(batch, 0)
             trainer._on_after_train_batch_fetch(batch, 1)
-        seed.assert_called_once_with(17)
-        rand.assert_called_once_with(5)
+        rand.assert_not_called()
         self.assertEqual(hook.call_count, 2)
+        for micro_step, call in enumerate(hook.call_args_list):
+            self.assertEqual(call.kwargs, {
+                "args": trainer.training_args,
+                "completed_steps": trainer.completed_steps,
+                "micro_step": micro_step,
+                "batch": batch,
+            })
 
 
 if __name__ == "__main__":

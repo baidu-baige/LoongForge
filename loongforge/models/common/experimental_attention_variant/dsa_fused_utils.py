@@ -222,22 +222,3 @@ def gather_heads_and_split_sequence(input_):
 def gather_sequence_and_scatter_heads(input_):
     """Wrapper for autograd function: gather sequence + scatter heads"""
     return _GatherSequenceAndScatterHeads.apply(input_)
-
-
-def _unscale_indexer_grad(grad, scale_inv):
-    """Dequantize an indexer grad by its per-row FP8 scale (grad / scale_inv).
-
-    Rows with amax 0 sit on the quantizer's epsilon floor (scale_inv = 2^-48
-    vs ~1.56e-2 for real rows); dividing amplifies kernel residue by ~2.8e14
-    into finite-but-huge values that overflow the fp32 grad-norm sum of
-    squares. Zero rows are routine (k %128 padding, empty packed segments,
-    padded q positions) and their true gradient is 0 — emit that.
-    """
-    epsilon_scale_floor = 2.0 ** -48 * 1.5  # 1.5x margin over the 2^-48 floor
-    scale_inv = scale_inv.unsqueeze(-1)
-    usable = (
-        torch.isfinite(scale_inv)
-        & (scale_inv > epsilon_scale_floor)
-    )
-    safe_scale_inv = torch.where(usable, scale_inv, torch.ones_like(scale_inv))
-    return (grad / safe_scale_inv).masked_fill(~usable.expand_as(grad), 0.0)

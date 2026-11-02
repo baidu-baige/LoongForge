@@ -21,6 +21,7 @@ from typing import List
 
 import cv2
 try:
+    import imgaug
     IMGAUG_AVAILABLE = True
     import imgaug as ia
     import imgaug.augmenters as iaa

@@ -31,6 +31,11 @@ MODEL_CONFIG_REGISTRY = {
         "config_path": "configs/models/deepseek3",
         "config_name": "deepseek_v3_2_sparse",
     },
+    "deepseek-v3.2-warmup": {
+        "engine": "megatron",
+        "config_path": "configs/models/deepseek3",
+        "config_name": "deepseek_v3_2_warmup",
+    },
     "deepseek-v4-flash": {
         "engine": "megatron",
         "config_path": "configs/models/deepseek4",
@@ -580,7 +585,7 @@ MODEL_CONFIG_REGISTRY = {
         "config_path": "configs/models/xvla",
         "config_name": "xvla",
         "model_config": "loongforge.models.embodied.xvla.model_configuration_xvla.XvlaModelConfig",
-        "data_config": "loongforge.data.embodied.xvla.transforms.data_configuration_xvla.XVLADataConfig",
+        "data_config": "loongforge.data.embodied.xvla.transforms.data_configuration_xvla.XvlaDataConfig",
     },
     "vlda": {
         "engine": "torch",
@@ -608,7 +613,7 @@ MODEL_CONFIG_REGISTRY = {
         "config_path": "configs/models/cosmos3",
         "config_name": "nano",
         "model_config": "loongforge.models.embodied.cosmos3.modeling_configuration_cosmos3.Cosmos3ModelConfig",
-        "data_config": "loongforge.data.embodied.cosmos3.data_configuration_cosmos3.Cosmos3DataConfig",
+        "data_config": "loongforge.data.embodied.cosmos3.data_configuration_cosmos3.Cosmos3DroidConfig",
     },
     "dreamzero_lora_wan22_5b": {
         "engine": "torch",
@@ -669,9 +674,15 @@ MODEL_CONFIG_REGISTRY = {
 }
 
 
+def normalize_model_name(name: str) -> str:
+    """Normalize input model name into canonical form."""
+    # in case of adding other regular expressions
+    return name.lower()
+
+
 def get_model_entry(model_name: str):
     """Resolve a name while preserving Torch's hyphen aliases."""
-    name = model_name.lower()
+    name = normalize_model_name(model_name)
     names = {name, name.replace("-", "_")}
     matches = [
         entry for key in names
@@ -686,16 +697,34 @@ def get_model_entry(model_name: str):
 
 
 def get_config_from_model_name(model_name: str):
-    """Return the absolute YAML directory and config name."""
-    entry = get_model_entry(model_name)
-    root = Path(__file__).resolve().parents[2]
-    return str(root / entry["config_path"]), entry["config_name"]
+    """
+    Lookup (config_path, config_name) from MODEL_CONFIG_REGISTRY,
+    and automatically prepend absolute project_root to config_path.
+    """
+    name = normalize_model_name(model_name)
+
+    if name not in MODEL_CONFIG_REGISTRY:
+        raise KeyError(
+            f"Unknown model_name '{model_name}'. "
+            f"You may consider passing the --config-file directly or"
+            f"register the config file path in catalog.py to add the model name '{model_name}'."
+            f"Now the available model names are: {list(MODEL_CONFIG_REGISTRY.keys())}"
+        )
+    entry = MODEL_CONFIG_REGISTRY[name]
+
+    current_file = Path(__file__).resolve()
+    project_root = current_file.parent.parent.parent   # LoongForge root dir
+
+    abs_config_path = str(project_root / entry["config_path"])
+
+    return abs_config_path, entry["config_name"]
 
 
 def get_config_path(model_name: str):
     """Return an existing default YAML path."""
-    directory, name = get_config_from_model_name(model_name)
-    path = Path(directory) / f"{name}.yaml"
+    entry = get_model_entry(model_name)
+    root = Path(__file__).resolve().parents[2]
+    path = root / entry["config_path"] / f"{entry['config_name']}.yaml"
     if not path.is_file():
         raise FileNotFoundError(f"Config file not found: {path}")
     return str(path)
@@ -767,17 +796,22 @@ class VisionLanguageModelFamilies(_BaseFamilies):
 
 
 class DiffusionModelFamilies(_BaseFamilies):
-    """Diffusion model families (Megatron engine)"""
-
+    """Diffusion model families"""
     WAN2_1_I2V = "wan2_1_i2v"
     WAN2_2_I2V = "wan2_2_i2v"
     QWEN_IMAGE = "qwen_image"
 
 
+class VisionLanguageActionModelFamilies(_BaseFamilies):
+    """Vision language action model families"""
+    PI05 = "pi05"
+    GROOT_N1_6 = "gr00t_n1_6"
+
+
 def get_all_model_families() -> List[str]:
     """
-    Lookup (config_path, config_name) from MODEL_CONFIG_REGISTRY,
-    and automatically prepend absolute project_root to config_path.
+    Get all model families defined in the constants file dynamically.
+    Returns a flattened list of all string names from all subclasses of _BaseFamilies.
     """
     all_families = []
 
@@ -785,16 +819,3 @@ def get_all_model_families() -> List[str]:
         all_families.extend(family_class.names())
 
     return all_families
-
-
-# Families whose Hydra config puts model_type at the top level; VLM configs put it under ``model``.
-TOP_LEVEL_MODEL_FAMILIES = frozenset(LanguageModelFamilies.names() + DiffusionModelFamilies.names())
-
-
-def split_model_config(config):
-    """Return ``(model_type, model_config)`` of a composed Megatron Hydra config."""
-    if hasattr(config, "model_type") and config.model_type in TOP_LEVEL_MODEL_FAMILIES:
-        return config.model_type, config
-    if not hasattr(config, "model"):
-        raise ValueError("Invalid model configuration structure")
-    return config.model.model_type, config.model

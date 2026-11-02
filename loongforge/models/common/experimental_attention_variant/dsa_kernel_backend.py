@@ -99,10 +99,17 @@ def _auto_backend() -> str:
     return BACKEND_SM100
 
 
-def _requested_backend(source=None) -> str:
+def _requested_backend(args=None) -> str:
     import os
 
-    value = getattr(source, "dsa_kernel_backend", None)
+    if args is None:
+        try:
+            from megatron.training import get_args
+
+            args = get_args()
+        except Exception:  # noqa: BLE001 - args not initialised outside training
+            args = None
+    value = getattr(args, "dsa_kernel_backend", None) if args is not None else None
     if not value:
         value = os.environ.get("LOONGFORGE_DSA_KERNEL_BACKEND")
     if not value:
@@ -543,30 +550,25 @@ def _tilelang_sparse_mla_bwd(q, kv, out, grad_out, indices, lse, sm_scale,
 _BACKEND: Optional[DSAKernelBackend] = None
 
 
-def resolve_backend_name(source=None) -> str:
-    """Backend name :func:`get_dsa_backend` would resolve to for ``source``.
+def resolve_backend_name(args=None) -> str:
+    """Backend name :func:`get_dsa_backend` would resolve to for ``args``.
 
     Name resolution only -- no kernels are bound and no operator packages are
     imported -- so this is safe to call from argument validation.  ``args``
     defaults to the megatron global args; pass it explicitly when they are not
     yet installed (e.g. during early arg validation).
     """
-    name = _requested_backend(source)
+    name = _requested_backend(args)
     if name == BACKEND_AUTO:
         name = _auto_backend()
     return name
 
 
-def get_dsa_backend(config=None) -> DSAKernelBackend:
-    """Resolve (once) and return the active fused-DSA kernel backend.
-
-    The first call fixes the backend.  ``DSADotProductAttention`` makes that call at
-    construction with its TransformerConfig, so the kernel calls inside autograd
-    functions omit ``config`` and get the configured backend.
-    """
+def get_dsa_backend() -> DSAKernelBackend:
+    """Resolve (once) and return the active fused-DSA kernel backend."""
     global _BACKEND
     if _BACKEND is None:
-        name = resolve_backend_name(config)
+        name = resolve_backend_name()
         _BACKEND = DSAKernelBackend(name)
         _warn_once(f"kernel backend = {name}")
     return _BACKEND

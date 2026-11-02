@@ -3,9 +3,11 @@
 
 """Parameter precision policy for LingBot VLA v2 distributed strategies.
 
-This module supplies the two per-axis marker lists and their class labels.
-The training recipe passes them to the engine's ``ParameterClassPolicy``,
-which owns matching and the runtime policy contract.
+This is the LingBot instance of the shared, config-driven tensor_wise policy. It only
+supplies the two per-axis marker lists and their class labels; the matching and
+the ``compute_dtype`` / ``is_comm_precision_critical`` / ``classify`` contract
+live in ``ParameterClassPolicy``. A new model reuses the same base with its own
+markers -- no branching is duplicated here.
 
     class             compute  grad-reduce            param-publish
     ---------------------------------------------------------------------------
@@ -20,6 +22,8 @@ parameter belongs to.
 """
 
 from __future__ import annotations
+
+from loongforge.engines.torch.optimizer.tensor_wise_optimizer.precision_policy import ParameterClassPolicy
 
 # Action-expert tensors train in fp32; everything else in bf16.
 _ACTION_FP32_MARKERS = (
@@ -52,18 +56,26 @@ _LABELS = {
 }
 
 
-def parameter_policy_kwargs(model_cfg=None):
-    """Declare LingBot targets for the training recipe's ParameterClassPolicy."""
-    extra_markers = (
-        () if model_cfg is None else tuple(getattr(model_cfg, "muon_exclude_name_patterns", ()) or ())
-    )
-    return dict(
-        compute_fp32_markers=_ACTION_FP32_MARKERS,
-        comm_critical_markers=_COMM_FP32_MARKERS,
-        labels=_LABELS,
-        force_comm_critical_below_ndim=2,
-        adamw_markers=_DEFAULT_ADAMW_MARKERS + extra_markers,
-    )
+class LingbotVlaV2ParameterPolicy(ParameterClassPolicy):
+    """Preserve the validated LingBot tensor_wise ownership and precision contract.
+
+    This is a plain ``ParameterClassPolicy`` (a model-side policy describing what
+    each parameter *is*). The parameter plan wraps it in the capability-resolving adapter
+    once, combining it with the run's collective precision plan -- the model never
+    binds runtime precision into the policy itself.
+    """
+
+    def __init__(self, model_cfg=None):
+        extra_markers = (
+            () if model_cfg is None else tuple(getattr(model_cfg, "muon_exclude_name_patterns", ()) or ())
+        )
+        super().__init__(
+            compute_fp32_markers=_ACTION_FP32_MARKERS,
+            comm_critical_markers=_COMM_FP32_MARKERS,
+            labels=_LABELS,
+            force_comm_critical_below_ndim=2,
+            adamw_markers=_DEFAULT_ADAMW_MARKERS + extra_markers,
+        )
 
 
-__all__ = ["parameter_policy_kwargs"]
+__all__ = ["LingbotVlaV2ParameterPolicy"]

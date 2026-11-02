@@ -73,13 +73,3 @@ class BlendedHuggingFaceDatasetConfig(BlendedMegatronDatasetConfig):
             assert len(self.dataset) == len(
                 self.blend[0]
             ), f"dataset must contain {len(self.blend[0])} blends"
-
-
-def get_dataset_blend_from_list(
-    dataset_names: Optional[List[str]],
-) -> Optional[List[str]]:
-    """get dataset from list"""
-    if dataset_names is None:
-        return None
-
-    return [_dataset_name.strip() for _dataset_name in dataset_names]

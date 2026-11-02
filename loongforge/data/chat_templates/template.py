@@ -27,19 +27,19 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import (
+    TYPE_CHECKING,
     Type,
     Dict,
     Any,
     List,
     Optional,
-    Protocol,
     Sequence,
     Set,
     Tuple,
     Union,
 )
 
-from loongforge.data import IGNORE_INDEX
+from loongforge.data.constants import DataRoles
 from .plugins.mm_plugin import MMPlugin, Qwen2VLPlugin, Qwen3VLPlugin
 from .plugins.kimi_plugin import KimiPlugin
 from .plugins.minicpm_v_4_6_plugin import MiniCPMV46Plugin
@@ -48,35 +48,11 @@ from .plugins.minicpm_v_4_6_plugin import MiniCPMV46Plugin
 logger = logging.getLogger(__name__)
 
 
-class TokenizerProtocol(Protocol):
-    """Tokenizer surface used by chat templates.
-
-    Defined locally so this package depends on neither ``engines`` nor a concrete
-    tokenizer implementation.
-    """
-
-    tokenizer: Any
-    bos: Any
-    eos: Any
-
-    def tokenize(self, text: str, add_special_tokens: bool = False) -> List[str]:
-        ...
-
-    def convert_tokens_to_ids(self, token: str) -> int:
-        ...
+if TYPE_CHECKING:
+    from loongforge.engines.megatron.tokenizer import AutoTokenizerFromHF
 
 
 SlotsType = Sequence[Union[str, Set[str], Dict[str, str]]]
-
-
-class DataRoles(object):
-    """data roles"""
-
-    USER = "user"
-    ASSISTANT = "assistant"
-    OBSERVATION = "observation"
-    FUNCTION = "function"
-    SYSTEM = "system"
 
 
 @dataclass
@@ -181,7 +157,7 @@ class ChatTemplate:
 
     def encode_multiturn(
         self,
-        tokenizer: "TokenizerProtocol",
+        tokenizer: "AutoTokenizerFromHF",
         messages: Sequence[Dict[str, str]],
         system: Optional[str] = None,
     ) -> List[Tuple[List[int], List[int]]]:
@@ -196,7 +172,7 @@ class ChatTemplate:
 
     def encode_oneturn(
         self,
-        tokenizer: "TokenizerProtocol",
+        tokenizer: "AutoTokenizerFromHF",
         messages: Sequence[Dict[str, str]],
         system: Optional[str] = None,
     ) -> Tuple[List[int], List[int]]:
@@ -213,12 +189,12 @@ class ChatTemplate:
 
     def encode_openai(
         self,
-        tokenizer: "TokenizerProtocol",
+        tokenizer: "AutoTokenizerFromHF",
         messages: Sequence[Dict[str, Any]],
         tools: Optional[Sequence[Dict[str, Any]]] = None,
         train_on_prompt: bool = False,
         history_mask_loss: bool = False,
-        ignore_index: int = IGNORE_INDEX,
+        ignore_index: int = -100,
         max_length: Optional[int] = None,
     ) -> Tuple[List[int], List[int], List[int], int]:
         """Encode OpenAI-style messages. Only HFChatTemplate supports this."""
@@ -230,7 +206,7 @@ class ChatTemplate:
 
     def _encode(
         self,
-        tokenizer: "TokenizerProtocol",
+        tokenizer: "AutoTokenizerFromHF",
         messages: Sequence[Dict[str, str]],
         system: Optional[str],
     ) -> List[List[int]]:
@@ -267,7 +243,7 @@ class ChatTemplate:
 
     def _convert_elements_to_ids(
         self,
-        tokenizer: "TokenizerProtocol",
+        tokenizer: "AutoTokenizerFromHF",
         elements: "SlotsType",
     ) -> List[int]:
         """
@@ -330,7 +306,7 @@ class HFChatTemplate(ChatTemplate):
 
     def _encode(
         self,
-        tokenizer: "TokenizerProtocol",
+        tokenizer: "AutoTokenizerFromHF",
         messages: Sequence[Dict[str, str]],
         system: Optional[str],
     ) -> List[List[int]]:
@@ -367,13 +343,13 @@ class HFChatTemplate(ChatTemplate):
 
     def _tokenize(
         self,
-        tokenizer: "TokenizerProtocol",
+        tokenizer: "AutoTokenizerFromHF",
         messages: Sequence[Dict[str, Any]],
         tools: Optional[Sequence[Dict[str, Any]]] = None,
         add_generation_prompt: bool = False,
     ) -> List[int]:
         """Tokenize chat messages with the tokenizer's HF chat template path."""
-        hf_tokenizer = tokenizer.tokenizer
+        hf_tokenizer = tokenizer.hf_tokenizer()
         kwargs = dict(self.chat_template_kwargs)
         if tools:
             kwargs["tools"] = tools
@@ -439,14 +415,14 @@ class HFChatTemplate(ChatTemplate):
 
     def _render_with_generation_indices(
         self,
-        tokenizer: "TokenizerProtocol",
+        tokenizer: "AutoTokenizerFromHF",
         messages: Sequence[Dict[str, Any]],
         tools: Optional[Sequence[Dict[str, Any]]] = None,
     ) -> Tuple[str, List[Tuple[int, int]]]:
         """Render chat text and return assistant generation character ranges."""
         from transformers.utils.chat_template_utils import render_jinja_template
 
-        hf_tokenizer = tokenizer.tokenizer
+        hf_tokenizer = tokenizer.hf_tokenizer()
         chat_template = self._require_generation_template(self.chat_template)
 
         kwargs = dict(self.chat_template_kwargs)
@@ -590,12 +566,12 @@ class HFChatTemplate(ChatTemplate):
 
     def _tokenize_with_generation_indices(
         self,
-        tokenizer: "TokenizerProtocol",
+        tokenizer: "AutoTokenizerFromHF",
         messages: Sequence[Dict[str, Any]],
         tools: Optional[Sequence[Dict[str, Any]]] = None,
     ) -> Tuple[List[int], List[int]]:
         """Render OpenAI chat messages and build assistant-token masks."""
-        hf_tokenizer = tokenizer.tokenizer
+        hf_tokenizer = tokenizer.hf_tokenizer()
         rendered, generation_ranges = self._render_with_generation_indices(
             tokenizer=tokenizer,
             messages=messages,
@@ -689,12 +665,12 @@ class HFChatTemplate(ChatTemplate):
 
     def encode_openai(
         self,
-        tokenizer: "TokenizerProtocol",
+        tokenizer: "AutoTokenizerFromHF",
         messages: Sequence[Dict[str, Any]],
         tools: Optional[Sequence[Dict[str, Any]]] = None,
         train_on_prompt: bool = False,
         history_mask_loss: bool = False,
-        ignore_index: int = IGNORE_INDEX,
+        ignore_index: int = -100,
         max_length: Optional[int] = None,
     ) -> Tuple[List[int], List[int], List[int], int]:
         """Encode OpenAI-style chat data into input ids, labels, and loss mask."""
@@ -729,7 +705,7 @@ class Llama2Template(ChatTemplate):
 
     def _encode(
         self,
-        tokenizer: "TokenizerProtocol",
+        tokenizer: "AutoTokenizerFromHF",
         messages: Sequence[Dict[str, str]],
         system: str,
     ) -> List[List[int]]:

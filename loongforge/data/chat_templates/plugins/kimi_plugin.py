@@ -25,7 +25,7 @@ from typing import (
 from typing_extensions import override
 from PIL import Image
 
-from .mm_plugin import MMPlugin, Placeholder
+from .mm_plugin import MMPlugin
 
 logger = logging.getLogger(__name__)
 
@@ -257,6 +257,8 @@ class KimiPlugin(MMPlugin):
         Returns:
             Tuple of (processed_messages, mm_inputs)
         """
+        from loongforge.data.constants import Placeholder
+
         self._validate_input(images, videos)
 
         # Get multimodal inputs (pixel values and grid_thws)

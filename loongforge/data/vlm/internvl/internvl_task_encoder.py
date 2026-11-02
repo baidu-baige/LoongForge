@@ -8,7 +8,6 @@ import torch
 from typing import List, Union
 from dataclasses import dataclass, asdict
 from typing_extensions import override
-from loongforge.data import IGNORE_INDEX
 from loongforge.data.vlm import MultiMixQASample
 from megatron.energon import stateless
 from ..base.task_encoder import (
@@ -18,12 +17,11 @@ from ..base.task_encoder import (
     BaseTaskEncoder,
     _format_packed_sample_overflow_error,
 )
-from .internvl_preprocess import InternvlPreprocess, IGNORE_TOKEN_ID
+from .internvl_preprocess import InternvlPreprocess, IGNORE_TOKEN_ID, IGNORE_INDEX
 
 from importlib.metadata import version as _energon_version
-from packaging.version import Version
 try:
-    _ENERGON_NEEDS_SUBFLAVOR = Version(_energon_version("megatron-energon")) < Version("7.0.0")
+    _ENERGON_NEEDS_SUBFLAVOR = _energon_version("megatron-energon") < "7.0.0"
 except Exception:
     _ENERGON_NEEDS_SUBFLAVOR = False
 @dataclass
@@ -56,16 +54,16 @@ class MixQATaskBatchPackedSample(BaseTaskBatchPacked):
 class InternVLTaskEncoder(BaseTaskEncoder):
     """Task encoder for Intervl."""
 
-    def __init__(self, config, tokenizer, chat_template=None, *, patch_size: int):
-        super().__init__(config, tokenizer, chat_template)
+    def __init__(self, args, tokenizer):
+        super().__init__()
         # Current limitation: SFT-only
-        assert config.training_phase == "sft"
-        self.preproc = InternvlPreprocess(config, tokenizer, patch_size=patch_size)
+        assert args.training_phase == "sft"
+        self.preproc = InternvlPreprocess(args, tokenizer)
         self.tokenizer = tokenizer
-        self.loss_reduction = config.loss_reduction
-        self.seq_length = config.seq_length
-        self.strict_mode = config.strict_mode
-        self.max_item_length = config.max_packed_tokens if self.strict_mode else 0
+        self.loss_reduction = args.loss_reduction
+        self.seq_length = args.seq_length
+        self.strict_mode = args.strict_mode
+        self.max_item_length = args.max_packed_tokens if self.strict_mode else 0
 
 
     def encode_multi_mix_qa(self, sample: MultiMixQASample) -> MixQATaskSample:

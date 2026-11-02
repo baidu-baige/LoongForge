@@ -17,13 +17,11 @@ from megatron.training.utils import print_rank_0
 from loongforge.engines.megatron import get_args
 from loongforge.models.catalog import DiffusionModelFamilies
 
-from loongforge.data.diffusion.dataloader import (
-    build_latent_dataloader,
-    build_packed_dataloader,
-)
+from loongforge.data.diffusion.latent_dataset import TensorDataset
 from loongforge.data.diffusion.packed_dataset import (
-    patchify_for_conv3d,
-    patchify_latent,
+    PackedDataset,
+    _patchify_for_conv3d,
+    _patchify_latent,
 )
 
 from loongforge.models.diffusion.wan.wan_flow_match import FlowMatchScheduler
@@ -42,6 +40,7 @@ from loongforge.models.diffusion.wan.gaussian_diffusion import (
 )
 
 from loongforge.models.diffusion.wan.wan_provider import wan_i2v_model_provider
+from loongforge.models.diffusion.wan.wan_utils import broadcast_on_cp_group
 
 SUPPORTED_MODELS = [
     DiffusionModelFamilies.WAN2_1_I2V,
@@ -51,129 +50,6 @@ WAN_PATCH_SIZE = (1, 2, 2)
 
 
 stimer = StragglerDetector()
-
-
-def send_batch(batch, broadcast):
-    """send batch"""
-    args = get_args()
-    video_shape = torch.tensor(batch["latents"].shape, dtype=torch.int64).cuda(
-        non_blocking=True
-    )
-    contxt_shape = torch.tensor(
-        batch["prompt_emb"]["context"].shape, dtype=torch.int64
-    ).cuda(non_blocking=True)
-    broadcast(video_shape)
-    broadcast(batch["latents"])
-    broadcast(batch["training_target"])
-    broadcast(batch["timestep"])
-    broadcast(batch["scale"])
-
-    broadcast(contxt_shape)
-    broadcast(batch["prompt_emb"]["context"])
-
-    image_emb = batch["image_emb"]
-    image_info = torch.tensor([0, 0], dtype=torch.int64).cuda(non_blocking=True)
-
-    if "clip_feature" in image_emb:
-        image_info[0] = 1
-    if "y" in image_emb:
-        image_info[1] = 1
-
-    broadcast(image_info)
-    if image_info[0] == 1:
-        clip_feature_shape = torch.tensor(
-            image_emb["clip_feature"].shape, dtype=torch.int64
-        ).cuda(non_blocking=True)
-        broadcast(clip_feature_shape)
-        broadcast(image_emb["clip_feature"])
-    if image_info[1] == 1:
-        y_shape = torch.tensor(image_emb["y"].shape, dtype=torch.int64).cuda(
-            non_blocking=True
-        )
-        broadcast(y_shape)
-        broadcast(image_emb["y"])
-
-    args.micro_batch_size = video_shape.tolist()[0]
-
-    return batch
-
-
-def receive_batch(broadcast):
-    """receive batch"""
-    args = get_args()
-    device = torch.cuda.current_device()
-    # receive video
-    video_shape = torch.empty(5, dtype=torch.int64, device=device)
-    broadcast(video_shape)
-    args.micro_batch_size = video_shape.tolist()[0]
-    video = torch.empty(video_shape.tolist(), dtype=torch.bfloat16, device=device)
-    training_target = torch.empty(
-        video_shape.tolist(), dtype=torch.bfloat16, device=device
-    )
-    broadcast(video)
-    broadcast(training_target)
-
-    # receive timestep
-    timestep = torch.empty([1], dtype=torch.bfloat16, device=device)
-    broadcast(timestep)
-
-    # scale
-    scale = torch.empty([1], dtype=torch.float32, device=device)
-    broadcast(scale)
-
-    # receive context
-    prompt_shape = torch.empty(4, dtype=torch.int64, device=device)
-    broadcast(prompt_shape)
-    prompt = torch.empty(prompt_shape.tolist(), dtype=torch.bfloat16, device=device)
-    broadcast(prompt)
-    # receive image
-    image_info = torch.empty(2, dtype=torch.int64, device=device)
-    broadcast(image_info)
-    image_emb = {}
-    if image_info[0].item() == 1:
-        clip_shape = torch.empty(4, dtype=torch.int64, device=device)
-        broadcast(clip_shape)
-        clip_feature = torch.empty(
-            clip_shape.tolist(), dtype=prompt.dtype, device=device
-        )
-        broadcast(clip_feature)
-        image_emb["clip_feature"] = clip_feature
-
-    if image_info[1].item() == 1:
-        y_shape = torch.empty(6, dtype=torch.int64, device=device)
-        broadcast(y_shape)
-        y = torch.empty(y_shape.tolist(), dtype=video.dtype, device=device)
-        broadcast(y)
-        image_emb["y"] = y
-
-    prompt_emb = {"context": prompt}
-    batch = {
-        "latents": video,
-        "training_target": training_target,
-        "timestep": timestep,
-        "prompt_emb": prompt_emb,
-        "image_emb": image_emb,
-        "scale": scale,
-    }
-
-    return batch
-
-
-def broadcast_on_cp_group(batch):
-    """broadcast_on_cp_group,"""
-
-    def _broadcast(item):
-        if item is not None:
-            torch.distributed.broadcast(
-                item,
-                mpu.get_context_parallel_src_rank(),
-                group=mpu.get_context_parallel_group(),
-            )
-
-    if mpu.get_context_parallel_rank() == 0:
-        return send_batch(batch, _broadcast)
-    else:
-        return receive_batch(_broadcast)
 
 
 def model_provider(pre_process=True, post_process=True, vp_stage: int = None):
@@ -195,7 +71,7 @@ def model_provider(pre_process=True, post_process=True, vp_stage: int = None):
     args.max_position_embeddings = args.seq_length
 
     if args.model_name in ("wan2-1-i2v", "wan2-2-i2v") or args.model_family in SUPPORTED_MODELS:
-        return wan_i2v_model_provider(pre_process, post_process, args=args)
+        return wan_i2v_model_provider(pre_process, post_process)
 
     raise ValueError(f"Unsupported WAN model: {args.model_name}")
 
@@ -410,8 +286,8 @@ def get_batch(data_iterator):
                 else:
                     noisy_latents_with_y = noisy_latents_without_y
 
-                latent_patched = patchify_for_conv3d(noisy_latents_with_y, WAN_PATCH_SIZE)
-                target_patched = patchify_latent(training_target_raw, WAN_PATCH_SIZE)
+                latent_patched = _patchify_for_conv3d(noisy_latents_with_y, WAN_PATCH_SIZE)
+                target_patched = _patchify_latent(training_target_raw, WAN_PATCH_SIZE)
                 padded_len = seq_len_q_padded[sample_index].item()
                 pad_q = int(padded_len - latent_patched.shape[0])
                 if pad_q > 0:
@@ -576,6 +452,9 @@ def train_valid_test_datasets_provider(diffusion, train_val_test_num_samples, vp
     args = get_args()
     use_packing = getattr(args, 'packing_sft_data', False)
 
+    dp_rank = parallel_state.get_data_parallel_rank()
+    dp_world_size = parallel_state.get_data_parallel_world_size()
+
     if use_packing:
         packing_buffer_size = getattr(args, 'packing_buffer_size', 512)
         seq_length = args.seq_length
@@ -585,20 +464,24 @@ def train_valid_test_datasets_provider(diffusion, train_val_test_num_samples, vp
         # iterator before train_iters steps are done.
         steps_per_epoch = args.train_iters * args.global_batch_size
 
-        dataloader = build_packed_dataloader(
-            args.data_path[0],
-            steps_per_epoch,
-            scheduler,
-            packing_buffer_size,
-            seq_length,
-            dp_rank=parallel_state.get_data_parallel_rank(),
-            dp_size=parallel_state.get_data_parallel_world_size(),
-            cp_size=parallel_state.get_context_parallel_world_size(),
-            context_max_len=getattr(args, "context_max_len", 512),
-            model_name=getattr(args, "model_name", None),
-            seed=args.seed,
-            max_timestep_boundary=args.max_timestep_boundary,
-            min_timestep_boundary=args.min_timestep_boundary,
+        dataset = PackedDataset(
+            data_path=args.data_path[0],
+            steps_per_epoch=steps_per_epoch,
+            args=args,
+            scheduler=scheduler,
+            packing_buffer_size=packing_buffer_size,
+            seq_length=seq_length,
+            dp_rank=dp_rank,
+            dp_world_size=dp_world_size,
+        )
+        # batch_size=None: DataLoader yields each item as-is (no batching /
+        # collation).  PackedDataset already produces fully-merged packed
+        # batches so no further assembly is needed.
+        dataloader = torch.utils.data.DataLoader(
+            dataset,
+            batch_size=None,
+            num_workers=0,
+            pin_memory=True,
         )
     else:
         keep_keys = None
@@ -608,14 +491,23 @@ def train_valid_test_datasets_provider(diffusion, train_val_test_num_samples, vp
                 "height", "width", "num_frames",
                 "max_timestep_boundary", "min_timestep_boundary",
             }
-        dataloader = build_latent_dataloader(
+        dataset = TensorDataset(
             args.data_path[0],
             args.train_iters * args.global_batch_size,
-            args.seed,
-            keep_keys,
-            args.num_workers,
-            dp_rank=parallel_state.get_data_parallel_rank(),
-            dp_size=parallel_state.get_data_parallel_world_size(),
+            seed=args.seed,
+            keep_keys=keep_keys,
+            data_parallel_size=dp_world_size,
+        )
+        sampler = torch.utils.data.DistributedSampler(
+            dataset, shuffle=False, num_replicas=dp_world_size,
+            rank=dp_rank, drop_last=True,
+        )
+        dataloader = torch.utils.data.DataLoader(
+            dataset,
+            batch_size=1,
+            num_workers=args.num_workers,
+            sampler=sampler,
+            pin_memory=True,
         )
 
     print_rank_0(f"> finished creating {args.model_name} datasets ...")

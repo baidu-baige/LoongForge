@@ -18,6 +18,7 @@ from megatron.core.transformer.moe.moe_utils import get_default_pg_collection
 from megatron.core.transformer.spec_utils import ModuleSpec, build_module
 from megatron.core.transformer import TransformerConfig
 from megatron.core.extensions.transformer_engine import te_checkpoint
+from loongforge.engines.megatron import get_args
 from megatron.core.transformer.moe.token_dispatcher import MoEAlltoAllTokenDispatcher
 from megatron.core.tensor_parallel import all_to_all
 from .ernie_router import TopKRouter
@@ -67,8 +68,9 @@ class ErnieMoeLayer(MoELayer):
             pg_collection = get_default_pg_collection()
         super().__init__(config=config, submodules=submodules, layer_number=layer_number, pg_collection=pg_collection)
         # Add change: route dtype from fp16->fp32
+        args = get_args()
         router_config = deepcopy(self.config)
-        for mixed_precision in self.config.use_fp32_dtype_for_param_pattern or []:
+        for mixed_precision in args.use_fp32_dtype_for_param_pattern:
             if "router" in mixed_precision:
                 router_config.params_dtype = torch.float32
 

@@ -23,6 +23,8 @@ from einops import rearrange
 from megatron.core.models.common.vision_module.vision_module import VisionModule
 from megatron.core.transformer.spec_utils import ModuleSpec
 
+from loongforge.engines.megatron import get_args
+
 from .qwen_image_config import QwenImageConfig
 from .qwen_image_modules import AdaLayerNorm, RMSNorm, TimestepEmbeddings
 from .qwen_image_rope import QwenEmbedLayer3DRope, QwenEmbedRope
@@ -44,6 +46,7 @@ class QwenImageModel(VisionModule):
     ):
         super().__init__(config=config)
         self.config = config
+        self.args = get_args()
         self.pre_process = pre_process
         self.post_process = post_process
         self.hidden_size = config.hidden_size

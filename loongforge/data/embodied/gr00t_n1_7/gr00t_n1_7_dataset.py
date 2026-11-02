@@ -14,24 +14,39 @@ import threading
 from typing import Any
 
 import numpy as np
+import torch.distributed as dist
 from torch.utils.data import IterableDataset, get_worker_info
 
-from loongforge.data.embodied.lerobot_dataset import build_default_lerobot_dataset
+from loongforge.data.embodied.datasets.lerobot_dataset import _build_lerobot_dataset
 
 
 _GROOT_N1D7_SHARD_PREFETCH_DEPTH = 3
 
 
-def build_groot_n1_7_lerobot_dataset(model_cfg, data_cfg, training_args, runtime):
+def build_groot_n1_7_lerobot_dataset(model_cfg, data_cfg, training_args):
     """Build and prepare a LeRobot dataset for GR00T-N1.7 sample semantics."""
-    dataset = build_default_lerobot_dataset(model_cfg, data_cfg, training_args, runtime)
+    dataset_path = training_args.dataset_path
+    if not dataset_path:
+        raise ValueError("Must specify --dataset-path")
+
+    dataset_path = Path(dataset_path)
+    repo_id = dataset_path.name
+
+    dataset = _build_lerobot_dataset(
+        repo_id=repo_id,
+        root=str(dataset_path),
+        action_horizon=model_cfg.action_horizon,
+        streaming=training_args.streaming,
+        episodes=None,
+        video_backend=training_args.video_backend,
+        tolerance_s=1e-4,
+        lerobotdataset_version=training_args.lerobotdataset_version,
+    )
     return prepare_groot_n1d7_lerobot_dataset(
         dataset,
         model_cfg,
         data_cfg=data_cfg,
         training_args=training_args,
-        rank=runtime.rank,
-        world_size=runtime.world_size,
     )
 
 
@@ -40,8 +55,6 @@ def prepare_groot_n1d7_lerobot_dataset(
     model_cfg: Any,
     data_cfg: Any = None,
     training_args: Any = None,
-    rank: int = 0,
-    world_size: int = 1,
 ) -> Any:
     """Adapt a generic LeRobot dataset to GR00T-N1.7 sample semantics."""
     root = _dataset_root(dataset)
@@ -87,8 +100,6 @@ def prepare_groot_n1d7_lerobot_dataset(
             num_shards_per_epoch=int(data_cfg.num_shards_per_epoch),
             prefetch_shards=dataset._groot_n1d7_prefetch_shards,
             prefetch_depth=dataset._groot_n1d7_shard_prefetch_depth,
-            rank=rank,
-            world_size=world_size,
         )
 
     dataset._step_index = _build_effective_step_index(dataset, action_horizon)
@@ -125,6 +136,13 @@ def _has_episode_index(dataset: Any) -> bool:
 
 def _resolve_data_seed(training_args: Any) -> int:
     return int(training_args.seed)
+
+
+def _uses_full_iteration_cuda_graph(training_args: Any) -> bool:
+    return (
+        getattr(training_args, "cuda_graph_impl", "none") == "local"
+        and getattr(training_args, "cuda_graph_scope", "full") == "full_iteration"
+    )
 
 
 def _load_groot_n1d7_stats_json(dataset: Any, root: Path) -> None:
@@ -215,9 +233,15 @@ def _build_isaac_sharded_step_index(
         sharded_episodes[shard_index].append((episode_index, split_step_indices))
         shard_lengths[shard_index] += len(split_step_indices)
 
+    world_size, worker_count, batch_size = _resolve_isaac_dataloader_shape(training_args)
     dataset._groot_n1d7_sharded_episodes = sharded_episodes
     dataset._groot_n1d7_shard_lengths = shard_lengths.tolist()
     dataset._groot_n1d7_sharded_order = True
+    dataset._groot_n1d7_sharded_order_shape = {
+        "world_size": world_size,
+        "worker_count": worker_count,
+        "batch_size": batch_size,
+    }
     dataset._groot_n1d7_pair_to_dataset_index = pair_to_dataset_index
     return full_step_index, {
         "sharded_episodes": sharded_episodes,
@@ -227,6 +251,8 @@ def _build_isaac_sharded_step_index(
 
 class _GrootN1d7IsaacIterableDataset(IterableDataset):
     """Iterable dataset that mirrors Isaac's shard-cache preprocessing order."""
+
+    use_torch_dataloader = True
 
     def __init__(
         self,
@@ -238,8 +264,6 @@ class _GrootN1d7IsaacIterableDataset(IterableDataset):
         num_shards_per_epoch: int,
         prefetch_shards: bool = False,
         prefetch_depth: int = 1,
-        rank: int = 0,
-        world_size: int = 1,
     ) -> None:
         self._dataset = dataset
         self._transform = None
@@ -249,8 +273,6 @@ class _GrootN1d7IsaacIterableDataset(IterableDataset):
         self._num_shards_per_epoch = int(num_shards_per_epoch)
         self._prefetch_shards = bool(prefetch_shards)
         self._shard_prefetch_depth = max(1, int(prefetch_depth))
-        self._rank = int(rank)
-        self._world_size = int(world_size)
         self._pair_to_dataset_index = dict(dataset._groot_n1d7_pair_to_dataset_index)
         self._groot_n1d7_sharded_order = True
         self._thread_local = threading.local()
@@ -259,7 +281,7 @@ class _GrootN1d7IsaacIterableDataset(IterableDataset):
             self._dataset._transform = None
 
     def __iter__(self):
-        rank, world_size = self._rank, self._world_size
+        rank, world_size = _resolve_dist_rank_world()
         worker_info = get_worker_info()
         if worker_info is None:
             worker_id = 0
@@ -452,6 +474,39 @@ def _apply_transform_replay(
     return apply_with_replay(datapoint, replay)
 
 
+def make_groot_n1d7_isaac_iterable_dataset(dataset: Any, transform: Any) -> IterableDataset:
+    """Wrap a prepared LeRobot dataset with Isaac's iterable shard semantics."""
+    sharded_episodes = dataset._groot_n1d7_sharded_episodes
+    shard_lengths = dataset._groot_n1d7_shard_lengths
+    if not sharded_episodes or not shard_lengths:
+        raise ValueError("GR00T-N1.7 sharded iterable requested before shard metadata was built")
+    data_cfg = dataset._groot_n1d7_data_cfg
+    seed = dataset._groot_n1d7_seed
+    num_shards_per_epoch = int(data_cfg.num_shards_per_epoch)
+    return _GrootN1d7IsaacIterableDataset(
+        dataset,
+        sharded_episodes=sharded_episodes,
+        shard_lengths=shard_lengths,
+        seed=seed,
+        num_shards_per_epoch=num_shards_per_epoch,
+        prefetch_shards=bool(getattr(dataset, "_groot_n1d7_prefetch_shards", False)),
+        prefetch_depth=int(getattr(dataset, "_groot_n1d7_shard_prefetch_depth", 1)),
+    )
+
+
+def _resolve_dist_rank_world() -> tuple[int, int]:
+    if dist.is_available() and dist.is_initialized():
+        return dist.get_rank(), dist.get_world_size()
+    return 0, 1
+
+
+def _resolve_isaac_dataloader_shape(training_args: Any) -> tuple[int, int, int]:
+    world_size = _resolve_dist_rank_world()[1]
+    num_workers = int(training_args.num_workers)
+    batch_size = int(training_args.per_device_batch_size)
+    return max(1, world_size), max(1, num_workers), max(1, batch_size)
+
+
 def _build_isaac_shard_schedule(
     *,
     num_shards: int,
@@ -484,6 +539,8 @@ def _read_json_if_exists(path: Path) -> dict[str, Any]:
 def _resolve_checkpoint_path(model_cfg: Any) -> Path | None:
     path_value = model_cfg.base_model_path
     if not path_value:
+        path_value = model_cfg.pretrained_checkpoint
+    if path_value is None:
         return None
     path = Path(str(path_value))
     return path if path.exists() else None

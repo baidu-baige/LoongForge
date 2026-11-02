@@ -12,7 +12,8 @@ from megatron.core.enums import ModelType
 from megatron.core.utils import StragglerDetector
 from megatron.training import get_timers
 
-from loongforge.data.diffusion.dataloader import build_latent_dataloader
+from loongforge.data.diffusion.latent_dataset import TensorDataset
+from torch.utils.data import DataLoader
 from megatron.training.utils import print_rank_0
 from loongforge.engines.megatron import get_args, get_model_config
 from loongforge.models.diffusion.qwen_image.qwen_image_provider import qwen_image_model_provider
@@ -29,8 +30,7 @@ def model_provider(pre_process=True, post_process=True, vp_stage: int = None):
     if args.context_parallel_size != 1:
         raise AssertionError("Qwen-Image uses FSDP + TP; set context parallel size to 1.")
     args.max_position_embeddings = args.seq_length
-    return qwen_image_model_provider(pre_process=pre_process, post_process=post_process, vp_stage=vp_stage,
-                                     args=args)
+    return qwen_image_model_provider(pre_process=pre_process, post_process=post_process, vp_stage=vp_stage)
 
 
 def _scheduler_for_shape(height, width):
@@ -306,15 +306,21 @@ def train_valid_test_datasets_provider(diffusion, train_val_test_num_samples, vp
         "scale",
         "seed",
     }
-    dataloader = build_latent_dataloader(
+    dataset = TensorDataset(
         args.data_path[0],
         args.train_iters * args.global_batch_size,
-        args.seed,
-        keep_keys,
-        args.num_workers,
-        dp_rank=parallel_state.get_data_parallel_rank(),
-        dp_size=parallel_state.get_data_parallel_world_size(),
+        seed=args.seed,
+        keep_keys=keep_keys,
+        data_parallel_size=parallel_state.get_data_parallel_world_size(),
     )
+    sampler = torch.utils.data.DistributedSampler(
+        dataset,
+        shuffle=False,
+        num_replicas=parallel_state.get_data_parallel_world_size(),
+        rank=parallel_state.get_data_parallel_rank(),
+        drop_last=True,
+    )
+    dataloader = DataLoader(dataset, batch_size=1, num_workers=args.num_workers, sampler=sampler, pin_memory=True)
     print_rank_0(f"> finished creating {args.model_name} datasets ...")
     return iter(dataloader), None, None
 

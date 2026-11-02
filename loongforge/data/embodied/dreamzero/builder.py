@@ -23,7 +23,7 @@ from loongforge.data.embodied.dreamzero.dataset.modality_configs import (
     EMBODIMENT_BUILDERS,
     EMBODIMENT_TAG_TO_ID,
 )
-from loongforge.data.embodied.dreamzero.samplers import (
+from loongforge.data.embodied.dreamzero.sampler import (
     DreamZeroShardedSampler,
 )
 from loongforge.data.embodied.dreamzero.transforms.base import (
@@ -43,7 +43,7 @@ from loongforge.data.embodied.dreamzero.transforms.video import (
     VideoToNumpy,
     VideoToTensor,
 )
-from loongforge.data.embodied.registry import DataRuntime
+from loongforge.engines.torch.distributed import DistributedContext
 from loongforge.models.embodied.dreamzero.precomputed_cache import (
     DreamZeroPrecomputedCacheConfig,
     build_precomputed_cache_config,
@@ -233,7 +233,7 @@ def build_dreamzero_sampler(
     train_dataset,
     base_dataset,
     sampler_type: str,
-    runtime: DataRuntime,
+    ctx: DistributedContext,
     batch_size: int,
     num_workers: int,
     sampler_seed: int,
@@ -259,9 +259,9 @@ def build_dreamzero_sampler(
     ``global_batch_shard`` ~= ``block`` (near-equivalent; differs only at the
     tail/remainder and resume-state handling).
     """
-    ddp_active = runtime.is_distributed and runtime.world_size > 1
-    replicas = runtime.world_size if ddp_active else 1
-    rank = runtime.rank if ddp_active else 0
+    ddp_active = ctx.is_distributed and ctx.world_size > 1
+    replicas = ctx.world_size if ddp_active else 1
+    rank = ctx.rank if ddp_active else 0
     sampler_type = str(sampler_type or "distributed").strip().lower()
     require_full_language_chunks = bool(data_cfg.require_full_language_chunks)
     sampler_worker_batching = str(data_cfg.sampler_worker_batching or "none").strip().lower()
@@ -326,7 +326,7 @@ def build_dreamzero_sampler(
     )
 
 
-def build_dreamzero_dataset(model_cfg, data_cfg, training_args, runtime):
+def build_dreamzero_dataset(model_cfg, data_cfg, training_args):
     """Build the DreamZero LeRobot dataset (single or mixture).
 
     The framework selects this through ``--dataset-strategy dreamzero``. Sampler

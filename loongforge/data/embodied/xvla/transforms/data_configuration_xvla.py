@@ -29,7 +29,7 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
-class XVLADataConfig:
+class XvlaDataConfig:
     """X-VLA data-processing config (maps 1:1 to YAML ``data:`` section).
 
     Image resize / normalization is fully handled by ``XVLAPreprocessor``

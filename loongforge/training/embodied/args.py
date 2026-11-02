@@ -43,10 +43,9 @@ class _EmbodiedDataArgs:
         default="default",
         metadata={
             "help": "Under --dataset-format lerobot_datasets: the model-specific "
-                    "dataset build strategy ('default', 'vlda', 'fastwam', "
-                    "'lingbot_va', 'lingbot_vla_v2', 'gr00t_n1_7', 'cosmos3_droid', "
-                    "'dreamzero', or 'wall_oss_0_5'); unknown values raise "
-                    "ValueError."
+                    "dataset build strategy ('default', 'fastwam', "
+                    "'cosmos3_droid', or 'dreamzero'); unknown values fall back "
+                    "to 'default'."
         },
     )
 

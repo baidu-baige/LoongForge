@@ -35,21 +35,20 @@ from megatron.core.transformer.moe.moe_layer import MoELayer, MoESubmodules
 from megatron.core.enums import Fp8Recipe
 
 from loongforge.models.dispatch import multiacc_modules
+from loongforge.engines.megatron import get_args
 
 def _get_deepseek_layer_with_te_spec(
     num_experts: Optional[int] = None,
     moe_grouped_gemm: Optional[bool] = True,
     qk_layernorm: Optional[bool] = False,
     experimental_attention_variant: Optional[str] = None,
-    use_dsa_fused: bool = False,
 ) -> ModuleSpec:
     """Get the transformer layer spec for deepseek
-
+    
     Args:
         experimental_attention_variant (str, optional): The type of experimental attention variant.
                                                         Defaults to None.
     """
-
     mlp = _get_mlp_module_spec(
         num_experts=num_experts,
         moe_grouped_gemm=moe_grouped_gemm,
@@ -69,6 +68,7 @@ def _get_deepseek_layer_with_te_spec(
     if experimental_attention_variant is not None:
         # Deepseek Sparse Attention (DSA)
         if experimental_attention_variant == "dsa":
+            use_dsa_fused = getattr(get_args(), "use_dsa_fused", False)
             # By default, use the naive MegatronLM implementation of DSA.
             if not use_dsa_fused:
                 from megatron.core.transformer.experimental_attention_variant.dsa import (
@@ -225,7 +225,6 @@ def get_deepseek_decoder_block_and_mtp_spec(
         moe_grouped_gemm=False,
         qk_layernorm=config.qk_layernorm,
         experimental_attention_variant=config.experimental_attention_variant,
-        use_dsa_fused=getattr(config, "use_dsa_fused", False),
     )
 
     moe_layer_spec = _get_deepseek_layer_with_te_spec(
@@ -233,7 +232,6 @@ def get_deepseek_decoder_block_and_mtp_spec(
         moe_grouped_gemm=config.moe_grouped_gemm,
         qk_layernorm=config.qk_layernorm,
         experimental_attention_variant=config.experimental_attention_variant,
-        use_dsa_fused=getattr(config, "use_dsa_fused", False),
     )
 
     # In FP8 training, replace `linear_q_down_proj` and `linear_kv_down_proj`
@@ -319,7 +317,6 @@ def get_deepseek_decoder_block_and_mtp_spec(
                     moe_grouped_gemm=config.moe_grouped_gemm,
                     qk_layernorm=config.qk_layernorm,
                     experimental_attention_variant=config.experimental_attention_variant,
-                    use_dsa_fused=getattr(config, "use_dsa_fused", False),
                 )
         else:
             transformer_layer_spec_for_mtp = block_spec

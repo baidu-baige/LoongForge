@@ -16,10 +16,10 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
 from loongforge.data.embodied.transforms.collator import (
-    BaseCollator,
+    BasePreprocessor,
     PreparedBatch,
+    register_preprocessor,
 )
-from loongforge.data.embodied.registry import register_collator
 
 
 @dataclass
@@ -29,8 +29,8 @@ class LingbotVLAV2PreparedBatch(PreparedBatch):
     data: Dict[str, Any] = field(default_factory=dict)
 
 
-@register_collator("lingbot_vla_v2")
-class LingbotVLAV2Preprocessor(BaseCollator):
+@register_preprocessor("lingbot_vla_v2")
+class LingbotVLAV2Preprocessor(BasePreprocessor):
     """collate_fn delegating to the upstream VLADataCollatorWithPacking."""
 
     def __init__(self):
@@ -43,8 +43,7 @@ class LingbotVLAV2Preprocessor(BaseCollator):
 
     @classmethod
     def from_config(
-        cls, model_cfg, data_cfg, training_args=None, dataset_stats=None, dataset=None,
-        runtime=None,
+        cls, model_cfg, data_cfg, training_args=None, dataset_stats=None, dataset=None
     ) -> "LingbotVLAV2Preprocessor":
         """Build the preprocessor; no config knob affects the upstream collator."""
         return cls()

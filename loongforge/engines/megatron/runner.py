@@ -33,7 +33,7 @@ import time
 _TRAIN_START_TIME = time.time()
 import torch
 from collections import OrderedDict
-from loongforge.engines.megatron.checkpointing import load_checkpoint, _load_checkpoint_from_path
+from .checkpointing import load_checkpoint, _load_checkpoint_from_path
 from megatron.core import mpu
 from megatron.core.utils import (
     check_param_hashes_across_dp_replicas,
@@ -92,7 +92,7 @@ from megatron.training.initialize import (
     write_args_to_tensorboard,
     set_jit_fusion_options,
 )
-from loongforge.engines.megatron.checkpointing import (
+from .checkpointing import (
     save_checkpoint,
     checkpoint_exists,
 )
@@ -122,7 +122,6 @@ from megatron.training.training import (
     dummy_train_step,
     post_training_step_callbacks,
     checkpoint_and_decide_exit,
-    print_module_param_dtypes,
 )
 from loongforge.models.common.peft.lora import LoRA, VLMLoRA
 from loongforge.models.common.peft.utils import apply_peft_transformation
@@ -131,16 +130,27 @@ from dataclasses import asdict
 from loongforge.data import TrainingPhase
 from loongforge.engines.megatron import (
     get_args,
-    get_model_config as get_loongforge_model_config,
     global_vars,
 )
-from loongforge.engines.megatron.initialize import initialize_loongforge_megatron
+from .initialize import initialize_loongforge_megatron
 from loongforge.data.dp_balance.train_hooks import (
     train_step_decorator,
     train_log_decorator
 )
 
-from loongforge.engines.megatron.hf_bridge import load_hf_checkpoint_online, save_hf_checkpoint_online
+
+# Add project root to Python path
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+# Add tools directory to Python path
+tools_path = os.path.join(project_root, "tools")
+if tools_path not in sys.path:
+    sys.path.insert(0, tools_path)
+
+from mcore_bridge.checkpoint.hf_checkpoint_loader import load_hf_checkpoint_online
+from mcore_bridge.checkpoint.hf_checkpoint_saver import save_hf_checkpoint_online
 
 try:
     from inspector.hooks import register_hooks
@@ -150,6 +160,42 @@ except ImportError:
     HAS_INSPECTOR = False
 
 stimer = StragglerDetector()
+
+
+# ---------------------------------------------------------------------------
+# Full-iteration CUDA graph wrapper registry.
+# Models register their wrapper class via register_full_iteration_graph_wrapper()
+# during trainer construction; training_utils.train() looks up the wrapper here.
+# ---------------------------------------------------------------------------
+_FULL_ITER_GRAPH_REGISTRY: dict[str, type] = {}
+
+
+def register_full_iteration_graph_wrapper(model_name: str, wrapper_cls: type):
+    """Register a full-iteration CUDA graph wrapper for a given model."""
+    _FULL_ITER_GRAPH_REGISTRY[model_name] = wrapper_cls
+
+
+def get_full_iteration_graph_wrapper(model_name: str):
+    """Look up a registered full-iteration graph wrapper, or None."""
+    return _FULL_ITER_GRAPH_REGISTRY.get(model_name)
+
+
+# ---------------------------------------------------------------------------
+# Per-microbatch CUDA graph wrapper registry.
+# Models register their wrapper class via register_per_microbatch_graph_wrapper()
+# during trainer construction; training_utils.train() looks up the wrapper here.
+# ---------------------------------------------------------------------------
+_PER_MICROBATCH_GRAPH_REGISTRY: dict[str, type] = {}
+
+
+def register_per_microbatch_graph_wrapper(model_name: str, wrapper_cls: type):
+    """Register a per-microbatch CUDA graph wrapper for a given model."""
+    _PER_MICROBATCH_GRAPH_REGISTRY[model_name] = wrapper_cls
+
+
+def get_per_microbatch_graph_wrapper(model_name: str):
+    """Look up a registered per-microbatch CUDA graph wrapper, or None."""
+    return _PER_MICROBATCH_GRAPH_REGISTRY.get(model_name)
 
 
 def is_hf_checkpoint(load_path):
@@ -197,29 +243,6 @@ def update_ema(ema_model, model, rate=0.9999):
     for name, param in model_params.items():
         ema_params[name].mul_(rate).add_(param.data, alpha=1 - rate)
 
-
-_FULL_ITER_GRAPH_REGISTRY: dict[str, type] = {}
-_PER_MICROBATCH_GRAPH_REGISTRY: dict[str, type] = {}
-
-
-def register_full_iteration_graph_wrapper(model_name: str, wrapper_cls: type):
-    """Register a full-iteration CUDA graph wrapper for a given model."""
-    _FULL_ITER_GRAPH_REGISTRY[model_name] = wrapper_cls
-
-
-def get_full_iteration_graph_wrapper(model_name: str):
-    """Look up a registered full-iteration graph wrapper, or None."""
-    return _FULL_ITER_GRAPH_REGISTRY.get(model_name)
-
-
-def register_per_microbatch_graph_wrapper(model_name: str, wrapper_cls: type):
-    """Register a per-microbatch CUDA graph wrapper for a given model."""
-    _PER_MICROBATCH_GRAPH_REGISTRY[model_name] = wrapper_cls
-
-
-def get_per_microbatch_graph_wrapper(model_name: str):
-    """Look up a registered per-microbatch CUDA graph wrapper, or None."""
-    return _PER_MICROBATCH_GRAPH_REGISTRY.get(model_name)
 
 def enable_memory_history_record(memory_snapshot_path):
     """Enable memory history record"""
@@ -333,7 +356,6 @@ def pretrain(
     non_loss_data_func=None,
     store=None,
     inprocess_call_wrapper: Optional[CallWrapper] = None,
-    hetero_step=None,
 ):
     """Main training program.
 
@@ -386,12 +408,6 @@ def pretrain(
 
     args = get_args()
     timers = get_timers()
-
-    if args.enable_full_hetero_dp and hetero_step is None:
-        raise ValueError(
-            "--enable-full-hetero-dp needs a HeteroStepContext from the training method; "
-            f"method for model_family '{args.model_family}' does not provide one"
-        )
 
     if args.log_progress:
         append_to_progress_log("Starting job")
@@ -540,7 +556,6 @@ def pretrain(
                 config=config,
                 checkpointing_context=checkpointing_context,
                 non_loss_data_func=non_loss_data_func,
-                hetero_step=hetero_step,
             )
 
         print_datetime("after training is done")
@@ -627,6 +642,7 @@ def pretrain(
 
     ft_integration.shutdown()
 
+
 def check_vlm_peft_config(model_config):
     """Check whether the VLM PEFT configuration is compatible with the current model architecture."""
     if not hasattr(model_config, 'peft_config') or model_config.peft_config is None:
@@ -686,7 +702,14 @@ def check_vlm_peft_config(model_config):
     peft_config.target_modules = target_modules
     return peft_config
 
+def print_module_param_dtypes(module):
+    """Print parameter data types of a given PyTorch module."""
+    for name, param in module.named_parameters():
+        print_rank_0(f"param {name}: {param.data.dtype}")
 
+    if hasattr(module, "named_buffers"):
+        for name, buffer in module.named_buffers():
+            print_rank_0(f"buffer {name}: {buffer.dtype}")
 
 
 def get_model(
@@ -1452,7 +1475,6 @@ def train_step(
     opt_param_scheduler,
     config,
     forward_backward_func,
-    hetero_step=None,
 ):
     """Single training step."""
     args = get_args()
@@ -1465,14 +1487,18 @@ def train_step(
             get_num_micro_batches_per_decoder_dp,
             get_num_real_micro_batches_per_decoder_dp,
         )
-        get_batch = hetero_step.get_batch
-        _create_mock_batch = hetero_step.create_mock_batch
+        from loongforge.training.vlm.pretrain_vlm import (
+            get_batch, get_embedding_list,
+            get_visual_pos_masks_list, get_deepstack_visual_embeds_list,
+            get_deepstack_grad_list, _create_mock_batch,
+            get_encoder_data_iterator,
+        )
 
         num_microbatch, encoder_rounds = get_num_micro_batches_per_decoder_dp()
         num_real_microbatch = get_num_real_micro_batches_per_decoder_dp()
         unwrapped_model = unwrap_model(model[0])
 
-        encoder_iter = hetero_step.encoder_data_iterator
+        encoder_iter = get_encoder_data_iterator()
         if encoder_iter is not None:
             if isinstance(data_iterator, list):
                 data_iterator = [RerunDataIterator(data_iterator[0])] + data_iterator[1:]
@@ -1495,15 +1521,15 @@ def train_step(
             all_raw_batches = [next(backup_iter) for _ in range(num_real_microbatch)]
 
         batch_list = []
-        round_outputs = []
         last_real_batch = None
         has_any_real = (pp_layer * tp_size < num_real_microbatch)
-        embedding_list = hetero_step.embedding_list
-        visual_pos_masks_list = hetero_step.visual_pos_masks_list
-        deepstack_visual_embeds_list = hetero_step.deepstack_visual_embeds_list
+        embedding_list = get_embedding_list()
+        visual_pos_masks_list = get_visual_pos_masks_list()
+        deepstack_visual_embeds_list = get_deepstack_visual_embeds_list()
         for round in range(encoder_rounds):
             batch_list.clear()
             front = pp_layer * tp_size + round * model_size
+            all_mock_in_range = (front >= num_real_microbatch)
             for tp_idx in range(tp_size):
                 global_mb_idx = front + tp_idx
                 if global_mb_idx >= num_real_microbatch:
@@ -1529,13 +1555,58 @@ def train_step(
                     last_real_batch = batch
                     batch_list.append(batch)
 
+            input_embeds_list = []
+            for i in range(tp_size):
+                input_embeds = unwrapped_model.encoder_model.text_forward(
+                    batch_list[i]["tokens"],
+                    batch_list[i]["position_ids"]
+                )
+                input_embeds_list.append(input_embeds)
+
+            batch_id = mpu.get_tensor_model_parallel_rank()
+            (
+                local_images,
+                local_image_grid_thw,
+                local_pixel_values_videos,
+                local_video_grid_thw,
+                local_input_ids,
+                local_attn_mask,
+                local_labels,
+                local_cu_lengths,
+                local_max_lengths,
+                local_position_ids,
+                local_loss_mask,
+                local_packed_seq_params,
+            ) = batch_list[batch_id].values()
+
             (
                 combined_embeddings,
+                decode_input,
                 visual_pos_masks,
                 deepstack_visual_embeds,
-            ) = unwrapped_model.hetero_encoder_forward(batch_list, round)
-            # Shape references for the gradient scatter after the decoder backward.
-            round_outputs.append((combined_embeddings, deepstack_visual_embeds))
+            ) = unwrapped_model.encoder_model(
+                input_ids=local_input_ids,
+                position_ids=local_position_ids,
+                image_inputs=dict(
+                    images=local_images,
+                    image_grid_thw=local_image_grid_thw,
+                ) if local_images is not None else None,
+                video_inputs=dict(
+                    pixel_values_videos=local_pixel_values_videos,
+                    video_grid_thw=local_video_grid_thw,
+                ) if local_pixel_values_videos is not None else None,
+                inference_params=None,
+                inputs_embeds=input_embeds_list[batch_id],
+                enable_encoder_hetero_dp=True,
+            )
+
+            unwrapped_model.vit_contexts.setdefault(round, {
+                "local_embedding": combined_embeddings,
+                "grads": None,
+                "local_visual_pos_masks": visual_pos_masks,
+                "local_deepstack_visual_embeds": deepstack_visual_embeds,
+                "local_deepstack_visual_embeds_grads": None,
+            })
 
             embedding_list.append(
                 gather_variable_shape_embeddings(
@@ -1559,18 +1630,19 @@ def train_step(
                     gather_variable_shape_embeddings(embed, group=mpu.get_model_parallel_group())
                     for embed in deepstack_visual_embeds
                 ])
-                hetero_step.deepstack_grad_list.append(
+                get_deepstack_grad_list().append(
                     [[None] * model_size for _ in range(len(deepstack_visual_embeds))]
                 )
             else:
                 deepstack_visual_embeds_list.append(None)
-                hetero_step.deepstack_grad_list.append(None)
+                get_deepstack_grad_list().append(None)
         batch_list.clear()
 
         # Offload gathered embeddings to CPU (only rank 0 holds them)
         if args.full_hetero_dp_cpu_offload:
+            from loongforge.training.vlm.pretrain_vlm import get_cpu_offload_manager
             from loongforge.engines.megatron.full_hetero_cpu_offload import offload_list_items
-            _offload_mgr = hetero_step.offload
+            _offload_mgr = get_cpu_offload_manager()
             _local_rank_for_offload = torch.distributed.get_rank(mpu.get_model_parallel_group())
             if _local_rank_for_offload == 0:
                 for _round_idx in range(encoder_rounds):
@@ -1648,6 +1720,9 @@ def train_step(
         )
 
     if args.enable_full_hetero_dp:
+        from loongforge.training.vlm.pretrain_vlm import (
+            get_grad_list, get_deepstack_grad_list, clear_full_hetero_info
+        )
         from loongforge.engines.megatron.initialize import (
             get_num_micro_batches_per_decoder_dp,
             get_num_real_micro_batches_per_decoder_dp,
@@ -1657,11 +1732,12 @@ def train_step(
         num_microbatch, encoder_rounds = get_num_micro_batches_per_decoder_dp()
         num_real_microbatch = get_num_real_micro_batches_per_decoder_dp()
         model_size = get_model_size()
-        grad_list = hetero_step.grad_list
+        grad_list = get_grad_list()
 
         # Reload offloaded grads from CPU before reshaping
         if args.full_hetero_dp_cpu_offload:
-            _reload_mgr = hetero_step.offload
+            from loongforge.training.vlm.pretrain_vlm import get_cpu_offload_manager
+            _reload_mgr = get_cpu_offload_manager()
             _reload_mgr.wait_all_offloads()
             for _gi in range(len(grad_list)):
                 if grad_list[_gi] is None:
@@ -1710,38 +1786,47 @@ def train_step(
                 src_rank = 0
                 group = mpu.get_model_parallel_group()
                 local_rank = torch.distributed.get_rank(group=group)
-                local_embedding, local_deepstack_visual_embeds = round_outputs[round]
-                round_outputs[round] = None
-                grads = scatter_variable_shape_embeddings(
+                ctx = local_model.vit_contexts[round]
+                ctx["grads"] = scatter_variable_shape_embeddings(
                     reshaped_grad_list[round] if local_rank == src_rank else None,
-                    local_embedding_ref=local_embedding,
+                    local_embedding_ref=ctx["local_embedding"],
                     group=mpu.get_model_parallel_group()
                 )
 
-                deepstack_grads = None
-                deepstack_grads_for_round = hetero_step.deepstack_grad_list[round]
+                deepstack_grads_for_round = get_deepstack_grad_list()[round]
                 if deepstack_grads_for_round is not None:
-                    deepstack_grads = []
-                    for i in range(len(local_deepstack_visual_embeds)):
+                    ctx["local_deepstack_visual_embeds_grads"] = []
+                    for i in range(len(ctx["local_deepstack_visual_embeds"])):
                         # Pad None entries (mock positions) with zero tensors for scatter
                         if local_rank == src_rank:
                             padded_ds_grads = []
                             for g in deepstack_grads_for_round[i]:
                                 if g is None:
-                                    padded_ds_grads.append(torch.zeros_like(local_deepstack_visual_embeds[i]))
+                                    padded_ds_grads.append(torch.zeros_like(ctx["local_deepstack_visual_embeds"][i]))
                                 else:
                                     padded_ds_grads.append(g)
                         else:
                             padded_ds_grads = None
-                        deepstack_grads.append(
+                        ctx["local_deepstack_visual_embeds_grads"].append(
                             scatter_variable_shape_embeddings(
                                 padded_ds_grads,
-                                local_embedding_ref=local_deepstack_visual_embeds[i],
+                                local_embedding_ref=ctx["local_deepstack_visual_embeds"][i],
                                 group=mpu.get_model_parallel_group()
                             )
                         )
 
-                local_model.hetero_encoder_backward(round, grads, deepstack_grads)
+                backward_tensors = [ctx["local_embedding"]]
+                backward_grads = [ctx["grads"]]
+                if ctx["local_deepstack_visual_embeds_grads"] is not None:
+                    backward_tensors += ctx["local_deepstack_visual_embeds"]
+                    backward_grads += ctx["local_deepstack_visual_embeds_grads"]
+
+                torch.autograd.backward(
+                    tensors=backward_tensors,
+                    grad_tensors=backward_grads,
+                    retain_graph=False,
+                )
+                del local_model.vit_contexts[round]
 
             if args.overlap_grad_reduce and _encoder_bucket_groups:
                 for bg in _encoder_bucket_groups:
@@ -1752,9 +1837,10 @@ def train_step(
         finally:
             _rsm.state = _prev_rsm_state
 
-        local_model.clear_hetero_contexts()
+        for _round_key in list(local_model.vit_contexts.keys()):
+            del local_model.vit_contexts[_round_key]
         
-        hetero_step.end_step()
+        clear_full_hetero_info()
 
     should_checkpoint, should_exit, exit_code = (
         rerun_state_machine.should_checkpoint_and_exit()
@@ -2356,7 +2442,6 @@ def train(
     config,
     checkpointing_context,
     non_loss_data_func,
-    hetero_step=None,
 ):
     """Train the model function."""
     args = get_args()
@@ -2488,12 +2573,35 @@ def train(
     # FullCudaGraphWrapper (simpler, no loss-allreduce suppression or self-heal).
     if (getattr(args, "cuda_graph_impl", "none") == "local" and
             getattr(args, "cuda_graph_scope", "full") == "full_iteration"):
-        from megatron.core.full_cuda_graph import FullCudaGraphWrapper
-        forward_backward_func = FullCudaGraphWrapper(
+        wrapper_cls = get_full_iteration_graph_wrapper(
+            getattr(args, "model_family", ""))
+        if wrapper_cls is None:
+            from megatron.core.full_cuda_graph import FullCudaGraphWrapper
+            wrapper_cls = FullCudaGraphWrapper
+        forward_backward_func = wrapper_cls(
             forward_backward_func,
             cuda_graph_warmup_steps=getattr(args, "cuda_graph_warmup_steps", 3),
         )
-        print_rank_0("[FullCudaGraphWrapper] Enabled full-iteration CUDA graph")
+        print_rank_0(f"[{wrapper_cls.__name__}] Enabled full-iteration CUDA graph")
+
+    # Per-microbatch CUDA graph mode: one sub-graph per microbatch with
+    # externalized RNG. Beta.sample + torch.randn run eagerly before each
+    # replay, achieving bit-exact loss alignment with pure eager at
+    # full_iteration performance.
+    # Wrapper class is registered by model-specific trainer (e.g. sft_groot.py).
+    if (getattr(args, "cuda_graph_impl", "none") == "local" and
+            getattr(args, "cuda_graph_scope", "full") == "per_microbatch"):
+        wrapper_cls = get_per_microbatch_graph_wrapper(
+            getattr(args, "model_family", ""))
+        if wrapper_cls is not None:
+            forward_backward_func = wrapper_cls(
+                forward_backward_func,
+                cuda_graph_warmup_steps=getattr(args, "cuda_graph_warmup_steps", 3),
+            )
+            print_rank_0(
+                f"[{wrapper_cls.__name__}] Per-microbatch CUDA graph mode enabled. "
+                "RNG externalized for bit-exact alignment with pure eager."
+            )
 
     prof = None
     if (
@@ -2657,7 +2765,6 @@ def train(
             opt_param_scheduler,
             config,
             forward_backward_func,
-            hetero_step,
         )
         ft_integration.on_training_step_end()
 

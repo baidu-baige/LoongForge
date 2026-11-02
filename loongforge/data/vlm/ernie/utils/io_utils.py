@@ -25,7 +25,6 @@ from pathlib import Path
 import requests
 from PIL import Image
 from PIL.ExifTags import TAGS
-
 from decord import VideoReader
 
 RAW_VIDEO_DIR = "./download_tmp/raw_video/"
@@ -152,7 +151,7 @@ def get_downloadable_image(
         """
         Convert image from I;16 mode to L mode
         """
-        # Since the point function in I mode only supports addition, subtraction, and
+        # Since the point function in I mode only supports addition, subtraction, and 
         # multiplication, the following * (1 / 256) cannot be changed to division.
         return img.point(lambda i: i * (1 / 256)).convert("L")
 

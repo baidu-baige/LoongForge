@@ -12,51 +12,6 @@ from typing import Dict, Optional, Tuple
 
 import torch
 
-from megatron.core import mpu
-
-
-class HeteroStepContext:
-    """State shared by the engine, the model and the EP-overlap callables for one full-hetero-DP run.
-
-    The lists live for one training step; the offload manager and the encoder data
-    iterator live for the whole run. ``train_step`` fills the lists, the model forward
-    and backward hooks read and write them, and ``end_step`` clears them.
-    """
-
-    def __init__(self, *, get_batch, create_mock_batch, reset_step_state, offload_enabled: bool):
-        self.embedding_list = []
-        self.grad_list = []
-        self.visual_pos_masks_list = []
-        self.deepstack_visual_embeds_list = []
-        self.deepstack_grad_list = []
-        self.offload = CpuOffloadManager(enabled=offload_enabled)
-        self.get_batch = get_batch
-        self.create_mock_batch = create_mock_batch
-        self.encoder_data_iterator = None
-        self._reset_step_state = reset_step_state
-
-    def reload(self, items: list, index: int, prefix: str) -> Optional[torch.Tensor]:
-        """Reload ``items[index]`` from CPU when offloading is on."""
-        return reload_list_item(self.offload, items, index, prefix)
-
-    def end_step(self) -> None:
-        """Reset everything scoped to one step; keeps the offload manager and the iterator."""
-        self._reset_step_state()
-        for items in (
-            self.embedding_list,
-            self.grad_list,
-            self.visual_pos_masks_list,
-            self.deepstack_visual_embeds_list,
-            self.deepstack_grad_list,
-        ):
-            items.clear()
-        if self.offload.enabled:
-            self.offload.clear()
-
-
-# ---------------------------------------------------------------------------
-# CPU offload of encoder embeddings and decoder gradients
-# ---------------------------------------------------------------------------
 
 class CpuOffloadManager:
     """Manages async GPU<->CPU tensor transfers via pinned memory and CUDA streams.
@@ -213,27 +168,3 @@ def reload_list_item(
         manager.reload_sync(key)
         items[index] = tensor
     return items[index]
-
-
-# ---------------------------------------------------------------------------
-# Parallel sizes for the strided encoder samplers in ``data/vlm/encoder_strided_sampler.py``
-# ---------------------------------------------------------------------------
-
-def encoder_parallel_facts():
-    """Return the PP/TP/model-size/microbatch sizes the strided encoder samplers need."""
-    from .initialize import (
-        get_model_size,
-        get_num_micro_batches_per_decoder_dp,
-        get_num_real_micro_batches_per_decoder_dp,
-    )
-
-    pp_rank = mpu.get_pipeline_model_parallel_rank()
-    tp_size = mpu.get_tensor_model_parallel_world_size()
-    _, encoder_rounds = get_num_micro_batches_per_decoder_dp()
-    return dict(
-        pp_rank=pp_rank,
-        tp_size=tp_size,
-        model_size=get_model_size(),
-        num_real_microbatch=get_num_real_micro_batches_per_decoder_dp(),
-        prefetch_count=tp_size * encoder_rounds,
-    )

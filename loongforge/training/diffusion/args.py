@@ -40,12 +40,10 @@ def add_diffusion_args(parser: argparse.ArgumentParser) -> argparse.ArgumentPars
     )
     group.add_argument(
         "--latent-patch-size",
-        nargs=3,
-        type=int,
+        type=tuple,
         default=(1, 1, 1),
-        metavar=("T", "H", "W"),
-        help="Patch size (time, height, width) for latent space tokenization, given as three "
-             "space-separated integers. Default: (1, 1, 1)"
+        help="Patch size (time, height, width) for latent space tokenization. "
+             "Default: (1, 1, 1)"
     )
     group.add_argument(
         "--latent-space-scale",

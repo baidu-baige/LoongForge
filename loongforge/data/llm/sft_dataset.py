@@ -18,36 +18,34 @@ from megatron.core.utils import log_single_rank
 from megatron.core.datasets.utils import Split
 from transformers import ProcessorMixin
 
-from loongforge.data import IGNORE_INDEX
-from loongforge.data.chat_templates.template import ChatTemplate
+from loongforge.data.constants import (
+    SFTDataFormats,
+    DEFAULT_DATASET_NAME,
+    SFT_SUPPORT_DATA_TYPE,
+)
 
 from .blended_hf_dataset_config import BlendedHuggingFaceDatasetConfig
-from .sft_format_utils import SFTDataFormats, convert_to_unified_format
+from .hf_dataset import HuggingFaceDataset
+from loongforge.data.chat_templates.template import ChatTemplate
+from .sft_format_utils import convert_to_unified_format
 from .sft_supervised_utils import convert_to_tokenized_data
 
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-DEFAULT_DATASET_NAME = "default"
-
-SFT_SUPPORT_DATA_TYPE = {
-    "arrow": "arrow",
-    "csv": "csv",
-    "json": "json",
-    "jsonl": "json",
-    "parquet": "parquet",
-    "txt": "text",
-}
-
-
 def get_default_sft_dataset_config() -> Optional[str]:
-    """Return the default SFT dataset config shipped with the repository."""
-    config_dir = Path(__file__).resolve().parents[3] / "configs" / "data"
-    for name in ("sft_dataset_config.yaml", "sft_dataset_config.yml"):
-        candidate = config_dir / name
+    """get default sft dataset config"""
+    config_dir = Path(__file__).parents[3] / "configs" / "data"
+    candidates = [
+        config_dir / "sft_dataset_config.yaml",
+        config_dir / "sft_dataset_config.yml",
+    ]
+
+    for candidate in candidates:
         if candidate.exists():
             return str(candidate)
+
     return None
 
 
@@ -171,7 +169,7 @@ class SFTDatasetConfig(BlendedHuggingFaceDatasetConfig):
     processor: Optional[ProcessorMixin] = None
     """The processor for the dataset"""
 
-    ignore_index: int = IGNORE_INDEX
+    ignore_index: int = -100
     """The index to ignore in the dataset"""
 
     train_on_prompt: bool = False
@@ -268,7 +266,7 @@ class SFTDatasetConfig(BlendedHuggingFaceDatasetConfig):
         super().__post_init__()
 
 
-class SFTDataset:
+class SFTDataset(HuggingFaceDataset):
     """Build the sft dataset."""
 
     def __init__(
@@ -277,12 +275,10 @@ class SFTDataset:
         dataset_path: str,
         config: SFTDatasetConfig,
         print_example: bool = True,
-        rank: int = 0,
-        distributed: bool = False,
     ):
+        super().__init__(dataset_name, dataset_path, config)
+
         self.config = config
-        self.rank = rank
-        self.distributed = distributed
         self.dataset_path = dataset_path
         self.dataset_name = dataset_name
 
@@ -315,16 +311,17 @@ class SFTDataset:
         self.dataset_format = self._get_format_config()
 
         path_to_cache = self.config.path_to_cache
-        if path_to_cache is None or not self.distributed:
+        if path_to_cache is None or not torch.distributed.is_initialized():
             return self._build_low_level_dataset(path_to_cache=path_to_cache)
 
+        rank = torch.distributed.get_rank()
         # First, build on rank 0
-        if self.rank == 0:
+        if rank == 0:
             self._build_low_level_dataset(path_to_cache=path_to_cache)
 
         torch.distributed.barrier()
 
-        if self.rank != 0:
+        if rank != 0:
             self._build_low_level_dataset(path_to_cache=path_to_cache)
 
     def _build_from_tokenized_data(self):

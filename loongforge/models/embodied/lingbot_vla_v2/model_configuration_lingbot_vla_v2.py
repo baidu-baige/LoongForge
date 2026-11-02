@@ -20,6 +20,10 @@ typed dataclass into that internal config so the two never diverge.
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from loongforge.engines.torch.optimizer.tensor_wise_optimizer.config import (
+    TensorWiseConfig,
+)
+
 
 @dataclass(frozen=True)
 class LingbotVLAV2ModelConfig:
@@ -105,8 +109,7 @@ class LingbotVLAV2ModelConfig:
     muon_exclude_name_patterns: Optional[List[str]] = None
 
     # ── tensor_wise collectives (YAML ``model.tensor_wise``) ──
-    # The training parser supplies the engine-owned schema and defaults.
-    tensor_wise: Any = None
+    tensor_wise: TensorWiseConfig = field(default_factory=TensorWiseConfig)
 
     # ── Depth / video alignment (teacher distillation) ──
     # Carried verbatim as a nested dict so the reference heads and the in-loop

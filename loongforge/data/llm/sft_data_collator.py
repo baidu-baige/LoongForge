@@ -3,7 +3,7 @@
 
 """sft datacollator"""
 
-from typing import TYPE_CHECKING, Optional, Union, Any, Dict, Sequence
+from typing import TYPE_CHECKING, Optional, Union, Any, Sequence, Dict
 from dataclasses import dataclass
 
 import numpy as np
@@ -12,10 +12,9 @@ from transformers.utils import PaddingStrategy
 
 import torch
 
-from loongforge.data import IGNORE_INDEX
-
 if TYPE_CHECKING:
-    from transformers import PreTrainedTokenizerBase, ProcessorMixin
+    from transformers import PreTrainedTokenizerBase
+    from transformers.processing_utils import ProcessorMixin
     from transformers.utils import PaddingStrategy
     from loongforge.data.chat_templates.plugins.mm_plugin import MMPlugin
 
@@ -31,7 +30,7 @@ class DataCollatorForSupervisedDataset:
     padding: Optional[Union[bool, str, "PaddingStrategy"]] = None
     max_length: Optional[int] = None
     pad_to_multiple_of: Optional[int] = None
-    label_pad_token_id: int = IGNORE_INDEX
+    label_pad_token_id: int = -100
     return_tensors: str = "pt"
     chunkpipe_base_length: Optional[int] = None
     chunkpipe_mtp_num_layers: int = 0

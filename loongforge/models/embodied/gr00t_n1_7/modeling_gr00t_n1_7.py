@@ -26,13 +26,13 @@ import torch.nn.functional as F
 from torch.distributions import Beta
 from transformers.feature_extraction_utils import BatchFeature
 
-from loongforge.data.embodied.gr00t_n1_6.transforms.gr00t_n1_6_processor import (
+from loongforge.data.embodied.gr00t_n1_6.transforms.processor_gr00t_n1_6 import (
     StateActionProcessor,
 )
-from loongforge.data.embodied.gr00t_n1_7.transforms.gr00t_n1_7_collator import (
+from loongforge.data.embodied.gr00t_n1_7.transforms.gr00t_collator import (
     Gr00tN1d7DataCollator,
 )
-from loongforge.models.embodied.gr00t_n1_7.embodiment_configs import (
+from loongforge.data.embodied.gr00t_n1_7.transforms.gr00t_transform import (
     EMBODIMENT_STAT_CONFIGS,
     EMBODIMENT_TAG_TO_PROJECTOR_INDEX,
     MODALITY_CONFIGS,

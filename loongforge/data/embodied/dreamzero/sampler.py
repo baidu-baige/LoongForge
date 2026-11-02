@@ -37,9 +37,10 @@ Notes:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Iterator
+from typing import TYPE_CHECKING, Any, Iterator, Optional
 
 import numpy as np
+import torch.distributed as dist
 from torch.utils.data import Sampler
 
 if TYPE_CHECKING:
@@ -212,8 +213,8 @@ class DreamZeroShardedSampler(Sampler[int]):
     def __init__(
         self,
         dataset: "DreamZeroLeRobotDataset",
-        num_replicas: int,
-        rank: int,
+        num_replicas: Optional[int] = None,
+        rank: Optional[int] = None,
         seed: int = 42,
         shard_sampling_rate: float = 0.1,
         num_steps_per_shard: int = 10_000,
@@ -225,6 +226,10 @@ class DreamZeroShardedSampler(Sampler[int]):
         dataloader_num_workers: int = 0,
         micro_batch_size: int = 1,
     ) -> None:
+        if num_replicas is None:
+            num_replicas = dist.get_world_size() if dist.is_available() and dist.is_initialized() else 1
+        if rank is None:
+            rank = dist.get_rank() if dist.is_available() and dist.is_initialized() else 0
         if not 0.0 <= shard_sampling_rate <= 1.0:
             raise ValueError(f"shard_sampling_rate must be in [0,1], got {shard_sampling_rate}")
         if rank < 0 or rank >= num_replicas:

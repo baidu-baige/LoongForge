@@ -17,7 +17,7 @@ from pathlib import Path
 import logging
 from typing import Any
 
-from ..precomputed_artifact import (
+from loongforge.models.embodied.dreamzero.precomputed_cache.artifact import (
     DreamZeroPrecomputedFeatureArtifact,
     cache_sample_path,
     extract_tensor_from_payload,

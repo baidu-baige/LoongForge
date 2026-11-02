@@ -7,6 +7,8 @@ from typing import Any
 from dataclasses import dataclass
 from functools import cached_property
 
+from loongforge.engines.megatron import get_args
+
 
 @dataclass
 class MultiAccModules:
@@ -57,6 +59,7 @@ def _gpu_backend_transformer_layer_modules() -> MultiAccModules:
     )
     from loongforge.models.common.local_layers.local_norm import LocalNorm
 
+    args = get_args()
 
     return MultiAccModules(
         # dense linear

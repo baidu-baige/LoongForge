@@ -15,13 +15,13 @@ import torch
 from transformers.feature_extraction_utils import BatchFeature
 
 from loongforge.data.embodied.transforms.collator import (
-    BaseCollator,
+    BasePreprocessor,
     PreparedBatch,
+    register_preprocessor,
 )
 from loongforge.data.embodied.gr00t_n1_7.transforms.data_configuration_gr00t_n1_7 import (
     GrootN1d7DataConfig,
 )
-from loongforge.data.embodied.registry import register_collator
 from loongforge.models.embodied.gr00t_n1_7.model_configuration_gr00t_n1_7 import GrootN1d7Config
 
 
@@ -121,9 +121,9 @@ class Gr00tN1d7DataCollator:
         return BatchFeature(data={"inputs": batch})
 
 
-@register_collator("Gr00tN1d7")
-class GrootN1d7Preprocessor(BaseCollator):
-    """Batch-level collator for GR00T-N1.7."""
+@register_preprocessor("Gr00tN1d7")
+class GrootN1d7Preprocessor(BasePreprocessor):
+    """Batch-level preprocessor for GR00T-N1.7."""
 
     def __init__(
         self,
@@ -144,15 +144,14 @@ class GrootN1d7Preprocessor(BaseCollator):
         training_args=None,
         dataset_stats=None,
         dataset=None,
-        runtime=None,
     ) -> "GrootN1d7Preprocessor":
         """Construct from LoongForge model config."""
         policy_cfg = GrootN1d7Config.from_config(model_cfg)
         data_cfg = GrootN1d7DataConfig() if data_cfg is None else data_cfg
         max_length = None
-        if runtime is not None:
-            graph_pad_length = runtime.graph_pad_length
-            graph_requested = runtime.graph_enabled
+        if training_args is not None:
+            graph_pad_length = training_args.cuda_graph_pad_length
+            graph_requested = training_args.cuda_graph_impl == "local"
             if graph_requested and graph_pad_length is not None and graph_pad_length > 0:
                 # Padding is opt-in because it changes the attention surface
                 # and can change training numerics. With zero/unset, preserve
@@ -192,7 +191,7 @@ class GrootN1d7Preprocessor(BaseCollator):
     def _to_prepared_batch(self, processed: Dict[str, Any]) -> GrootN1d7PreparedBatch:
         action = processed.get("action")
         if action is None:
-            raise KeyError("GR00T-N1.7 collator did not produce required 'action' tensor")
+            raise KeyError("GR00T-N1.7 preprocessor did not produce required 'action' tensor")
 
         action_mask = processed.get("action_mask")
         if action_mask is None:
