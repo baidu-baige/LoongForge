@@ -89,7 +89,7 @@ class VLDAFinetuneTrainer(FinetuneTrainer):
         }
 
     def _handle_resume(self, path, step, epoch):
-        with (Path(path) / "vlda_config.json").open() as stream:
+        with (Path(path) / "config.json").open() as stream:
             manifest = json.load(stream)
         stats_path = Path(path) / "assets/norm_stats.json"
         if hashlib.sha256(stats_path.read_bytes()).hexdigest() != manifest["norm_stats_sha256"]:
@@ -143,7 +143,7 @@ class VLDAFinetuneTrainer(FinetuneTrainer):
                     "dataset_fingerprint": dataset.fingerprint,
                     "norm_stats_sha256": hashlib.sha256((assets / "norm_stats.json").read_bytes()).hexdigest(),
                 }
-                with (path / "vlda_config.json").open("w") as stream:
+                with (path / "config.json").open("w") as stream:
                     json.dump(manifest, stream, indent=2)
             except Exception as exc:
                 error[0] = str(exc)

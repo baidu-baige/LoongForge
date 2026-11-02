@@ -69,6 +69,11 @@ class EvalServerArgs:
     # ``server:`` section; models that ignore it keep the default.
     embodiment_tag: str = "behavior_r1_pro"
 
+    # Eval-time preprocessing / unnormalization modes (e.g. Pi0.5).
+    # Defaults preserve historical behavior (ImageTransform "identity", Normalizer "q99").
+    eval_image_normalize_mode: str = "identity"
+    eval_normalization_mode: str = "q99"
+
 
 def parse_eval_server_config(config_path: str) -> tuple[EvalServerArgs, Dict[str, Any]]:
     """Parse an eval YAML config and return (EvalServerArgs, raw_model_dict).
@@ -97,6 +102,11 @@ def parse_eval_server_config(config_path: str) -> tuple[EvalServerArgs, Dict[str
     # This avoids passing unknown server: keys (host, python, log, etc.) to OmegaConf structured merge.
     _EVAL_SERVER_FIELDS = {f.name for f in __import__("dataclasses").fields(EvalServerArgs)}
     server_known = {k: v for k, v in server.items() if k in _EVAL_SERVER_FIELDS}
+    # For eval preprocessing modes, explicit ``server:`` values take precedence.
+    # ``model:`` is a compatibility fallback; dataclass defaults apply if neither is set.
+    for _mode_key in ("eval_image_normalize_mode", "eval_normalization_mode"):
+        if _mode_key not in server_known and _mode_key in model:
+            server_known[_mode_key] = model[_mode_key]
     model_type = model.get("model_type")
     if not model_type:
         raise ValueError(

@@ -31,6 +31,13 @@ export EMBODIED_LOG_ROOT=${EMBODIED_LOG_ROOT:-"${EMBODIED_CI_ROOT}/logs"}
 # (e.g. when running the same checkout from multiple machines).
 export EMBODIED_BASELINE_ROOT=${EMBODIED_BASELINE_ROOT:-"${_EMBODIED_SUITE_ROOT}/baseline"}
 
+# Per-target overrides injected into the training script by execution/executor.py
+# (EMBODIED_<MODEL NAME UPPERCASE>_<VAR> -> <VAR>). The DreamZero 14B full run compiles
+# whole attention blocks; without deterministic mode its per-iteration loss and grad_norm
+# differ by more than the 2% gate between otherwise identical runs, which the regression
+# cannot distinguish from a real regression.
+export EMBODIED_DREAMZERO_WAN21_14B_FULL_FSDP_DETERMINISTIC_MODE=${EMBODIED_DREAMZERO_WAN21_14B_FULL_FSDP_DETERMINISTIC_MODE:-true}
+
 # ── Artifact source and optional preparation tool ─────────────
 export BOS_VLA_ARTIFACTS_ROOT=${BOS_VLA_ARTIFACTS_ROOT:-"bos:/path/to/vla_artifacts/"}
 export BCECMD_DIR=${BCECMD_DIR:-"${EMBODIED_CI_ROOT}/tools"}

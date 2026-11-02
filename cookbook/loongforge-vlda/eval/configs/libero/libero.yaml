@@ -1,7 +1,7 @@
 # LoongForge-VLDA Stage 2 LIBERO evaluation. Fill /path/to/... before running.
 # Default: four suites, all tasks, 50 episodes/task.
 # Model settings below match the default LIBERO training recipe.
-# Match them to the checkpoint's vlda_config.json if using a different recipe.
+# Match them to the checkpoint's config.json if using a different recipe.
 benchmark:
   name: libero
   suite: libero_object

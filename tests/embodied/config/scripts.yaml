@@ -31,3 +31,6 @@ lingbot_va_robotwin_fsdp:          lingbot_va/finetuning/sft_lingbot_va_robotwin
 
 # --- xvla ---
 xvla_ddp:                          xvla/finetuning/sft_xvla_ddp.sh
+
+# --- lingbot_vla_v2 ---
+lingbot_vla_v2_tensor_wise:        lingbot_vla_v2/finetuning/sft_lingbot_vla_v2.sh

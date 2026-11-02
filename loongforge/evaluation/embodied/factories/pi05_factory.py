@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 import types
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from loongforge.evaluation.embodied.factories.registry import register_factory
 from loongforge.evaluation.embodied.servers.eval_server_config import EvalServerArgs
@@ -20,26 +20,10 @@ from loongforge.models.embodied.pi05.model_configuration_pi05 import Pi05ModelCo
 from loongforge.models.embodied.registry import build_model
 
 
-def _q99_unnormalize_actions(actions, action_stats: Optional[dict]):
-    """Unnormalize PI05 quantile-normalized actions with dataset action stats."""
-    import torch
-
-    if action_stats is None:
-        return actions
-    if "q01" not in action_stats or "q99" not in action_stats:
-        raise ValueError(
-            "PI05 is configured for quantile action unnormalization and requires "
-            "dataset_stats['action'].q01 and q99"
-        )
-    q01 = torch.as_tensor(action_stats["q01"], dtype=actions.dtype, device=actions.device)
-    q99 = torch.as_tensor(action_stats["q99"], dtype=actions.dtype, device=actions.device)
-    dim = min(actions.shape[-1], q01.shape[-1])
-    out = actions.clone()
-    out[..., :dim] = (out[..., :dim] + 1.0) / 2.0 * (q99[:dim] - q01[:dim]) + q01[:dim]
-    return out
-
-
-def _predict_action(self, images, instructions, state=None, dataset_stats=None):
+def _predict_action(
+    self, images, instructions, state=None, dataset_stats=None, *,
+    image_normalize_mode="identity", normalization_mode="q99",
+):
     """Inference: Euler ODE denoising, returns ndarray (B, action_horizon, max_action_dim).
 
     Bound to the PI05Policy instance as ``predict_action`` by :class:`PI05ModelFactory`;
@@ -51,13 +35,14 @@ def _predict_action(self, images, instructions, state=None, dataset_stats=None):
     from loongforge.data.embodied.pi05.transforms.pi05_transform import StateDiscretizationTransform
     from loongforge.data.embodied.transforms.utils.builders import convert_stats
     from loongforge.data.embodied.transforms.utils.image_transform import ImageTransform
+    from loongforge.data.embodied.transforms.utils.normalizer import Normalizer
 
     with torch.no_grad():
         device = next(self.parameters()).device
         if not isinstance(images[0], list):
             images = [[img] for img in images]
         B = len(images)
-        image_transform = ImageTransform(apply_to=[], image_size=self._image_size)
+        image_transform = ImageTransform(apply_to=[], image_size=self._image_size, normalize_mode=image_normalize_mode)
         # Use the number of views provided by the eval client so LIBERO (2) and
         # RoboTwin (3) both work without hard-coding a single camera count.
         num_images = max(len(images[0]), 1)
@@ -82,9 +67,11 @@ def _predict_action(self, images, instructions, state=None, dataset_stats=None):
             if state.dim() == 1:
                 state = state.unsqueeze(0)
             state_stats = convert_stats(dataset_stats.get("observation.state")) if dataset_stats else None
+            if normalization_mode in ("identity", "binary"):
+                state_stats = {}
             state_transform = StateDiscretizationTransform(
                 apply_to=["prompt"], state_key="observation.state", task_key="task",
-                num_bins=256, normalization_mode="q99", statistics=state_stats,
+                num_bins=256, normalization_mode=normalization_mode, statistics=state_stats,
             )
             prompts = [state_transform.apply({"observation.state": state[i], "task": instructions[i]})["prompt"]
                        for i in range(B)]
@@ -97,67 +84,15 @@ def _predict_action(self, images, instructions, state=None, dataset_stats=None):
 
         actions = self.model.sample_actions(images_list, img_masks, tokens, masks)
         action_stats = convert_stats(dataset_stats.get("action")) if dataset_stats else None
-        actions = _q99_unnormalize_actions(actions, action_stats)
+        # Preserve stat-free inference when no action statistics are supplied.
+        if action_stats is not None or normalization_mode in ("identity", "binary"):
+            normalizer = Normalizer(mode=normalization_mode, statistics=action_stats or {})
+            normalizer.statistics = {k: v.to(actions.device) for k, v in normalizer.statistics.items()}
+            stat_key = {"q99": "q01", "mean_std": "mean", "min_max": "min", "scale": "min"}.get(normalization_mode)
+            dim = min(actions.shape[-1], normalizer.statistics[stat_key].numel()) if stat_key else self.config.action_dim
+            actions = actions.clone()
+            actions[..., :dim] = normalizer.inverse(actions[..., :dim]).to(actions.dtype)
         return actions.cpu().numpy()
-
-
-def _load_pi05_pretrained(pi05_pytorch, pretrained_path: str, device=None):
-    """Load PI05 weights, handling the extra 'model.' wrapper prefix.
-
-    Some checkpoints store PI05Pytorch weights with an extra ``model.``
-    prefix (i.e. ``model.action_in_proj.bias`` instead of
-    ``action_in_proj.bias``).  The training-side ``load_pretrained`` only
-    strips ``model.architecture.pi05_model.`` and
-    ``architecture.pi05_model.`` prefixes, so it fails on this format.
-
-    This wrapper pre-processes the state dict on the eval side to strip
-    the bare ``model.`` prefix before delegating to the standard method.
-    """
-    from pathlib import Path
-
-    from safetensors.torch import load_file
-
-    path = Path(pretrained_path)
-    safetensors_file = path / "model.safetensors" if path.is_dir() else path
-    load_kwargs = {"device": str(device)} if device is not None else {}
-    raw_sd = load_file(str(safetensors_file), **load_kwargs)
-
-    # Detect whether this checkpoint uses the bare 'model.' wrapper prefix
-    # by checking if stripping it produces keys that exist in the model.
-    model_sd_keys = set(pi05_pytorch.state_dict().keys())
-    needs_strip = any(
-        k.startswith("model.") and k[len("model."):] in model_sd_keys
-        for k in raw_sd
-    )
-    if needs_strip:
-        stripped = {}
-        for k, v in raw_sd.items():
-            stripped[k[len("model."):] if k.startswith("model.") else k] = v
-        # Write back so load_pretrained receives the corrected state dict via
-        # a temporary safetensors file would be heavy; instead call
-        # load_state_dict directly using the same remapping logic.
-        _RENAME = {
-            "action_time_mlp_in.": "time_mlp_in.",
-            "action_time_mlp_out.": "time_mlp_out.",
-        }
-        fixed = {}
-        for key, value in stripped.items():
-            new_key = key
-            for old, new in _RENAME.items():
-                new_key = new_key.replace(old, new)
-            if new_key.startswith("state_proj."):
-                continue
-            if new_key in ("paligemma_with_expert.paligemma.lm_head.weight",):
-                fixed["paligemma_with_expert.paligemma.model.language_model.embed_tokens.weight"] = value.clone()
-            fixed[new_key] = value
-        missing, unexpected = pi05_pytorch.load_state_dict(fixed, strict=True)
-        del fixed
-        if missing:
-            raise RuntimeError(f"Missing keys after strip: {missing[:5]}")
-        if unexpected:
-            raise RuntimeError(f"Unexpected keys after strip: {unexpected[:5]}")
-    else:
-        pi05_pytorch.load_pretrained(pretrained_path, device=str(device) if device is not None else None)
 
 
 @register_factory("pi05")
@@ -191,11 +126,46 @@ class PI05ModelFactory:
         model.predict_action = types.MethodType(_predict_action, model)
         model._tokenizer_path = server_args.tokenizer_path or os.environ.get("TOKENIZER_PATH", "")
         if not server_args.random_init:
-            _load_pi05_pretrained(model.model, pretrained_path, device=resolved_device)
+            from loongforge.engines.torch.distributed.checkpoint import canonical_state_dict
+
+            with canonical_state_dict(model.model):
+                model.model.load_pretrained(pretrained_path, device=resolved_device)
         model = model.to(resolved_device)
         model.eval()
         if server_args.use_bf16 and resolved_device.type == "cuda":
             model = model.to(dtype=torch.bfloat16)
+
+        # Keep only the first N steps of each chunk so the policy replans every
+        # N steps. 0 / negative = no truncation (full action_horizon).
+        chunk_execute_steps = int(server_args.chunk_execute_steps)
+        image_norm_mode = server_args.eval_image_normalize_mode
+        norm_mode = server_args.eval_normalization_mode
+
+        from loongforge.data.embodied.transforms.utils.image_transform import ImageTransform
+        from loongforge.data.embodied.transforms.utils.normalizer import Normalizer
+
+        if image_norm_mode not in ImageTransform.NORMALIZE_MODES:
+            raise ValueError(
+                f"Invalid eval_image_normalize_mode={image_norm_mode!r}; "
+                f"expected one of {ImageTransform.NORMALIZE_MODES}"
+            )
+        if norm_mode not in Normalizer.VALID_MODES:
+            raise ValueError(
+                f"Invalid eval_normalization_mode={norm_mode!r}; "
+                f"expected one of {Normalizer.VALID_MODES}"
+            )
+
+        original_predict_action = model.predict_action
+
+        @torch.no_grad()
+        def _predict_action_wrapper(images, instructions, state=None, dataset_stats=None):
+            out = original_predict_action(
+                images, instructions, state=state, dataset_stats=dataset_stats,
+                image_normalize_mode=image_norm_mode, normalization_mode=norm_mode,
+            )
+            return out[:, :chunk_execute_steps] if chunk_execute_steps > 0 else out
+
+        model.predict_action = _predict_action_wrapper
 
         metadata: Dict[str, Any] = {
             "framework": "loongforge",
@@ -207,6 +177,7 @@ class PI05ModelFactory:
             "action_horizon": model_cfg.action_horizon,
             "dataset_statistics_path": server_args.dataset_statistics_path,
             "tokenizer_path": model._tokenizer_path,
+            "chunk_execute_steps": chunk_execute_steps if chunk_execute_steps > 0 else None,
         }
         return PredictActionModelSpec(model=model, metadata=metadata)
 

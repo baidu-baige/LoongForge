@@ -896,9 +896,12 @@ class PI05Pytorch(nn.Module):
         load_kwargs = {"device": str(device)} if device is not None else {}
         original_state_dict = load_file(str(safetensors_file), **load_kwargs)
 
-        _PREFIXES = ("model.architecture.pi05_model.", "architecture.pi05_model.")
+        _PREFIXES = ("model.architecture.pi05_model.", "architecture.pi05_model.", "model.")
         fixed = {}
         for key, value in original_state_dict.items():
+            # Older policy checkpoints contain both model.* and its pi05.* alias.
+            if key.startswith("pi05.") and "model." + key[len("pi05."):] in original_state_dict:
+                continue
             new_key = key
             for prefix in _PREFIXES:
                 if new_key.startswith(prefix):

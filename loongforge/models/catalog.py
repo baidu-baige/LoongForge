@@ -540,6 +540,13 @@ MODEL_CONFIG_REGISTRY = {
     },
 
     # Embodied
+    "lingbot_vla_v2": {
+        "engine": "torch",
+        "config_path": "configs/models/lingbot_vla_v2",
+        "config_name": "lingbot_vla_v2",
+        "model_config": "loongforge.models.embodied.lingbot_vla_v2.model_configuration_lingbot_vla_v2.LingbotVLAV2ModelConfig",
+        "data_config": "loongforge.data.embodied.lingbot_vla_v2.transforms.data_configuration_lingbot_vla_v2.LingbotVLAV2DataConfig",
+    },
     "lingbot_va_robotwin": {
         "engine": "torch",
         "config_path": "configs/models/lingbot_va",

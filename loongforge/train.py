@@ -51,6 +51,10 @@ METHOD_REGISTRY: Dict[Tuple[str, str], str] = {
 
 TORCH_TRAINER_TYPES: Dict[str, str] = {
     "FinetuneTrainer": "loongforge.training.embodied.sft.FinetuneTrainer",
+    "TensorWiseTrainer": "loongforge.training.embodied.custom.tensor_wise_trainer.TensorWiseTrainer",
+    "LingbotVlaV2Trainer": (
+        "loongforge.training.embodied.custom.lingbot_vla_v2.lingbot_vla_v2_trainer.LingbotVlaV2Trainer"
+    ),
     "VLDAFinetuneTrainer": (
         "loongforge.training.embodied.custom.vlda.vlda_finetune_trainer.VLDAFinetuneTrainer"
     ),

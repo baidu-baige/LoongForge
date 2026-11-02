@@ -120,6 +120,8 @@ def _dreamzero_rank0() -> bool:
         return True
 
 
+# Call this outside compiled blocks: inside one the set mutation becomes a Dynamo guard
+# between the first forward and the activation-checkpoint recompute.
 def _dreamzero_log_once(key: str, msg: str) -> None:
     if key in _DREAMZERO_COMPILE_LOGGED:
         return
@@ -598,12 +600,26 @@ class CausalWanSelfAttention(nn.Module):
         self.attention_backend = attention_backend
         self._dreamzero_performance_options = performance_options
         self._dreamzero_context_parallel_enabled = int(context_parallel_size or 1) > 1
+        if self._dreamzero_context_parallel_enabled:
+            _dreamzero_log_once(
+                "context_parallel_attn",
+                "[dreamzero-cp] enabled Ulysses self-attn all-to-all "
+                f"(context_parallel_size={int(context_parallel_size or 1)})",
+            )
         self._dreamzero_manual_self_attn_linear_bwd = _dreamzero_perf_bool(
             performance_options, "manual_self_attn_linear_backward", False
         )
         self._dreamzero_skip_single_state_attention = _dreamzero_perf_bool(
             performance_options, "skip_single_state_attention", False
         )
+        # Logged at construction because it only reflects this configuration; inside a compiled
+        # block the check would run every forward and its side effect would become a guard.
+        if self.num_state_per_block == 1 and self._dreamzero_skip_single_state_attention:
+            _dreamzero_log_once(
+                "skip_single_state_attn",
+                "[dreamzero-attn] skip_single_state_attention=true, "
+                "return state V for single-token state self-attention",
+            )
         self._dreamzero_attention_kwargs = _dreamzero_attention_kwargs(performance_options)
         self._dreamzero_rope_kwargs = _dreamzero_rope_kwargs(performance_options)
         # layers
@@ -1375,11 +1391,6 @@ class CausalWanSelfAttention(nn.Module):
         num_blocks = state_horizon // self.num_state_per_block
 
         if self.num_state_per_block == 1 and self._dreamzero_skip_single_state_attention:
-            _dreamzero_log_once(
-                "skip_single_state_attn",
-                "[dreamzero-attn] skip_single_state_attention=true, "
-                "return state V for single-token state self-attention",
-            )
             if out is not None:
                 out.copy_(state_v)
                 return out
@@ -1605,11 +1616,6 @@ class CausalWanSelfAttention(nn.Module):
                     f"DreamZero Ulysses requires sequence length ({s}) divisible by "
                     f"context_parallel_size ({cp_size})"
                 )
-            _dreamzero_log_once(
-                "context_parallel_attn",
-                "[dreamzero-cp] enabled Ulysses self-attn all-to-all "
-                f"(context_parallel_size={cp_size})",
-            )
             q = sequence_to_head_parallel(q, cp_group)
             k = sequence_to_head_parallel(k, cp_group)
             v = sequence_to_head_parallel(v, cp_group)

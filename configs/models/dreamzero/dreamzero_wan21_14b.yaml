@@ -18,6 +18,7 @@ model:
   # Performance switches
   batch_vae_encode: false
   skip_single_state_attention: true
+  compile_causal_attention_block: true
   compile_causal_cross_attention: true
   compile_cross_attention_emulate_precision_casts: true
   compile_block_norm_modulate: true

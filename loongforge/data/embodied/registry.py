@@ -44,6 +44,7 @@ DATASET_STRATEGIES: Dict[str, str] = {
     "vlda": "vlda.vlda_dataset:build_vlda_dataset",
     "fastwam": "fastwam.fastwam_dataset:build_fastwam_lerobot_dataset",
     "lingbot_va": "lingbot_va.latent_lerobot_dataset:build_lingbot_dataset",
+    "lingbot_vla_v2": "lingbot_vla_v2.lingbot_vla_v2_dataset:build_lingbot_vla_v2_dataset",
     "gr00t_n1_7": "gr00t_n1_7.gr00t_n1_7_dataset:build_groot_n1_7_lerobot_dataset",
     "cosmos3_droid": "cosmos3.droid_lerobot_dataset:build_droid_dataset",
     "dreamzero": "dreamzero.builder:build_dreamzero_dataset",

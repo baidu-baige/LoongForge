@@ -44,7 +44,7 @@ class _EmbodiedDataArgs:
         metadata={
             "help": "Under --dataset-format lerobot_datasets: the model-specific "
                     "dataset build strategy ('default', 'vlda', 'fastwam', "
-                    "'lingbot_va', 'gr00t_n1_7', 'cosmos3_droid', "
+                    "'lingbot_va', 'lingbot_vla_v2', 'gr00t_n1_7', 'cosmos3_droid', "
                     "'dreamzero', or 'wall_oss_0_5'); unknown values raise "
                     "ValueError."
         },

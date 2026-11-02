@@ -47,6 +47,7 @@ myst_enable_extensions = [
     "tasklist",
     "colon_fence",
 ]
+myst_heading_anchors = 3
 
 html_theme = 'sphinx_book_theme'
 html_title = 'LoongForge'

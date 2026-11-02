@@ -32,6 +32,7 @@ MODEL_PACKAGES: Dict[str, str] = {
     "cosmos3": "cosmos3",
     "dreamzero": "dreamzero",
     "lingbot_va": "lingbot_va",
+    "lingbot_vla_v2": "lingbot_vla_v2",
     "wall_oss_0_5": "wall_oss_0_5",
 }
 
