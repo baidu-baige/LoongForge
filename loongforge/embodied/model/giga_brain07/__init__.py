@@ -9,7 +9,7 @@ Layer-A reshell: this package __init__ exposes the xvla/pi05-style names
 surface, mirroring how ``model/xvla`` and ``model/pi05`` present their
 config/model. The names are resolved **lazily** (PEP 562 ``__getattr__``) so
 that merely importing a submodule (e.g. the slim config consumed by
-``train/config_map.py``) does NOT trigger the heavy vendored model import —
+``train/config_map.py``) does NOT trigger the heavy vendored model import --
 keeping the training import chain and numerics byte-identical.
 
 The real implementation is untouched and lives in the vendored package
@@ -24,7 +24,7 @@ __all__ = ["GigaBrain07ModelConfig", "GigaBrain07Policy", "from_pretrained"]
 
 
 def __getattr__(name):
-    # Lightweight, dependency-free dataclass — safe to resolve anywhere.
+    # Lightweight, dependency-free dataclass -- safe to resolve anywhere.
     if name == "GigaBrain07ModelConfig":
         from loongforge.embodied.model.giga_brain07.model_configuration_giga_brain07 import (
             GigaBrain07ModelConfig,
@@ -32,7 +32,7 @@ def __getattr__(name):
 
         return GigaBrain07ModelConfig
     # Heavy: pulls the vendored model lib. Requires the giga PYTHONPATH
-    # (model/giga_brain07 on sys.path) — the same one the trainer uses.
+    # (model/giga_brain07 on sys.path) -- the same one the trainer uses.
     if name in ("GigaBrain07Policy", "from_pretrained"):
         from loongforge.embodied.model.giga_brain07.modeling_giga_brain07 import (
             GigaBrain07Policy,

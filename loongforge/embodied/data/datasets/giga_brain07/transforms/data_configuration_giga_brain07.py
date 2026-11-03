@@ -1,9 +1,9 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""GigaBrain07 DataConfig — data-pipeline parameters (YAML ``data:`` section).
+"""GigaBrain07 DataConfig -- data-pipeline parameters (YAML ``data:`` section).
 
-方案B: the actual dataset + preprocessing are the *giga originals*
+Route B: the actual dataset + preprocessing are the *giga originals*
 (``giga_datasets.LeRobotDataset`` + ``GigaBrain07Transform``). This dataclass
 carries every value needed to reconstruct the giga ``data_or_config`` +
 ``transform`` dicts exactly as in

@@ -85,6 +85,14 @@ def _lingbot_vla_v2_strategy_builder() -> Callable:
     return build_lingbot_vla_v2_dataset
 
 
+def _giga_brain07_strategy_builder() -> Callable:
+    from loongforge.embodied.data.datasets.giga_brain07 import (
+        build_giga_brain07_dataset,
+    )
+
+    return build_giga_brain07_dataset
+
+
 # name -> lazy loader (imports deferred so lerobot / motus deps only load when used)
 _DATASET_STRATEGY_LOADERS: dict[str, Callable[[], Callable]] = {
     "default": _default_strategy_builder,
@@ -96,6 +104,7 @@ _DATASET_STRATEGY_LOADERS: dict[str, Callable[[], Callable]] = {
     "dreamzero": _dreamzero_strategy_builder,
     "wall_oss_0_5": _wall_oss_0_5_strategy_builder,
     "lingbot_vla_v2": _lingbot_vla_v2_strategy_builder,
+    "giga_brain07": _giga_brain07_strategy_builder,
 }
 
 

@@ -3,7 +3,7 @@
 
 """GigaBrain-0.7 model factory for the LoongForge eval server.
 
-方案B: the GigaBrain-0.7 checkpoint carries its full architecture in its own
+The GigaBrain-0.7 checkpoint carries its full architecture in its own
 ``config.json`` (proprio_anchor / num_embodiments=8 / max_action_dim=32), so the
 eval model is built exactly like the trainer builds it —
 ``GigaBrain07Policy.from_pretrained(pretrained)`` — rather than from the slim
@@ -50,7 +50,7 @@ def _build_giga_model(model_cfg: GigaBrain07ModelConfig, pretrained_path: str, r
     weights via diffusers ``from_config``; otherwise weights are loaded with
     ``from_pretrained``.
     """
-    from giga_models.models.vla.giga_brain_0.modeling_giga_brain_0 import GigaBrain07Policy
+    from loongforge.embodied.model.giga_brain07.modeling_giga_brain_0 import GigaBrain07Policy
 
     if not pretrained_path:
         raise ValueError(

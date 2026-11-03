@@ -1,10 +1,15 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Aspect-ratio sampler: groups dataset indices by image aspect ratio so each batch contains similarly shaped samples, reducing padding waste."""
+
 import math
 from typing import Iterator
 
 import numpy as np
 import torch
 
-from ..datasets import ConcatDataset, Dataset
+from loongforge.embodied.data.datasets.giga_brain07.transforms.dataset import ConcatDataset, Dataset
 
 
 class AspectRatioSampler(torch.utils.data.Sampler):

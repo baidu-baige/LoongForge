@@ -1,9 +1,9 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""GigaBrain07 ModelConfig — model-structure parameters (YAML ``model:`` section).
+"""GigaBrain07 ModelConfig -- model-structure parameters (YAML ``model:`` section).
 
-方案B: the GigaBrain-0.7-3.5B-Base checkpoint carries its full architecture in
+Route B: the GigaBrain-0.7-3.5B-Base checkpoint carries its full architecture in
 its own ``config.json`` (proprio_anchor / num_embodiments=8), so the model is
 built with ``GigaBrain07Policy.from_pretrained(pretrained)`` and this dataclass
 only needs to carry the pretrained path plus the handful of switches the
@@ -38,7 +38,7 @@ class GigaBrain07ModelConfig:
     action_horizon: int = 50
     max_action_dim: int = 32
 
-    # llm (next-token) loss weight — giga a2d finetune uses 0.0.
+    # llm (next-token) loss weight -- giga a2d finetune uses 0.0.
     llm_loss_weight: float = 0.0
 
     # ── Optimizer hyper-params (giga: AdamW betas(0.9,0.95) eps1e-8 wd1e-10) ──

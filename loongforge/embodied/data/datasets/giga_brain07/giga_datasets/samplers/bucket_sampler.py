@@ -1,10 +1,15 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Bucket sampler: assigns dataset indices into buckets (e.g. by shape/length) and iterates them bucket by bucket for shape-homogeneous batching."""
+
 import math
 from typing import Iterator
 
 import numpy as np
 import torch
 
-from ..datasets import ConcatDataset, Dataset
+from loongforge.embodied.data.datasets.giga_brain07.transforms.dataset import ConcatDataset, Dataset
 
 
 class BucketSampler(torch.utils.data.Sampler):

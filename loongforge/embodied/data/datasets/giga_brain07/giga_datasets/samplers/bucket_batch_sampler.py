@@ -1,3 +1,8 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Bucket batch sampler: yields variable-size batches per bucket (e.g. per resolution) so batch size can differ across buckets while staying consistent across ranks."""
+
 import math
 import random
 from typing import Iterator
@@ -5,7 +10,7 @@ from typing import Iterator
 import numpy as np
 import torch
 
-from ..datasets import ConcatDataset, Dataset
+from loongforge.embodied.data.datasets.giga_brain07.transforms.dataset import ConcatDataset, Dataset
 
 
 class BucketBatchSampler(torch.utils.data.Sampler):

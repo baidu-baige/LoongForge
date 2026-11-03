@@ -1,10 +1,15 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Special dataset sampler: keeps every batch within a single sub-dataset so samples from different concatenated datasets are never mixed in one batch."""
+
 import math
 from typing import Iterator
 
 import numpy as np
 import torch
 
-from ..datasets import ConcatDataset
+from loongforge.embodied.data.datasets.giga_brain07.transforms.dataset import ConcatDataset
 
 
 class SpecialDatasetSampler(torch.utils.data.Sampler):

@@ -27,17 +27,11 @@ import torch
 import torch.nn as nn
 from torch.utils.data import BatchSampler, DataLoader
 
-# ── Make the vendored giga packages importable (mirror train_giga_brain07.py) ──
-_EMB = Path(__file__).resolve().parents[4]            # .../loongforge/embodied
-_MODEL_GB = _EMB / "model" / "giga_brain07"
-_DATA_GB = _EMB / "data" / "datasets" / "giga_brain07"
-for _p in (str(_MODEL_GB), str(_DATA_GB)):
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-_pp = [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p]
-os.environ["PYTHONPATH"] = os.pathsep.join(
-    dict.fromkeys([str(_MODEL_GB), str(_DATA_GB), *_pp])
-)
+# giga model/data code is imported via fully-qualified LoongForge paths now
+# (loongforge.embodied.model.giga_brain07.* / data.datasets.giga_brain07.*),
+# so the vendored packages are no longer injected onto sys.path as bare
+# top-level names. Only the LoongForge repo root must be importable, which
+# the launcher already guarantees. No sys.path / PYTHONPATH mutation here.
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
@@ -69,10 +63,10 @@ class GigaBrain07Trainer(FinetuneTrainer):
         # matmul precision (and hence loss) drifts from the baseline.
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
-        from giga_models.models.vla.giga_brain_0.modeling_giga_brain_0 import (
+        from loongforge.embodied.model.giga_brain07.modeling_giga_brain_0 import (
             GigaBrain07Policy,
         )
-        from giga_brain_0.giga_brain_0_loss import GigaBrain07Loss
+        from loongforge.embodied.model.giga_brain07.giga_brain_0_loss import GigaBrain07Loss
 
         model = GigaBrain07Policy.from_pretrained(m.pretrained)
         loaded_vlm = getattr(model, "vlm_type", m.vlm_type)
@@ -106,7 +100,7 @@ class GigaBrain07Trainer(FinetuneTrainer):
             self._maybe_apply_compile()  # [compile] no-op unless model.compile_model
             return
         if m.activation_checkpointing and m.activation_class_names:
-            from giga_train.strategies import module_auto_wrap_policy
+            from loongforge.embodied.model.giga_brain07.activation_checkpointing import module_auto_wrap_policy
             from torch.distributed.algorithms._checkpoint.checkpoint_wrapper import (
                 apply_activation_checkpointing,
                 checkpoint_wrapper,
@@ -144,7 +138,7 @@ class GigaBrain07Trainer(FinetuneTrainer):
             return
         import logging as _lg
         import re as _re
-        from giga_models.models.vla.giga_brain_0.paligemma2_with_expert import (
+        from loongforge.embodied.model.giga_brain07.paligemma2_with_expert import (
             Gemma2DecoderLayerWithExpert,
         )
 
@@ -194,7 +188,7 @@ class GigaBrain07Trainer(FinetuneTrainer):
             return
         import logging as _lg
         log = _lg.getLogger(__name__)
-        from giga_models.models.vla.giga_brain_0.paligemma2_with_expert import (
+        from loongforge.embodied.model.giga_brain07.paligemma2_with_expert import (
             Gemma2AttentionWithExpert,
             Gemma2DecoderLayerWithExpert,
             Gemma2MLP,
@@ -306,16 +300,16 @@ class GigaBrain07Trainer(FinetuneTrainer):
     def _build_optimizer(self) -> torch.optim.Optimizer:
         m = self.model_cfg
         params = [p for p in self.model.parameters() if p.requires_grad]
-        # foreach=False lowers the transient peak when AdamW first materializes
-        # exp_avg / exp_avg_sq (loss-neutral: per-parameter elementwise math is
-        # identical to the fused/foreach path) so the fp32 3.5B states fit 80GB.
+        # Match native giga (giga-brain-0): giga_train.optimizers.build_optimizer
+        # builds AdamW from dict(type="AdamW", betas, lr, eps, weight_decay) with
+        # no `foreach` key, so torch uses its default (fused multi-tensor path on
+        # CUDA). Omit `foreach` here too so the optimizer matches native exactly.
         opt = torch.optim.AdamW(
             params,
             lr=m.lr,
             betas=m.adam_betas(),
             eps=m.adam_eps,
             weight_decay=m.weight_decay,
-            foreach=False,
         )
         # Tag the optimizer step for nsys / torch.profiler (gated no-op when the
         # NVTX switch is off; purely an annotation, no numerics change). Bind as
@@ -339,7 +333,7 @@ class GigaBrain07Trainer(FinetuneTrainer):
     # ───────────────────────── scheduler (giga WarmupCosine via LambdaLR) ──────
     def _build_scheduler(self):
         m = self.model_cfg
-        from giga_train.schedulers import build_scheduler as giga_build_scheduler
+        from loongforge.embodied.model.giga_brain07.scheduler import build_scheduler as giga_build_scheduler
 
         n = int(self.train_iters)
         return giga_build_scheduler(
@@ -355,25 +349,37 @@ class GigaBrain07Trainer(FinetuneTrainer):
             max_steps=n,
         )
 
-    # ───────────────────────── dataloader (giga LeRobot + transform) ──────────
+    # ───────────────────────── dataloader (shared LeRobot reader + giga transform) ──
     def _build_dataloaders(self) -> Dict[str, DataLoader]:
         d = self.data_cfg
-        from giga_datasets import DefaultCollator, load_dataset
-        from giga_train import build_sampler, build_transform
+        # Data infra (reader + collator + sampler + transform) is self-contained
+        # under the giga_brain07 data package; no top-level vendored
+        # ``giga_datasets`` / ``giga_train`` imports are used here.
+        from loongforge.embodied.data.datasets.giga_brain07.collators import (
+            DefaultCollator,
+        )
+        from loongforge.embodied.data.datasets.giga_brain07.giga_datasets.samplers import (
+            DefaultSampler,
+        )
+        from loongforge.embodied.data.datasets.giga_brain07.transforms.giga_brain07_transform import (
+            GigaBrain07Transform,
+        )
+        # 方案乙 (route B): dataset *reading* now goes through the shared
+        # LeRobot v3 reader (loongforge.embodied.data.datasets.lerobot_dataset
+        # .LeRobotV3Dataset) via the giga_brain07 strategy, instead of the
+        # vendored giga_datasets.LeRobotDataset. Divergent giga params
+        # (action chunk -> action_horizon, video backend, per-sample meta
+        # attach) are passed as parameters. Per-sample output parity with the
+        # giga reader was verified on AgiBot task_327 (see
+        # giga_analysis/probe_parity.py). Genuinely giga-specific hardening
+        # (bounded-memory decode, HF-cache locking, thin metadata, repack) is
+        # intentionally dropped here and can be re-added later as separately
+        # gated parameters on the shared reader.
+        from loongforge.embodied.data.datasets.giga_brain07 import (
+            build_giga_brain07_dataset,
+        )
 
-        data_or_config = [
-            dict(
-                _class_name="LeRobotDataset",
-                data_path=d.data_path,
-                delta_info={"action": int(d.action_chunk)},
-                meta_name=d.meta_name,
-                video_backend=d.video_backend,
-                torchcodec_decoder_cache_size=int(d.torchcodec_decoder_cache_size),
-                decode_video_keys=list(d.camera_keys),
-            )
-        ]
         transform_cfg = dict(
-            type="GigaBrain07Transform",
             is_train=bool(d.is_train),
             state_input_mode=d.state_input_mode,
             observation_memory_size=int(d.observation_memory_size),
@@ -418,17 +424,21 @@ class GigaBrain07Trainer(FinetuneTrainer):
             ),
         )
 
-        dataset = load_dataset(data_or_config)
-        transform = build_transform(transform_cfg)
-        dataset.set_transform(transform)
+        dataset = build_giga_brain07_dataset(self.model_cfg, self.data_cfg, self.training_args)
+        transform = GigaBrain07Transform(**transform_cfg)
+        # Attach the per-sample transform the same way the generic
+        # ``dataloader._apply_transform`` does for every other model (poke
+        # ``_transform``); the shared reader needs no model-specific setter.
+        dataset._transform = transform
 
         bs = int(d.batch_size_per_gpu)
         grad_accum = int(self.training_args.gradient_accumulation_steps)
         global_bs = bs * int(self.ctx.world_size) * grad_accum
-        sampler = build_sampler(
-            dict(type="DefaultSampler", shuffle=bool(d.shuffle), seed=int(d.sampler_seed)),
-            dataset=dataset,
+        sampler = DefaultSampler(
+            dataset,
             batch_size=global_bs,
+            shuffle=bool(d.shuffle),
+            seed=int(d.sampler_seed),
         )
         batch_sampler = BatchSampler(sampler, batch_size=bs, drop_last=False)
 
@@ -547,11 +557,11 @@ class GigaBrain07Trainer(FinetuneTrainer):
         return out
 
     def _train_forward_impl(self, batch) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-        from giga_brain_0.giga_brain_0_trainer import (
+        from loongforge.embodied.model.giga_brain07.loss_masks import (
             _apply_skip_loss_mask,
             _get_flow_action_horizon,
         )
-        from giga_models.utils.action_horizon import downsample_flow_action_tensors
+        from loongforge.embodied.model.giga_brain07.action_horizon import downsample_flow_action_tensors
 
         b = batch
         images = b["images"]
