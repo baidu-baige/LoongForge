@@ -18,10 +18,6 @@ from typing import Any, Callable
 from torch.optim.lr_scheduler import LambdaLR
 
 
-import copy
-from typing import Any, Callable
-
-
 class Registry(dict):
     r"""A helper class for managing registering modules, it extends a
     dictionary and provides a register function."""

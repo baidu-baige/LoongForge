@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
 # ═══════════════════════════════════════════════════════════════
 # run_giga_brain07_torchrun_8gpu.sh — 8×A800 FSDP2 variant for perf/bs sweep
 # Derived from run_giga_brain07_torchrun.sh (kept intact). Adds:

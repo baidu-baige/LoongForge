@@ -84,8 +84,8 @@ def load_file(file_path: str, **kwargs: Any) -> Any:
     elif file_path.endswith(".json"):
         data = json.load(open(file_path, "r"), **kwargs)
     elif file_path.endswith(".yaml") or file_path.endswith("yml"):
-        kwargs.setdefault("Loader", _YamlLoader)
-        data = yaml.load(open(file_path, "r"), **kwargs)
+        kwargs.pop("Loader", None)
+        data = yaml.safe_load(open(file_path, "r"), **kwargs)
     else:
         assert False
     return data
