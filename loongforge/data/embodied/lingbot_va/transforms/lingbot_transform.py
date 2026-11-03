@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from loongforge.data.embodied.registry import (
+from loongforge.data.embodied.transforms.registry import (
     TransformBuilderContext,
     register_transform_builder,
 )

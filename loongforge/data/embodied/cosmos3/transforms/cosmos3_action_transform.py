@@ -36,7 +36,7 @@ from transformers import AutoTokenizer
 
 from loongforge.data.embodied.transforms.base import BaseTransform
 from loongforge.models.embodied.cosmos3.sequence_packing import SequencePlan
-from loongforge.data.embodied.registry import (
+from loongforge.data.embodied.transforms.registry import (
     TransformBuilderContext,
     register_transform_builder,
 )

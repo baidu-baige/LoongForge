@@ -3,8 +3,7 @@
 
 """constants"""
 
-from . import IGNORE_INDEX as IGNORE_INDEX
-from . import TrainingPhase as TrainingPhase
+IGNORE_INDEX = -100
 
 DEFAULT_DATASET_NAME = "default"
 
@@ -16,6 +15,13 @@ SFT_SUPPORT_DATA_TYPE = {
     "parquet": "parquet",
     "txt": "text",
 }
+
+
+class TrainingPhase(object):
+    """Training phase"""
+
+    PRETRAIN = "pretrain"
+    SFT = "sft"
 
 
 class SFTDataFormats(object):

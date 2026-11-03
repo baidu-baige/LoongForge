@@ -24,12 +24,12 @@ from loongforge.data.embodied.transforms.base import BaseTransform, ComposedTran
 from loongforge.data.embodied.transforms.collator import (
     BasePreprocessor,
     PreparedBatch,
-)
-from loongforge.data.embodied.registry import (
     build_preprocessor,
-    build_transforms_from_args,
     get_preprocessor,
     register_preprocessor,
+)
+from loongforge.data.embodied.transforms.pipeline import build_transforms_from_args
+from loongforge.data.embodied.transforms.registry import (
     TransformBuilderContext,
     get_transform_builder,
     register_transform_builder,

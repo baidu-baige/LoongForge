@@ -10,7 +10,7 @@ transform list keeps the LoongForge pipeline contract satisfied without
 duplicating any processing.
 """
 
-from loongforge.data.embodied.registry import (
+from loongforge.data.embodied.transforms.registry import (
     register_transform_builder,
 )
 

@@ -31,7 +31,7 @@ from loongforge.data.llm.sft_dataset import SFTDataset, SFTDatasetConfig
 from loongforge.data.llm.blended_hf_dataset_builder import BlendedHuggingFaceDatasetBuilder
 from loongforge.data.llm.sft_data_collator import DataCollatorForSupervisedDataset
 
-from loongforge.data import IGNORE_INDEX
+from loongforge.data.constants import IGNORE_INDEX
 
 from loongforge.engines.megatron.runner import pretrain
 

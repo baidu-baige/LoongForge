@@ -10,7 +10,7 @@ video processing, multimodal training, and parallel execution.
 
 import argparse
 
-from loongforge.data import TrainingPhase
+from loongforge.data.constants import TrainingPhase
 from loongforge.data.chat_templates.template import get_support_templates
 from loongforge.training.diffusion.args import add_diffusion_args
 from loongforge.training.llm.args import add_llm_args

@@ -10,7 +10,7 @@ from megatron.core.datasets.megatron_tokenizer import MegatronLegacyTokenizer
 from megatron.training.tokenizer.tokenizer import _vocab_size_with_padding
 from megatron.training.tokenizer import build_tokenizer as build_megatron_tokenizer
 
-from loongforge.data import TrainingPhase
+from loongforge.data.constants import TrainingPhase
 from loongforge.models.catalog import LanguageModelFamilies
 from loongforge.engines.megatron.utils.runtime import print_rank_0
 

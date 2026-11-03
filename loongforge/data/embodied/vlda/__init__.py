@@ -7,8 +7,6 @@ from torchdata.stateful_dataloader.sampler import StatefulDistributedSampler
 
 from loongforge.data.embodied.sampler_builder import register_sampler_builder
 
-from .transforms import vlda_collator, vlda_transform  # noqa: F401
-
 
 class VLDASampler(StatefulDistributedSampler):
     """Keep epoch-aware sample randomness independent of worker assignment."""

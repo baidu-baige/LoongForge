@@ -34,20 +34,6 @@ from .sft_supervised_utils import convert_to_tokenized_data
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-def get_default_sft_dataset_config() -> Optional[str]:
-    """get default sft dataset config"""
-    config_dir = Path(__file__).parents[3] / "configs" / "data"
-    candidates = [
-        config_dir / "sft_dataset_config.yaml",
-        config_dir / "sft_dataset_config.yml",
-    ]
-
-    for candidate in candidates:
-        if candidate.exists():
-            return str(candidate)
-
-    return None
-
 
 @dataclass
 class Columns(object):

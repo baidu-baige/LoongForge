@@ -13,7 +13,7 @@ from megatron.training.global_vars import (
 
 from loongforge.engines.megatron.tokenizer import build_tokenizer
 
-from loongforge.data import TrainingPhase
+from loongforge.data.constants import TrainingPhase
 
 
 if TYPE_CHECKING:

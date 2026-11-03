@@ -22,7 +22,7 @@ except ImportError:
 
 from loongforge.engines.megatron.tokenizer import build_tokenizer
 from megatron.core.datasets import indexed_dataset
-from loongforge.data import TrainingPhase
+from loongforge.data.constants import TrainingPhase
 from loongforge.models.catalog import get_all_model_families
 
 

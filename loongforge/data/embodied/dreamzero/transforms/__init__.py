@@ -3,7 +3,7 @@
 #
 # Modified from DreamZero under the Apache-2.0 License.
 
-from loongforge.data.embodied.registry import (
+from loongforge.data.embodied.transforms.registry import (
     register_transform_builder,
 )
 

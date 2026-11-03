@@ -127,7 +127,7 @@ from loongforge.models.common.peft.lora import LoRA, VLMLoRA
 from loongforge.models.common.peft.utils import apply_peft_transformation
 from megatron.core.transformer.multi_token_prediction import MTPLossLoggingHelper
 from dataclasses import asdict
-from loongforge.data import TrainingPhase
+from loongforge.data.constants import TrainingPhase
 from loongforge.engines.megatron import (
     get_args,
     global_vars,
@@ -3032,7 +3032,7 @@ def dump_model_input_example_once(
     _PRINTED_MODEL_INPUT_EXAMPLE = True
 
     from loongforge.engines.megatron import get_tokenizer as get_loongforge_tokenizer
-    from loongforge.data import IGNORE_INDEX
+    from loongforge.data.constants import IGNORE_INDEX
 
     tokenizer = get_loongforge_tokenizer()
 

@@ -24,7 +24,7 @@ from loongforge.data.embodied.transforms.base import BaseTransform
 from loongforge.data.embodied.gr00t_n1_6.transforms.processor_gr00t_n1_6 import (
     StateActionProcessor,
 )
-from loongforge.data.embodied.registry import (
+from loongforge.data.embodied.transforms.registry import (
     TransformBuilderContext,
     register_transform_builder,
 )

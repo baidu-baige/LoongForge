@@ -15,7 +15,7 @@ from megatron.training.arguments import validate_args
 from packaging.version import Version as PkgVersion
 
 from loongforge.engines.megatron.tokenizer import get_default_tokenizer
-from loongforge.data import TrainingPhase
+from loongforge.data.constants import TrainingPhase
 from loongforge.models.catalog import DiffusionModelFamilies, VisionLanguageModelFamilies
 from loongforge.engines.megatron import (
     get_device_arch_version,

@@ -9,16 +9,25 @@ Classes:
     - register_preprocessor: Decorator to register model-specific collators
 """
 
+import importlib
+import pkgutil
 from dataclasses import dataclass, fields
-from typing import Any, Dict, List
+from pathlib import Path
+from typing import Any, Dict, List, Type
 
 import torch
 
-from loongforge.data.embodied.registry import (
-    build_preprocessor as build_preprocessor,
-    get_preprocessor as get_preprocessor,
-    register_preprocessor,
-)
+
+_PREPROCESSOR_REGISTRY: Dict[str, Type["BasePreprocessor"]] = {}
+_DISCOVERED_PREPROCESSORS = False
+
+
+def register_preprocessor(name: str):
+    """Decorator to register a preprocessor class for a model."""
+    def decorator(cls):
+        _PREPROCESSOR_REGISTRY[name] = cls
+        return cls
+    return decorator
 
 
 @dataclass
@@ -103,6 +112,56 @@ class BasePreprocessor:
     def __call__(self, examples: List[Dict[str, Any]]) -> PreparedBatch:
         """Transform a list of dataset samples into a PreparedBatch."""
         raise NotImplementedError
+
+
+def get_preprocessor(name: str) -> Type[BasePreprocessor]:
+    """Look up a registered preprocessor class by name."""
+    discover_preprocessors()
+    if name not in _PREPROCESSOR_REGISTRY:
+        raise ValueError(
+            f"Unknown preprocessor '{name}'. "
+            f"Available: {list(_PREPROCESSOR_REGISTRY.keys())}"
+        )
+    return _PREPROCESSOR_REGISTRY[name]
+
+
+def build_preprocessor(
+    name: str,
+    model_cfg,
+    data_cfg,
+    training_args=None,
+    dataset_stats=None,
+    dataset=None,
+) -> BasePreprocessor:
+    """Instantiate a registered preprocessor via its from_config classmethod."""
+    cls = get_preprocessor(name)
+    return cls.from_config(
+        model_cfg,
+        data_cfg,
+        training_args=training_args,
+        dataset_stats=dataset_stats,
+        dataset=dataset,
+    )
+
+
+def discover_preprocessors() -> None:
+    """Import model transform subpackages so collator decorators can register.
+
+    Model-specific collators now live under ``data/embodied/<model>/transforms/``;
+    walk the ``data.embodied`` package and import each ``<model>.transforms`` package.
+    """
+    global _DISCOVERED_PREPROCESSORS
+    if _DISCOVERED_PREPROCESSORS:
+        return
+
+    _DISCOVERED_PREPROCESSORS = True
+    datasets_dir = Path(__file__).resolve().parent.parent
+    datasets_pkg = "loongforge.data.embodied"
+    for module_info in pkgutil.iter_modules([str(datasets_dir)]):
+        if not module_info.ispkg or module_info.name.startswith("_"):
+            continue
+        if (datasets_dir / module_info.name / "transforms").is_dir():
+            importlib.import_module(f"{datasets_pkg}.{module_info.name}.transforms")
 
 
 @register_preprocessor("dummy")

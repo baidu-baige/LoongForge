@@ -7,7 +7,7 @@ import torch
 import torchvision.transforms.functional as TF
 
 from loongforge.data.embodied.transforms.base import BaseTransform
-from loongforge.data.embodied.registry import (
+from loongforge.data.embodied.transforms.registry import (
     TransformBuilderContext,
     register_transform_builder,
 )

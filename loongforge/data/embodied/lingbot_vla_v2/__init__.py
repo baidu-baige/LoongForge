@@ -6,6 +6,5 @@
 from loongforge.data.embodied.lingbot_vla_v2.lingbot_vla_v2_dataset import (
     build_lingbot_vla_v2_dataset,
 )
-from . import transforms  # noqa: F401
 
 __all__ = ["build_lingbot_vla_v2_dataset"]

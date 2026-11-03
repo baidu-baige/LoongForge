@@ -15,17 +15,15 @@ shuffling (map-style) or natural iteration (iterable-style).
 
 from __future__ import annotations
 
+import importlib
+import pkgutil
 from dataclasses import dataclass
-from typing import Any, Callable, Optional
+from pathlib import Path
+from typing import Any, Callable, Dict, Optional
 
 import torch
 from torch.utils.data import IterableDataset, Sampler
 from torchdata.stateful_dataloader.sampler import StatefulDistributedSampler
-
-from loongforge.data.embodied.registry import (
-    get_sampler_builder,
-    register_sampler_builder as register_sampler_builder,
-)
 
 
 @dataclass(frozen=True)
@@ -41,6 +39,10 @@ class SamplerBuilderContext:
 
 
 SamplerBuilder = Callable[[SamplerBuilderContext], Optional[Sampler]]
+
+_SAMPLER_BUILDER_REGISTRY: Dict[str, SamplerBuilder] = {}
+_DISCOVERED_SAMPLER_BUILDERS = False
+
 
 class _BlockShardSampler(Sampler[int]):
     """Distribute contiguous batches across data-parallel ranks."""
@@ -109,6 +111,15 @@ class _BlockShardSampler(Sampler[int]):
         self.epoch = int(state_dict.get("epoch", 0))
 
 
+def register_sampler_builder(model_type: str):
+    """Decorator to register a model-specific sampler builder."""
+    def decorator(builder: SamplerBuilder) -> SamplerBuilder:
+        _SAMPLER_BUILDER_REGISTRY[model_type] = builder
+        return builder
+
+    return decorator
+
+
 def default_sampler_builder(context: SamplerBuilderContext) -> Optional[Sampler]:
     """Default distributed sampler selection (block vs stateful-distributed).
 
@@ -145,6 +156,12 @@ def default_sampler_builder(context: SamplerBuilderContext) -> Optional[Sampler]
     )
 
 
+def get_sampler_builder(model_type: str) -> SamplerBuilder:
+    """Look up a sampler builder by model type, falling back to the default."""
+    discover_sampler_builders()
+    return _SAMPLER_BUILDER_REGISTRY.get(model_type, default_sampler_builder)
+
+
 def build_sampler(
     model_type: str,
     *,
@@ -166,3 +183,27 @@ def build_sampler(
         shuffle=shuffle,
     )
     return builder(context)
+
+
+def discover_sampler_builders() -> None:
+    """Import model packages so sampler decorators can register.
+
+    Walk the ``data.embodied`` package and import each ``<model>`` package (running
+    its ``__init__``); if a dedicated ``<model>/samplers.py`` module exists,
+    import that too. A model registers its custom sampler with
+    ``@register_sampler_builder`` in either ``data/embodied/<model>/__init__.py`` or
+    ``data/embodied/<model>/samplers.py`` — no ``transforms`` subpackage required.
+    """
+    global _DISCOVERED_SAMPLER_BUILDERS
+    if _DISCOVERED_SAMPLER_BUILDERS:
+        return
+
+    _DISCOVERED_SAMPLER_BUILDERS = True
+    datasets_dir = Path(__file__).resolve().parent
+    datasets_pkg = "loongforge.data.embodied"
+    for module_info in pkgutil.iter_modules([str(datasets_dir)]):
+        if not module_info.ispkg or module_info.name.startswith("_"):
+            continue
+        importlib.import_module(f"{datasets_pkg}.{module_info.name}")
+        if (datasets_dir / module_info.name / "samplers.py").is_file():
+            importlib.import_module(f"{datasets_pkg}.{module_info.name}.samplers")

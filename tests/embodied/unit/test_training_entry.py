@@ -99,7 +99,8 @@ class SFTRecipeTests(unittest.TestCase):
         import inspect
 
         from loongforge.data.embodied.lingbot_vla_v2 import build_lingbot_vla_v2_dataset
-        from loongforge.data.embodied.registry import build_preprocessor, get_transform_builder
+        from loongforge.data.embodied.transforms.collator import build_preprocessor
+        from loongforge.data.embodied.transforms.registry import get_transform_builder
         from loongforge.models.embodied.lingbot_vla_v2 import upstream_adapter
 
         inspect.signature(build_lingbot_vla_v2_dataset).bind(object(), object(), object())
