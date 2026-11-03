@@ -13,7 +13,6 @@ import torch
 from torch.utils.data import Dataset, IterableDataset
 from torchdata.stateful_dataloader import StatefulDataLoader
 
-from loongforge.data.embodied.registry import build_dataset
 from loongforge.data.embodied.sampler_builder import build_sampler
 from loongforge.data.embodied.transforms.collator import build_preprocessor
 from loongforge.data.embodied.transforms.pipeline import build_transforms_from_args
@@ -82,11 +81,12 @@ def build_dataloader(model_cfg, data_cfg, training_args, ctx: DistributedContext
     The returned DataLoader yields PreparedBatch objects on CPU. Call
     ``batch.to(device)`` before passing a batch to ``model.forward``.
     """
+    dataset_format = training_args.dataset_format
     batch_size = training_args.per_device_batch_size
     num_workers = training_args.num_workers
     mp_context = training_args.dataloader_multiprocessing_context or ("spawn" if num_workers > 0 else None)
 
-    dataset = build_dataset(model_cfg, data_cfg, training_args)
+    dataset = _build_dataset(model_cfg, data_cfg, training_args, dataset_format)
     dataset_stats = _get_dataset_stats(dataset)
 
     transform = build_transforms_from_args(model_cfg, data_cfg, training_args, dataset, dataset_stats)
@@ -198,3 +198,26 @@ def _build_preprocessor(model_cfg, data_cfg, training_args, dataset_stats, datas
 
     logger.info(f"Using preprocessor: {model_type}")
     return preprocessor
+
+
+def _build_dataset(model_cfg, data_cfg, training_args, dataset_format: str):
+    """Build dataset instance based on ``--dataset-format``."""
+    if dataset_format == "lerobot_datasets":
+        from .registry import build_dataset_by_strategy
+
+        return build_dataset_by_strategy(model_cfg, data_cfg, training_args)
+
+    if dataset_format == "hdf5_datasets":
+        from .datasets.hdf5_dataset import build_hdf5_dataset
+
+        return build_hdf5_dataset(model_cfg, data_cfg, training_args)
+
+    if dataset_format == "dummy_datasets":
+        from .datasets.dummy_dataset import build_dummy_dataset
+
+        return build_dummy_dataset(model_cfg, data_cfg, training_args)
+
+    raise ValueError(
+        f"Unknown dataset_format: '{dataset_format}'. "
+        f"Supported: lerobot_datasets, hdf5_datasets, dummy_datasets"
+    )

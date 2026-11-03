@@ -8,7 +8,6 @@
 
 import os
 import torch
-from datasets import load_from_disk
 from functools import partial
 import copy
 
@@ -26,24 +25,30 @@ from megatron.core import parallel_state
 
 from transformers import DataCollatorForSeq2Seq
 
+from loongforge.models import catalog as constants
+from loongforge.data import constants as data_constants
 from loongforge.engines.megatron import get_args, get_model_config
 
-from loongforge.engines.megatron.runner import dump_model_input_example_once, pretrain
+# from loongforge.models.qwen_vl.utils import get_inputs_on_this_cp_rank_by_tex # TODO:@yizhan
+from loongforge.engines.megatron.runner import MegatronTrainer
+from loongforge.training import register_model_trainer
+from loongforge.engines.megatron.runner import dump_model_input_example_once
 from loongforge.data.utils import (
-    build_sft_cyclic_iterators,
     build_sft_data_collator,
+    build_sft_cyclic_iterators,
 )
 from loongforge.data.vlm.dataloader_provider import (
-    VLMPretrainCollator,
     get_train_dataset,
     get_val_dataset,
     get_train_loader,
+    VLMPretrainCollator,
 )
 from loongforge.data.vlm import build_task_encoder
+from datasets import load_from_disk
 
 
 from loongforge.models.omni_models.omni_model_provider import (
-    omni_model_provider as model_provider,
+    omni_model_provider,
 )
 from loongforge.models.omni_models.utils import get_batch_on_this_cp_rank
 from loongforge.engines.megatron.get_loss_func import default_loss_func
@@ -438,7 +443,7 @@ GLOBAL_TRAIN_DATASET_SIZE = None
 
 def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None):
     """Provides the datasets used by the trainer"""
-    import loongforge.data.dp_balance.patches  # noqa: F401
+    import loongforge.data.dp_balance.patches
     global GLOBAL_TRAIN_DATASET_SIZE
     args = get_args()
 
@@ -527,14 +532,19 @@ def get_embedding_ranks(pp_ranks: List[int]):
     embedding_ranks = sorted(embedding_ranks)
     return embedding_ranks
 
-def train(args):
-    """Run VLM pretraining."""
-    train_valid_test_dataset_provider.is_distributed = True
-    pretrain(
-        args,
-        train_valid_test_dataset_provider,
-        model_provider,
-        ModelType.encoder_or_decoder,  # TODO: Heterogeneous TP/PP not supported yet
-        forward_step,
+@register_model_trainer(
+    model_family=constants.VisionLanguageModelFamilies.names(),
+    training_phase=data_constants.TrainingPhase.PRETRAIN,
+)
+def default_vlm_pretrain_trainer(train_args):
+    """build trainer"""
+    trainer = MegatronTrainer(
+        train_args=train_args,
+        train_valid_test_dataset_provider=train_valid_test_dataset_provider,
+        model_provider=omni_model_provider,
+        model_type=ModelType.encoder_or_decoder,  # TODO: Heterogeneous TP/PP not supported yet
+        forward_step_func=forward_step,
         get_embedding_ranks=get_embedding_ranks,
     )
+
+    return trainer

@@ -3,10 +3,13 @@
 
 """Training dispatch and SFT callback regression tests."""
 
+import argparse
 import importlib.util
+import io
 import subprocess
 import sys
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -17,9 +20,27 @@ class TrainingEntryTests(unittest.TestCase):
     def test_entry_does_not_import_torch(self):
         subprocess.run(
             [sys.executable, "-c",
-             "import sys; import loongforge.train; assert 'torch' not in sys.modules"],
+             "import sys; import loongforge.train; "
+             "assert not any(name in sys.modules for name in ('torch', 'megatron')); "
+             "assert not any(name.startswith('loongforge.engines.') for name in sys.modules)"],
             check=True,
         )
+
+    def test_megatron_uses_registered_trainer(self):
+        from loongforge.training import MODEL_FAMILY_TRAINER_FACTORY
+
+        args = SimpleNamespace(model_name="qwen3-8b", model_family="qwen3", training_phase="pretrain")
+        recipe = Mock()
+        parser = SimpleNamespace(parse_train_args=Mock(return_value=args))
+        with (
+            patch.dict(MODEL_FAMILY_TRAINER_FACTORY, {"qwen3": {"pretrain": recipe}}, clear=True),
+            patch("loongforge.training._load_builtin_trainers"),
+            patch.dict(sys.modules, {"loongforge.engines.megatron.parser": parser}),
+        ):
+            self.assertIsNone(train._run_megatron())
+        parser.parse_train_args.assert_called_once_with()
+        recipe.assert_called_once_with(args)
+        recipe.return_value.train.assert_called_once_with()
 
     def test_unknown_trainer_fails_before_import(self):
         with patch.object(train.importlib, "import_module") as import_module:
@@ -53,6 +74,91 @@ class TrainingEntryTests(unittest.TestCase):
             train.main()
         run_megatron.assert_called_once_with()
         run_torch.assert_not_called()
+
+    def test_help_and_unknown_model_reach_the_megatron_parser(self):
+        for argv in (["--help"], ["--model-name", "unknown"], []):
+            with (
+                self.subTest(argv=argv),
+                patch.object(sys, "argv", ["train.py", *argv]),
+                patch.object(train, "_run_megatron") as run_megatron,
+                patch.object(train, "_run_torch") as run_torch,
+            ):
+                self.assertIsNone(train.main())
+                self.assertEqual(sys.argv, ["train.py", *argv])
+                run_megatron.assert_called_once_with()
+                run_torch.assert_not_called()
+
+    def test_torch_model_name_keeps_the_original_unique_abbreviation(self):
+        with (
+            patch.object(sys, "argv", ["train.py", "--model-n", "pi05"]),
+            patch.object(train, "_run_megatron") as run_megatron,
+            patch.object(train, "_run_torch") as run_torch,
+        ):
+            self.assertIsNone(train.main())
+        run_torch.assert_called_once_with()
+        run_megatron.assert_not_called()
+
+    def test_help_and_missing_values_reach_the_engine_parser(self):
+        cases = (
+            (["--help", "--model-name"], False, 0),
+            (["--help", "--model-name", "pi05"], False, 0),
+            (["--model-name", "pi05", "--help", "--model-name"], True, 0),
+            (["--model-name", "pi05", "--help", "--model-name", "qwen3-8b"], True, 0),
+            (["--model-name", "qwen3-8b", "-h", "--model-name", "pi05"], False, 0),
+            (["--model-n", "pi05", "--help", "--model-name"], True, 0),
+            (["--model-name"], False, 2),
+        )
+        for argv, use_torch, exit_code in cases:
+            with self.subTest(argv=argv):
+                parser = argparse.ArgumentParser(allow_abbrev=use_torch)
+                parser.add_argument("--model-name")
+                with (
+                    patch.object(sys, "argv", ["train.py", *argv]),
+                    patch.object(train, "_run_megatron", side_effect=parser.parse_args) as run_megatron,
+                    patch.object(train, "_run_torch", side_effect=parser.parse_args) as run_torch,
+                    redirect_stdout(io.StringIO()),
+                    redirect_stderr(io.StringIO()),
+                    self.assertRaises(SystemExit) as result,
+                ):
+                    train.main()
+                self.assertEqual(result.exception.code, exit_code)
+                self.assertEqual(run_torch.call_count, int(use_torch))
+                self.assertEqual(run_megatron.call_count, int(not use_torch))
+
+    def test_exact_model_name_controls_routing_with_abbreviations(self):
+        cases = (
+            (["--model-n", "pi05"], True, "pi05", []),
+            (["--model=pi05"], True, "pi05", []),
+            (["--model-n", "qwen3-8b"], False, None, ["--model-n", "qwen3-8b"]),
+            (["--model-name", "qwen3-8b", "--model-n", "pi05"],
+             False, "qwen3-8b", ["--model-n", "pi05"]),
+            (["--model-name", "pi05", "--model-n", "qwen3-8b"],
+             True, "qwen3-8b", []),
+            (["--model-name", "pi05", "--model-name", "qwen3-8b"],
+             False, "qwen3-8b", []),
+            (["--model-name", "qwen3-8b", "--model-name", "pi05"],
+             True, "pi05", []),
+            (["--model-name", "pi05", "--", "--model-name", "qwen3-8b"],
+             True, "pi05", ["--", "--model-name", "qwen3-8b"]),
+        )
+        for argv, use_torch, model_name, unknown in cases:
+            with self.subTest(argv=argv):
+                parser = argparse.ArgumentParser(allow_abbrev=use_torch)
+                parser.add_argument("--model-name")
+                parsed = []
+                with (
+                    patch.object(sys, "argv", ["train.py", *argv]),
+                    patch.object(train, "_run_megatron",
+                                 side_effect=lambda: parsed.append(parser.parse_known_args())) as run_megatron,
+                    patch.object(train, "_run_torch",
+                                 side_effect=lambda: parsed.append(parser.parse_known_args())) as run_torch,
+                ):
+                    self.assertIsNone(train.main())
+                    self.assertEqual(sys.argv, ["train.py", *argv])
+                self.assertEqual(run_torch.call_count, int(use_torch))
+                self.assertEqual(run_megatron.call_count, int(not use_torch))
+                self.assertEqual(parsed[0][0].model_name, model_name)
+                self.assertEqual(parsed[0][1], unknown)
 
 
 @unittest.skipUnless(

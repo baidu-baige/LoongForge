@@ -6,7 +6,9 @@
 import argparse
 import ast
 import functools
+import importlib
 import os
+import subprocess
 import sys
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
@@ -15,7 +17,7 @@ from copy import deepcopy
 from dataclasses import make_dataclass
 from pathlib import Path
 from types import ModuleType, SimpleNamespace as NS
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -33,6 +35,147 @@ def _load_functions(relative_path, names, **namespace):
     module = ast.fix_missing_locations(ast.Module(body=[future, *functions], type_ignores=[]))
     exec(compile(module, str(path), "exec"), namespace)
     return namespace
+
+
+@pytest.fixture
+def model_imports():
+    """Keep model registration real and replace only heavy model dependencies."""
+    with patch.dict(sys.modules):
+        for name in list(sys.modules):
+            if name.split(".")[0] in {"loongforge", "torch", "transformers", "megatron"}:
+                del sys.modules[name]
+
+        def stub(name, **exports):
+            module = sys.modules.setdefault(name, ModuleType(name))
+            module.__path__ = []
+            module.__dict__.update(exports)
+
+        stub("torch")
+        stub("transformers", AutoModel=NS(register=Mock()))
+        stub("megatron")
+        stub("megatron.core")
+        stub("megatron.core.transformer")
+        stub("megatron.core.transformer.spec_utils", import_module=Mock())
+        stub("loongforge.engines.megatron.utils.runtime", get_transformers_version=Mock())
+        stub(
+            "loongforge.engines.megatron",
+            build_transformer_config=Mock(), get_args=Mock(), print_rank_0=Mock(),
+        )
+        stub("loongforge.models.common", BaseModelStditConfig=type("BaseModelStditConfig", (), {}))
+        stub("loongforge.models.diffusion.wan.wan_config", WanConfig=type("WanConfig", (), {}))
+        stub(
+            "loongforge.models.diffusion.qwen_image.qwen_image_model",
+            QwenImageModel=type("QwenImageModel", (), {}),
+        )
+        stub(
+            "loongforge.models.diffusion.qwen_image.qwen_image_layer_spec",
+            get_qwen_image_layer_with_te_spec=Mock(),
+        )
+        for package in ("foundation", "encoder"):
+            path = ROOT / f"loongforge/models/{package}/__init__.py"
+            for node in ast.parse(path.read_text(encoding="utf-8")).body:
+                if isinstance(node, ast.ImportFrom) and node.level == 1:
+                    name = f"loongforge.models.{package}.{node.module}"
+                    stub(name, **{alias.name: type(alias.name, (), {}) for alias in node.names})
+
+        yield importlib.import_module
+
+
+@pytest.mark.parametrize("first", ["factory", "vlm.args", "foundation", "encoder", "diffusion"])
+def test_model_imports_register_builtins_before_custom_providers(first, model_imports, monkeypatch):
+    model_imports(
+        "loongforge.training.vlm.args" if first == "vlm.args" else f"loongforge.models.{first}"
+    )
+    factory = model_imports("loongforge.models.factory")
+    builtin = factory.get_model_provider("qwen_image")
+    assert builtin is not None
+    provider = model_imports("loongforge.models.diffusion.qwen_image.qwen_image_provider")
+    assert builtin is provider.qwen_image_model_provider
+    assert factory.get_model_config("qwen-image-edit-2511").model_type == "qwen_image"
+    register = model_imports("transformers").AutoModel.register
+    registrations = register.call_args_list[:]
+    assert registrations
+    for module in ("factory", "foundation", "encoder", "diffusion"):
+        model_imports(f"loongforge.models.{module}")
+    assert register.call_args_list == registrations
+
+    with pytest.raises(ValueError, match="Cannot register duplicate model provider"):
+        factory.register_model_provider("qwen_image")(lambda: None)
+    assert factory.get_model_provider("qwen_image") is builtin
+
+    vlm_args = model_imports("loongforge.training.vlm.args")
+    query = factory.get_support_model_archs
+    assert vlm_args.get_support_model_archs is query
+    expected = query("qwen_image")
+    assert expected
+    monkeypatch.setattr(factory, "get_support_model_archs", Mock(side_effect=AssertionError("Late factory lookup")))
+    assert vlm_args.get_support_model_archs("qwen_image") == expected
+
+
+def test_model_catalog_import_keeps_torch_entry_lightweight():
+    subprocess.run(
+        [sys.executable, "-B", "-c", """
+import sys
+import loongforge.models.catalog
+assert not any(name.split(".")[0] in {"torch", "transformers", "megatron"} for name in sys.modules)
+assert not any(name in sys.modules for name in (
+    "loongforge.models.factory",
+    "loongforge.models.foundation", "loongforge.models.encoder", "loongforge.models.diffusion",
+))
+"""],
+        cwd=ROOT, check=True, capture_output=True, text=True,
+    )
+
+
+def test_recipe_registry_keeps_family_case_and_override_rules(monkeypatch):
+    from loongforge import training
+
+    registry = {}
+    monkeypatch.setattr(training, "MODEL_FAMILY_TRAINER_FACTORY", registry)
+    monkeypatch.setattr(training, "_load_builtin_trainers", Mock())
+    original, replacement, sft = Mock(), Mock(), Mock()
+    register = training.register_model_trainer
+    assert register(["LLAMA", "qwen3"], "pretrain")(original) is original
+    assert registry == {"llama": {"pretrain": original}, "qwen3": {"pretrain": original}}
+    register("llama", "pretrain")(replacement)
+    assert registry["llama"]["pretrain"] is original
+    register("llama", "pretrain", override=True)(replacement)
+    assert registry["llama"]["pretrain"] is replacement
+    assert register("LLAMA", "sft", training_func=sft) is None
+    assert registry["llama"]["sft"] is sft
+
+
+def test_recipe_loader_retries_import_errors_and_loads_defaults_once(monkeypatch):
+    from loongforge import training
+
+    monkeypatch.setattr(training, "_TRAINERS_LOADED", False)
+    monkeypatch.setattr(training, "_TRAINERS_LOADING", False)
+    original_import = __import__
+    imported = []
+    fail = True
+
+    def import_recipes(name, globals=None, locals=None, fromlist=(), level=0):
+        if name in {
+            "loongforge.training.llm", "loongforge.training.vlm", "loongforge.training.diffusion",
+        }:
+            imported.extend(fromlist)
+            if fail and "pretrain_vlm" in fromlist:
+                raise ImportError("recipe dependency unavailable")
+            return NS(**dict.fromkeys(fromlist))
+        return original_import(name, globals, locals, fromlist, level)
+
+    with patch("builtins.__import__", side_effect=import_recipes):
+        with pytest.raises(ImportError, match="recipe dependency unavailable"):
+            training._load_builtin_trainers()
+        assert training._TRAINERS_LOADED is False
+        assert training._TRAINERS_LOADING is False
+        fail = False
+        imported.clear()
+        training._load_builtin_trainers()
+        assert "pretrain_vlm" in imported
+        first_imports = imported[:]
+        training._load_builtin_trainers()
+        assert imported == first_imports
 
 
 def test_engine_registers_loss_and_keeps_original_training_provider(monkeypatch):
@@ -67,18 +210,8 @@ def test_engine_registers_loss_and_keeps_original_training_provider(monkeypatch)
         loongforge_extra_train_args_provider=training_provider,
         validate_loongforge_extra_args=Mock(), apply_resumption_flags=resume,
     )
-    module = ModuleType("loongforge.engines.megatron.parser")
-    module.parse_train_args = engine["parse_train_args"]
-    monkeypatch.setitem(sys.modules, module.__name__, module)
-    recipe = Mock()
-    resolve = Mock(return_value=recipe)
-    entry = _load_functions(
-        "loongforge/train.py", {"_run_megatron"}, resolve_method=resolve,
-    )
-    assert entry["_run_megatron"]() is recipe.train.return_value
-    resolve.assert_called_once_with("llm", "pretrain")
-    recipe.train.assert_called_once_with(result)
-    assert set(resolvers) == {"act", "position_func", "loss_func", "moe_freq"}
+    assert engine["parse_train_args"]() is result
+    assert {"act", "position_func", "loss_func", "moe_freq"} <= resolvers.keys()
     assert register.call_args.kwargs == {"replace": True}
     save_config.assert_called_once_with(config)
     resume.assert_not_called()
@@ -162,11 +295,11 @@ def test_training_provider_registers_original_bridge_parameters_once(monkeypatch
         "add_llm_args", "add_vlm_args", "add_diffusion_args",
     )
     namespace = _load_functions(
-        "loongforge/training/megatron_args.py", {"_add_extra_bridge_args", "add_training_args"},
+        "loongforge/training/megatron_args.py", {"_add_extra_bridge_args", "loongforge_extra_train_args_provider"},
         **{name: Mock(side_effect=lambda parser: parser) for name in providers},
     )
     parser = argparse.ArgumentParser()
-    assert namespace["add_training_args"](parser) is parser
+    assert namespace["loongforge_extra_train_args_provider"](parser) is parser
     group = next(group for group in parser._action_groups if group.title == "extra-bridge")
     names = (
         "fp8-force-no-requant", "force-pow-2-scales", "amax-epsilon", "hf-dequantize-int4",
@@ -207,7 +340,7 @@ def test_megatron_validators_keep_original_call_order():
     calls = []
     callbacks = {name: Mock(side_effect=lambda *values, name=name: calls.append(name)) for name in names}
     namespace = _load_functions(
-        "loongforge/engines/megatron/validators.py",
+        "loongforge/training/megatron_args.py",
         {"validate_loongforge_extra_args", "validate_megatron_args"}, **callbacks,
     )
     args, config = NS(enable_one_logger=True), object()
@@ -262,8 +395,8 @@ def test_runtime_print_rank_zero_keeps_actual_rank_priority(
 ])
 def test_diffusion_text_length_keeps_cp_alignment(family, length, cp, expected):
     namespace = _load_functions(
-        "loongforge/engines/megatron/validators.py", {"_validata_extra_custom_args"},
-        DiffusionModelFamilies=NS(names=lambda: {"wan"}),
+        "loongforge/training/diffusion/args.py", {"_validata_extra_custom_args"},
+        catalog=NS(DiffusionModelFamilies=NS(names=lambda: {"wan"})),
     )
     args = NS(model_family=family, max_text_length=length, context_parallel_size=cp)
     namespace["_validata_extra_custom_args"](args)
@@ -335,8 +468,9 @@ def test_master_schema_filters_cli_fields_and_global_dsa_keeps_yaml_priority(fam
         VisionLanguageActionModelFamilies=NS(names=lambda: set()),
     )
     validator = _load_functions(
-        "loongforge/engines/megatron/validators.py", {"_validate_extra_model_args"},
-        _YAML_KEY_ALIASES={}, VisionLanguageModelFamilies=constants.VisionLanguageModelFamilies,
+        "loongforge/training/megatron_args.py", {"_validate_extra_model_args"},
+        _YAML_KEY_ALIASES={}, catalog=constants,
+        _validate_vlm_model_args=Mock(), _validate_llm_model_args=Mock(),
         print_rank_0=Mock(),
     )
     namespace = _load_functions(
@@ -491,8 +625,6 @@ def test_finetune_keeps_the_original_base_contract_and_iterator_lifecycle():
         "_save_checkpoint", "_init_data_iterator", "_advance_epoch", "_fetch_batch",
     }
     assert not finetune.__abstractmethods__
-    assert "_fetch_batch_cpu" not in base.__dict__
-    assert "_fetch_batch_cpu" in finetune.__dict__
 
     class Loader(list):
         pass
@@ -511,9 +643,6 @@ def test_finetune_keeps_the_original_base_contract_and_iterator_lifecycle():
 
 @pytest.mark.parametrize("offload_enabled", [False, True])
 def test_full_hetero_keeps_global_state_and_lazy_offload(offload_enabled, monkeypatch):
-    path = ROOT / "loongforge/training/vlm/pretrain_vlm.py"
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    assert not any(isinstance(node, ast.ClassDef) and node.name == "HeteroStepContext" for node in tree.body)
     offload = NS(enabled=offload_enabled, clear=Mock())
     manager = Mock(return_value=offload)
     module = ModuleType("loongforge.engines.megatron.full_hetero_cpu_offload")
@@ -575,8 +704,7 @@ def test_vlm_recipe_uses_original_model_provider(monkeypatch):
     monkeypatch.setitem(sys.modules, source, module)
     namespace = {}
     exec(compile(ast.Module(body=imports, type_ignores=[]), str(path), "exec"), namespace)
-    assert namespace["model_provider"] is provider
-    assert not any(isinstance(node, ast.FunctionDef) and node.name == "model_provider" for node in tree.body)
+    assert namespace["omni_model_provider"] is provider
     provider.assert_not_called()
 
 

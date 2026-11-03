@@ -341,7 +341,7 @@ Click any model for its training examples; see [`configs/models/`](./configs/mod
 </table>
 
 > [!TIP]
-> For VLMs, also see the [custom composition example](./examples/qwen_vit_llama3/pretrain/pretrain_qwen_vit_llama3.sh), which assembles a new model from a ViT and an LLM purely through configuration.
+> For VLMs, also see the [custom composition example](./examples/qwen_vit_llama3/), which assembles a new model from a ViT and an LLM purely through configuration.
 
 <a id="powered-by-loongforge"></a>
 ## 🌟 Awesome Projects Built with LoongForge

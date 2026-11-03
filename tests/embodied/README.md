@@ -42,7 +42,7 @@ All environment-related paths are centralized in `config/env.sh` (sourced automa
 you invoke via `run.sh` or `cli.py`). To switch machines, you only need to change
 this one file, or temporarily override with environment variables before the command:
 
-- `EMBODIED_CI_ROOT` — default `/workspace/loongforge_embodied_ci`; unified root directory for out-of-repo mutable state (data, logs, tools). Baselines are **no longer** derived from it by default.
+- `EMBODIED_CI_ROOT` — default `/ssd2/loongforge_embodied_ci`; unified root directory for out-of-repo mutable state (data, logs, tools). Baselines are **no longer** derived from it by default.
 - `LOCAL_VLA_ARTIFACTS_ROOT` — default `${EMBODIED_CI_ROOT}/vla_artifacts`; data/ckpt root, shared by download and training scripts
 - `EMBODIED_LOG_ROOT` — default `${EMBODIED_CI_ROOT}/logs`; regression log/result root directory
 - `EMBODIED_BASELINE_ROOT` — default **in-repo** at `tests/embodied/baseline` (this suite owns its baselines; the sibling suite owns `tests/llm_vlm/baseline/`). Override to point at a shared out-of-repo collection if multiple checkouts must share baselines.

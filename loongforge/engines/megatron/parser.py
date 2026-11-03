@@ -17,16 +17,18 @@ from megatron.training.checkpointing import load_args_from_checkpoint
 from omegaconf import DictConfig, OmegaConf
 
 from loongforge.models.utils import build_model_config
-from loongforge.training.megatron_args import add_training_args as loongforge_extra_train_args_provider
+from loongforge.training.megatron_args import (
+    loongforge_extra_train_args_provider,
+    validate_custom_model_args,
+    validate_loongforge_extra_args,
+    validate_megatron_args,
+)
 from loongforge.engines.megatron.get_loss_func import (default_loss_func,
                                                     loss_func_internvl)
 from loongforge.models.omni_models.get_position_idx_func import (get_mrope_index,
                                                             get_position_ids,
                                                             get_rope_index_internvl,
                                                             get_rope_index_qwen3vl)
-from loongforge.engines.megatron.validators import (validate_loongforge_extra_args,
-                                                validate_custom_model_args,
-                                                validate_megatron_args)
 from loongforge.models import catalog as constants
 from loongforge.models.catalog import get_config_from_model_name
 from loongforge.engines.megatron.utils.global_vars import (get_hydra_config,
@@ -48,7 +50,7 @@ def register_custom_resolvers():
     POSITION_IDX_FUNC_MAP = {
         "position_ids": get_position_ids,
         "mrope_ids": get_mrope_index,
-        "rope_ids_internvl": get_rope_index_internvl,
+        "rope_ids_internvl": get_rope_index_internvl, 
         "rope_ids_qwen3vl": get_rope_index_qwen3vl
     }
     LOSS_FUNC_MAP = {
@@ -194,7 +196,7 @@ def parse_arguments(
 
     # TODO: remove this in the future
     args.model_family = model_type
-
+    
     if model_type in constants.VisionLanguageModelFamilies.names():
         args_dict = {}
         for name, config_values in model_config.items():
@@ -220,11 +222,11 @@ def parse_arguments(
                 validate_custom_model_args(name, args_deepcopy)
 
             args_dict[name] = args_deepcopy
-
+        
         if "foundation" not in args_dict:
             raise ValueError("args_dict does not contain 'foundation'")
         args = args_dict["foundation"]
-
+        
         # set global args dict
         set_args_dict(args_dict)
 

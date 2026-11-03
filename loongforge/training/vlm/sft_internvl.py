@@ -6,8 +6,8 @@
 
 import os
 import torch
-from datasets import load_from_disk
 from functools import partial
+from datasets import load_from_disk
 from transformers import DataCollatorForSeq2Seq
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.training import get_timers
@@ -18,11 +18,15 @@ from megatron.core import parallel_state
 from megatron.core.utils import StragglerDetector
 from loongforge.engines.megatron import (get_args, get_tokenizer, get_model_config)
 from megatron.core.enums import ModelType
-from loongforge.engines.megatron.runner import pretrain
+from loongforge.models import catalog as constants
+from loongforge.data import constants as data_constants
+from loongforge.models.factory import get_model_provider
+from loongforge.engines.megatron.runner import MegatronTrainer
+from loongforge.training import register_model_trainer
 from loongforge.data.vlm.internvl.internvl_task_encoder import InternVLTaskEncoder
 from loongforge.data.utils import (
-    build_sft_cyclic_iterators,
     build_sft_data_collator,
+    build_sft_cyclic_iterators,
 )
 from loongforge.data.vlm.dataloader_provider import (
     get_train_dataset,
@@ -31,7 +35,6 @@ from loongforge.data.vlm.dataloader_provider import (
 from loongforge.models.omni_models.omni_model_provider import (
     omni_model_provider,
 )
-from loongforge.models.encoder.internvl_vision_models.internvl_config import IMG_CONTEXT_TOKEN
 
 stimer = StragglerDetector()
 
@@ -46,7 +49,11 @@ def model_provider(pre_process=True, post_process=True, vp_stage: int = None):
     Returns:
         MCoreModel: The returned model
     """
-    return omni_model_provider(pre_process, post_process, vp_stage=vp_stage)
+    args = get_args()
+    #model_family = get_model_family(args.model_family)
+    model_provider = get_model_provider(args.model_family)
+    assert model_provider is not None, f'model provider for {args.model_name} not found'
+    return model_provider(pre_process, post_process, vp_stage)
 
 
 def get_packed_seq_params(attention_mask):
@@ -173,9 +180,8 @@ def forward_step(data_iterator, model):
     # for qianfanvl
     if mpu.is_pipeline_last_stage():
         tokenizer = get_tokenizer().tokenizer
-        image_token_id = tokenizer.convert_tokens_to_ids(IMG_CONTEXT_TOKEN)
-        patch_size = get_model_config().image_encoder.patch_size
-        num_image_token = int((args.force_image_size // patch_size) ** 2 * (args.down_sample_ratio ** 2))
+        image_token_id = tokenizer.convert_tokens_to_ids('<IMG_CONTEXT>')
+        num_image_token = int((args.force_image_size // args.patch_size) ** 2 * (args.down_sample_ratio ** 2))
         ignore_flag = filter_ignore_data(input_ids, image_flags, image_token_id,
                                             num_image_token)
         if ignore_flag:
@@ -222,13 +228,16 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
         return train_dataloader, None, None
 
 
-def train(args):
-    """Run InternVL SFT."""
-    train_valid_test_datasets_provider.is_distributed = True
-    pretrain(
-        args,
-        train_valid_test_datasets_provider,
-        model_provider,
-        ModelType.encoder_or_decoder,
-        forward_step,
+@register_model_trainer(model_family=constants.VisionLanguageModelFamilies.INTERN_VL,
+                        training_phase=data_constants.TrainingPhase.SFT, override=True)
+def default_sft_trainer(train_args):
+    """Build trainer"""
+    trainer = MegatronTrainer(
+        train_args=train_args,
+        train_valid_test_dataset_provider=train_valid_test_datasets_provider,
+        model_provider=omni_model_provider,
+        model_type=ModelType.encoder_or_decoder,
+        forward_step_func=forward_step,
     )
+
+    return trainer

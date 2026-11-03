@@ -13,8 +13,8 @@
 | `examples/` | 模型级启动脚本目录，可通过脚本末尾的透传参数覆盖默认配置 |
 | `configs/models/` | 模型默认 YAML 配置目录，包含 `model:` / `data:` 两个顶层配置段 |
 | `loongforge/train.py` | 训练入口，负责解析配置、构建 Trainer 并启动训练 |
-| `loongforge/training/torch_args.py` | 通用训练参数定义文件，负责生成 shell CLI |
-| `loongforge/models/catalog.py` | 模型配置路由表，将 `--model-name` 绑定到 YAML、`ModelConfig` 与 `DataConfig` |
+| `loongforge/training/torch_args.py` 与 `loongforge/training/embodied/args.py` | 通用训练参数定义文件，负责生成 shell CLI |
+| `loongforge/training/torch_args.py` | 模型配置路由表，将 `--model-name` 绑定到 YAML、`ModelConfig` 与 `DataConfig` |
 | `loongforge/models/embodied/` | 模型组网、模型注册 |
 | `loongforge/data/embodied/` | 数据处理相关功能 |
 
@@ -27,7 +27,7 @@ loongforge/train.py
     ↓
 parse_train_args()
     ↓
-build_model_trainer()
+resolve_torch_trainer()
     ↓
 trainer.train()
 ```
@@ -143,7 +143,7 @@ model.forward(batch)
 
 | 功能 | 配置项 | 默认值 | 取值 / 类型 | 说明 |
 | --- | --- | --- | --- | --- |
-| 选择模型 | `--model-name` | `None` | `catalog.py` 中注册的模型名 | 选择模型 schema、默认 YAML、`ModelConfig` 与 `DataConfig` |
+| 选择模型 | `--model-name` | `None` | `torch_args.py` 中注册的模型名 | 选择模型 schema、默认 YAML、`ModelConfig` 与 `DataConfig` |
 | 指定 YAML | `--config-file` | `None` | YAML 文件路径 | 覆盖 `--model-name` 对应的默认 YAML |
 | 指定 tokenizer | `--tokenizer-path` | `None` | 本地路径或 HF repo id | 设置 tokenizer 路径，并同步到 `TOKENIZER_PATH` 环境变量 |
 

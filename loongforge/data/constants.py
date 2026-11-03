@@ -5,6 +5,7 @@
 
 IGNORE_INDEX = -100
 
+######### dataset ########
 DEFAULT_DATASET_NAME = "default"
 
 SFT_SUPPORT_DATA_TYPE = {
@@ -15,13 +16,6 @@ SFT_SUPPORT_DATA_TYPE = {
     "parquet": "parquet",
     "txt": "text",
 }
-
-
-class TrainingPhase(object):
-    """Training phase"""
-
-    PRETRAIN = "pretrain"
-    SFT = "sft"
 
 
 class SFTDataFormats(object):
@@ -47,3 +41,11 @@ class Placeholder(object):
 
     IMAGE = "<image>"
     VIDEO = "<video>"
+
+
+######## training args ########
+class TrainingPhase(object):
+    """Training phase"""
+
+    PRETRAIN = "pretrain"
+    SFT = "sft"

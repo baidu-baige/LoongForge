@@ -768,7 +768,7 @@ def test_validation_rejects_unsupported_combinations(overrides, match):
 
 @pytest.mark.parametrize("trainer_type", ["FinetuneTrainer", "LingbotVlaV2Trainer"])
 def test_muon_validation_accepts_ddp(trainer_type):
-    from loongforge.engines.torch.validators import validate_muon_args
+    from loongforge.training.torch_args import validate_muon_args
 
     validate_muon_args(_training_args(trainer_type=trainer_type, optimizer="muon"))
     validate_muon_args(_training_args(trainer_type=trainer_type, distributed_strategy="fsdp"))
@@ -784,7 +784,7 @@ def test_muon_validation_accepts_ddp(trainer_type):
     ],
 )
 def test_muon_validation_rejects_unsupported_combinations(trainer_type, overrides, match):
-    from loongforge.engines.torch.validators import validate_muon_args
+    from loongforge.training.torch_args import validate_muon_args
 
     args = _training_args(trainer_type=trainer_type, optimizer="muon", **overrides)
     with pytest.raises(ValueError, match=re.escape(match)):

@@ -11,7 +11,7 @@ import torch.nn as nn
 
 from loongforge.engines.torch.distributed.fsdp_utils.builders import build_ignored_params
 from loongforge.engines.torch.distributed.fsdp_utils.units import resolve_wrap_runs
-from loongforge.engines.torch.validators import _validate_fsdp_ignored_frozen_args
+from loongforge.training.torch_args import _validate_fsdp_ignored_frozen_args
 
 
 class FrozenBlock(nn.Module):

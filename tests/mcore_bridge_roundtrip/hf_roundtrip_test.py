@@ -407,10 +407,9 @@ def main():
             is_vlm = False
             break
     if is_vlm:
-        model_provider = omni_model_provider
+        model = get_model(omni_model_provider, ModelType.encoder_or_decoder, wrap_with_ddp=False)
     else:
-        model_provider = llm_model_provider
-    model = get_model(model_provider, ModelType.encoder_or_decoder, wrap_with_ddp=False)
+        model = get_model(llm_model_provider, ModelType.encoder_or_decoder, wrap_with_ddp=False)
 
     # ── Step 4: Load HF checkpoint (identical to training) ────────────────
     print_rank_0("=" * 80)

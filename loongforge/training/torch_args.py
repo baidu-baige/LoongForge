@@ -34,14 +34,14 @@ import logging
 import os
 from dataclasses import dataclass, field
 from functools import partial
-from typing import Any, List, Optional, Union, get_args, get_origin
+from pathlib import Path
+from typing import Any, List, Optional, Type, Union, get_args, get_origin
 
 import torch
 
 from omegaconf import OmegaConf
 
-from loongforge.engines.torch.validators import validate
-from loongforge.models.catalog import get_config_path, get_config_types
+from loongforge.engines.torch.optimizer.tensor_wise_optimizer.validation import validate_tensor_wise_args
 from loongforge.training.cli_utils import (
     parse_class_names,
     parse_non_negative_int,
@@ -49,6 +49,36 @@ from loongforge.training.cli_utils import (
     parse_positive_int,
 )
 from loongforge.training.embodied.args import _EmbodiedDataArgs, _EmbodiedRoutingArgs
+from loongforge.models.embodied.pi05.model_configuration_pi05 import Pi05ModelConfig
+from loongforge.models.embodied.vlda.model_configuration_vlda import VLDAModelConfig
+from loongforge.data.embodied.vlda.transforms.data_configuration_vlda import VLDADataConfig
+from loongforge.data.embodied.pi05.transforms.data_configuration_pi05 import Pi05DataConfig
+from loongforge.models.embodied.gr00t_n1_6.model_configuration_gr00t_n1_6 import GrootN1d6ModelConfig
+from loongforge.data.embodied.gr00t_n1_6.transforms.data_configuration_gr00t_n1_6 import GrootN1d6DataConfig
+from loongforge.models.embodied.xvla.model_configuration_xvla import XvlaModelConfig
+from loongforge.data.embodied.xvla.transforms.data_configuration_xvla import XvlaDataConfig
+from loongforge.models.embodied.fastwam.modeling_configuration_fastwam import FastWAMModelConfig
+from loongforge.data.embodied.fastwam.transforms.data_configuration_fastwam import FastWAMDataConfig
+from loongforge.models.embodied.gr00t_n1_7.model_configuration_gr00t_n1_7 import GrootN1d7Config
+from loongforge.data.embodied.gr00t_n1_7.transforms.data_configuration_gr00t_n1_7 import (
+    GrootN1d7DataConfig,
+)
+from loongforge.models.embodied.cosmos3.modeling_configuration_cosmos3 import Cosmos3ModelConfig
+from loongforge.data.embodied.cosmos3.data_configuration_cosmos3 import Cosmos3DroidConfig
+from loongforge.models.embodied.dreamzero.model_configuration_dreamzero import DreamZeroConfig
+from loongforge.data.embodied.dreamzero.transforms.data_configuration_dreamzero import DreamZeroDataConfig
+from loongforge.models.embodied.lingbot_va.model_configuration_lingbot_va import LingBotVAModelConfig
+from loongforge.data.embodied.lingbot_va.transforms.data_configuration_lingbot_va import LingBotVADataConfig
+from loongforge.models.embodied.wall_oss_0_5.model_configuration_wall_oss_0_5 import WallOss05ModelConfig
+from loongforge.data.embodied.wall_oss_0_5.transforms.data_configuration_wall_oss_0_5 import (
+    WallOss05DataConfig,
+)
+from loongforge.models.embodied.lingbot_vla_v2.model_configuration_lingbot_vla_v2 import (
+    LingbotVLAV2ModelConfig,
+)
+from loongforge.data.embodied.lingbot_vla_v2.transforms.data_configuration_lingbot_vla_v2 import (
+    LingbotVLAV2DataConfig,
+)
 from loongforge.training.embodied.global_vars import (
     set_data_config,
     set_model_config,
@@ -56,6 +86,81 @@ from loongforge.training.embodied.global_vars import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+_CONFIGS_DIR = (
+    Path(__file__).resolve().parent.parent.parent
+    / "configs" / "models"
+)
+
+
+@dataclass(frozen=True)
+class ModelSchema:
+    """Binding of a model name to its YAML file and typed config classes."""
+
+    yaml_file: str
+    model_config_cls: Type
+    data_config_cls: Type
+
+
+MODEL_SCHEMA = {
+    "lingbot_va_robotwin": ModelSchema(
+        "lingbot_va/lingbot_va_robotwin.yaml", LingBotVAModelConfig, LingBotVADataConfig
+    ),
+    "lingbot_va_libero": ModelSchema(
+        "lingbot_va/lingbot_va_libero.yaml", LingBotVAModelConfig, LingBotVADataConfig
+    ),
+    "lingbot_vla_v2": ModelSchema(
+        "lingbot_vla_v2/lingbot_vla_v2.yaml", LingbotVLAV2ModelConfig, LingbotVLAV2DataConfig
+    ),
+    "pi05": ModelSchema("pi05/pi05.yaml", Pi05ModelConfig, Pi05DataConfig),
+    "vlda": ModelSchema("vlda/vlda.yaml", VLDAModelConfig, VLDADataConfig),
+    "gr00t_n1_6": ModelSchema("gr00t_n1_6/gr00t_n1_6.yaml", GrootN1d6ModelConfig, GrootN1d6DataConfig),
+    "xvla": ModelSchema("xvla/xvla.yaml", XvlaModelConfig, XvlaDataConfig),
+    "fastwam": ModelSchema("fastwam/fastwam.yaml", FastWAMModelConfig, FastWAMDataConfig),
+    "gr00t_n1_7": ModelSchema("gr00t_n1_7/gr00t_n1_7.yaml", GrootN1d7Config, GrootN1d7DataConfig),
+    "cosmos3_nano": ModelSchema("cosmos3/nano.yaml", Cosmos3ModelConfig, Cosmos3DroidConfig),
+    "dreamzero_lora_wan22_5b": ModelSchema(
+        "dreamzero/dreamzero_wan22_5b.yaml", DreamZeroConfig, DreamZeroDataConfig
+    ),
+    "dreamzero_full_wan22_5b": ModelSchema(
+        "dreamzero/dreamzero_wan22_5b.yaml", DreamZeroConfig, DreamZeroDataConfig
+    ),
+    "dreamzero_lora_wan21_14b": ModelSchema(
+        "dreamzero/dreamzero_wan21_14b.yaml", DreamZeroConfig, DreamZeroDataConfig
+    ),
+    "dreamzero_full_wan21_14b": ModelSchema(
+        "dreamzero/dreamzero_wan21_14b.yaml", DreamZeroConfig, DreamZeroDataConfig
+    ),
+    "dreamzero_libero_wan22_5b": ModelSchema(
+        "dreamzero/dreamzero_libero_wan22_5b.yaml", DreamZeroConfig, DreamZeroDataConfig
+    ),
+    "dreamzero_agibot_wan21_14b": ModelSchema(
+        "dreamzero/dreamzero_agibot_wan21_14b.yaml", DreamZeroConfig, DreamZeroDataConfig
+    ),
+    "dreamzero_yam_wan21_14b": ModelSchema(
+        "dreamzero/dreamzero_yam_wan21_14b.yaml", DreamZeroConfig, DreamZeroDataConfig
+    ),
+    "wall_oss_0_5": ModelSchema("wall_oss_0_5/wall_oss_0_5.yaml", WallOss05ModelConfig, WallOss05DataConfig),
+}
+
+
+def get_model_schema(model_name: str) -> ModelSchema:
+    """Look up the ModelSchema for a model name."""
+    key = model_name.lower().replace("-", "_")
+    if key not in MODEL_SCHEMA:
+        available = ", ".join(sorted(MODEL_SCHEMA.keys()))
+        raise ValueError(f"Unknown model-name '{model_name}'. Available: [{available}]")
+    return MODEL_SCHEMA[key]
+
+
+def get_config_path(model_name: str) -> str:
+    """Look up config YAML path by model name."""
+    schema = get_model_schema(model_name)
+    path = _CONFIGS_DIR / schema.yaml_file
+    if not path.exists():
+        raise FileNotFoundError(f"Config file not found: {path}")
+    return str(path)
 
 
 # ---------------------------------------------------------------------------
@@ -159,9 +264,14 @@ def parse_dtype_from_str(dtype_name: str) -> torch.dtype:
 
 
 # ---------------------------------------------------------------------------
-# Recipe mixins
+# TrainingArgs - single source of truth for generic training params
+#
+# The parameters are split into concern-scoped mixin dataclasses (_XxxArgs)
+# below; ``TrainingArgs`` aggregates them via multiple inheritance and remains a
+# single flat frozen dataclass. Attribute access stays flat
+# (``training_args.lr_base``) and the CLI/serialization behavior is unchanged.
+# To add or change a generic parameter, edit the matching _XxxArgs mixin.
 # ---------------------------------------------------------------------------
-
 
 @dataclass(frozen=True)
 class _ModelRoutingArgs:
@@ -173,10 +283,9 @@ class _ModelRoutingArgs:
         metadata={
             "help": "Model identifier (e.g. 'pi05', 'gr00t_n1_6'). Selects the "
                     "ModelConfig/DataConfig classes and default YAML via "
-                    "loongforge.models.catalog. Required."
+                    "MODEL_SCHEMA. Required."
         },
     )
-
     config_file: Optional[str] = field(
         default=None,
         metadata={
@@ -185,7 +294,6 @@ class _ModelRoutingArgs:
                     "required to pick the config classes."
         },
     )
-
     tokenizer_path: Optional[str] = field(
         default=None,
         metadata={
@@ -197,24 +305,8 @@ class _ModelRoutingArgs:
 
 
 @dataclass(frozen=True)
-class _RunArgs:
-    """Run length, output location, initialization source, seeding, and manual GC."""
-
-    pretrained_checkpoint: Optional[str] = field(
-        default=None,
-        metadata={
-            "help": "Path to pretrained weights to initialize the model from "
-                    "(fine-tuning)."
-        },
-    )
-
-    resume: bool = field(
-        default=False,
-        metadata={
-            "help": "Resume training (weights + optimizer/scheduler/RNG state) "
-                    "from the latest checkpoint in --output-dir."
-        },
-    )
+class _BasicTrainingArgs:
+    """Basic training loop control, seeding, and output directory."""
 
     train_iters: int = field(
         default=150000,
@@ -222,12 +314,10 @@ class _RunArgs:
             "help": "Total number of optimizer update steps to run before stopping."
         },
     )
-
     save_interval: int = field(
         default=10000,
         metadata={"help": "Write a checkpoint every N iterations; 0 disables saving."},
     )
-
     seed: int = field(
         default=3047,
         metadata={
@@ -235,33 +325,79 @@ class _RunArgs:
                     "(reproducibility)."
         },
     )
-
     set_seed_by_rank: bool = field(
         default=False,
         metadata={
             "help": "If True, seed += torch.distributed.get_rank()"
         },
     )
-
+    deterministic_mode: bool = field(
+        default=False,
+        metadata={
+            "help": "Force cuDNN deterministic algorithms. Improves "
+                    "reproducibility at some throughput cost; requires "
+                    "CUBLAS_WORKSPACE_CONFIG to be set."
+        },
+    )
+    disable_tf32: bool = field(
+        default=False,
+        metadata={
+            "help": "disable"
+                    "torch.backends.cudnn.allow_tf32"
+                    "torch.backends.cuda.matmul.allow_tf32"
+        },
+    )
+    cudnn_benchmark: bool = field(
+        default=False,
+        metadata={
+            "help": "Let cuDNN autotune convolution algorithms for the shapes it "
+                    "sees (torch.backends.cudnn.benchmark). Worth it for models "
+                    "with a fixed conv shape per step, e.g. the FastWAM VAE "
+                    "encoder; costs a slower first step per new shape. Mutually "
+                    "exclusive with --deterministic-mode."
+        },
+    )
     output_dir: str = field(
         default="outputs/default",
         metadata={
             "help": "Root directory for checkpoints, logs, and other run artifacts."
         },
     )
-
+    gradient_accumulation_steps: int = field(
+        default=1,
+        metadata={
+            "help": "Number of micro-batches accumulated before each optimizer "
+                    "step; effective batch = per_device_batch_size * world_size "
+                    "* this value."
+        },
+    )
+    loss_spike_threshold: float = field(
+        default=100.0,
+        metadata={
+            "help": "Loss spike guard threshold. The scaled backward loss "
+                    "(loss / gradient_accumulation_steps) is checked each "
+                    "micro-batch; if it is NaN/Inf or greater than this value, "
+                    "that loss contribution is zeroed before backward and the "
+                    "optimizer iteration is counted as spiked/skipped."
+        },
+    )
     manual_gc: bool = field(
         default=False,
         metadata={
             "help": "Disable automatic Python GC and collect explicitly after optimizer steps."
         },
     )
-
     manual_gc_interval: int = field(
         default=0,
         metadata={
             "help": "Manual GC cadence in steps when --manual-gc is enabled; "
                     "0 disables periodic collection."
+        },
+    )
+    check_for_nan_in_loss_and_grad: bool = field(
+        default=True,
+        metadata={
+            "help": "Run host-side NaN/Inf checks on loss and gradients each step."
         },
     )
 
@@ -277,7 +413,6 @@ class _LearningRateArgs:
                     "--lr-group."
         },
     )
-
     lr_group: Optional[str] = field(
         default=None,
         metadata={
@@ -427,7 +562,6 @@ class _LearningRateArgs:
     #   Global step is partitioned into consecutive cycles of length C
     #
     # ============================================================
-
     lr_decay_style: str = field(
         default="cosine_with_min_lr",
         metadata={
@@ -454,7 +588,6 @@ class _LearningRateArgs:
                     "min(s, T)/T with T=--lr-decay-iters or --train-iters."
         },
     )
-
     lr_warmup_iters: int = field(
         default=2000,
         metadata={
@@ -462,14 +595,12 @@ class _LearningRateArgs:
                     "its peak."
         },
     )
-
     lr_decay_iters: Optional[int] = field(
         default=None,
         metadata={
             "help": "Number of scheduler decay steps. Defaults to --train-iters when unset."
         },
     )
-
     lr_decay_start_iters: int = field(
         default=0,
         metadata={
@@ -479,12 +610,10 @@ class _LearningRateArgs:
                     "after warmup. Requires --custom-lr-lambda."
         },
     )
-
     min_lr: float = field(
         default=1e-6,
         metadata={"help": "Lower bound the LR schedule decays to (floor)."},
     )
-
     custom_lr_lambda: bool = field(
         default=False,
         metadata={
@@ -495,7 +624,6 @@ class _LearningRateArgs:
         },
     )
     # ── lambda_linear scheduler params ──
-
     lambda_f_max: float = field(
         default=0.4,
         metadata={
@@ -503,7 +631,6 @@ class _LearningRateArgs:
                     "Only used when --lr-decay-style=lambda_linear."
         },
     )
-
     lambda_f_min: float = field(
         default=0.0,
         metadata={
@@ -511,7 +638,6 @@ class _LearningRateArgs:
                     "Only used when --lr-decay-style=lambda_linear."
         },
     )
-
     lambda_f_start: float = field(
         default=0.0,
         metadata={
@@ -519,7 +645,6 @@ class _LearningRateArgs:
                     "Only used when --lr-decay-style=lambda_linear."
         },
     )
-
     lambda_cycle_length: Optional[int] = field(
         default=10000,
         metadata={
@@ -529,7 +654,6 @@ class _LearningRateArgs:
         },
     )
     # ── polynomial scheduler params ──
-
     lr_end: float = field(
         default=1e-7,
         metadata={
@@ -537,7 +661,6 @@ class _LearningRateArgs:
                     "Only used when --lr-decay-style=polynomial."
         },
     )
-
     polynomial_power: float = field(
         default=1.0,
         metadata={
@@ -546,236 +669,11 @@ class _LearningRateArgs:
         },
     )
     # ── cosine_with_restarts scheduler params ──
-
     num_cycles: float = field(
         default=1.0,
         metadata={
             "help": "cosine_with_restarts: number of hard restart cycles. "
                     "Only used when --lr-decay-style=cosine_with_restarts."
-        },
-    )
-
-
-@dataclass(frozen=True)
-class _FreezeArgs:
-    """Parameter freezing by module path prefix."""
-
-    freeze_modules: str = field(
-        default="",
-        metadata={
-            "help": "Comma-separated module path prefixes whose parameters are "
-                    "frozen (requires_grad=False)."
-        },
-    )
-
-
-@dataclass(frozen=True)
-class _LoggingArgs:
-    """Logging cadence, W&B, and TensorBoard."""
-
-    log_interval: int = field(
-        default=1,
-        metadata={
-            "help": "Log scalar metrics (loss, LR, throughput) every N iterations."
-        },
-    )
-
-    detail_log_interval: int = field(
-        default=20,
-        metadata={
-            "help": "Log detailed per-stage timing breakdown every N iterations."
-        },
-    )
-
-    timing_log_level: int = field(
-        default=0,
-        metadata={
-            "choices": [0, 1],
-            "help": "Verbosity of per-stage timing logs: 0 = summary, "
-                    "1 = detailed.",
-        },
-    )
-
-    loss_log_rank: List[int] = field(
-        default_factory=lambda: [-1],
-        metadata={
-            "help": "Ranks whose loss is logged; -1 logs the all-reduced mean "
-                    "across ranks."
-        },
-    )
-
-    wandb_project: str = field(
-        default="loongforge-vla",
-        metadata={"help": "Weights & Biases project name."},
-    )
-
-    wandb_mode: str = field(
-        default="disabled",
-        metadata={
-            "choices": ["online", "offline", "disabled"],
-            "help": "W&B logging mode: stream online, buffer offline, or disable.",
-        },
-    )
-
-    tensorboard_dir: Optional[str] = field(
-        default=None,
-        metadata={
-            "help": "Directory for TensorBoard event files; unset disables "
-                    "TensorBoard."
-        },
-    )
-
-    tensorboard_queue_size: int = field(
-        default=1000,
-        metadata={
-            "help": "Max pending events buffered before the async TensorBoard "
-                    "writer flushes."
-        },
-    )
-
-
-@dataclass(frozen=True)
-class _ProfilerArgs:
-    """torch.profiler / Nsight profiling capture window."""
-
-    use_pytorch_profiler: bool = field(
-        default=False,
-        metadata={"help": "Enable torch.profiler to capture CPU/GPU op traces."},
-    )
-
-    use_nsys_profiler: bool = field(
-        default=False,
-        metadata={
-            "help": "Enable NVIDIA Nsight Systems (nsys) profiling range markers."
-        },
-    )
-
-    profile_step_start: int = field(
-        default=10,
-        metadata={"help": "Iteration at which profiling capture starts."},
-    )
-
-    profile_step_end: int = field(
-        default=12,
-        metadata={"help": "Iteration at which profiling capture stops."},
-    )
-
-    profile_ranks: List[int] = field(
-        default_factory=lambda: [0],
-        metadata={"help": "Ranks on which the profiler is active."},
-    )
-
-    profile_output_dir: Optional[str] = field(
-        default=None,
-        metadata={"help": "Directory to write profiler traces to."},
-    )
-
-
-# ---------------------------------------------------------------------------
-# Engine mixins
-# ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class _StepArgs:
-    """Per-micro-batch step execution and gradient accumulation."""
-
-    gradient_accumulation_steps: int = field(
-        default=1,
-        metadata={
-            "help": "Number of micro-batches accumulated before each optimizer "
-                    "step; effective batch = per_device_batch_size * world_size "
-                    "* this value."
-        },
-    )
-
-    loss_spike_threshold: float = field(
-        default=100.0,
-        metadata={
-            "help": "Loss spike guard threshold. The scaled backward loss "
-                    "(loss / gradient_accumulation_steps) is checked each "
-                    "micro-batch; if it is NaN/Inf or greater than this value, "
-                    "that loss contribution is zeroed before backward and the "
-                    "optimizer iteration is counted as spiked/skipped."
-        },
-    )
-
-    check_for_nan_in_loss_and_grad: bool = field(
-        default=True,
-        metadata={
-            "help": "Run host-side NaN/Inf checks on loss and gradients each step."
-        },
-    )
-
-
-@dataclass(frozen=True)
-class _RuntimeArgs:
-    """Backend runtime switches applied at initialization."""
-
-    deterministic_mode: bool = field(
-        default=False,
-        metadata={
-            "help": "Force cuDNN deterministic algorithms. Improves "
-                    "reproducibility at some throughput cost; requires "
-                    "CUBLAS_WORKSPACE_CONFIG to be set."
-        },
-    )
-
-    disable_tf32: bool = field(
-        default=False,
-        metadata={
-            "help": "Disable TF32 for cuDNN convolutions and CUDA matmuls "
-                    "(torch.backends.cudnn.allow_tf32, "
-                    "torch.backends.cuda.matmul.allow_tf32)."
-        },
-    )
-
-    cudnn_benchmark: bool = field(
-        default=False,
-        metadata={
-            "help": "Let cuDNN autotune convolution algorithms for the shapes it "
-                    "sees (torch.backends.cudnn.benchmark). Worth it for models "
-                    "with a fixed conv shape per step, e.g. the FastWAM VAE "
-                    "encoder; costs a slower first step per new shape. Mutually "
-                    "exclusive with --deterministic-mode."
-        },
-    )
-
-
-@dataclass(frozen=True)
-class _CheckpointIOArgs:
-    """On-disk checkpoint format and save behavior."""
-
-    save_format: str = field(
-        default="safetensors",
-        metadata={
-            "choices": ["safetensors", "pt", "dcp"],
-            "help": "On-disk checkpoint format: safetensors, raw torch .pt, or "
-                    "distributed checkpoint (dcp).",
-        },
-    )
-
-    save_training_state: bool = field(
-        default=True,
-        metadata={
-            "help": "Also save optimizer, LR scheduler, and RNG state (needed to "
-                    "resume)."
-        },
-    )
-
-    async_save: bool = field(
-        default=False,
-        metadata={
-            "help": "Save checkpoints asynchronously in the background (dcp "
-                    "format only)."
-        },
-    )
-    save_processor_config: bool = field(
-        default=False,
-        metadata={
-            "help": "Write processor_config.json (the training data config) into "
-                    "every steps_N dir for the eval loader. Required by GR00T-N1.7 "
-                    "eval; enable for models whose eval loader reads it."
         },
     )
 
@@ -931,6 +829,68 @@ class _OptimizerArgs:
     )
 
 
+@dataclass(frozen=True)
+class _CheckpointArgs:
+    """Checkpoint save/resume format and state."""
+
+    pretrained_checkpoint: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "Path to pretrained weights to initialize the model from "
+                    "(fine-tuning)."
+        },
+    )
+    resume: bool = field(
+        default=False,
+        metadata={
+            "help": "Resume training (weights + optimizer/scheduler/RNG state) "
+                    "from the latest checkpoint in --output-dir."
+        },
+    )
+    save_format: str = field(
+        default="safetensors",
+        metadata={
+            "choices": ["safetensors", "pt", "dcp"],
+            "help": "On-disk checkpoint format: safetensors, raw torch .pt, or "
+                    "distributed checkpoint (dcp).",
+        },
+    )
+    save_training_state: bool = field(
+        default=True,
+        metadata={
+            "help": "Also save optimizer, LR scheduler, and RNG state (needed to "
+                    "resume)."
+        },
+    )
+    async_save: bool = field(
+        default=False,
+        metadata={
+            "help": "Save checkpoints asynchronously in the background (dcp "
+                    "format only)."
+        },
+    )
+    save_processor_config: bool = field(
+        default=False,
+        metadata={
+            "help": "Write processor_config.json (the training data config) into "
+                    "every steps_N dir for the eval loader. Required by GR00T-N1.7 "
+                    "eval; enable for models whose eval loader reads it."
+        },
+    )
+
+
+@dataclass(frozen=True)
+class _FreezeArgs:
+    """Parameter freezing by module path prefix."""
+
+    freeze_modules: str = field(
+        default="",
+        metadata={
+            "help": "Comma-separated module path prefixes whose parameters are "
+                    "frozen (requires_grad=False)."
+        },
+    )
+
 
 @dataclass(frozen=True)
 class _LoraArgs:
@@ -981,6 +941,96 @@ class _LoraArgs:
         metadata={
             "help": "PEFT init_lora_weights mode, such as true, gaussian, or pissa."
         },
+    )
+
+
+@dataclass(frozen=True)
+class _LoggingArgs:
+    """Logging cadence, GC control, W&B, and TensorBoard."""
+
+    log_interval: int = field(
+        default=1,
+        metadata={
+            "help": "Log scalar metrics (loss, LR, throughput) every N iterations."
+        },
+    )
+    detail_log_interval: int = field(
+        default=20,
+        metadata={
+            "help": "Log detailed per-stage timing breakdown every N iterations."
+        },
+    )
+    timing_log_level: int = field(
+        default=0,
+        metadata={
+            "choices": [0, 1],
+            "help": "Verbosity of per-stage timing logs: 0 = summary, "
+                    "1 = detailed.",
+        },
+    )
+    loss_log_rank: List[int] = field(
+        default_factory=lambda: [-1],
+        metadata={
+            "help": "Ranks whose loss is logged; -1 logs the all-reduced mean "
+                    "across ranks."
+        },
+    )
+    wandb_project: str = field(
+        default="loongforge-vla",
+        metadata={"help": "Weights & Biases project name."},
+    )
+    wandb_mode: str = field(
+        default="disabled",
+        metadata={
+            "choices": ["online", "offline", "disabled"],
+            "help": "W&B logging mode: stream online, buffer offline, or disable.",
+        },
+    )
+    tensorboard_dir: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "Directory for TensorBoard event files; unset disables "
+                    "TensorBoard."
+        },
+    )
+    tensorboard_queue_size: int = field(
+        default=1000,
+        metadata={
+            "help": "Max pending events buffered before the async TensorBoard "
+                    "writer flushes."
+        },
+    )
+
+
+@dataclass(frozen=True)
+class _ProfilerArgs:
+    """torch.profiler / Nsight profiling capture window."""
+
+    use_pytorch_profiler: bool = field(
+        default=False,
+        metadata={"help": "Enable torch.profiler to capture CPU/GPU op traces."},
+    )
+    use_nsys_profiler: bool = field(
+        default=False,
+        metadata={
+            "help": "Enable NVIDIA Nsight Systems (nsys) profiling range markers."
+        },
+    )
+    profile_step_start: int = field(
+        default=10,
+        metadata={"help": "Iteration at which profiling capture starts."},
+    )
+    profile_step_end: int = field(
+        default=12,
+        metadata={"help": "Iteration at which profiling capture stops."},
+    )
+    profile_ranks: List[int] = field(
+        default_factory=lambda: [0],
+        metadata={"help": "Ranks on which the profiler is active."},
+    )
+    profile_output_dir: Optional[str] = field(
+        default=None,
+        metadata={"help": "Directory to write profiler traces to."},
     )
 
 
@@ -1257,8 +1307,8 @@ class _DistributedArgs:
 
     init_on_meta: bool = field(
         default=False,
-        metadata={"help": "Allocate all params on the 'meta' device. "
-                          "Weights are then loaded into the sharded DTensors."
+        metadata={"help": "Allocate all params on 'meta' device."
+                          "Then weights are loaded into the sharded DTensors."
         }
     )
 
@@ -1645,13 +1695,14 @@ class _DistributedArgs:
 
 @dataclass(frozen=True)
 class TrainingArgs(
+    # Dataclasses read bases in reverse; keep trainer_type last.
+    _EmbodiedRoutingArgs,
     _ModelRoutingArgs,
-    _RunArgs,
+    _BasicTrainingArgs,
     _LearningRateArgs,
     _OptimizerArgs,
-    _EmbodiedRoutingArgs,
     _EmbodiedDataArgs,
-    _CheckpointIOArgs,
+    _CheckpointArgs,
     _FreezeArgs,
     _LoraArgs,
     _LoggingArgs,
@@ -1660,8 +1711,6 @@ class TrainingArgs(
     _ActivationCheckpointArgs,
     _FP8Args,
     _DistributedArgs,
-    _StepArgs,
-    _RuntimeArgs,
 ):
     """Generic training args (single source of truth). Frozen after construction.
 
@@ -1686,6 +1735,369 @@ class TrainingArgs(
                 "deterministic_mode=True forces dataloader_seed_workers=True "
                 "(seeding the sampler shuffle and per-worker RNG for reproducibility)."
             )
+
+
+def validate_muon_args(training_args):
+    """Reject what ``--optimizer muon`` cannot honour, under any trainer."""
+    if training_args.optimizer.lower() != "muon":
+        return
+    # Muon needs whole local tensors: no FSDP shards, no ZeRO partition.
+    if training_args.distributed_strategy != "ddp":
+        raise ValueError(
+            "--optimizer=muon needs --distributed-strategy ddp, and the default is "
+            "fsdp: add --distributed-strategy ddp to the launch command, or use "
+            "--optimizer Dmuon under fsdp."
+        )
+    if training_args.zero_optimizer:
+        raise ValueError("--optimizer=muon is incompatible with --zero-optimizer.")
+    # Muon groups by --lr-base (plus a model-supplied scale), so per-module rates
+    # would be dropped without a word.
+    if training_args.lr_group:
+        raise ValueError("--lr-group is not supported with --optimizer=muon.")
+
+
+def _validate_fsdp_ignored_frozen_args(training_args):
+    """Reject unsupported frozen-parameter replication combinations."""
+    if (
+        training_args.fsdp_ignored_frozen_param_dtype is not None
+        and not training_args.fsdp_ignore_frozen_module_classes
+    ):
+        raise ValueError(
+            "--fsdp-ignored-frozen-param-dtype requires "
+            "--fsdp-ignore-frozen-module-classes"
+        )
+    if not training_args.fsdp_ignore_frozen_module_classes:
+        return
+    if training_args.distributed_strategy != "fsdp":
+        raise ValueError(
+            "--fsdp-ignore-frozen-module-classes requires "
+            "--distributed-strategy fsdp"
+        )
+    if training_args.init_on_meta:
+        raise ValueError(
+            "--fsdp-ignore-frozen-module-classes is incompatible with "
+            "--init-on-meta because ignored meta parameters cannot be "
+            "materialized generically"
+        )
+    if training_args.fsdp_ignored_frozen_param_dtype is not None:
+        dtype_aliases = {
+            "fp32": "float32",
+            "float32": "float32",
+            "bf16": "bfloat16",
+            "bfloat16": "bfloat16",
+            "fp16": "float16",
+            "float16": "float16",
+        }
+        ignored_dtype = dtype_aliases.get(
+            training_args.fsdp_ignored_frozen_param_dtype
+        )
+        compute_dtype = dtype_aliases.get(training_args.dtype)
+        if (
+            ignored_dtype is None
+            or compute_dtype is None
+            or ignored_dtype != compute_dtype
+        ):
+            raise ValueError(
+                "--fsdp-ignored-frozen-param-dtype must match the training "
+                f"compute dtype --dtype ({training_args.dtype}); got "
+                f"{training_args.fsdp_ignored_frozen_param_dtype}"
+            )
+
+
+def validate(training_args, model_cfg, data_cfg):
+    """Validate the combination of TrainingArgs + ModelConfig + DataConfig.
+
+    Raises ValueError on hard errors, logs warnings for soft issues.
+    """
+    # ── Learning rate ──
+    if training_args.lr_base <= 0:
+        raise ValueError(f"--lr-base must be positive, got {training_args.lr_base}")
+    if training_args.min_lr < 0:
+        raise ValueError(f"--min-lr must be >= 0, got {training_args.min_lr}")
+    if training_args.min_lr >= training_args.lr_base:
+        logger.warning(
+            f"--min-lr ({training_args.min_lr}) >= --lr-base ({training_args.lr_base}); "
+            f"cosine decay will have no effect."
+        )
+
+    # ── Steps ──
+    if training_args.train_iters <= 0:
+        raise ValueError(f"--train-iters must be positive, got {training_args.train_iters}")
+    if training_args.save_interval < 0:
+        raise ValueError(
+            f"--save-interval must be >= 0, got {training_args.save_interval}"
+        )
+    if training_args.lr_decay_iters is not None and training_args.lr_decay_iters <= 0:
+        raise ValueError(f"--lr-decay-iters must be positive, got {training_args.lr_decay_iters}")
+    lr_schedule_steps = int(training_args.lr_decay_iters or training_args.train_iters)
+    if training_args.lr_decay_start_iters < 0:
+        raise ValueError("--lr-decay-start-iters must be non-negative")
+    if training_args.lr_decay_style == "cosine_decay_with_warmup" and training_args.custom_lr_lambda:
+        raise ValueError(
+            "--custom-lr-lambda does not apply to --lr-decay-style=cosine_decay_with_warmup"
+        )
+    if training_args.lr_decay_start_iters:
+        if not training_args.custom_lr_lambda or training_args.lr_decay_style not in {
+            "cosine_with_min_lr", "cosine_warmup_with_min_lr"
+        }:
+            raise ValueError("--lr-decay-start-iters requires a custom cosine LR scheduler")
+        if not training_args.lr_warmup_iters <= training_args.lr_decay_start_iters < lr_schedule_steps:
+            raise ValueError(
+                "--lr-decay-start-iters must be at least --lr-warmup-iters "
+                "and less than the scheduler steps"
+            )
+    if training_args.lr_warmup_iters >= lr_schedule_steps:
+        logger.warning(
+            f"--lr-warmup-iters ({training_args.lr_warmup_iters}) >= scheduler steps ({lr_schedule_steps})"
+        )
+    if training_args.manual_gc_interval < 0:
+        raise ValueError(
+            f"--manual-gc-interval must be >= 0, got {training_args.manual_gc_interval}"
+        )
+    if training_args.dataloader_prefetch_factor <= 0:
+        raise ValueError(
+            "--dataloader-prefetch-factor must be positive, got "
+            f"{training_args.dataloader_prefetch_factor}"
+        )
+    if training_args.cuda_graph_warmup_steps <= 0:
+        raise ValueError(
+            f"--cuda-graph-warmup-steps must be positive, got {training_args.cuda_graph_warmup_steps}"
+        )
+
+    # ── CUDA graph ──
+    if training_args.cuda_graph_impl == "local":
+        logger.warning(
+            "Host-side loss/grad NaN checks are disabled because CUDA graph mode "
+            "is enabled."
+        )
+
+        if training_args.cuda_graph_pad_length is None:
+            raise ValueError(
+                "--cuda-graph-pad-length must be set when --cuda-graph-impl=local."
+            )
+        if training_args.cuda_graph_pad_length < 0:
+            raise ValueError(
+                f"--cuda-graph-pad-length must be non-negative, got {training_args.cuda_graph_pad_length}"
+            )
+        if training_args.cuda_graph_scope not in {"full_iteration", "per_microbatch"}:
+            raise ValueError(
+                f"Unsupported --cuda-graph-scope={training_args.cuda_graph_scope!r} in embodied trainer."
+            )
+
+    # ── Tokenizer ──
+    if training_args.tokenizer_path is None and not os.environ.get("TOKENIZER_PATH"):
+        logger.warning(
+            "Neither --tokenizer-path nor TOKENIZER_PATH env var is set. "
+            "Model initialization may fail if a tokenizer is required."
+        )
+
+    # ── FSDP ──
+    for option_name, value in (
+        ("--fsdp-min-param-num", training_args.fsdp_min_param_num),
+        (
+            "--fsdp-forward-prefetch-distance",
+            training_args.fsdp_forward_prefetch_distance,
+        ),
+        (
+            "--fsdp-backward-prefetch-distance",
+            training_args.fsdp_backward_prefetch_distance,
+        ),
+        (
+            "--fsdp-delta-fp8-prime-steps",
+            training_args.fsdp_delta_fp8_prime_steps,
+        ),
+        (
+            "--fsdp-delta-fp8-reprime-interval",
+            training_args.fsdp_delta_fp8_reprime_interval,
+        ),
+    ):
+        if value < 0:
+            raise ValueError(f"{option_name} must be non-negative, got {value}")
+    delta_fp8_block = training_args.fsdp_delta_fp8_block
+    if delta_fp8_block <= 0 or delta_fp8_block & (delta_fp8_block - 1):
+        raise ValueError(
+            "--fsdp-delta-fp8-block must be a positive power of two, got "
+            f"{delta_fp8_block}"
+        )
+    if delta_fp8_block > 1 << 20:
+        raise ValueError(
+            "--fsdp-delta-fp8-block must be <= 1048576 for Triton "
+            f"tl.arange, got {delta_fp8_block}"
+        )
+    if (
+        training_args.fsdp_delta_fp8_allgather
+        and training_args.distributed_strategy != "fsdp"
+    ):
+        raise ValueError(
+            "--fsdp-delta-fp8-allgather requires --distributed-strategy fsdp"
+        )
+    _validate_fsdp_ignored_frozen_args(training_args)
+
+    if (
+        training_args.hsdp_shard_size is not None
+        and training_args.hsdp_shard_size <= 0
+    ):
+        raise ValueError(
+            f"--hsdp-shard-size must be positive, got {training_args.hsdp_shard_size}"
+        )
+
+    if training_args.distributed_strategy == "fsdp":
+        wrap_conflict = set(training_args.fsdp_wrap_modules or []) & set(
+            training_args.fsdp_no_wrap_modules or []
+        )
+        if wrap_conflict:
+            raise ValueError(
+                "Module classes appear in both --fsdp-wrap-modules and "
+                f"--fsdp-no-wrap-modules: {', '.join(sorted(wrap_conflict))}."
+            )
+    elif training_args.fsdp_original_param_dtype is not None:
+        logger.warning(
+            "--fsdp-original-param-dtype only applies to --distributed-strategy "
+            "fsdp; parameter storage follows --dtype under %s.",
+            training_args.distributed_strategy,
+        )
+
+    # ── ZeRO optimizer options ──
+    if training_args.zero_parameters_as_bucket_view and not training_args.zero_optimizer:
+        logger.warning(
+            "--zero-parameters-as-bucket-view has no effect without --zero-optimizer."
+        )
+    if training_args.zero_master_param_dtype != "none" and not training_args.zero_optimizer:
+        logger.warning(
+            "--zero-master-param-dtype has no effect without --zero-optimizer."
+        )
+    if (
+        training_args.zero_master_param_dtype != "none"
+        and training_args.distributed_strategy != "ddp"
+    ):
+        logger.warning(
+            "--zero-master-param-dtype is only effective with --distributed-strategy ddp."
+        )
+
+    # ── DMuon optimizer options ──
+    if training_args.optimizer.lower() == "dmuon":
+        if training_args.distributed_strategy != "fsdp":
+            raise ValueError("--optimizer=dmuon requires --distributed-strategy=fsdp.")
+        if training_args.save_format == "dcp":
+            raise ValueError("--optimizer=dmuon currently supports only safetensors/pt checkpoints.")
+        if training_args.zero_optimizer:
+            raise ValueError("--optimizer=dmuon is incompatible with --zero-optimizer.")
+        if training_args.dmuon_ns_coefficients == "wallx_muon" and training_args.dmuon_ns_backend != "direct":
+            raise ValueError(
+                "--dmuon-ns-coefficients=wallx_muon requires --dmuon-ns-backend=direct."
+            )
+
+    # ── Muon optimizer options ──
+    validate_muon_args(training_args)
+
+    # ── tensor_wise ──
+    validate_tensor_wise_args(training_args)
+
+    # ── Profiler mutual exclusion ──
+    if training_args.use_pytorch_profiler and training_args.use_nsys_profiler:
+        raise ValueError(
+            "--use-pytorch-profiler and --use-nsys-profiler are mutually exclusive."
+        )
+    if training_args.use_pytorch_profiler or training_args.use_nsys_profiler:
+        if training_args.profile_step_end < training_args.profile_step_start:
+            raise ValueError(
+                f"--profile-step-end ({training_args.profile_step_end}) must be greater than "
+                f"--profile-step-start ({training_args.profile_step_start})."
+            )
+
+    # ── LoRA ──
+    if training_args.lora_r <= 0:
+        raise ValueError(f"--lora-r must be positive, got {training_args.lora_r}")
+    if training_args.lora_alpha <= 0:
+        raise ValueError(
+            f"--lora-alpha must be positive, got {training_args.lora_alpha}"
+        )
+    if not 0.0 <= training_args.lora_dropout < 1.0:
+        raise ValueError(
+            "--lora-dropout must be in [0, 1), got "
+            f"{training_args.lora_dropout}"
+        )
+    if training_args.use_lora:
+        if training_args.init_on_meta:
+            raise ValueError("--use-lora does not currently support --init-on-meta")
+        if training_args.save_interval == 0:
+            logger.warning(
+                "--save-interval=0 disables both checkpoints and LoRA adapter saving."
+            )
+
+    # ── FP8 ──
+    if training_args.fp8:
+        if training_args.init_on_meta:
+            raise ValueError(
+                "--fp8 does not currently support --init-on-meta in the "
+                "embodied model wrapping lifecycle."
+            )
+        if training_args.use_lora:
+            raise ValueError(
+                "--fp8 and --use-lora are mutually exclusive. PEFT selects "
+                "targets and replaces Linear modules before FP8 conversion; "
+                "this combination has not been validated for either backend."
+            )
+        if training_args.fp8_skip_modules and not training_args.fp8_module_patterns:
+            logger.warning(
+                "--fp8-skip-modules is set without --fp8-module-patterns; it "
+                "will be applied against the model's default_fp8_targets()."
+            )
+        if (
+            training_args.fp8_backend == "te"
+            and getattr(model_cfg, "compile_model", False)
+        ):
+            raise ValueError(
+                "--fp8 conflicts with model.compile_model=true: te.Linear.forward "
+                "carries torch.compiler.disable, so Dynamo raises "
+                "'Skip inlining torch.compiler.disable()d function' instead of "
+                "graph-breaking. Pass model.compile_model=false to run FP8."
+            )
+        if training_args.fp8_backend == "torchao":
+            te_overrides = (
+                training_args.fp8_te_format is not None
+                or training_args.fp8_te_margin != 0
+                or training_args.fp8_te_amax_history_len != 1024
+                or training_args.fp8_te_amax_compute_algo != "max"
+                or not training_args.fp8_te_reduce_amax
+                or training_args.fp8_te_current_use_power_2_scales
+                or training_args.fp8_te_block_use_f32_scales
+                or training_args.fp8_te_block_backward_override is not None
+            )
+            if te_overrides:
+                raise ValueError(
+                    "TransformerEngine recipe options cannot be used with "
+                    "--fp8-backend=torchao; configure --fp8-torchao-recipe "
+                    "and TorchAO-specific options instead."
+                )
+            if (
+                training_args.fp8_torchao_fsdp_float8_all_gather
+                and training_args.distributed_strategy != "fsdp"
+            ):
+                raise ValueError(
+                    "--fp8-torchao-fsdp-float8-all-gather requires "
+                    "--distributed-strategy=fsdp."
+                )
+            if (
+                training_args.fp8_torchao_fsdp_float8_all_gather
+                and training_args.fp8_torchao_recipe != "tensorwise"
+            ):
+                raise ValueError(
+                    "TorchAO FP8 FSDP all-gather currently supports only "
+                    "--fp8-torchao-recipe=tensorwise."
+                )
+        elif (
+            training_args.fp8_torchao_recipe != "tensorwise"
+            or not training_args.fp8_torchao_pad_inner_dim
+            or training_args.fp8_torchao_fsdp_float8_all_gather
+        ):
+            raise ValueError(
+                "TorchAO-specific FP8 options require --fp8-backend=torchao."
+            )
+
+    # ── Model config sanity ──
+    if not model_cfg.model_type:
+        raise ValueError("ModelConfig.model_type must be set (from YAML model.model_type).")
 
 
 # ---------------------------------------------------------------------------
@@ -1789,16 +2201,16 @@ def parse_train_args():
     else:
         raise ValueError("Must specify --model-name (and optionally --config-file).")
 
-    model_config_cls, data_config_cls = get_config_types(training_dc.model_name)
+    schema = get_model_schema(training_dc.model_name)
     yaml_cfg = OmegaConf.load(config_path)
 
     # ── 3. ModelConfig / DataConfig: structured schema ← YAML section ──
     model_dc = OmegaConf.merge(
-        OmegaConf.structured(model_config_cls),
+        OmegaConf.structured(schema.model_config_cls),
         yaml_cfg.get("model", {}),
     )
     data_dc = OmegaConf.merge(
-        OmegaConf.structured(data_config_cls),
+        OmegaConf.structured(schema.data_config_cls),
         yaml_cfg.get("data", {}),
     )
 
@@ -1833,8 +2245,6 @@ def parse_train_args():
 
 __all__ = [
     "TrainingArgs",
-    "add_args_from_dataclass",
     "build_arg_parser",
     "parse_train_args",
-    "validate",
 ]

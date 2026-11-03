@@ -22,8 +22,8 @@ Optional environment overrides:
   LOONGFORGE_ROOT        Default: /workspace/wan2.1/LoongForge
   WAN21_MODEL_ROOT       Default: /workspace/Wan2.1-I2V-14B-480P
   WAN22_MODEL_ROOT       Default: /workspace/Wan2.2-I2V-A14B
-  DATASET_BASE_PATH      Default: ./dataset/samples
-  DATASET_METADATA_PATH  Default: ./dataset/samples/metadata_100.jsonl
+  DATASET_BASE_PATH      Default: ../dataset/samples
+  DATASET_METADATA_PATH  Default: ../dataset/samples/metadata_100.jsonl
   HEIGHT                 Default: 480 (both versions)
   WIDTH                  Default: 832 (both versions)
   NUM_FRAMES             Default: 81 (wan2.1) / 49 (wan2.2)

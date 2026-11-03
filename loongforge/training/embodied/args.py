@@ -16,8 +16,8 @@ class _EmbodiedRoutingArgs:
     trainer_type: str = field(
         default="FinetuneTrainer",
         metadata={
-            "help": "Trainer type (e.g. FinetuneTrainer, GrootN1d6Trainer); "
-                    "selects the recipe, hooks and runner in loongforge/train.py."
+            "help": "Trainer class to instantiate (e.g. FinetuneTrainer, "
+                    "GrootN1d6Trainer); resolved by the trainer registry in loongforge/train.py."
         },
     )
 
@@ -33,12 +33,10 @@ class _EmbodiedDataArgs:
                     "(e.g. lerobot_datasets, hdf5_datasets, dummy_datasets)."
         },
     )
-
     dataset_path: Optional[str] = field(
         default=None,
         metadata={"help": "Filesystem path or repo id of the dataset to train on."},
     )
-
     dataset_strategy: Optional[str] = field(
         default="default",
         metadata={
@@ -48,38 +46,12 @@ class _EmbodiedDataArgs:
                     "to 'default'."
         },
     )
-
     split: str = field(
         default="train",
         metadata={
             "help": "Dataset split to load (RLDS), e.g. 'train' or 'train[:95%%]'."
         },
     )
-
-    data_root_dir: Optional[str] = field(
-        default=None,
-        metadata={
-            "help": "Root directory containing the datasets referenced by "
-                    "--dataset-mix."
-        },
-    )
-
-    robot_type: Optional[str] = field(
-        default=None,
-        metadata={
-            "help": "Robot embodiment type (e.g. libero_franka); selects "
-                    "action/state layout."
-        },
-    )
-
-    task_name: str = field(
-        default="perform the task",
-        metadata={
-            "help": "Language instruction used as the prompt when the dataset has "
-                    "none (HDF5)."
-        },
-    )
-
     lerobotdataset_version: str = field(
         default="v3.0",
         metadata={
@@ -87,7 +59,6 @@ class _EmbodiedDataArgs:
             "help": "On-disk LeRobot dataset format version to parse.",
         },
     )
-
     video_backend: str = field(
         default="torchcodec",
         metadata={
@@ -95,7 +66,6 @@ class _EmbodiedDataArgs:
             "help": "Backend used to decode episode videos into frames.",
         },
     )
-
     streaming: bool = field(
         default=False,
         metadata={
@@ -103,16 +73,34 @@ class _EmbodiedDataArgs:
                     "access (lower memory, no global shuffle)."
         },
     )
-
+    data_root_dir: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "Root directory containing the datasets referenced by "
+                    "--dataset-mix."
+        },
+    )
+    robot_type: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "Robot embodiment type (e.g. libero_franka); selects "
+                    "action/state layout."
+        },
+    )
+    task_name: str = field(
+        default="perform the task",
+        metadata={
+            "help": "Language instruction used as the prompt when the dataset has "
+                    "none (HDF5)."
+        },
+    )
     per_device_batch_size: int = field(
         default=4,
         metadata={"help": "Micro-batch size processed per GPU per forward pass."},
     )
-
     num_workers: int = field(
         default=4,
         metadata={"help": "Number of DataLoader worker processes per rank."})
-
     dataloader_prefetch_factor: int = field(
         default=2,
         metadata={
@@ -120,12 +108,10 @@ class _EmbodiedDataArgs:
             "help": "Number of batches prefetched by each DataLoader worker.",
         },
     )
-
     dataloader_seed_workers: bool = field(
         default=False,
         metadata={"help": "Set DataLoader worker_init_fn and generator from --seed. "
                           "Default leaves both unset for baseline precision comparison."})
-
     dataloader_multiprocessing_context: Optional[str] = field(
         default=None,
         metadata={
@@ -133,12 +119,10 @@ class _EmbodiedDataArgs:
             "help": "Multiprocessing start method for DataLoader workers.",
         },
     )
-
     sampler_shuffle: bool = field(
         default=True,
-        metadata={"help": "Shuffle sample order in the sampler."},
+        metadata={"help": "whether shiffle in sampler"},
     )
-
     distributed_sampler_mode: str = field(
         default="cyclic",
         metadata={
@@ -147,7 +131,6 @@ class _EmbodiedDataArgs:
                     "'cyclic' (round-robin) or 'block' (contiguous shards).",
         },
     )
-
     sampler_epoch_mode: str = field(
         default="advance",
         metadata={
@@ -161,7 +144,6 @@ class _EmbodiedDataArgs:
                     "fastwam); see data/embodied/fastwam/samplers.py.",
         },
     )
-
     batch_drop_last: bool = field(
         default=False,
         metadata={
@@ -172,7 +154,6 @@ class _EmbodiedDataArgs:
             ),
         },
     )
-
     num_samples: int = field(
         default=100,
         metadata={

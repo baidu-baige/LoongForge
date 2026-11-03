@@ -32,17 +32,22 @@ from megatron.training.utils import (
     get_batch_on_this_tp_rank,
     is_first_or_last_pipeline_stage,
     get_next_batch_on_this_tp_rank,
-    print_rank_0,
 )
 from megatron.core.utils import get_attr_wrapped_model
 from megatron.core import parallel_state
 from megatron.core.transformer.multi_token_prediction import mtp_on_this_rank, get_mtp_ranks
 
-from loongforge.engines.megatron import get_args, get_model_config, get_tokenizer
+from loongforge.models import catalog as constants
+from loongforge.data import constants as data_constants
+from loongforge.engines.megatron import get_args, get_tokenizer, print_rank_0
 
 
+from loongforge.engines.megatron.runner import MegatronTrainer
+from loongforge.training import register_model_trainer
 from loongforge.models.foundation.llm_model_provider import llm_model_provider
-from loongforge.engines.megatron.runner import pretrain
+
+from loongforge.engines.megatron.utils.global_vars import get_model_config
+
 
 stimer = StragglerDetector()
 
@@ -215,6 +220,7 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
         f"> building train, validation, and test datasets for {args.model_name} ..."
     )
     
+    is_dataset_built = partial(_is_dataset_built_on_rank, vp_stage=vp_stage)
 
     train_ds, valid_ds, test_ds = BlendedMegatronDatasetBuilder(
         GPTDataset if not args.mock_data else MockGPTDataset,
@@ -240,14 +246,19 @@ def get_embedding_ranks(pp_ranks: List[int]):
     embedding_ranks = sorted(embedding_ranks)
     return embedding_ranks
 
-def train(args):
-    """Run LLM pretraining."""
-    train_valid_test_datasets_provider.is_distributed = True
-    pretrain(
-        args,
-        train_valid_test_datasets_provider,
-        llm_model_provider,
-        ModelType.encoder_or_decoder,
-        forward_step,
+@register_model_trainer(
+    model_family=constants.LanguageModelFamilies.names(),
+    training_phase=data_constants.TrainingPhase.PRETRAIN,
+)
+def default_pretrain_trainer(train_args):
+    """build trainer"""
+    trainer = MegatronTrainer(
+        train_args=train_args,
+        train_valid_test_dataset_provider=train_valid_test_datasets_provider,
+        model_provider=llm_model_provider,
+        model_type=ModelType.encoder_or_decoder,
+        forward_step_func=forward_step,
         get_embedding_ranks=get_embedding_ranks,
     )
+
+    return trainer

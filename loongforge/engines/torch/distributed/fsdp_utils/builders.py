@@ -130,7 +130,7 @@ def build_ignored_params(training_args, model: nn.Module, ctx: DistributedContex
             ``fsdp_ignore_frozen_module_classes`` supplies exact class names;
             ``fsdp_ignored_frozen_param_dtype`` optionally casts parameters from
             those matched classes. Configuration-level constraints for these
-            options are checked by ``train.validators.validate`` before this
+            options are checked by ``training.torch_args.validate`` before this
             model-dependent builder runs.
             Name matching is on substrings, not suffixes,
             so ``q_proj`` also selects ``q_proj_moe_gen``; qualify with

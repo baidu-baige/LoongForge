@@ -341,7 +341,7 @@ bash examples/pi05/finetuning/sft_pi05_ddp.sh
 </table>
 
 > [!TIP]
-> VLM 还可参考[自定义组合示例](./examples/qwen_vit_llama3/pretrain/pretrain_qwen_vit_llama3.sh)，用配置将 ViT 与 LLM 自由组装为新模型。
+> VLM 还可参考[自定义组合示例](./examples/qwen_vit_llama3/)，用配置将 ViT 与 LLM 自由组装为新模型。
 
 <a id="powered-by-loongforge"></a>
 ## 🌟 基于 LoongForge 的优秀项目案例

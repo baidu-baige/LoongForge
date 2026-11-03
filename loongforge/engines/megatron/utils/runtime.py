@@ -158,12 +158,12 @@ def convert_custom_pipeline_to_layout(
 ) -> str:
     """
     Convert custom-pipeline-layers format to pipeline-model-parallel-layout format.
-
+    
     Args:
         custom_pipeline_layers: Comma-separated string of decoder layer counts per PP stage.
                                 Example: "6,5,7,9" means 4 PP stages with 6,5,7,9 decoder layers.
                                 Cannot be used together with custom_virtual_pipeline_layers.
-        custom_virtual_pipeline_layers: Optional. Comma-separated string specifying exact layer
+        custom_virtual_pipeline_layers: Optional. Comma-separated string specifying exact layer 
                                        counts for each VPP stage. Format: all PP's VPP0, then all PP's VPP1.
                                        Example: "3,2,3,4,3,3,4,5" for PP=4, VPP=2
                                        Cannot be used together with custom_pipeline_layers.
@@ -171,7 +171,7 @@ def convert_custom_pipeline_to_layout(
                         If None, defaults to 1 (no virtual pipeline).
         mtp_num_layers: Number of MTP layers. If None, no MTP layers are added.
                         MTP layers are placed in the last stage with loss.
-
+    
     Returns:
         Layout string in pipeline-model-parallel-layout format.
     """

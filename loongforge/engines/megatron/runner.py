@@ -127,11 +127,9 @@ from loongforge.models.common.peft.lora import LoRA, VLMLoRA
 from loongforge.models.common.peft.utils import apply_peft_transformation
 from megatron.core.transformer.multi_token_prediction import MTPLossLoggingHelper
 from dataclasses import asdict
-from loongforge.data.constants import TrainingPhase
-from loongforge.engines.megatron import (
-    get_args,
-    global_vars,
-)
+from loongforge.data import constants as data_constants
+from loongforge.engines.megatron import get_args
+from loongforge.engines.megatron.utils import global_vars
 from .initialize import initialize_loongforge_megatron
 from loongforge.data.dp_balance.train_hooks import (
     train_step_decorator,
@@ -165,7 +163,7 @@ stimer = StragglerDetector()
 # ---------------------------------------------------------------------------
 # Full-iteration CUDA graph wrapper registry.
 # Models register their wrapper class via register_full_iteration_graph_wrapper()
-# during trainer construction; training_utils.train() looks up the wrapper here.
+# during trainer construction; runner.train() looks up the wrapper here.
 # ---------------------------------------------------------------------------
 _FULL_ITER_GRAPH_REGISTRY: dict[str, type] = {}
 
@@ -183,7 +181,7 @@ def get_full_iteration_graph_wrapper(model_name: str):
 # ---------------------------------------------------------------------------
 # Per-microbatch CUDA graph wrapper registry.
 # Models register their wrapper class via register_per_microbatch_graph_wrapper()
-# during trainer construction; training_utils.train() looks up the wrapper here.
+# during trainer construction; runner.train() looks up the wrapper here.
 # ---------------------------------------------------------------------------
 _PER_MICROBATCH_GRAPH_REGISTRY: dict[str, type] = {}
 
@@ -339,6 +337,61 @@ def add_hooks(model, args, prefix):
     else:
         print_rank_0(
             f"No layers found for the log tensor name pattern: {args.log_tensor_name_pattern}"
+        )
+
+
+class MegatronTrainer(object):
+    """megatron trainer"""
+
+    def __init__(
+        self,
+        train_args,
+        train_valid_test_dataset_provider,
+        model_provider,
+        model_type,
+        forward_step_func,
+        process_non_loss_data_func=None,
+        get_embedding_ranks=None,
+        get_position_embedding_ranks=None,
+    ):
+        """
+        train_valid_test_dataset_provider: a function that takes the size of
+            train/valid/test dataset and returns `train, valid, test` datasets.
+        model_provider: a function that returns a vanilla version of the
+            model. By vanilla we mean a simple model on cpu with no fp16 or ddp.
+        model_type: an enum that specifies the type of model being trained.
+        forward_step_func: a function that takes a `data iterator` and `model`,
+            and returns a `loss` scalar with a dictionary with key:values being
+            the info we would like to monitor during training, for example
+            `lm-loss: value`. We also require that this function add
+            `batch generator` to the timers class.
+        process_non_loss_data_func: a function to post process outputs of the
+            network. It can be used for dumping output tensors (e.g images) to
+            tensorboard. It takes `collected data`(list of tensors),
+            `current iteration index` and `tensorboard writer` as arguments.
+        """
+        self.train_args = train_args
+        self.train_valid_test_datasets_provider = train_valid_test_dataset_provider
+        self.model_provider = model_provider
+        self.model_type = model_type
+        self.forward_step_func = forward_step_func
+        self.process_non_loss_data_func = process_non_loss_data_func
+        self.get_embedding_ranks = get_embedding_ranks
+        self.get_position_embedding_ranks = get_position_embedding_ranks
+
+    def train(self):
+        """start training"""
+        self.train_valid_test_datasets_provider.is_distributed = True
+
+        pretrain(
+            train_args=self.train_args,
+            train_valid_test_dataset_provider=self.train_valid_test_datasets_provider,
+            model_provider=self.model_provider,
+            model_type=self.model_type,
+            forward_step_func=self.forward_step_func,
+            process_non_loss_data_func=self.process_non_loss_data_func,
+            get_embedding_ranks=self.get_embedding_ranks,
+            get_position_embedding_ranks=self.get_position_embedding_ranks,
         )
 
 
@@ -618,7 +671,7 @@ def pretrain(
             write_to_tensorboard=not args.skip_train,
             non_loss_data_func=non_loss_data_func,
         )
-
+    
     # Save HF checkpoint at the end of training if --save-hf is enabled
     save_hf_enabled = getattr(args, 'save_hf', 'false').lower() == 'true'
     if save_hf_enabled and iteration == args.train_iters:
@@ -641,7 +694,6 @@ def pretrain(
     ft_integration.on_checkpointing_end(is_async_finalization=True)
 
     ft_integration.shutdown()
-
 
 def check_vlm_peft_config(model_config):
     """Check whether the VLM PEFT configuration is compatible with the current model architecture."""
@@ -1913,7 +1965,7 @@ def train_step(
                         loss_reduced[key] = torch.tensor(0.0)
                         continue
                 if (
-                    args.training_phase == TrainingPhase.SFT
+                    args.training_phase == data_constants.TrainingPhase.SFT
                     and not args.legacy_reporting_loss_reduction
                 ):
                     if args.calculate_per_token_loss:
@@ -3031,7 +3083,7 @@ def dump_model_input_example_once(
 
     _PRINTED_MODEL_INPUT_EXAMPLE = True
 
-    from loongforge.engines.megatron import get_tokenizer as get_loongforge_tokenizer
+    from loongforge.engines.megatron.utils.global_vars import get_tokenizer as get_loongforge_tokenizer
     from loongforge.data.constants import IGNORE_INDEX
 
     tokenizer = get_loongforge_tokenizer()

@@ -1,35 +1,101 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Dataset formats and build strategies for embodied data."""
+"""Dataset build strategies for the generic lerobot datasets.
+
+A *dataset strategy* is a builder ``fn(model_cfg, data_cfg, training_args) ->
+Dataset`` selected by ``training_args.dataset_strategy``. This unifies dataset
+construction under the single ``--dataset-format lerobot_datasets`` entry: the
+``"default"`` strategy reproduces the stock lerobot build, while model-specific
+strategies (e.g. ``"motus"`` / ``"fastwam"``) plug their own multi-frame geometry
+into the same generic dataset classes via behaviour hooks — no ``dataset_format``
+branch per model is required.
+"""
 
 from __future__ import annotations
 
-import importlib
-from typing import Dict
+from typing import Callable
 
-# dataset_strategy name -> "module:callable" string.  Resolved lazily so that
-# lerobot / model-specific deps only load when actually selected.  The
-# ``"default"`` strategy is the stock lerobot build; model-specific strategies
-# plug custom multi-frame geometry into the same generic dataset classes.
-DATASET_STRATEGIES: Dict[str, str] = {
-    "default": "datasets.lerobot_dataset:build_default_lerobot_dataset",
-    "vlda": "vlda:build_vlda_dataset",
-    "fastwam": "fastwam.fastwam_dataset:build_fastwam_lerobot_dataset",
-    "lingbot_va": "lingbot_va.latent_lerobot_dataset:build_lingbot_dataset",
-    "lingbot_vla_v2": "lingbot_vla_v2.lingbot_vla_v2_dataset:build_lingbot_vla_v2_dataset",
-    "gr00t_n1_7": "gr00t_n1_7.gr00t_n1_7_dataset:build_groot_n1_7_lerobot_dataset",
-    "cosmos3_droid": "cosmos3.droid_lerobot_dataset:build_droid_dataset",
-    "dreamzero": "dreamzero.builder:build_dreamzero_dataset",
-    "wall_oss_0_5": "wall_oss_0_5.lerobot_dataset:build_wall_oss_0_5_lerobot_dataset",
-}
 
-# --dataset-format -> "module:callable" (relative to ``loongforge.data.embodied``).
-# "lerobot_datasets" further dispatches on --dataset-strategy through DATASET_STRATEGIES.
-DATASET_FORMATS: Dict[str, str] = {
-    "lerobot_datasets": "registry:build_dataset_by_strategy",
-    "hdf5_datasets": "datasets.hdf5_dataset:build_hdf5_dataset",
-    "dummy_datasets": "datasets.dummy_dataset:build_dummy_dataset",
+def _default_strategy_builder() -> Callable:
+    from loongforge.data.embodied.datasets.lerobot_dataset import (
+        build_default_lerobot_dataset,
+    )
+
+    return build_default_lerobot_dataset
+
+
+def _vlda_strategy_builder() -> Callable:
+    from loongforge.data.embodied.vlda import build_vlda_dataset
+
+    return build_vlda_dataset
+
+
+def _fastwam_strategy_builder() -> Callable:
+    from loongforge.data.embodied.fastwam import (
+        build_fastwam_lerobot_dataset,
+    )
+
+    return build_fastwam_lerobot_dataset
+
+
+def _lingbot_va_strategy_builder() -> Callable:
+    from loongforge.data.embodied.lingbot_va import build_lingbot_dataset
+
+    return build_lingbot_dataset
+
+
+def _groot_n1_7_strategy_builder() -> Callable:
+    from loongforge.data.embodied.gr00t_n1_7 import (
+        build_groot_n1_7_lerobot_dataset,
+    )
+
+    return build_groot_n1_7_lerobot_dataset
+
+
+def _cosmos3_droid_strategy_builder() -> Callable:
+    from loongforge.data.embodied.cosmos3 import (
+        build_droid_dataset,
+    )
+
+    return build_droid_dataset
+
+
+def _dreamzero_strategy_builder() -> Callable:
+    from loongforge.data.embodied.dreamzero.builder import (
+        build_dreamzero_dataset,
+    )
+
+    return build_dreamzero_dataset
+
+
+def _wall_oss_0_5_strategy_builder() -> Callable:
+    from loongforge.data.embodied.wall_oss_0_5 import (
+        build_wall_oss_0_5_lerobot_dataset,
+    )
+
+    return build_wall_oss_0_5_lerobot_dataset
+
+
+def _lingbot_vla_v2_strategy_builder() -> Callable:
+    from loongforge.data.embodied.lingbot_vla_v2 import (
+        build_lingbot_vla_v2_dataset,
+    )
+
+    return build_lingbot_vla_v2_dataset
+
+
+# name -> lazy loader (imports deferred so lerobot / motus deps only load when used)
+_DATASET_STRATEGY_LOADERS: dict[str, Callable[[], Callable]] = {
+    "default": _default_strategy_builder,
+    "vlda": _vlda_strategy_builder,
+    "fastwam": _fastwam_strategy_builder,
+    "lingbot_va": _lingbot_va_strategy_builder,
+    "gr00t_n1_7": _groot_n1_7_strategy_builder,
+    "cosmos3_droid": _cosmos3_droid_strategy_builder,
+    "dreamzero": _dreamzero_strategy_builder,
+    "wall_oss_0_5": _wall_oss_0_5_strategy_builder,
+    "lingbot_vla_v2": _lingbot_vla_v2_strategy_builder,
 }
 
 
@@ -40,23 +106,5 @@ def build_dataset_by_strategy(model_cfg, data_cfg, training_args):
     dataset that has no dedicated strategy.
     """
     name = training_args.dataset_strategy or "default"
-    entry = DATASET_STRATEGIES.get(name, DATASET_STRATEGIES["default"])
-    module_rel, func_name = entry.split(":")
-    mod = importlib.import_module(f"loongforge.data.embodied.{module_rel}")
-    return getattr(mod, func_name)(model_cfg, data_cfg, training_args)
-
-
-def build_dataset(model_cfg, data_cfg, training_args):
-    """Build the dataset named by ``training_args.dataset_format``.
-
-    Lerobot datasets dispatch further on ``training_args.dataset_strategy``
-    through ``DATASET_STRATEGIES``.
-    """
-    name = training_args.dataset_format
-    if name not in DATASET_FORMATS:
-        raise ValueError(
-            f"Unknown dataset_format: '{name}'. Supported: {sorted(DATASET_FORMATS)}"
-        )
-    module_rel, func_name = DATASET_FORMATS[name].split(":")
-    mod = importlib.import_module(f"loongforge.data.embodied.{module_rel}")
-    return getattr(mod, func_name)(model_cfg, data_cfg, training_args)
+    loader = _DATASET_STRATEGY_LOADERS.get(name, _default_strategy_builder)
+    return loader()(model_cfg, data_cfg, training_args)

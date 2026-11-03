@@ -13,11 +13,13 @@ from megatron.core.utils import StragglerDetector
 
 from megatron.training import get_timers
 
-from megatron.training.utils import print_rank_0
-from loongforge.engines.megatron import get_args
+from loongforge.engines.megatron import get_args, print_rank_0
+from loongforge.data.constants import TrainingPhase
 from loongforge.models.catalog import DiffusionModelFamilies
 
 from loongforge.data.diffusion.latent_dataset import TensorDataset
+
+
 from loongforge.data.diffusion.packed_dataset import (
     PackedDataset,
     _patchify_for_conv3d,
@@ -27,7 +29,8 @@ from loongforge.data.diffusion.packed_dataset import (
 from loongforge.models.diffusion.wan.wan_flow_match import FlowMatchScheduler
 from megatron.core.packed_seq_params import PackedSeqParams
 
-from loongforge.engines.megatron.runner import pretrain
+from loongforge.engines.megatron.runner import MegatronTrainer
+from loongforge.training import register_model_trainer
 from megatron.core import parallel_state
 import numpy as np
 
@@ -39,8 +42,10 @@ from loongforge.models.diffusion.wan.gaussian_diffusion import (
     get_named_beta_schedule,
 )
 
+from loongforge.models.diffusion.wan.wan_utils import (
+    broadcast_on_cp_group,
+)
 from loongforge.models.diffusion.wan.wan_provider import wan_i2v_model_provider
-from loongforge.models.diffusion.wan.wan_utils import broadcast_on_cp_group
 
 SUPPORTED_MODELS = [
     DiffusionModelFamilies.WAN2_1_I2V,
@@ -71,7 +76,7 @@ def model_provider(pre_process=True, post_process=True, vp_stage: int = None):
     args.max_position_embeddings = args.seq_length
 
     if args.model_name in ("wan2-1-i2v", "wan2-2-i2v") or args.model_family in SUPPORTED_MODELS:
-        return wan_i2v_model_provider(pre_process, post_process)
+        return wan_i2v_model_provider(pre_process, post_process, vp_stage)
 
     raise ValueError(f"Unsupported WAN model: {args.model_name}")
 
@@ -410,6 +415,7 @@ def forward_step(diffusion, data_iterator, model):
     # Get the batch.
     timers("batch-generator", log_level=2).start()
 
+    global stimer
     with stimer(bdata=True):
         noisy_latents, timestep, text_enc, image_emb, training_target, scale, \
             packed_seq_params, grid_sizes, loss_mask, seq_len_q_padded, seq_len_q = get_batch(data_iterator)
@@ -515,15 +521,21 @@ def train_valid_test_datasets_provider(diffusion, train_val_test_num_samples, vp
     return iter(dataloader), None, None
 
 
-def train(args):
-    """Run Wan pretraining."""
+# Set random number seed
+@register_model_trainer(
+    model_family=SUPPORTED_MODELS, training_phase=TrainingPhase.PRETRAIN
+)
+def default_pretrain_trainer(train_args):
+    """build trainer"""
     diffusion = gaussian_diffusion()
-    datasets_provider = partial(train_valid_test_datasets_provider, diffusion)
-    datasets_provider.is_distributed = True
-    pretrain(
-        args,
-        datasets_provider,
-        model_provider,
-        ModelType.encoder_or_decoder,
-        partial(forward_step, diffusion),
+    trainer = MegatronTrainer(
+        train_args=train_args,
+        train_valid_test_dataset_provider=partial(
+            train_valid_test_datasets_provider, diffusion
+        ),
+        model_provider=model_provider,
+        model_type=ModelType.encoder_or_decoder,
+        forward_step_func=partial(forward_step, diffusion),
     )
+
+    return trainer

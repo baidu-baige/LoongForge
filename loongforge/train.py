@@ -3,100 +3,38 @@
 
 """Training entry for Megatron and Torch model families."""
 
-from __future__ import annotations
-
 import argparse
 import importlib
 import logging
-from typing import Dict, Tuple
+import sys
 
-from loongforge.models.catalog import (
-    DiffusionModelFamilies,
-    LanguageModelFamilies,
-    VisionLanguageModelFamilies,
-    get_model_entry,
-)
+from loongforge.models.catalog import TORCH_MODEL_NAMES
 
-logging.basicConfig(level=logging.WARNING)
 
-# ---------------------------------------------------------------------------
-# Megatron: family -> group
-# ---------------------------------------------------------------------------
-
-FAMILY_GROUP: Dict[str, str] = {f: "llm" for f in LanguageModelFamilies.names()}
-FAMILY_GROUP.update({f: "vlm" for f in VisionLanguageModelFamilies.names()})
-FAMILY_GROUP[VisionLanguageModelFamilies.INTERN_VL] = "intern_vl"
-FAMILY_GROUP[VisionLanguageModelFamilies.ERNIE4_5_VL] = "ernie4_5_vl"
-FAMILY_GROUP[DiffusionModelFamilies.WAN2_1_I2V] = "wan"
-FAMILY_GROUP[DiffusionModelFamilies.WAN2_2_I2V] = "wan"
-FAMILY_GROUP[DiffusionModelFamilies.QWEN_IMAGE] = "qwen_image"
-
-# (group, phase) -> method module path
-METHOD_REGISTRY: Dict[Tuple[str, str], str] = {
-    ("llm", "pretrain"): "loongforge.training.llm.pretrain_llm",
-    ("llm", "sft"): "loongforge.training.llm.sft_llm",
-    ("vlm", "pretrain"): "loongforge.training.vlm.pretrain_vlm",
-    ("vlm", "sft"): "loongforge.training.vlm.sft_vlm",
-    ("intern_vl", "pretrain"): "loongforge.training.vlm.pretrain_vlm",
-    ("intern_vl", "sft"): "loongforge.training.vlm.sft_internvl",
-    ("ernie4_5_vl", "pretrain"): "loongforge.training.vlm.pretrain_vlm",
-    ("ernie4_5_vl", "sft"): "loongforge.training.vlm.sft_ernie",
-    ("wan", "pretrain"): "loongforge.training.diffusion.pretrain_wan",
-    ("qwen_image", "pretrain"): "loongforge.training.diffusion.pretrain_qwen_image",
-}
-
-# ---------------------------------------------------------------------------
-# Torch: trainer type -> recipe class
-# ---------------------------------------------------------------------------
-
-TORCH_TRAINER_TYPES: Dict[str, str] = {
+TORCH_TRAINER_TYPES = {
     "FinetuneTrainer": "loongforge.training.embodied.sft.FinetuneTrainer",
     "TensorWiseTrainer": "loongforge.training.embodied.custom.tensor_wise_trainer.TensorWiseTrainer",
-    "LingbotVlaV2Trainer": (
-        "loongforge.training.embodied.custom.lingbot_vla_v2.lingbot_vla_v2_trainer.LingbotVlaV2Trainer"
-    ),
-    "VLDAFinetuneTrainer": (
-        "loongforge.training.embodied.custom.vlda.vlda_finetune_trainer.VLDAFinetuneTrainer"
-    ),
-    "GrootN1d6Trainer": (
-        "loongforge.training.embodied.custom.gr00t_n1_6.gr00t_trainer.GrootN1d6Trainer"
-    ),
-    "GrootN1d7Trainer": (
-        "loongforge.training.embodied.custom.gr00t_n1_7.gr00t_trainer.GrootN1d7Trainer"
-    ),
-    "LingBotFinetuneTrainer": (
-        "loongforge.training.embodied.custom.lingbot_va.lingbot_finetune_trainer.LingBotFinetuneTrainer"
-    ),
+    "VLDAFinetuneTrainer": "loongforge.training.embodied.custom.vlda.VLDAFinetuneTrainer",
+    "GrootN1d6Trainer": "loongforge.training.embodied.custom.gr00t_n1_6.GrootN1d6Trainer",
+    "LingBotFinetuneTrainer": "loongforge.training.embodied.custom.lingbot_va.LingBotFinetuneTrainer",
+    "GrootN1d7Trainer": "loongforge.training.embodied.custom.gr00t_n1_7.GrootN1d7Trainer",
+    "LingbotVlaV2Trainer": "loongforge.training.embodied.custom.lingbot_vla_v2.LingbotVlaV2Trainer",
 }
-
-
-def resolve_method(model_family: str, training_phase: str):
-    """Lazily import and return the Megatron method module for *model_family* + *phase*."""
-    group = FAMILY_GROUP.get(model_family, model_family)
-    key = (group, training_phase)
-    module_path = METHOD_REGISTRY.get(key)
-    if module_path is None:
-        raise ValueError(
-            f"No method registered for ({model_family!r}, {training_phase!r}) "
-            f"[resolved group={group!r}]. "
-            f"Available: {sorted(METHOD_REGISTRY.keys())}"
-        )
-    return importlib.import_module(module_path)
 
 
 def resolve_torch_trainer(trainer_type: str):
-    """Lazily import and return the Torch recipe class."""
+    """Load the Torch recipe selected by ``--trainer-type``."""
     if not trainer_type:
         raise ValueError(
             "--trainer-type is required. "
-            f"Available: {sorted(TORCH_TRAINER_TYPES.keys())}"
+            f"Available: {list(TORCH_TRAINER_TYPES.keys())}"
         )
 
     entry = TORCH_TRAINER_TYPES.get(trainer_type)
     if entry is None:
         raise ValueError(
             f"Unknown --trainer-type '{trainer_type}'. "
-            f"Available: {sorted(TORCH_TRAINER_TYPES.keys())}"
+            f"Available: {list(TORCH_TRAINER_TYPES.keys())}"
         )
 
     module_path, class_name = entry.rsplit(".", 1)
@@ -105,10 +43,23 @@ def resolve_torch_trainer(trainer_type: str):
 
 def _run_megatron():
     """Parse the Megatron arguments and run the recipe for their family and phase."""
+    logging.basicConfig(level=logging.WARNING)
     from loongforge.engines.megatron.parser import parse_train_args
+    from loongforge.training import MODEL_FAMILY_TRAINER_FACTORY, _load_builtin_trainers
 
+    _load_builtin_trainers()
     args = parse_train_args()
-    return resolve_method(args.model_family, args.training_phase).train(args)
+    model_family = args.model_family
+
+    if model_family not in MODEL_FAMILY_TRAINER_FACTORY:
+        raise ValueError(f"Not found trainer for family: {model_family}")
+    if args.training_phase not in MODEL_FAMILY_TRAINER_FACTORY[model_family]:
+        raise ValueError(
+            f"Loongforge not support {args.training_phase} phase for {args.model_name} (family: {model_family})"
+        )
+
+    trainer = MODEL_FAMILY_TRAINER_FACTORY[model_family][args.training_phase](args)
+    trainer.train()
 
 
 def _run_torch():
@@ -117,29 +68,32 @@ def _run_torch():
 
     training_args, model_cfg, data_cfg = parse_train_args()
     trainer_type = resolve_torch_trainer(training_args.trainer_type)
-    return trainer_type(training_args, model_cfg, data_cfg).train()
+    trainer = trainer_type(training_args, model_cfg, data_cfg)
+    trainer.train()
 
 
 def main():
     """Pick the engine for ``--model-name`` and run the selected recipe."""
+    argv = sys.argv[1:]
+    for index, arg in enumerate(argv):
+        if arg in ("-h", "--help", "--"):
+            argv = argv[:index]
+            break
+
     parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
-    parser.add_argument("--model-name")
-    parser.add_argument("--config-file")
-    args, _ = parser.parse_known_args()
-
+    # Let the selected engine report missing values.
+    parser.add_argument("--model-name", nargs="?")
+    args, _ = parser.parse_known_args(argv)
     if args.model_name is None:
-        if args.config_file is None:
-            parser.error("one of --model-name or --config-file is required")
-        engine = "megatron"
-    else:
-        try:
-            engine = get_model_entry(args.model_name)["engine"]
-        except ValueError as exc:
-            parser.error(str(exc))
+        # Only Torch accepts model-name abbreviations.
+        parser.allow_abbrev = True
+        args, _ = parser.parse_known_args(argv)
 
-    if engine == "megatron":
-        return _run_megatron()
-    return _run_torch()
+    # Keep validation and help in the selected engine's original parser.
+    if args.model_name and args.model_name.lower().replace("-", "_") in TORCH_MODEL_NAMES:
+        _run_torch()
+    else:
+        _run_megatron()
 
 
 if __name__ == "__main__":

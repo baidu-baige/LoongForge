@@ -128,3 +128,4 @@ def test_pt_checkpoint_is_canonical_and_loads(tmp_path):
     torch.testing.assert_close(target.state_dict(), source.state_dict())
     # Tied parameter stays the same object after loading the canonical key only.
     assert target.core.head.weight is target.core.embed.weight
+

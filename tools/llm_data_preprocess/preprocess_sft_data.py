@@ -19,7 +19,7 @@ from loongforge.data.chat_templates.template import (
 )
 from loongforge.engines.megatron.tokenizer import build_tokenizer
 from loongforge.engines.megatron.utils.runtime import get_default_sft_dataset_config
-from loongforge.data.constants import IGNORE_INDEX, TrainingPhase
+from loongforge.data import constants
 from loongforge.data.utils import get_dataset_blend_from_list
 
 
@@ -45,7 +45,7 @@ def build_sft_dataset(args):
         processor=processor,
         num_preprocess_workers=args.workers,
         train_on_prompt=args.train_on_prompt,
-        ignore_index=IGNORE_INDEX,
+        ignore_index=constants.IGNORE_INDEX,
         eod_mask_loss=args.eod_mask_loss,
         history_mask_loss=args.history_mask_loss,
         is_tokenized=False,
@@ -180,7 +180,7 @@ def parse_args():
 
     # some default/dummy values
     args.rank = 0
-    args.training_phase = TrainingPhase.SFT
+    args.training_phase = constants.TrainingPhase.SFT
     args.make_vocab_size_divisible_by = 128
     args.tensor_model_parallel_size = 1
     args.vocab_extra_ids = 0

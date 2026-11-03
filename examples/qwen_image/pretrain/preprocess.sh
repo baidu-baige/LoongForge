@@ -63,7 +63,7 @@ Arguments:
 Environment variables:
   QWEN_IMAGE_MODEL_ROOT  Model root dir (required, see structure above)
   LOONGFORGE_ROOT        Default: auto-detected from script location
-  DATASET_BASE_PATH      Default: ./data/samples
+  DATASET_BASE_PATH      Default: ../data/samples
   DATASET_METADATA_PATH  Default: \${DATASET_BASE_PATH}/metadata.json
   MAX_PIXELS             Default: 1048576  (1MP)
   SEED                   Default: 1234

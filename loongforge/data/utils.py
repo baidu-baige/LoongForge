@@ -20,7 +20,7 @@ from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.legacy.data.data_samplers import MegatronPretrainingRandomSampler
 
 from loongforge.engines.megatron import get_args, get_model_config, get_tokenizer
-from loongforge import data as constants
+from loongforge.data import constants
 from loongforge.data.llm.sft_data_collator import DataCollatorForSupervisedDataset
 from loongforge.engines.megatron.tokenizer import AutoTokenizerFromHF
 from loongforge.engines.megatron.checkpointing import get_checkpoint_name, read_tracker_iteration

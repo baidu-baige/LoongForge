@@ -10,6 +10,9 @@ import torch
 
 from functools import partial
 
+from typing import List
+from megatron.core.transformer.multi_token_prediction import get_mtp_ranks
+
 from megatron.core import mpu
 from megatron.core.enums import ModelType
 from megatron.core.utils import StragglerDetector
@@ -19,21 +22,24 @@ from megatron.core.num_microbatches_calculator import get_num_microbatches
 
 from megatron.training import get_timers
 
+from loongforge.models import catalog as constants
+from loongforge.data import constants as data_constants
+
 from loongforge.engines.megatron import (
     get_args,
-    get_model_config,
     get_tokenizer,
     get_chat_template,
+    print_rank_0,
 )
-from megatron.training.utils import print_rank_0
 
 from loongforge.data.llm.sft_dataset import SFTDataset, SFTDatasetConfig
 from loongforge.data.llm.blended_hf_dataset_builder import BlendedHuggingFaceDatasetBuilder
 from loongforge.data.llm.sft_data_collator import DataCollatorForSupervisedDataset
 
-from loongforge.data.constants import IGNORE_INDEX
+from loongforge.engines.megatron import get_model_config
 
-from loongforge.engines.megatron.runner import pretrain
+from loongforge.engines.megatron.runner import MegatronTrainer
+from loongforge.training import register_model_trainer
 
 from loongforge.data.utils import (
     get_batch_on_this_tp_rank,
@@ -43,7 +49,6 @@ from loongforge.data.utils import (
     build_sft_data_collator,
 )
 from loongforge.models.foundation.llm_model_provider import llm_model_provider
-from loongforge.training.llm.pretrain_llm import get_embedding_ranks
 
 
 stimer = StragglerDetector()
@@ -391,7 +396,7 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
         chat_template=get_chat_template(),
         num_preprocess_workers=args.sft_num_preprocess_workers,
         train_on_prompt=args.train_on_prompt,
-        ignore_index=IGNORE_INDEX,
+        ignore_index=data_constants.IGNORE_INDEX,
         eod_mask_loss=args.eod_mask_loss,
         history_mask_loss=args.history_mask_loss,
         is_tokenized=args.is_tokenized_data,
@@ -424,14 +429,32 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
 
     return train_iter, valid_iter, test_iter
 
-def train(args):
-    """Run LLM SFT."""
-    train_valid_test_datasets_provider.is_distributed = True
-    pretrain(
-        args,
-        train_valid_test_datasets_provider,
-        llm_model_provider,
-        ModelType.encoder_or_decoder,
-        forward_step,
+def get_embedding_ranks(pp_ranks: List[int]):
+    """Get the embedding ranks."""
+    embedding_ranks = [pp_ranks[0]]
+    if len(pp_ranks) > 1:
+        args = get_args()
+        if not args.untie_embeddings_and_output_weights:
+            embedding_ranks.append(pp_ranks[-1])
+        mtp_ranks = get_mtp_ranks(pp_ranks, config=get_model_config())
+        embedding_ranks.extend(mtp_ranks)
+    embedding_ranks = list(set(embedding_ranks))
+    embedding_ranks = sorted(embedding_ranks)
+    return embedding_ranks
+
+@register_model_trainer(
+    model_family=constants.LanguageModelFamilies.names(),
+    training_phase=data_constants.TrainingPhase.SFT,
+)
+def default_sft_trainer(train_args):
+    """build trainer"""
+    trainer = MegatronTrainer(
+        train_args=train_args,
+        train_valid_test_dataset_provider=train_valid_test_datasets_provider,
+        model_provider=llm_model_provider,
+        model_type=ModelType.encoder_or_decoder,
+        forward_step_func=forward_step,
         get_embedding_ranks=get_embedding_ranks,
     )
+
+    return trainer

@@ -7,19 +7,24 @@ import logging
 import torch
 import torch.nn.functional as F
 from functools import partial
-from loongforge.training.vlm import pretrain_vlm
 from megatron.core.enums import ModelType
 from megatron.training import get_timers
 
-from megatron.training.utils import print_rank_0
-from loongforge.engines.megatron import get_args, get_model_config
+from loongforge.engines.megatron import get_args, print_rank_0
+from loongforge.data.constants import TrainingPhase
+from loongforge.models.catalog import VisionLanguageModelFamilies
 from loongforge.data.vlm.ernie.data_utils import ErnieTensorDataset
-from loongforge.engines.megatron.runner import pretrain
+from loongforge.engines.megatron.runner import MegatronTrainer
+from loongforge.training import register_model_trainer
 from megatron.core import parallel_state
 from megatron.core import mpu, tensor_parallel
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.transformer.enums import AttnMaskType
 from megatron.core.utils import StragglerDetector
+from loongforge.engines.megatron import get_model_config
+from loongforge.models.omni_models.omni_model_provider import (
+    omni_model_provider
+)
 from loongforge.engines.megatron.get_loss_func import default_loss_func
 
 logger = logging.getLogger(__name__)
@@ -165,6 +170,7 @@ def forward_step(data_iterator, model):
             labels, loss_mask, attn_mask_type, packed_seq_params = get_batch(data_iterator)
     timers("batch-generator").stop()
 
+    extra_input = {}
     model_config = get_model_config()
     image_mask = input_ids == model_config.foundation.im_patch_id
     # breakpoint()
@@ -235,13 +241,16 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
     return iter(dataloader), None, None
 
 
-def train(args):
-    """Run ERNIE-4.5-VL SFT."""
-    train_valid_test_datasets_provider.is_distributed = True
-    pretrain(
-        args,
-        train_valid_test_datasets_provider,
-        pretrain_vlm.model_provider,
-        ModelType.encoder_or_decoder,
-        forward_step,
+@register_model_trainer(
+    model_family=[VisionLanguageModelFamilies.ERNIE4_5_VL],
+    training_phase=TrainingPhase.SFT, override=True)
+def default_pretrain_trainer(train_args):
+    """build trainer"""
+    trainer = MegatronTrainer(
+        train_args=train_args,
+        train_valid_test_dataset_provider=train_valid_test_datasets_provider,
+        model_provider=omni_model_provider,
+        model_type=ModelType.encoder_or_decoder,
+        forward_step_func=forward_step,
     )
+    return trainer

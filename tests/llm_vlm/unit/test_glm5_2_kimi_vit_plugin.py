@@ -262,17 +262,24 @@ class VLMValidationDatasetTest(unittest.TestCase):
     def _get_val_dataset(self, args):
         dataset = object()
         with patch.object(
+            dataloader_provider, "get_args", return_value=args
+        ), patch.object(
+            dataloader_provider.parallel_state,
+            "get_data_parallel_rank",
+            return_value=0,
+        ), patch.object(
+            dataloader_provider.parallel_state,
+            "get_data_parallel_world_size",
+            return_value=1,
+        ), patch.object(
+            dataloader_provider.parallel_state,
+            "get_data_parallel_group",
+            return_value=None,
+        ), patch.object(
             dataloader_provider.energon, "WorkerConfig", return_value=object()
         ), patch.object(
             dataloader_provider.energon, "get_val_dataset", return_value=dataset
-        ) as get_val_dataset, patch.object(
-            dataloader_provider, "get_args", return_value=args
-        ), patch.multiple(
-            dataloader_provider.parallel_state,
-            get_data_parallel_rank=Mock(return_value=0),
-            get_data_parallel_world_size=Mock(return_value=1),
-            get_data_parallel_group=Mock(return_value=None),
-        ):
+        ) as get_val_dataset:
             result = dataloader_provider.get_val_dataset(Mock())
         return result, dataset, get_val_dataset
 

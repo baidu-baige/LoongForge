@@ -17,7 +17,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-from loongforge.data.embodied.dataloader import build_dataloader
+from loongforge.data.embodied import build_dataloader
 from loongforge.engines.torch.distributed.checkpoint import (
     detect_checkpoint_format,
     is_lora_adapter_checkpoint,
@@ -213,14 +213,13 @@ class FinetuneTrainer(BaseTrainer):
     def _on_after_train_batch_fetch(self, batch, micro_step: int) -> None:
         raw = unwrap_model(self.model)
         hook = getattr(raw, "on_after_train_batch_fetch", None)
-        if not callable(hook):
-            return
-        hook(
-            args=self.training_args,
-            completed_steps=self.completed_steps,
-            micro_step=micro_step,
-            batch=batch,
-        )
+        if callable(hook):
+            hook(
+                args=self.training_args,
+                completed_steps=self.completed_steps,
+                micro_step=micro_step,
+                batch=batch,
+            )
 
     def _prepare_model_for_train_step(self):
         """Put model in train mode and let policies re-freeze eval-only modules."""

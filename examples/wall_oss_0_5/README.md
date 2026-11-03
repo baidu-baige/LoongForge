@@ -48,7 +48,7 @@ Wall-OSS-0.5 normalizes actions/proprioception with per-dim `mean/std/q01/q99`
 statistics. **This step is required before the fine-tuning below** — the
 fine-tune script consumes the resulting JSON via `NORM_STATS_PATH`, so generate
 it once from the source LeRobot dataset first. The JSON layout matches
-`loongforge/data/embodied/wall_oss_0_5/transforms/wall_oss_0_5_utils.py::load_norm_stats`.
+`wall_oss_0_5/transforms/wall_oss_0_5_utils.py::load_norm_stats`.
 
 ```bash
 DATASET_PATH=/path/to/libero \
@@ -58,7 +58,7 @@ OUTPUT_PATH=$LOONGFORGE_PATH/data/wall_oss_0_5_norm_stats/libero_norm_stats.json
 
 `STATE_KEY` (default `observation.state`) and `ACTION_KEY` (default `action`)
 select the dataset columns; extra arguments are forwarded to the underlying
-[compute_norm_stats.py](../../loongforge/data/embodied/wall_oss_0_5/compute_norm_stats.py).
+`compute_norm_stats.py`.
 
 ## Fine-Tuning (FSDP + DMuon)
 

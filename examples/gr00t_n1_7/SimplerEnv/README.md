@@ -131,7 +131,7 @@ Loss curves (left half of each plot: raw action loss; right half: 500-step movin
 
 | Bridge (WidowX) | Fractal (Google Robot) |
 |:---:|:---:|
-| ![bridge_loss_curve](../../../../docs/assets/images/gr00t_n1_7/bridge_loss_curve.png) | ![fractal_loss_curve](../../../../docs/assets/images/gr00t_n1_7/fractal_loss_curve.png) |
+| ![bridge_loss_curve](../../../docs/assets/images/gr00t_n1_7/bridge_loss_curve.png) | ![fractal_loss_curve](../../../docs/assets/images/gr00t_n1_7/fractal_loss_curve.png) |
 
 ---
 
@@ -233,8 +233,8 @@ Fractal, 6 tasks:
 
 | Bridge (WidowX) | Bridge (WidowX) |
 |:---:|:---:|
-| ![widowx_spoon_on_towel](../../../../docs/assets/images/gr00t_n1_7/widowx_spoon_on_towel.gif) | ![widowx_close_drawer](../../../../docs/assets/images/gr00t_n1_7/widowx_close_drawer.gif) |
+| ![widowx_spoon_on_towel](../../../docs/assets/images/gr00t_n1_7/widowx_spoon_on_towel.gif) | ![widowx_close_drawer](../../../docs/assets/images/gr00t_n1_7/widowx_close_drawer.gif) |
 | *put the spoon on the towel* | *close the drawer* |
 | **Fractal (Google Robot)** | **Fractal (Google Robot)** |
-| ![google_robot_open_drawer](../../../../docs/assets/images/gr00t_n1_7/google_robot_open_drawer.gif) | ![google_robot_close_drawer](../../../../docs/assets/images/gr00t_n1_7/google_robot_close_drawer.gif) |
+| ![google_robot_open_drawer](../../../docs/assets/images/gr00t_n1_7/google_robot_open_drawer.gif) | ![google_robot_close_drawer](../../../docs/assets/images/gr00t_n1_7/google_robot_close_drawer.gif) |
 | *open bottom drawer* | *close bottom drawer* |

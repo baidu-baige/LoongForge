@@ -10,8 +10,15 @@ from megatron.core.utils import StragglerDetector
 from typing import List
 from megatron.core.transformer.multi_token_prediction import get_mtp_ranks
 
-from loongforge.training.vlm import pretrain_vlm
-from loongforge.engines.megatron.runner import pretrain
+from loongforge.models import catalog as constants
+from loongforge.data import constants as data_constants
+from loongforge.models.omni_models.omni_model_provider import (
+    omni_model_provider,
+)
+
+
+from loongforge.engines.megatron.runner import MegatronTrainer
+from loongforge.training import register_model_trainer
 
 from loongforge.engines.megatron import get_args, get_model_config
 
@@ -30,15 +37,18 @@ def get_embedding_ranks(pp_ranks: List[int]):
     embedding_ranks = sorted(embedding_ranks)
     return embedding_ranks
 
-
-def train(args):
-    """Run VLM SFT with the pretrain_vlm data provider and forward step."""
-    pretrain_vlm.train_valid_test_dataset_provider.is_distributed = True
-    pretrain(
-        args,
-        pretrain_vlm.train_valid_test_dataset_provider,
-        pretrain_vlm.model_provider,
-        ModelType.encoder_or_decoder,
-        pretrain_vlm.forward_step,
+@register_model_trainer(model_family=constants.VisionLanguageModelFamilies.names(),
+                        training_phase=data_constants.TrainingPhase.SFT)
+def default_pretrain_trainer(train_args):
+    """build trainer"""
+    from loongforge.training.vlm import pretrain_vlm
+    trainer = MegatronTrainer(
+        train_args=train_args,
+        train_valid_test_dataset_provider=pretrain_vlm.train_valid_test_dataset_provider,
+        model_provider=omni_model_provider,
+        model_type=ModelType.encoder_or_decoder,
+        forward_step_func=pretrain_vlm.forward_step,
         get_embedding_ranks=get_embedding_ranks,
     )
+
+    return trainer

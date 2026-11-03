@@ -121,9 +121,9 @@ Training time on 8 × A800:
 
 | libero_spatial | libero_object |
 |:---:|:---:|
-| ![libero_spatial loss](../../../../docs/assets/images/gr00t_n1_7/loss_libero_spatial.png) | ![libero_object loss](../../../../docs/assets/images/gr00t_n1_7/loss_libero_object.png) |
+| ![libero_spatial loss](../../../docs/assets/images/gr00t_n1_7/loss_libero_spatial.png) | ![libero_object loss](../../../docs/assets/images/gr00t_n1_7/loss_libero_object.png) |
 | **libero_goal** | **libero_10** |
-| ![libero_goal loss](../../../../docs/assets/images/gr00t_n1_7/loss_libero_goal.png) | ![libero_10 loss](../../../../docs/assets/images/gr00t_n1_7/loss_libero_10.png) |
+| ![libero_goal loss](../../../docs/assets/images/gr00t_n1_7/loss_libero_goal.png) | ![libero_10 loss](../../../docs/assets/images/gr00t_n1_7/loss_libero_10.png) |
 
 ---
 
@@ -199,8 +199,8 @@ Success rates on the four suites (10 tasks × 20 episodes = 200 episodes per sui
 
 | libero_spatial | libero_object |
 |:---:|:---:|
-| ![libero_spatial](../../../../docs/assets/images/gr00t_n1_7/replay_libero_spatial.gif) | ![libero_object](../../../../docs/assets/images/gr00t_n1_7/replay_libero_object.gif) |
+| ![libero_spatial](../../../docs/assets/images/gr00t_n1_7/replay_libero_spatial.gif) | ![libero_object](../../../docs/assets/images/gr00t_n1_7/replay_libero_object.gif) |
 | *pick up the black bowl on the wooden cabinet and place it on the plate* | *pick up the orange juice and place it in the basket* |
 | **libero_goal** | **libero_10** |
-| ![libero_goal](../../../../docs/assets/images/gr00t_n1_7/replay_libero_goal.gif) | ![libero_10](../../../../docs/assets/images/gr00t_n1_7/replay_libero_10.gif) |
+| ![libero_goal](../../../docs/assets/images/gr00t_n1_7/replay_libero_goal.gif) | ![libero_10](../../../docs/assets/images/gr00t_n1_7/replay_libero_10.gif) |
 | *put the bowl on the stove* | *put both the cream cheese box and the butter in the basket* |

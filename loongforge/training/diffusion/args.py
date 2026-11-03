@@ -5,6 +5,8 @@
 
 import argparse
 
+from loongforge.models import catalog
+
 
 def add_diffusion_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Register diffusion-only arguments on *parser*."""
@@ -112,3 +114,37 @@ def add_diffusion_args(parser: argparse.ArgumentParser) -> argparse.ArgumentPars
     )
 
     return parser
+
+
+def _validata_extra_custom_args(args):
+    """Validate multimodal arguments"""
+    if args.model_family not in catalog.DiffusionModelFamilies.names():
+        return
+
+    # make text length divisible by cp size
+    if args.max_text_length is not None and args.context_parallel_size > 1:
+        while (args.max_text_length % args.context_parallel_size) != 0:
+            args.max_text_length += 1
+
+
+def _get_wan_packing_cp_alignment(cp_size):
+    """Return WAN packing sequence alignment required by CP split."""
+    return 2 * cp_size
+
+
+def _align_wan_packing_seq_length(args):
+    """Align WAN packing seq-length before Megatron validation."""
+    if getattr(args, "model_name", None) != "wan2-2-i2v":
+        return
+    if not getattr(args, "packing_sft_data", False):
+        return
+    cp_size = getattr(args, "context_parallel_size", 1)
+    seq_length = getattr(args, "seq_length", None)
+    if cp_size <= 1 or seq_length is None:
+        return
+    alignment = _get_wan_packing_cp_alignment(cp_size)
+    aligned_seq_length = ((seq_length + alignment - 1) // alignment) * alignment
+    args.seq_length = aligned_seq_length
+    if getattr(args, "encoder_seq_length", None) is not None:
+        args.encoder_seq_length = aligned_seq_length
+    args.max_position_embeddings = max(args.max_position_embeddings, aligned_seq_length)

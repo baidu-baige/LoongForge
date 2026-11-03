@@ -40,11 +40,11 @@ pre-commit run --files <file>                                      # SPDX header
 
 | Path | Purpose |
 |---|---|
-| `loongforge/train.py` | Training entry point and the tables that map a Megatron family/phase or a Torch `--trainer-type` to a recipe |
-| `loongforge/training/` | What one run does: shared args (`megatron_args.py`, `torch_args.py`), per-family recipes (`llm/`, `vlm/`, `diffusion/`, `embodied/`) that combine data, model, and engine, and single-model training flows (`embodied/custom/`) |
+| `loongforge/train.py` | Training entry point that selects the engine and a registered Megatron recipe or Torch `--trainer-type` |
+| `loongforge/training/` | What one run does: args and validation (`megatron_args.py`, `torch_args.py`, per-family `args.py`), recipe registration (`__init__.py`), per-family recipes (`llm/`, `vlm/`, `diffusion/`, `embodied/`), and single-model training flows (`embodied/custom/`) |
 | `loongforge/engines/` | How training runs for any model: Megatron and torch wrappers for the parallel runtime, precision, model wrapping, optimizer, step loop, and checkpoint I/O (`megatron/`, `torch/`) |
-| `loongforge/models/` | What the network computes (`foundation/`, `encoder/`, `omni_models/`, `diffusion/`, `embodied/`, `common/`), including the model-specific part of engine features such as EP-overlap callables and FSDP/LoRA/FP8 targets; `catalog.py` maps `--model-name` to engine and config |
-| `loongforge/data/` | How samples become batches: per-family datasets, transforms, collators, samplers, and chat templates (`chat_templates/`: the registry in `template.py`, multimodal plugins in `plugins/`, Jinja files in `jinja/`) |
+| `loongforge/models/` | What the network computes (`foundation/`, `encoder/`, `omni_models/`, `diffusion/`, `embodied/`, `common/`), including EP-overlap callables and FSDP/LoRA/FP8 targets; `factory.py` registers and queries Megatron models; `catalog.py` holds model families, Megatron config paths, and Torch names for engine selection |
+| `loongforge/data/` | How samples become batches: per-family datasets, transforms, collators, samplers, and shared chat templates (`chat_templates/`: registry in `template.py`, plugins in `plugins/`, Jinja files in `jinja/`) |
 | `loongforge/evaluation/` | Evaluation (`embodied/`) |
 | `configs/` | YAML model configs (`configs/models/`) and data configs (`configs/data/`) |
 | `examples/` | Per-model training, checkpoint conversion, and evaluation scripts |

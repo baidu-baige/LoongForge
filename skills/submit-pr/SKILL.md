@@ -67,7 +67,7 @@ Or for breaking changes:
    - `docs/` → `docs`
    - `tests/` → `tests`
    - `.github/workflows/` → `ci`
-   - `examples/` → `scripts`
+   - `examples/`, `scripts/` → `scripts`
    - `loongforge/models/embodied/` → check model type (`diffusion`/`vla`)
    - `loongforge/models/diffusion/` → `diffusion`
 3. Determine type from commit messages and nature of changes
@@ -165,7 +165,7 @@ After PR is created:
 | ci | `.github/workflows/` |
 | docs | `docs/` |
 | tests | `tests/` |
-| scripts | `examples/` |
+| scripts | `examples/`, `scripts/`, `build.sh` |
 | release | `pyproject.toml`, version bumps |
 
 ## Common Mistakes
