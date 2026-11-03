@@ -19,8 +19,6 @@ Alignment points vs giga_brain_0/configs/giga_brain_0_07_a2d_finetune.py:
 """
 
 import os
-import sys
-from pathlib import Path
 from typing import Dict, Tuple
 
 import torch

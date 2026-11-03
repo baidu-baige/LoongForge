@@ -32,10 +32,8 @@ import yaml
 
 try:  # Prefer the C-accelerated (de)serializers when libyaml is available.
     from yaml import CDumper as _YamlDumper
-    from yaml import CLoader as _YamlLoader
 except ImportError:  # pragma: no cover - pure-python fallback
     from yaml import Dumper as _YamlDumper
-    from yaml import Loader as _YamlLoader
 
 
 # ───────────────────────────── timing ─────────────────────────────
