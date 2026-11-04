@@ -167,7 +167,7 @@ class TrainingEntryTests(unittest.TestCase):
 )
 class SFTRecipeTests(unittest.TestCase):
     def setUp(self):
-        from loongforge.training.embodied import global_vars
+        from loongforge.engines.torch.utils import global_vars
 
         for name in (
             "_EMBODIED_TRAINING_ARGS", "_EMBODIED_MODEL_CONFIG", "_EMBODIED_DATA_CONFIG",

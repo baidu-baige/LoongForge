@@ -27,7 +27,7 @@ from loongforge.models.embodied.wall_oss_0_5.qwen2_5 import (
     Qwen25VLMoEForAction,
 )
 
-from loongforge.training.embodied.global_vars import get_model_config, get_training_args
+from loongforge.engines.torch.utils.global_vars import get_model_config, get_training_args
 
 logger = logging.getLogger(__name__)
 

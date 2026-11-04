@@ -79,7 +79,7 @@ from loongforge.models.embodied.lingbot_vla_v2.model_configuration_lingbot_vla_v
 from loongforge.data.embodied.lingbot_vla_v2.transforms.data_configuration_lingbot_vla_v2 import (
     LingbotVLAV2DataConfig,
 )
-from loongforge.training.embodied.global_vars import (
+from loongforge.engines.torch.utils.global_vars import (
     set_data_config,
     set_model_config,
     set_training_args,

@@ -238,7 +238,7 @@ def _is_graph_mode_active() -> bool:
     - OR we're currently in a CUDA graph capture stream
     """
     try:
-        from loongforge.training.embodied.global_vars import get_training_args
+        from loongforge.engines.torch.utils.global_vars import get_training_args
 
         training_args = get_training_args()
         if (
