@@ -50,7 +50,7 @@ def _build_giga_model(model_cfg: GigaBrain07ModelConfig, pretrained_path: str, r
     weights via diffusers ``from_config``; otherwise weights are loaded with
     ``from_pretrained``.
     """
-    from loongforge.embodied.model.giga_brain07.modeling_giga_brain_0 import GigaBrain07Policy
+    from loongforge.embodied.model.giga_brain07.modeling_giga_brain07 import GigaBrain07Policy
 
     if not pretrained_path:
         raise ValueError(

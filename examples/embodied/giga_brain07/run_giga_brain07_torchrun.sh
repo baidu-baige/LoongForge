@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Copyright 2026 The LoongForge Authors.
-# SPDX-License-Identifier: Apache-2.0
 # ═══════════════════════════════════════════════════════════════
 # run_giga_brain07_torchrun_8gpu.sh — 8×A800 FSDP2 variant for perf/bs sweep
 # Derived from run_giga_brain07_torchrun.sh (kept intact). Adds:
@@ -18,7 +16,7 @@ export LOONGFORGE_PATH="${LOONGFORGE_PATH:-/workspace/LoongForge}"
 
 GB_MODEL_DIR="$LOONGFORGE_PATH/loongforge/embodied/model/giga_brain07"
 GB_DATA_DIR="$LOONGFORGE_PATH/loongforge/embodied/data/datasets/giga_brain07"
-export PYTHONPATH="$GB_MODEL_DIR:$GB_DATA_DIR:$LOONGFORGE_PATH:${PYTHONPATH:-}"
+export PYTHONPATH="$LOONGFORGE_PATH:${PYTHONPATH:-}"  # giga code imported via loongforge.* absolute paths (no bare giga_* dirs)
 
 export GB0_PRETRAINED="${GB0_PRETRAINED:-/workspace/ckpt/open-gigaai/GigaBrain-0.7-3.5B-Base}"
 export GB0_TOKENIZER="${GB0_TOKENIZER:-/workspace/ckpt/paligemma-3b-pt-224}"
@@ -107,6 +105,10 @@ PYTHONPATH="$PYTHONPATH" torchrun "${DISTRIBUTED_ARGS[@]}" \
     --dtype "$GB0_DTYPE" \
     $GB0_EXTRA_ARGS \
     --optimizer AdamW \
+    --lr-decay-style giga_warmup_cosine \
+    --lr-warmup-iters 10 \
+    --lr-decay-iters 300 \
+    --min-lr 2.5e-6 \
     --clip-grad 0 \
     --loss-spike-threshold 1000 \
     --save-interval 0 \

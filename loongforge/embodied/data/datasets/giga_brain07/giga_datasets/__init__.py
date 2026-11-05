@@ -53,13 +53,13 @@ _SAMPLER_NAMES = frozenset(
         "AspectRatioSampler",
         "BucketBatchSampler",
         "BucketSampler",
-        "DefaultSampler",
+        "GigaBrainSampler",
         "SpecialDatasetSampler",
     }
 )
 
 __all__ = [
-    "DefaultCollator",
+    "GigaBrainCollator",
     "is_lerobot_available",
     *sorted(_READER_NAMES),
     *sorted(_SAMPLER_NAMES),
@@ -79,8 +79,8 @@ def _ensure_readers() -> None:
 def __getattr__(name):
     import importlib
 
-    if name == "DefaultCollator":
-        return getattr(importlib.import_module(_PKG + ".collators"), "DefaultCollator")
+    if name == "GigaBrainCollator":
+        return getattr(importlib.import_module(_PKG + ".collators"), "GigaBrainCollator")
     if name in _READER_NAMES:
         _ensure_readers()
         if name in ("BaseDataset", "BaseProcessor"):

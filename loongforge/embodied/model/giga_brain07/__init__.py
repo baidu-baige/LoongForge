@@ -13,7 +13,7 @@ that merely importing a submodule (e.g. the slim config consumed by
 keeping the training import chain and numerics byte-identical.
 
 The real implementation is untouched and lives in the vendored package
-``giga_models.models.vla.giga_brain_0.modeling_giga_brain_0`` (re-exported via
+``giga_brain07.modeling_giga_brain07`` (re-exported via
 the naming-aligned ``modeling_giga_brain07`` module). Nothing here moves,
 rewrites, or re-registers the model.
 """

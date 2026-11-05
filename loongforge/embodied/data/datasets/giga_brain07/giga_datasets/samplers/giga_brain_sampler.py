@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Default sampler for giga_brain07: infinite, per-epoch reshuffled index stream (seed+epoch) padded to a whole multiple of the batch size."""
+"""GigaBrain sampler for giga_brain07: infinite, per-epoch reshuffled index stream (seed+epoch) padded to a whole multiple of the batch size."""
 
 import math
 from typing import Iterator
@@ -10,7 +10,7 @@ import numpy as np
 import torch
 
 
-class DefaultSampler(torch.utils.data.Sampler):
+class GigaBrainSampler(torch.utils.data.Sampler):
     """Infinite or finite sampler with optional shuffling and padding."""
 
     def __init__(

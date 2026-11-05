@@ -16,7 +16,7 @@ route-B dataset builder on the shared LeRobot reader. Both are resolved
 pull the heavy transform / lerobot dependencies.
 
 The collator lives in the sibling ``collators`` package
-(``giga_brain07.collators.DefaultCollator``), mirroring the xvla layout where
+(``giga_brain07.collators.GigaBrainCollator``), mirroring the xvla layout where
 the collator is a dedicated module; it is re-exported here for backward
 compatibility.
 """
@@ -28,11 +28,22 @@ from loongforge.embodied.data.datasets.giga_brain07.transforms.data_configuratio
     GigaBrain07DataConfig,
 )
 
+# Eager: importing this package triggers the preprocessor registry decorator
+# (@register_preprocessor("giga_brain07")) so discover_preprocessors() finds it,
+# exactly like xvla's transforms package. Pulls only collator + base preprocessor.
+from loongforge.embodied.data.datasets.giga_brain07.collators import (  # noqa: E402,F401
+    GigaBrain07Batch,
+    GigaBrain07Preprocessor,
+    GigaBrainCollator,
+)
+
 __all__ = [
     "GigaBrain07DataConfig",
     "GigaBrain07Transform",
-    "DefaultCollator",
+    "GigaBrainCollator",
     "build_giga_brain07_dataset",
+    "GigaBrain07Batch",
+    "GigaBrain07Preprocessor",
 ]
 
 
@@ -44,14 +55,14 @@ def __getattr__(name):
         )
 
         return GigaBrain07Transform
-    if name == "DefaultCollator":
+    if name == "GigaBrainCollator":
         # Collator lives in the sibling ``collators`` package (xvla-style
         # dedicated module); re-exported here for backward compatibility.
         from loongforge.embodied.data.datasets.giga_brain07.collators import (
-            DefaultCollator,
+            GigaBrainCollator,
         )
 
-        return DefaultCollator
+        return GigaBrainCollator
     if name == "build_giga_brain07_dataset":
         # Route-B dataset builder on the shared LeRobot reader (pulls lerobot).
         from loongforge.embodied.data.datasets.giga_brain07.transforms.giga_brain07_dataset import (
@@ -60,3 +71,11 @@ def __getattr__(name):
 
         return build_giga_brain07_dataset
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+# Eager (light): register the per-sample transform builder so
+# discover_transform_builders() finds giga_brain07, like xvla. Imports only the
+# registry; GigaBrain07Transform is imported lazily inside the builder.
+from loongforge.embodied.data.datasets.giga_brain07.transforms.giga_brain07_transform_builder import (  # noqa: E402,F401
+    build_giga_brain07_transforms,
+)

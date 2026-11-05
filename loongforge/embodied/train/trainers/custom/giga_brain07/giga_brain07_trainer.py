@@ -55,41 +55,19 @@ class GigaBrain07Trainer(FinetuneTrainer):
 
     # ───────────────────────── model + loss (giga get_models) ─────────────────
     def _build_model(self) -> nn.Module:
-        m = self.model_cfg
-        # giga enables TF32 (accelerate Trainer allow_tf32=True). LoongForge only
-        # *disables* TF32 on --disable-tf32, so match giga explicitly here else
-        # matmul precision (and hence loss) drifts from the baseline.
-        torch.backends.cuda.matmul.allow_tf32 = True
-        torch.backends.cudnn.allow_tf32 = True
-        from loongforge.embodied.model.giga_brain07.modeling_giga_brain_0 import (
-            GigaBrain07Policy,
-        )
-        from loongforge.embodied.model.giga_brain07.giga_brain_0_loss import GigaBrain07Loss
+        # Route-C: build via the shared model registry (build_model ->
+        # @register_model("giga_brain07") -> build_giga_brain07_policy), the same
+        # path XVLAPolicy is reached. TF32, pretrained load, loss-module attach
+        # and num_embodiments now live in the registered factory / on the policy.
+        from loongforge.embodied.model.registry import build_model
 
-        model = GigaBrain07Policy.from_pretrained(m.pretrained)
-        loaded_vlm = getattr(model, "vlm_type", m.vlm_type)
-        if loaded_vlm != "paligemma2":
-            raise ValueError(f"GigaBrain07 only supports PaliGemma2, got {loaded_vlm!r}")
+        model = build_model(self.model_cfg)
         model.to(self.ctx.device)
         model.train()
-
-        # Honor model.enable_nvtx_profiling from the slim config at build time;
-        # env LOONGFORGE_NVTX=1 still force-on wins inside set_enabled(). No-op
-        # (zero overhead / zero numerics change) when the switch is off.
-        set_enabled(bool(getattr(m, "enable_nvtx_profiling", False)))
-
-        self._giga_loss = GigaBrain07Loss(
-            llm_loss_weight=float(m.llm_loss_weight),
-            flow_action_dim_loss_weight_cfg=None,
-        )
-        cfg = getattr(model, "config", {})
-        try:
-            self._num_embodiments = int(cfg.get("num_embodiments", m.num_embodiments))
-        except AttributeError:
-            self._num_embodiments = int(getattr(cfg, "num_embodiments", m.num_embodiments))
+        # Honor model.enable_nvtx_profiling from the slim config at build time.
+        set_enabled(bool(getattr(self.model_cfg, "enable_nvtx_profiling", False)))
         return model
 
-    # ───────────────────────── wrap (single-GPU: AC only, no dist) ────────────
     def _wrap_model_for_training(self):
         m = self.model_cfg
         if self.ctx.world_size > 1:
@@ -97,17 +75,19 @@ class GigaBrain07Trainer(FinetuneTrainer):
             self._maybe_apply_kv_slice()  # [compile] no-op unless model.decoder_kv_slice
             self._maybe_apply_compile()  # [compile] no-op unless model.compile_model
             return
-        if m.activation_checkpointing and m.activation_class_names:
-            from loongforge.embodied.model.giga_brain07.activation_checkpointing import module_auto_wrap_policy
-            from torch.distributed.algorithms._checkpoint.checkpoint_wrapper import (
+        if self.training_args.activation_checkpoint_module_patterns:
+            # xvla-style: reuse the shared apply_activation_checkpointing (same
+            # function wrap_model() uses in the multi-GPU path), selecting modules
+            # by key-glob patterns from --activation-checkpoint-module-patterns
+            # (giga passes paligemma_with_expert.layers.0..N). Loss-transparent.
+            from loongforge.embodied.distributed.activation_checkpointing import (
                 apply_activation_checkpointing,
-                checkpoint_wrapper,
             )
-            policy = module_auto_wrap_policy(list(m.activation_class_names))
+
             apply_activation_checkpointing(
                 self.model,
-                checkpoint_wrapper_fn=checkpoint_wrapper,
-                auto_wrap_policy=policy,
+                self.training_args.activation_checkpoint_module_patterns,
+                self.training_args.activation_checkpoint_skip_modules,
             )
             if self.ctx.is_main:
                 n_ckpt = sum(
@@ -328,39 +308,19 @@ class GigaBrain07Trainer(FinetuneTrainer):
         with nvtx_range('backward'):
             super()._backward_loss(loss, log_loss_dict, log_dict, grad_accum)
 
-    # ───────────────────────── scheduler (giga WarmupCosine via LambdaLR) ──────
-    def _build_scheduler(self):
-        m = self.model_cfg
-        from loongforge.embodied.model.giga_brain07.scheduler import build_scheduler as giga_build_scheduler
-
-        n = int(self.train_iters)
-        return giga_build_scheduler(
-            dict(
-                type="WarmupCosineScheduler",
-                warmup_steps=int(m.warmup_steps),
-                decay_steps=int(m.decay_steps),
-                end_value=float(m.scheduler_end_value),
-            ),
-            optimizer=self.optimizer,
-            epoch_size=n,
-            max_epochs=1,
-            max_steps=n,
-        )
-
-    # ───────────────────────── dataloader (shared LeRobot reader + giga transform) ──
     def _build_dataloaders(self) -> Dict[str, DataLoader]:
         d = self.data_cfg
         # Data infra (reader + collator + sampler + transform) is self-contained
         # under the giga_brain07 data package; no top-level vendored
         # ``giga_datasets`` / ``giga_train`` imports are used here.
-        from loongforge.embodied.data.datasets.giga_brain07.collators import (
-            DefaultCollator,
+        from loongforge.embodied.data.datasets.transforms.collator import (
+            build_preprocessor,
         )
         from loongforge.embodied.data.datasets.giga_brain07.giga_datasets.samplers import (
-            DefaultSampler,
+            GigaBrainSampler,
         )
-        from loongforge.embodied.data.datasets.giga_brain07.transforms.giga_brain07_transform import (
-            GigaBrain07Transform,
+        from loongforge.embodied.data.datasets.transforms.pipeline import (
+            build_transforms_from_args,
         )
         # 方案乙 (route B): dataset *reading* now goes through the shared
         # LeRobot v3 reader (loongforge.embodied.data.datasets.lerobot_dataset
@@ -377,62 +337,23 @@ class GigaBrain07Trainer(FinetuneTrainer):
             build_giga_brain07_dataset,
         )
 
-        transform_cfg = dict(
-            is_train=bool(d.is_train),
-            state_input_mode=d.state_input_mode,
-            observation_memory_size=int(d.observation_memory_size),
-            agent_pos_config={"state": int(d.agent_pos_state)},
-            use_quaternion_to_6d=bool(d.use_quaternion_to_6d),
-            robot_type_embodiment_id_overrides={d.robot_type: d.embodiment_override},
-            delta_action_cfg=dict(
-                selector="embodiment_id",
-                use_delta_joint_actions=bool(d.use_delta_joint_actions),
-                mask_unsupervised_action_dims_for_noise=bool(
-                    d.mask_unsupervised_action_dims_for_noise
-                ),
-                mask={d.embodiment_id: list(d.delta_mask)},
-            ),
-            norm_cfg=dict(
-                norm_stats_path={d.embodiment_id: d.norm_stats_path},
-                use_quantiles=bool(d.use_quantiles),
-            ),
-            image_cfg=dict(
-                resize_imgs_with_padding=list(d.resize_hw),
-                enable_image_aug=bool(d.enable_image_aug),
-                present_img_keys=list(d.camera_keys),
-                enable_depth_img=bool(d.enable_depth_img),
-                vlm_type=d.vlm_type,
-            ),
-            prompt_cfg=dict(
-                tokenizer_model_path=d.tokenizer_model_path,
-                fast_tokenizer_path=d.fast_tokenizer_path,
-                enable_control_mode_token=bool(d.enable_control_mode_token),
-                enable_end_effector_token=bool(d.enable_end_effector_token),
-                max_length=int(d.max_length),
-                state_input_mode=d.state_input_mode,
-                discrete_state_input=bool(d.discrete_state_input),
-                discrete_state_input_for_pose_embodiments=bool(
-                    d.discrete_state_input_for_pose_embodiments
-                ),
-                encode_action_input=bool(d.encode_action_input),
-                encode_sub_task_input=bool(d.encode_sub_task_input),
-                encoded_action_horizon=int(d.encoded_action_horizon),
-                sample_ratios=dict(d.sample_ratios),
-                vlm_type=d.vlm_type,
-            ),
-        )
-
         dataset = build_giga_brain07_dataset(self.model_cfg, self.data_cfg, self.training_args)
-        transform = GigaBrain07Transform(**transform_cfg)
-        # Attach the per-sample transform the same way the generic
-        # ``dataloader._apply_transform`` does for every other model (poke
-        # ``_transform``); the shared reader needs no model-specific setter.
-        dataset._transform = transform
+        # xvla-style: build the per-sample transform through the shared pipeline
+        # (build_transforms_from_args -> @register_transform_builder("giga_brain07")),
+        # then attach it exactly as dataloader._apply_transform does (poke
+        # ``_transform``). The transform_cfg assembly now lives in the registered
+        # builder in giga_brain07/transforms/giga_brain07_transform.py.
+        dataset_stats = getattr(getattr(dataset, "meta", None), "stats", {})
+        transform = build_transforms_from_args(
+            self.model_cfg, self.data_cfg, self.training_args, dataset, dataset_stats,
+        )
+        if transform is not None:
+            dataset._transform = transform
 
         bs = int(d.batch_size_per_gpu)
         grad_accum = int(self.training_args.gradient_accumulation_steps)
         global_bs = bs * int(self.ctx.world_size) * grad_accum
-        sampler = DefaultSampler(
+        sampler = GigaBrainSampler(
             dataset,
             batch_size=global_bs,
             shuffle=bool(d.shuffle),
@@ -443,7 +364,9 @@ class GigaBrain07Trainer(FinetuneTrainer):
         num_workers = int(d.num_workers)
         kwargs = dict(
             batch_sampler=batch_sampler,
-            collate_fn=DefaultCollator(),
+            collate_fn=build_preprocessor(
+                "giga_brain07", self.model_cfg, self.data_cfg, self.training_args,
+            ),
             num_workers=num_workers,
             pin_memory=bool(d.pin_memory),
         )
@@ -471,187 +394,8 @@ class GigaBrain07Trainer(FinetuneTrainer):
 
     # ───────────────────────── forward + loss (giga forward_step/parse) ───────
     def _train_forward(self, batch) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-        # [compile] opt-in one-shot saved-activation census (GB0_MEM_DIAG=1);
-        # default path is a plain delegation (no behavior change).
-        if os.environ.get("GB0_MEM_DIAG", "0") != "1":
-            return self._train_forward_impl(batch)
-        self._gb0_diag_calls = getattr(self, "_gb0_diag_calls", 0) + 1
-        if self._gb0_diag_calls != 2 or not self.ctx.is_main:
-            return self._train_forward_impl(batch)
-        import collections
-        stack, hooks, seen = [], [], {}
-
-        def _post(m, a, o, n):
-            if stack and stack[-1] == n:
-                stack.pop()
-            return None  # never replace the module output
-
-        for name, mod in self.model.named_modules():
-            hooks.append(mod.register_forward_pre_hook(lambda m, a, n=name: stack.append(n)))
-            hooks.append(mod.register_forward_hook(lambda m, a, o, n=name: _post(m, a, o, n)))
-
-        def pack(t):
-            try:
-                if t.is_cuda:
-                    st = t.untyped_storage()
-                    k = st.data_ptr()
-                    if k not in seen:
-                        seen[k] = (st.nbytes(), stack[-1] if stack else "<top>",
-                                   tuple(t.shape), str(t.dtype))
-            except Exception:
-                pass
-            return t
-
-        torch.cuda.synchronize()
-        m0 = torch.cuda.memory_allocated()
-        # per-module allocated-memory delta (post - pre), synchronized
-        curve = []
-        pre_mem = {}
-
-        def _mpre(m, a, n):
-            torch.cuda.synchronize()
-            pre_mem.setdefault(n, []).append(torch.cuda.memory_allocated())
-
-        def _mpost(m, a, o, n):
-            torch.cuda.synchronize()
-            now = torch.cuda.memory_allocated()
-            p = pre_mem[n].pop() if pre_mem.get(n) else now
-            curve.append((n, (now - p) / 2**30, (now - m0) / 2**30))
-            return None
-
-        for name, mod in self.model.named_modules():
-            short = name.replace("._checkpoint_wrapped_module", "")
-            depth = short.count(".")
-            if (short.startswith("paligemma_with_expert.layers.") and depth == 2) or \
-               (short.startswith("paligemma_with_expert.vision_tower.encoder.layers.") and depth == 4) or \
-               (depth <= 1 and short):
-                if short != name:
-                    continue  # hook the CheckpointWrapper (outer) only
-                hooks.append(mod.register_forward_pre_hook(lambda m, a, n=short: _mpre(m, a, n)))
-                hooks.append(mod.register_forward_hook(lambda m, a, o, n=short: _mpost(m, a, o, n)))
-        with torch.autograd.graph.saved_tensors_hooks(pack, lambda t: t):
-            if os.environ.get("GB0_MEM_SNAP"):
-                torch.cuda.memory._record_memory_history(max_entries=400000)
-            out = self._train_forward_impl(batch)
-            if os.environ.get("GB0_MEM_SNAP"):
-                torch.cuda.memory._dump_snapshot(os.environ["GB0_MEM_SNAP"])
-                torch.cuda.memory._record_memory_history(enabled=None)
-        torch.cuda.synchronize()
-        m1 = torch.cuda.memory_allocated()
-        for h in hooks:
-            h.remove()
-        for n, d, c in curve:
-            print("[gb0-memcurve] %-60s delta=%.3f GB cum=%.2f GB" % (n, d, c), flush=True)
-        agg = collections.Counter()
-        for nb, name, _, _ in seen.values():
-            agg[".".join(name.split(".")[:5])] += nb
-        tot = sum(v[0] for v in seen.values())
-        print("[gb0-memdiag] fwd_alloc_growth_GB=%.2f saved_outside_AC_GB=%.2f n=%d"
-              % ((m1 - m0) / 2**30, tot / 2**30, len(seen)), flush=True)
-        for k, v in agg.most_common(25):
-            print("[gb0-memdiag]   %-70s %.3f GB" % (k, v / 2**30), flush=True)
-        for nb, name, shp, dt in sorted(seen.values(), key=lambda x: -x[0])[:15]:
-            print("[gb0-memdiag]   big %.3f GB %s %s %s" % (nb / 2**30, name, shp, dt), flush=True)
-        return out
-
-    def _train_forward_impl(self, batch) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-        from loongforge.embodied.model.giga_brain07.loss_masks import (
-            _apply_skip_loss_mask,
-            _get_flow_action_horizon,
-        )
-        from loongforge.embodied.model.giga_brain07.action_horizon import downsample_flow_action_tensors
-
-        b = batch
-        images = b["images"]
-        img_masks = b["image_masks"]
-        lang_tokens = b["lang_tokens"]
-        lang_masks = b["lang_masks"]
-        lang_att_masks = b["lang_att_masks"]
-        lang_loss_masks = b["lang_loss_masks"]
-        fast_action_indicator = b["fast_action_indicator"]
-        subtask_indicator = b["subtask_indicator"]
-        actions = b["action"]
-        action_loss_mask = b["action_loss_mask"]
-        action_dim_loss_mask = b.get("action_dim_loss_mask")
-        action_fps = b.get("action_fps")
-        skip_loss_mask = b.get("skip_loss_mask")
-
-        traj = b.get("traj")
-        traj_loss_mask = b.get("traj_loss_mask") if traj is not None else None
-
-        lang_loss_masks, action_loss_mask, action_dim_loss_mask, traj_loss_mask = (
-            _apply_skip_loss_mask(
-                skip_loss_mask, lang_loss_masks, action_loss_mask,
-                action_dim_loss_mask, traj_loss_mask,
-            )
-        )
-
-        emb_ids = b["embodiment_id"]
-        flow_action_horizon = _get_flow_action_horizon(self.model)
-        if action_dim_loss_mask is None:
-            actions, action_loss_mask = downsample_flow_action_tensors(
-                actions, action_loss_mask, flow_action_horizon, action_fps=action_fps,
-            )
-        else:
-            actions, action_loss_mask, action_dim_loss_mask = downsample_flow_action_tensors(
-                actions, action_loss_mask, flow_action_horizon, action_fps=action_fps,
-                action_dim_loss_mask=action_dim_loss_mask,
-            )
-        if actions.ndim != 3 or actions.shape[-1] != 32:
-            raise ValueError(f"Flow actions must be [B,T,32], got {tuple(actions.shape)}")
-
-        m = self.model_cfg
-        batch_mul = int(m.flow_matching_batch_mul) if bool(m.enable_multi_flow_samples) else 1
-        noisy_model_input, timesteps = self._giga_loss.add_noise(
-            actions, action_dim_loss_mask, batch_mul=batch_mul,
-        )
-        action_emb_ids = emb_ids
-        if batch_mul > 1:
-            action_emb_ids = emb_ids.repeat_interleave(batch_mul, dim=0)
-            action_loss_mask = action_loss_mask.repeat_interleave(batch_mul, dim=0)
-            if action_dim_loss_mask is not None:
-                action_dim_loss_mask = action_dim_loss_mask.repeat_interleave(batch_mul, dim=0)
-
-        _rf_fwd = nvtx_range('forward_model')
-        _rf_fwd.__enter__()
-        model_pred = self.model(
-            images, img_masks, lang_tokens, lang_masks,
-            noisy_model_input, timesteps, emb_ids,
-            lang_att_masks=lang_att_masks,
-            fast_action_indicator=fast_action_indicator,
-            subtask_indicator=subtask_indicator,
-            lang_loss_masks=lang_loss_masks,
-            state_memory=b.get("observation.state_memory", None),
-            state_memory_masks=b.get("observation.state_memory_mask", None),
-            proprioception=b.get("observation.proprioception", None),
-            agent_pos_mask=b.get("observation.agent_pos_mask", None),
-            proprioception_present=b.get("observation.proprioception_present", None),
-            state=b.get("observation.state"),
-            action_emb_ids=action_emb_ids,
-            flow_matching_batch_mul=batch_mul,
-        )
-        model_pred = {
-            k: v if k in {"lang_logits", "lang_logits_mask", "lang_token_loss"}
-            or not isinstance(v, torch.Tensor) else v.float()
-            for k, v in model_pred.items()
-        }
-        _rf_fwd.__exit__(None, None, None)  # forward_model
-        with nvtx_range('loss_compute'):
-            losses = self._giga_loss(
-                model_pred, lang_tokens, lang_loss_masks, action_loss_mask,
-                traj, traj_loss_mask,
-                action_dim_loss_mask=action_dim_loss_mask,
-                fast_action_indicator=fast_action_indicator,
-                subtask_indicator=subtask_indicator,
-                embodiment_id=action_emb_ids,
-                num_embodiments=getattr(self, "_num_embodiments", 0),
-            )
-
-        # giga parse_losses: drop metric/* (diagnostics), mean rest, sum = total.
-        for k in [k for k in list(losses.keys()) if k.startswith("metric/")]:
-            losses.pop(k)
-        losses = {k: v.mean() for k, v in losses.items()}
-        total = sum(losses.values())
-        log = {k: v.detach() for k, v in losses.items()}
-        log["total_loss"] = total.detach()
-        return total, log
+        # Route-C xvla-style contract: the policy's forward(batch) returns
+        # (loss, log_dict). The flow-matching loss assembly moved verbatim into
+        # GigaBrain07Policy._train_step; no autocast wrapper (giga runs fp32,
+        # mixed_precision="no"), matching the pre-refactor numerics.
+        return self.model(batch)

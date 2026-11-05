@@ -5,7 +5,7 @@
 
 Consolidation of the former ``giga_datasets/utils/`` package (file/time/paths/
 utils/import_utils) into a single module. Only the helpers actually used by the
-surviving giga dataset reader + ``DefaultCollator`` are kept; dead helpers
+surviving giga dataset reader + ``GigaBrainCollator`` are kept; dead helpers
 (``empty_dir`` / ``list_dir`` / ``chmod_dir`` / ``get_root_dir`` /
 ``get_cur_time`` / ``as_list`` / ``repeat_n`` / ``split_data`` / ``wrap_call``)
 were dropped. Implementations are byte-for-byte equivalent to the originals, so
@@ -30,7 +30,7 @@ import numpy as np
 import torch
 import yaml
 
-try:  # Prefer the C-accelerated (de)serializers when libyaml is available.
+try:  # Prefer the C-accelerated serializer when libyaml is available.
     from yaml import CDumper as _YamlDumper
 except ImportError:  # pragma: no cover - pure-python fallback
     from yaml import Dumper as _YamlDumper
