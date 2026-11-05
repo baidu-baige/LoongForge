@@ -18,13 +18,13 @@ from loongforge.data.vlm.flavors import (
 # Registry for multimodal task encoders so configs can swap them without
 # touching individual encoder modules.
 TASK_ENCODER_REGISTRY = {
-    "vlmtaskencoder": "loongforge.data.vlm.vlm_task_encoder.VLMTaskEncoder",
-    "internvltaskencoder": "loongforge.data.vlm.internvl.internvl_task_encoder.InternVLTaskEncoder",
-    "llavaov15taskencoder": "loongforge.data.vlm.llava_ov_task_encoder.LLavaOv15TaskEncoder",
-    "ernietaskencoder": "loongforge.data.vlm.ernie.ernie_task_encoder.ErnieTaskEncoder",
-    "kimitaskencoder": "loongforge.data.vlm.kimi_task_encoder.KimiTaskEncoder",
+    "vlmtaskencoder": "loongforge.data.vlm.encoder.vlm_task_encoder.VLMTaskEncoder",
+    "internvltaskencoder": "loongforge.data.vlm.encoder.internvl_task_encoder.InternVLTaskEncoder",
+    "llavaov15taskencoder": "loongforge.data.vlm.encoder.llava_ov_task_encoder.LLavaOv15TaskEncoder",
+    "ernietaskencoder": "loongforge.data.vlm.encoder.ernie_task_encoder.ErnieTaskEncoder",
+    "kimitaskencoder": "loongforge.data.vlm.encoder.kimi_task_encoder.KimiTaskEncoder",
     "minicpmv46taskencoder": (
-        "loongforge.data.vlm.minicpm_v_4_6_task_encoder.MiniCPMV46TaskEncoder"
+        "loongforge.data.vlm.encoder.minicpm_v_4_6_task_encoder.MiniCPMV46TaskEncoder"
     ),
 }
 

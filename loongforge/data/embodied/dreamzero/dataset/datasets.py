@@ -246,7 +246,7 @@ class DreamZeroLeRobotDataset(
 
         # NOTE(YL): method to predict the task progress
         if "action.task_progress" in self._modality_keys["action"]:
-            from ..schema import StateActionMetadata
+            from .schema import StateActionMetadata
 
             logger.info("Adding task progress to the action modality")
             self._modality_keys["action"].append("action.task_progress")

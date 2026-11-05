@@ -10,14 +10,14 @@ from dataclasses import dataclass, asdict
 from typing_extensions import override
 from loongforge.data.vlm import MultiMixQASample
 from megatron.energon import stateless
-from ..base.task_encoder import (
+from .base.task_encoder import (
     BaseTaskSample,
     BaseTaskSamplePacked,
     BaseTaskBatchPacked,
     BaseTaskEncoder,
     _format_packed_sample_overflow_error,
 )
-from .internvl_preprocess import InternvlPreprocess, IGNORE_TOKEN_ID, IGNORE_INDEX
+from loongforge.data.vlm.internvl.internvl_preprocess import InternvlPreprocess, IGNORE_TOKEN_ID, IGNORE_INDEX
 
 from importlib.metadata import version as _energon_version
 try:

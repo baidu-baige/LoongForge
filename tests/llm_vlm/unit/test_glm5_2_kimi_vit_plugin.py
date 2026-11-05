@@ -20,9 +20,9 @@ from transformers.processing_utils import ProcessorMixin
 from loongforge.data.chat_templates.template import MAPPING_NAME_TO_TEMPLATE
 from loongforge.data.chat_templates.plugins.kimi_plugin import KimiPlugin
 from loongforge.data.vlm import dataloader_provider
-from loongforge.data.vlm.base.task_encoder import BaseTaskEncoder
-from loongforge.data.vlm.kimi_task_encoder import KimiTaskEncoder
-from loongforge.data.vlm.vlm_task_encoder import VLMTaskEncoder
+from loongforge.data.vlm.encoder.base.task_encoder import BaseTaskEncoder
+from loongforge.data.vlm.encoder.kimi_task_encoder import KimiTaskEncoder
+from loongforge.data.vlm.encoder.vlm_task_encoder import VLMTaskEncoder
 from loongforge.models.omni_models.omni_encoder_model import OmniEncoderModel
 from loongforge.data import constants
 
@@ -239,7 +239,7 @@ class VLMTaskEncoderCompatibilityTest(unittest.TestCase):
                     "__init__",
                     lambda encoder: setattr(encoder, "args", args),
                 ), patch(
-                    "loongforge.data.vlm.vlm_task_encoder.AutoProcessor.from_pretrained",
+                    "loongforge.data.vlm.encoder.vlm_task_encoder.AutoProcessor.from_pretrained",
                     side_effect=load_processor,
                 ):
                     VLMTaskEncoder(args)

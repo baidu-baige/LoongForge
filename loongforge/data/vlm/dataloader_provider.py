@@ -22,7 +22,7 @@ from megatron.training import get_args
 from megatron.training.checkpointing import get_checkpoint_name
 from loongforge.data import constants
 from loongforge.engines.megatron import get_model_config, print_rank_0
-from .base.task_encoder import print_error_handler
+from .encoder.base.task_encoder import print_error_handler
 from loongforge.models.omni_models.get_position_idx_func import get_position_ids
 
 IGNORE_INDEX = constants.IGNORE_INDEX
@@ -545,7 +545,7 @@ def build_full_hetero_encoder_energon_iterator(
     wraps it with EncoderStridedIterator to yield only microbatches assigned
     to this PP rank.
     """
-    from loongforge.data.encoder_strided_sampler import EncoderStridedIterator, PrefetchIterator
+    from loongforge.data.vlm.encoder_strided_sampler import EncoderStridedIterator, PrefetchIterator
     from loongforge.engines.megatron.initialize import get_num_micro_batches_per_decoder_dp
 
     encoder_dataset = get_train_dataset(task_encoder)

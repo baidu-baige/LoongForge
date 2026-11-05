@@ -29,7 +29,7 @@ except Exception:
     _ENERGON_NEEDS_SUBFLAVOR = False
 
 from loongforge.data.vlm import MultiMixQASample
-from loongforge.data.vlm.base.task_encoder import (
+from loongforge.data.vlm.encoder.base.task_encoder import (
     BaseTaskEncoder,
     BaseTaskSample,
     BaseTaskSamplePacked,

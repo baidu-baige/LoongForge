@@ -6,7 +6,7 @@
 import torch
 
 from loongforge.data.chat_templates.plugins.minicpm_v_4_6_plugin import MiniCPMV46Plugin
-from loongforge.data.vlm.vlm_task_encoder import (
+from loongforge.data.vlm.encoder.vlm_task_encoder import (
     IMAGE_TOKEN,
     IMAGE_TOKEN_WITH_TAGS,
     IGNORE_INDEX,

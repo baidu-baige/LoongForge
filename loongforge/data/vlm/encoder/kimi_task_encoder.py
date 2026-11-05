@@ -5,7 +5,7 @@
 
 import logging
 import torch
-from loongforge.data.vlm.vlm_task_encoder import VLMTaskEncoder
+from loongforge.data.vlm.encoder.vlm_task_encoder import VLMTaskEncoder
 from typing import Optional, Tuple, Union
 
 from megatron.energon import (
