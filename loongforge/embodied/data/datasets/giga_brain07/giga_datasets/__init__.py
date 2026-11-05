@@ -23,10 +23,11 @@ _preload_torchcodec_decoder_before_decord()
 from .utils import is_lerobot_available
 
 # The dataset-reading framework + collator were relocated into the giga_brain07
-# package (``transforms`` / ``collators``) to mirror the xvla-style layout. They
-# are re-exported here under their original names so every existing
-# ``from giga_datasets import ...`` keeps resolving to the exact same objects
-# (logic unchanged); only their on-disk location moved.
+# ``transforms`` package (single merged reader module
+# ``transforms.giga_brain_lerobot_dataset`` + ``transforms.giga_brain_collator``)
+# to mirror the xvla-style layout. They are re-exported here under their original
+# names so every existing ``from giga_datasets import ...`` keeps resolving to
+# the exact same objects (logic unchanged); only their on-disk location moved.
 #
 # Resolution is lazy (PEP 562 ``__getattr__``): the relocated reader imports
 # ``giga_datasets.utils`` back, so importing those modules eagerly here would
@@ -67,30 +68,23 @@ __all__ = [
 
 
 def _ensure_readers() -> None:
-    """Import the relocated reader modules so their ``@register_dataset``
+    """Import the relocated reader module so its ``@register_dataset``
     decorators populate the registry (matches the original eager behaviour)."""
     import importlib
 
-    importlib.import_module(_PKG + ".transforms.dataset")
-    if is_lerobot_available():
-        importlib.import_module(_PKG + ".transforms.lerobot_dataset")
+    importlib.import_module(_PKG + ".transforms.giga_brain_lerobot_dataset")
 
 
 def __getattr__(name):
     import importlib
 
     if name == "GigaBrainCollator":
-        return getattr(importlib.import_module(_PKG + ".collators"), "GigaBrainCollator")
+        return getattr(importlib.import_module(_PKG + ".transforms.giga_brain_collator"), "GigaBrainCollator")
     if name in _READER_NAMES:
         _ensure_readers()
-        if name in ("BaseDataset", "BaseProcessor"):
-            module = importlib.import_module(_PKG + ".transforms.base_dataset")
-        elif name == "LeRobotDataset":
-            if not is_lerobot_available():
-                raise AttributeError(name)
-            module = importlib.import_module(_PKG + ".transforms.lerobot_dataset")
-        else:
-            module = importlib.import_module(_PKG + ".transforms.dataset")
+        if name == "LeRobotDataset" and not is_lerobot_available():
+            raise AttributeError(name)
+        module = importlib.import_module(_PKG + ".transforms.giga_brain_lerobot_dataset")
         return getattr(module, name)
     if name in _SAMPLER_NAMES:
         return getattr(importlib.import_module(__name__ + ".samplers"), name)

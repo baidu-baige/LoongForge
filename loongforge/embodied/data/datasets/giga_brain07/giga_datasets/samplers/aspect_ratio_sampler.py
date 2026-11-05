@@ -9,7 +9,7 @@ from typing import Iterator
 import numpy as np
 import torch
 
-from loongforge.embodied.data.datasets.giga_brain07.transforms.dataset import ConcatDataset, Dataset
+from loongforge.embodied.data.datasets.giga_brain07.transforms.giga_brain_lerobot_dataset import ConcatDataset, Dataset
 
 
 class AspectRatioSampler(torch.utils.data.Sampler):

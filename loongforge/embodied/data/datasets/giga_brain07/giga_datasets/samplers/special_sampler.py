@@ -9,7 +9,7 @@ from typing import Iterator
 import numpy as np
 import torch
 
-from loongforge.embodied.data.datasets.giga_brain07.transforms.dataset import ConcatDataset
+from loongforge.embodied.data.datasets.giga_brain07.transforms.giga_brain_lerobot_dataset import ConcatDataset
 
 
 class SpecialDatasetSampler(torch.utils.data.Sampler):

@@ -15,10 +15,9 @@ route-B dataset builder on the shared LeRobot reader. Both are resolved
 **lazily** (PEP 562 ``__getattr__``) so importing the slim data config does NOT
 pull the heavy transform / lerobot dependencies.
 
-The collator lives in the sibling ``collators`` package
-(``giga_brain07.collators.GigaBrainCollator``), mirroring the xvla layout where
-the collator is a dedicated module; it is re-exported here for backward
-compatibility.
+The collator now lives in this same ``transforms`` package
+(``giga_brain07.transforms.giga_brain_collator.GigaBrainCollator``); it is
+re-exported here for backward compatibility.
 """
 
 from __future__ import annotations
@@ -31,7 +30,7 @@ from loongforge.embodied.data.datasets.giga_brain07.transforms.data_configuratio
 # Eager: importing this package triggers the preprocessor registry decorator
 # (@register_preprocessor("giga_brain07")) so discover_preprocessors() finds it,
 # exactly like xvla's transforms package. Pulls only collator + base preprocessor.
-from loongforge.embodied.data.datasets.giga_brain07.collators import (  # noqa: E402,F401
+from loongforge.embodied.data.datasets.giga_brain07.transforms.giga_brain_collator import (  # noqa: E402,F401
     GigaBrain07Batch,
     GigaBrain07Preprocessor,
     GigaBrainCollator,
@@ -56,9 +55,9 @@ def __getattr__(name):
 
         return GigaBrain07Transform
     if name == "GigaBrainCollator":
-        # Collator lives in the sibling ``collators`` package (xvla-style
-        # dedicated module); re-exported here for backward compatibility.
-        from loongforge.embodied.data.datasets.giga_brain07.collators import (
+        # Collator lives in this transforms package (giga_brain_collator);
+        # re-exported here for backward compatibility.
+        from loongforge.embodied.data.datasets.giga_brain07.transforms.giga_brain_collator import (
             GigaBrainCollator,
         )
 
