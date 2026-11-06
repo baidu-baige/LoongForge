@@ -161,7 +161,7 @@
 * **评测结果** —— 各模型在 **LIBERO / RoboTwin / SimplerEnv** 上的成功率与对应开源基线持平：
 
 <table width="100%">
-<thead><tr><th align="left" width="160">模型</th><th align="left" width="160">评测基准</th><th align="left" width="160">任务集</th><th align="left" width="160">基线</th><th align="left" width="160">LoongForge</th></tr></thead>
+<thead><tr><th align="left" width="170">模型</th><th align="left" width="170">评测基准</th><th align="left" width="170">任务集</th><th align="left" width="170">基线</th><th align="left" width="170">LoongForge</th></tr></thead>
 <tbody>
 <tr><td rowspan="6">Pi0.5</td><td rowspan="5">LIBERO</td><td>Spatial</td><td>97.0%</td><td>99.6%</td></tr>
 <tr><td>Object</td><td>99.0%</td><td>99.6%</td></tr>
