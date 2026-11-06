@@ -49,7 +49,7 @@ DROID data requires no extra offline preprocessing. Frame stitching, image augme
 
 Remaining settings like target resolution, action chunk length, CFG dropout are already set in the data section of `configs/models/embodied/cosmos3/nano.yaml` (defaults: `target_h/target_w=480`, `action_chunk_length=32`, `action_fps=15.0`), and generally don't need overriding.
 
-Data behaviour that matches the official cosmos-framework HEAD (all enabled by default, no extra arguments needed):
+Data behaviour that matches the official cosmos-framework (all enabled by default, no extra arguments needed):
 
 - Action targets are frames t..t+31, and the initial state is frame t;
 - Training order is an episode-shuffled stream that reads each episode sequentially (`episode_stream=true`), and 3% of episodes, chosen by `randperm(N, seed=42)`, are held out from training (`split_val_ratio=0.03`).

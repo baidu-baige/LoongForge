@@ -7,7 +7,7 @@
 
 """Cosmos3 sampler: cosmos-framework's episode-shuffle stream as an index sampler.
 
-Port of ``ActionIterableShuffleDataset.__iter__`` (cosmos-framework 300faa1): each
+Port of ``ActionIterableShuffleDataset.__iter__``: each
 epoch permutes the per-episode blocks with ``randperm(len(blocks), seed + epoch)``,
 assigns blocks disjointly to shards ``order[shard::total_shards]`` and walks the
 windows of each block sequentially. A shard is one (rank, cosmos worker) pair;

@@ -168,7 +168,7 @@ class RectifiedFlow:
         max_timestep=1000,
         tensor_kwargs=None,
     ):
-        """Cosmos-equivalent analytic shift formula (cosmos-framework 15d4c1c).
+        """Cosmos-equivalent analytic shift formula.
 
         The shift is applied to the raw sampled time, without inversion:
         sigmas    = shift * t_raw / (1 + (shift - 1) * t_raw)

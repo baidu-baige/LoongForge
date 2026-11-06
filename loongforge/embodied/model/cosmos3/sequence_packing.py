@@ -83,7 +83,7 @@ MAX_FULL_LEN_IMAGE_BATCH = 0
 MAX_CAUSAL_LEN_VIDEO_BATCH = 0
 MAX_FULL_LEN_VIDEO_BATCH = 0
 
-# Trailing pad segment, mirroring cosmos-framework HEAD ``sequence_pack_from_packed_sequence``:
+# Trailing pad segment, mirroring cosmos-framework ``sequence_pack_from_packed_sequence``:
 # when every sample has both a causal and a full split, each stream gets ``cp_world_size`` extra
 # zero rows (before rounding), described as one extra trailing segment on the tower offsets and on
 # ``sample_offsets`` so padding attends only to padding. COSMOS3_PAD_SEGMENT=0 disables it.
@@ -2699,7 +2699,7 @@ def get_all_seq(pack: SequencePack) -> torch.Tensor:
 def get_all_seq_padded(pack: SequencePack) -> Tuple[torch.Tensor, torch.Tensor, int]:
     """
     Get all tokens as one interleaved stream padded to the length ``sample_offsets`` describes,
-    together with ``sample_offsets`` / ``max_sample_len`` (cosmos HEAD ``runtime.get_all_seq``).
+    together with ``sample_offsets`` / ``max_sample_len`` (cosmos ``runtime.get_all_seq``).
 
     On a pack with a pad segment the stream is ``padded_causal + padded_full`` rows long: real tokens
     scatter into their packed positions and the trailing rows stay zero, covered by the pad segment

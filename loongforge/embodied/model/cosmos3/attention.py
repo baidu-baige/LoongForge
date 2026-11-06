@@ -143,7 +143,7 @@ def two_way_attention(
     causal_v, _ = get_causal_seq(packed_value_states)
     full_q, full_q_offsets = get_full_only_seq(packed_query_states)
 
-    # Tower offsets carry the pad segment folded in when the pack has one (cosmos HEAD); the
+    # Tower offsets carry the pad segment folded in when the pack has one; the
     # gen->all pass keys against the padded interleaved stream with the matching padded
     # ``sample_offsets`` so the padded GEN queries attend only to the padded keys.
     sample_k, sample_offsets, max_sample_len = get_all_seq_padded(packed_key_states)
@@ -221,7 +221,7 @@ def three_way_attention(
         # regardless of attention weights. Softmax mass is still allocated to these positions (not
         # redistributed), so this differs from hard key masking, but the output contribution is 0.
         full_v = full_v.clone()
-        # Real-sample starts only: the pad segment must not be treated as a sample (cosmos HEAD).
+        # Real-sample starts only: the pad segment must not be treated as a sample.
         starts = drop_pad_segment(packed_query_states, full_q_offsets)[:-1].long()  # [B]
         null_positions = (
             starts.unsqueeze(1) + torch.arange(attention_meta.num_action_tokens_per_supertoken, device=starts.device)

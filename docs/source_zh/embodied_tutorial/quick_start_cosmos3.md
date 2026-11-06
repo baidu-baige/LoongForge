@@ -49,7 +49,7 @@ DROID 数据不需要额外的离线预处理，训练时通过内建的 `cosmos
 
 其余目标分辨率、动作 chunk 长度、CFG dropout 等已经写在 `configs/models/embodied/cosmos3/nano.yaml` 的 `data` 段（默认 `target_h/target_w=480`、`action_chunk_length=32`、`action_fps=15.0`），通常不需要覆盖。
 
-与官方 cosmos-framework HEAD 一致的数据行为（均为默认开启，无需额外参数）：
+与官方 cosmos-framework 一致的数据行为（均为默认开启，无需额外参数）：
 
 - 动作目标取第 t..t+31 帧，初始状态取第 t 帧；
 - 训练顺序为按 episode 打乱、episode 内顺序读取的流式采样（`episode_stream=true`），并按 `randperm(N, seed=42)` 留出 3% episode 不参与训练（`split_val_ratio=0.03`）。
