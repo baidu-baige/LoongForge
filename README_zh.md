@@ -161,26 +161,26 @@
 * **评测结果** —— 各模型在 **LIBERO / RoboTwin / SimplerEnv** 上的成功率与对应开源基线持平：
 
 <table width="100%">
-<thead><tr><th align="left" width="170">模型</th><th align="left" width="170">评测基准</th><th align="left" width="170">任务集</th><th align="left" width="170">基线</th><th align="left" width="170">LoongForge</th></tr></thead>
+<thead><tr><th align="left" width="170">Model</th><th align="left" width="170">Benchmark</th><th align="left" width="170">Suite</th><th align="left" width="170">Baseline</th><th align="left" width="170">LoongForge</th></tr></thead>
 <tbody>
 <tr><td rowspan="6">Pi0.5</td><td rowspan="5">LIBERO</td><td>Spatial</td><td>97.0%</td><td>99.6%</td></tr>
 <tr><td>Object</td><td>99.0%</td><td>99.6%</td></tr>
 <tr><td>Goal</td><td>98.0%</td><td>98.8%</td></tr>
 <tr><td>Long</td><td>96.0%</td><td>97.0%</td></tr>
-<tr><td>平均</td><td>97.50%</td><td>98.75%</td></tr>
+<tr><td>Avg.</td><td>97.50%</td><td>98.75%</td></tr>
 <tr><td>RoboTwin</td><td>Easy</td><td>67.91%</td><td>77.56%</td></tr>
 <tr><td rowspan="7">GR00T N1.7</td><td rowspan="5">LIBERO</td><td>Spatial</td><td>97.65%</td><td>98.0%</td></tr>
 <tr><td>Object</td><td>98.45%</td><td>98.5%</td></tr>
 <tr><td>Goal</td><td>97.50%</td><td>96.5%</td></tr>
 <tr><td>Long</td><td>94.35%</td><td>95.5%</td></tr>
-<tr><td>平均</td><td>96.99%</td><td>97.13%</td></tr>
+<tr><td>Avg.</td><td>96.99%</td><td>97.13%</td></tr>
 <tr><td rowspan="2">SimplerEnv</td><td>Bridge</td><td>62.3%</td><td>62.6%</td></tr>
 <tr><td>Fractal</td><td>72.5%</td><td>72.1%</td></tr>
 <tr><td rowspan="5">FastWAM</td><td rowspan="5">LIBERO</td><td>Spatial</td><td>98.2%</td><td>97.0%</td></tr>
 <tr><td>Object</td><td>99.2%</td><td>99.6%</td></tr>
 <tr><td>Goal</td><td>97.8%</td><td>97.2%</td></tr>
 <tr><td>Long</td><td>95.8%</td><td>94.2%</td></tr>
-<tr><td>平均</td><td>97.75%</td><td>97.00%</td></tr>
+<tr><td>Avg.</td><td>97.75%</td><td>97.00%</td></tr>
 <tr><td rowspan="3">LingBot-VA</td><td>LIBERO</td><td>Long</td><td>78.8%</td><td>84.6%</td></tr>
 <tr><td rowspan="2">RoboTwin</td><td>Easy</td><td>86.1%</td><td>87.6%</td></tr>
 <tr><td>Hard</td><td>85.1%</td><td>85.7%</td></tr>
