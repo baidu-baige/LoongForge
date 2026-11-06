@@ -47,6 +47,13 @@ class Cosmos3DroidConfig:
     video_backend: str = "torchcodec"
     use_image_augmentation: bool = False
     colorjitter_on_gpu: bool = False
+    format_prompt_as_json: bool = False
+    split_val_ratio: float = 0.03
+    split_seed: int = 42
+    episode_stream: bool = True
+    episode_shuffle_seed: int = 42
+    episode_stream_shards_per_rank: int = 1
+    episode_stream_worker_batch: int = 16
 
     def __post_init__(self) -> None:
         pass
