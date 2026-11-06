@@ -160,30 +160,30 @@ Since optimal training strategies differ across model families and scales, Loong
 
 * **Evaluation Results** — Success rates on par with the corresponding open-source baselines, measured per model across **LIBERO / RoboTwin / SimplerEnv**:
 
-<table align="center">
-<thead><tr><th align="left">Model</th><th align="left">Benchmark</th><th align="left">Suite</th><th><div align="right">Baseline</div></th><th><div align="right">LoongForge</div></th></tr></thead>
+<table width="100%">
+<thead><tr><th align="left" width="170">Model</th><th align="left" width="170">Benchmark</th><th align="left" width="170">Suite</th><th align="left" width="170">Baseline</th><th align="left" width="170">LoongForge</th></tr></thead>
 <tbody>
-<tr><td rowspan="6">Pi0.5</td><td rowspan="5">LIBERO</td><td>Spatial</td><td align="right">97.0%</td><td align="right">99.6%</td></tr>
-<tr><td>Object</td><td align="right">99.0%</td><td align="right">99.6%</td></tr>
-<tr><td>Goal</td><td align="right">98.0%</td><td align="right">98.8%</td></tr>
-<tr><td>Long</td><td align="right">96.0%</td><td align="right">97.0%</td></tr>
-<tr><td>Avg.</td><td align="right">97.50%</td><td align="right">98.75%</td></tr>
-<tr><td>RoboTwin</td><td>Easy</td><td align="right">67.91%</td><td align="right">77.56%</td></tr>
-<tr><td rowspan="7">GR00T N1.7</td><td rowspan="5">LIBERO</td><td>Spatial</td><td align="right">97.65%</td><td align="right">98.0%</td></tr>
-<tr><td>Object</td><td align="right">98.45%</td><td align="right">98.5%</td></tr>
-<tr><td>Goal</td><td align="right">97.50%</td><td align="right">96.5%</td></tr>
-<tr><td>Long</td><td align="right">94.35%</td><td align="right">95.5%</td></tr>
-<tr><td>Avg.</td><td align="right">96.99%</td><td align="right">97.13%</td></tr>
-<tr><td rowspan="2">SimplerEnv</td><td>Bridge</td><td align="right">62.3%</td><td align="right">62.6%</td></tr>
-<tr><td>Fractal</td><td align="right">72.5%</td><td align="right">72.1%</td></tr>
-<tr><td rowspan="5">FastWAM</td><td rowspan="5">LIBERO</td><td>Spatial</td><td align="right">98.2%</td><td align="right">97.0%</td></tr>
-<tr><td>Object</td><td align="right">99.2%</td><td align="right">99.6%</td></tr>
-<tr><td>Goal</td><td align="right">97.8%</td><td align="right">97.2%</td></tr>
-<tr><td>Long</td><td align="right">95.8%</td><td align="right">94.2%</td></tr>
-<tr><td>Avg.</td><td align="right">97.75%</td><td align="right">97.00%</td></tr>
-<tr><td rowspan="3">LingBot-VA</td><td>LIBERO</td><td>Long</td><td align="right">78.8%</td><td align="right">84.6%</td></tr>
-<tr><td rowspan="2">RoboTwin</td><td>Easy</td><td align="right">86.1%</td><td align="right">87.6%</td></tr>
-<tr><td>Hard</td><td align="right">85.1%</td><td align="right">85.7%</td></tr>
+<tr><td rowspan="6">Pi0.5</td><td rowspan="5">LIBERO</td><td>Spatial</td><td>97.0%</td><td>99.6%</td></tr>
+<tr><td>Object</td><td>99.0%</td><td>99.6%</td></tr>
+<tr><td>Goal</td><td>98.0%</td><td>98.8%</td></tr>
+<tr><td>Long</td><td>96.0%</td><td>97.0%</td></tr>
+<tr><td>Avg.</td><td>97.50%</td><td>98.75%</td></tr>
+<tr><td>RoboTwin</td><td>Easy</td><td>67.91%</td><td>77.56%</td></tr>
+<tr><td rowspan="7">GR00T N1.7</td><td rowspan="5">LIBERO</td><td>Spatial</td><td>97.65%</td><td>98.0%</td></tr>
+<tr><td>Object</td><td>98.45%</td><td>98.5%</td></tr>
+<tr><td>Goal</td><td>97.50%</td><td>96.5%</td></tr>
+<tr><td>Long</td><td>94.35%</td><td>95.5%</td></tr>
+<tr><td>Avg.</td><td>96.99%</td><td>97.13%</td></tr>
+<tr><td rowspan="2">SimplerEnv</td><td>Bridge</td><td>62.3%</td><td>62.6%</td></tr>
+<tr><td>Fractal</td><td>72.5%</td><td>72.1%</td></tr>
+<tr><td rowspan="5">FastWAM</td><td rowspan="5">LIBERO</td><td>Spatial</td><td>98.2%</td><td>97.0%</td></tr>
+<tr><td>Object</td><td>99.2%</td><td>99.6%</td></tr>
+<tr><td>Goal</td><td>97.8%</td><td>97.2%</td></tr>
+<tr><td>Long</td><td>95.8%</td><td>94.2%</td></tr>
+<tr><td>Avg.</td><td>97.75%</td><td>97.00%</td></tr>
+<tr><td rowspan="3">LingBot-VA</td><td>LIBERO</td><td>Long</td><td>78.8%</td><td>84.6%</td></tr>
+<tr><td rowspan="2">RoboTwin</td><td>Easy</td><td>86.1%</td><td>87.6%</td></tr>
+<tr><td>Hard</td><td>85.1%</td><td>85.7%</td></tr>
 </tbody>
 </table>
 
@@ -390,6 +390,7 @@ https://github.com/user-attachments/assets/8563afca-f79a-4a45-bb4f-36e06c0ccbcb
 <a id="blogs"></a>
 ## 📝 Community Blogs
 
+- [百度&哈工大提出机器人操作新范式VLDA，从预测未来转向学习变化！](https://mp.weixin.qq.com/s/CFiPalRXwskMJLEDx475mA)
 - [VLA 训练如何一步步提速：以 Pi0.5 为例的 3 倍加速实践](https://zhuanlan.zhihu.com/p/2095555587304117777)
 - [百度百舸 LoongForge 团队提出 TAOT：拓扑感知传输破解大规模 MoE 训练端到端加速 1.43 倍](https://mp.weixin.qq.com/s/Op-KpFe5G1Q2IxzIUgm2KA)
 - [加速 GR00T N1.6 具身 VLA 模型训练！LoongForge 开源框架实现三层全链路优化，吞吐提升 2.3 倍、训练周期缩短 56.6%](https://mp.weixin.qq.com/s/lIMsQ0Q5G9KaDKGtrBt-Nw)
