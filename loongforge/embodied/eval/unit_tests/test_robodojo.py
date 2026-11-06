@@ -201,7 +201,8 @@ def test_plugin_deploy_replays_official_env_call_order(n_actions):
 
 
 class _FakePolicyClient:
-    def __init__(self, host="127.0.0.1", port=0, timeout=0):
+    def __init__(self, host="127.0.0.1", port=0, timeout=0, ping_interval=20, ping_timeout=20):
+        self.ping_interval = ping_interval
         self.resets = []
         self.calls = []
 
@@ -236,6 +237,7 @@ def test_bridge_episode_boundaries_and_payload(monkeypatch, tmp_path):
     out0 = model.get_action(_obs(0))
     out1 = model.get_action(_obs(1))
     assert model.client.resets == ["robodojo/stack_bowls/seed1/ep0000"]
+    assert model.client.ping_interval is None  # long chunk-boundary calls must not trip keepalive
     steps = [call["episode_step"] for call in model.client.calls]
     assert steps == [0, 1]
     first = model.client.calls[0]
