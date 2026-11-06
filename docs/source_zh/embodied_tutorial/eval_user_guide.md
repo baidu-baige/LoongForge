@@ -386,3 +386,95 @@ vulkaninfo
 
 - [model_integration_guide.md](https://github.com/baidu-baige/LoongForge/blob/master/loongforge/embodied/eval/model_integration_guide.md) — 新模型语义检查清单，含 pi0.5 与 X-VLA 的并排对比
 - [predict_action_interface.md](https://github.com/baidu-baige/LoongForge/blob/master/loongforge/embodied/eval/predict_action_interface.md) — `predict_action` 接口契约（签名、shape、反归一化归属、后处理 vs 模型）
+
+---
+
+## 8. 并行评测（多卡编排）
+
+在配置中加入 `servers` 和 `pools`，评测会切换为「每张卡一个推理服务 + 每卡 N 个仿真 worker + 全局队列」：
+
+```yaml
+servers:
+  - gpus: [0, 1, 2, 3, 4, 5, 6, 7]
+pools:
+  gpu_sim:
+    n_sims_per_server: 8
+    placement: co_locate
+```
+
+现有配置若不含 `servers` / `pools` / `coordinator`，仍走原来的单 run 路径，行为不变。可直接复制 `configs/libero/libero_pi05_parallel.yaml`、`configs/robotwin/robotwin_pi05_parallel.yaml`，用 `run_*_eval_parallel.sh` 启动。
+
+### 8.1 关键配置
+
+| 配置 | 作用 |
+|---|---|
+| `pools.gpu_sim.n_sims_per_server` | 每卡仿真数（N） |
+| `pools.gpu_sim.placement` | `co_locate`（仿真与推理服务同卡，推荐）或 `separate` |
+| `benchmark.episodes_per_chunk` | 一个评测单元连续跑多少集 |
+| `benchmark.plan_order` | 设为 `lpt`，长任务优先派发 |
+| `benchmark.sim_cpu_threads` | 仅 RoboTwin；多仿真共卡时设为 1，避免线程超订 |
+
+单元数应接近 slot 数：`episodes_per_chunk ≈ max(1, floor(总集数 / (卡数 × N)))`，这样一波跑完、每单元只付一次进程启动。未显式设置时，planner 的默认值是 `ceil(E / (4 × slot 数))`（约每 slot 4 个单元），让后续波次可以回填空出的 slot；已知一波能跑完时请显式设为上式。单任务且总集数 ≤ slot 数时该值取 1，此时继续增大 N 不会提高并发。
+
+### 8.2 加速开关
+
+| 开关 | 默认 | 说明 |
+|---|---|---|
+| `benchmark.return_action_chunk` | `false`（LIBERO 为 `true`） | 客户端持有动作块，请求数从每步一次降到每块一次 |
+| `benchmark.chunk_execute_steps` | 0（全部） | 一块执行多少步后重新规划 |
+| `benchmark.skip_intra_chunk_obs` | `false` | 仅 RoboTwin；块内不渲染相机，是长任务加速的主要来源 |
+
+`return_action_chunk` + `skip_intra_chunk_obs` 会让策略在块内开环（每 `chunk_execute_steps` 步才重新感知），因此逐集结果不会与逐步闭环完全一致，详见 8.5。
+
+### 8.3 标定（试跑）
+
+```bash
+python -m loongforge.embodied.eval.orchestrator.calibration.calibrate \
+    --config run.yaml --n 6,8,10,12 --gpus 0,1,2,3,4,5,6,7 --out /tmp/calib
+```
+
+两个口径：**墙钟吞吐**（不含模型加载、含每单元进程启动，适合一波跑完的小规模）和**稳态吞吐**（只算 rollout，适合每个 slot 连续跑很多集的全量评测）。RoboTwin 上每单元进程启动约 150–340 s，而单集 rollout 只有约 20 s，两个口径可能相差数倍，按实际场景选择。
+
+参考实测（8×A800）：
+
+- **LIBERO + FastWAM**（每卡一个推理服务，`chunk_execute_steps=10`）：N=16/24/48/80 时稳态容量 70.7 / 77.8 / 81.8 / 81.9 eps/min，本机在 N≈48 附近出平台。
+- **RoboTwin + pi05**（`adjust_bottle`，官方 400 步，`E=16N`，每单元 2 集）：
+
+| N | 单元墙钟 | 启动 | rollout/集 | 墙钟吞吐（每卡） | 稳态吞吐（每卡） | 峰值显存 |
+|---|---|---|---|---|---|---|
+| 6 | 204.5 s | 167 s | 17.0 s | 3.52 ep/min | 21.1 ep/min | — |
+| 8 | 266.6 s | 221 s | 20.8 s | 3.60 ep/min | 23.1 ep/min | — |
+| 10 | 323.8 s | 275 s | 22.0 s | 3.71 ep/min | 27.3 ep/min | ~58–60 GB |
+| 12 | 389.0 s | 341 s | 21.9 s | 3.70 ep/min | 32.9 ep/min | ~75 GB |
+
+稳态吞吐到 N=12 仍在上升；峰值显存随 N 近似线性增长，在本机 80 GB 卡上 N=12 已接近上限。显存上限取决于场景、模型与渲染设置，请在自己的环境实测并留余量。
+
+### 8.4 加速实测
+
+| 场景 | 基线 | 并行配置 | 加速 |
+|---|---|---|---|
+| LIBERO + FastWAM，2000 集 | 官方脚本 173.7 min（8 卡折合） | 35.5 min（worker 阶段）/ ~41 min（含加载） | **4.9× / ~4.3×** |
+| RoboTwin + pi05，`adjust_bottle` 50 集 | 1040 s（评测阶段 699 s） | 513 s（199 s） | 2.0× / 3.5× |
+| RoboTwin + pi05，`open_microwave` 50 集 | 4984 s（4701 s） | 756 s（453 s） | 6.6× / 10.4× |
+
+RoboTwin 的第二个数去掉了模型加载与服务启动（8 个服务约 5 min），仿真 worker 的进程启动仍计入。
+
+> **可复现性说明**：该链路上不是逐位可复现的——同一配置连续跑两次（固定 `model.noise_seed`、`max_batch_size: 1`），同一 seed 的步数仍会差 1–3 步。因此逐集回归不能作为等价性判据，只能比较聚合成功率（n≥50 时二项噪声约 ±7pt @1σ、±14pt @95%）。这也是 RoboTwin 的动作块开关默认关闭的原因：其逐集影响无法与噪声底分开。
+
+### 8.5 结果对齐
+
+开启加速后，评测集或执行路径会变化，逐集结果不会与 vanilla 逐位一致：
+
+- RoboTwin 会跳过不稳定场景并顺延后续 seed；LIBERO 的 `per_task` 场景由「seed + 进程内第几次 reset」决定，分片且未启用场景快照时场景会变；
+- 动作块执行让策略每 `chunk_execute_steps` 步才重新感知；
+- batching 改变批内归约顺序，差异在噪声级。
+
+评测集足够大时（每任务/套件 ≥50–100 集），这些差异表现为抽样噪声（n=50 约 ±7pt @1σ，n=100 约 ±5pt @1σ），可视为随机性的一部分；**不要**用单集或少集结果做逐位回归对比。需要严格对齐时关闭 `return_action_chunk`、`skip_intra_chunk_obs`，使用 `env_seed_mode: per_episode`（或 `per_task` + 场景快照），并关闭 batching。
+
+### 8.6 RoboTwin 离线专家检查
+
+RoboTwin 官方流程会先跑专家 rollout 过滤不可解场景，可缓存复用：
+
+1. **扫描**：`benchmark.offline_expert_check_scan: <dir>` 只跑专家分支（不启动推理服务），`offline_expert_check_scan_shards: k` 按残差类分片，跑完自动 merge；
+2. **消费**：`benchmark.offline_expert_check: <dir>` 跳过专家分支、按索引取 seed；`start_seed` 仍是 seed 值，不用于索引；
+3. **失效**：缓存只在**生成它的环境**有效。「环境」指完整计算栈：GPU 型号、驱动与 CUDA 版本、Python 与依赖版本（torch、SAPIEN/svulkan、cuRobo）、benchmark 资产以及任务/场景定义。GPU 或驱动变化可能改变 seed 的稳定性，异地生成的缓存可能放入一个本地不稳定的 seed。当前实现**不记录也不校验环境摘要**，上述任一项变化都必须重新扫描，缓存应视为某一机器配置的产物；消费时若缓存 seed 不稳定，单元以 `CACHE STALE` 失败并重试，应重新扫描而非静默跳过。

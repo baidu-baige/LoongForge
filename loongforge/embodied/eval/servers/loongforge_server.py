@@ -12,6 +12,8 @@ import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
 
+import yaml
+
 from loongforge.embodied.eval.factories.registry import build_model_spec
 from loongforge.embodied.eval.servers.eval_server_config import parse_eval_server_config
 from loongforge.embodied.eval.servers.loongforge_policy import GenericPredictActionPolicy
@@ -81,6 +83,34 @@ def start_health_server(port: int, ckpt_path: str) -> None:
     thread.start()
 
 
+def _release_loader_cached_memory() -> None:
+    """Return allocator-cached blocks left over by model loading to the driver.
+
+    Several factories build in fp32 and cast to bf16 at the end (pi05, xvla,
+    GR00T, DreamZero), and some stage the checkpoint tensors on the GPU before
+    copying them into the parameters. PyTorch keeps those freed blocks in its
+    caching allocator, so ``nvidia-smi`` shows the transient high-water mark
+    instead of the live weight size. On a shared card that memory is invisible
+    to other processes (e.g. a co-located simulator) until it is released.
+
+    Only cached blocks are freed; live parameters are untouched. Called before
+    warmup so the warmup activations populate a clean cache.
+    """
+    import torch
+
+    if not torch.cuda.is_available():
+        return
+    reserved_before = torch.cuda.memory_reserved()
+    torch.cuda.empty_cache()
+    reserved_after = torch.cuda.memory_reserved()
+    if reserved_after != reserved_before:
+        logging.info(
+            "Released allocator-cached memory after model load: reserved %.2f GiB -> %.2f GiB",
+            reserved_before / 2**30,
+            reserved_after / 2**30,
+        )
+
+
 def main() -> None:
     """Run main."""
     import argparse
@@ -90,6 +120,9 @@ def main() -> None:
     cli = parser.parse_args()
 
     server_args, raw_model_dict = parse_eval_server_config(cli.config)
+    with open(cli.config, "r", encoding="utf-8") as file:
+        raw_config = yaml.safe_load(file) or {}
+    batching = (raw_config.get("server") or {}).get("batching") or {}
 
     if server_args.loongforge_root:
         os.chdir(server_args.loongforge_root)
@@ -98,6 +131,7 @@ def main() -> None:
 
     logging.basicConfig(level=logging.INFO, force=True)
     model_spec = build_model_spec(server_args, raw_model_dict)
+    _release_loader_cached_memory()
     _warmup_model(model_spec)
     policy = GenericPredictActionPolicy(
         model=model_spec.model,
@@ -107,7 +141,12 @@ def main() -> None:
         request_id_prefix=f"loongforge-{server_args.model_type}",
     )
     start_health_server(server_args.health_port, server_args.ckpt_path)
-    PolicyServer(policy=policy, port=server_args.port, metadata=policy.metadata).serve_forever()
+    PolicyServer(
+        policy=policy,
+        port=server_args.port,
+        metadata=policy.metadata,
+        batching=batching,
+    ).serve_forever()
 
 
 if __name__ == "__main__":

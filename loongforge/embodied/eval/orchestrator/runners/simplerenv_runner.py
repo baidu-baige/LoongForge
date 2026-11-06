@@ -198,54 +198,66 @@ def run_evaluation(args: argparse.Namespace) -> Dict[str, Any]:
     action_trace: List[Dict[str, Any]] = []
     action_history: deque[np.ndarray] = deque(maxlen=args.action_ensemble_horizon)
     start_time = time.time()
+    stepper = _common.EpisodePolicyStepper(
+        # Action ensembles need a fresh prediction every env step, so they opt
+        # out of client-side chunk reuse even when the server returns a chunk.
+        chunk_steps=1 if args.action_ensemble else int(client.metadata.get("chunk_execute_steps") or 0),
+        return_action_chunk=args.action_ensemble or bool(getattr(args, "return_action_chunk", False)),
+        # A closed-loop-within-chunk model must see every frame; the
+        # PayloadBuilder capability can only turn the cache off, never back on.
+        disable_action_cache=bool(
+            args.disable_action_cache
+            or getattr(payload_builder, "disable_action_cache", False)
+        ),
+        payload_builder=payload_builder,
+    )
 
     try:
         for episode_step in range(max_steps):
-            canonical_obs = adapter.obs_to_canonical(
-                obs,
-                {
-                    "instruction": instruction,
-                    "episode_id": episode_id,
-                    "episode_step": episode_step,
-                },
-            )
             if args.save_replay:
                 _append_replay_frame(adapter, obs, replay_frames)
 
-            ctx = {
-                "benchmark_name": "simplerenv",
-                "episode_id": episode_id,
-                "episode_step": episode_step,
-                "instruction": instruction,
-            }
-            extra_control = {
-                "cfg_scale": args.cfg_scale,
-            }
-            response = client.predict_action(
-                **build_rpc_payload(
-                    payload_builder,
-                    canonical_obs,
-                    ctx,
-                    disable_action_cache=args.disable_action_cache,
-                    return_action_chunk=args.action_ensemble,
-                    extra_control=extra_control,
+            def _request(_request_step: int) -> tuple[Dict[str, Any], float]:
+                canonical_obs = adapter.obs_to_canonical(
+                    obs,
+                    {
+                        "instruction": instruction,
+                        "episode_id": episode_id,
+                        "episode_step": episode_step,
+                    },
                 )
-            )
-            if not response.get("ok", False):
-                raise RuntimeError(f"Policy error: {response}")
+                ctx = {
+                    "benchmark_name": "simplerenv",
+                    "episode_id": episode_id,
+                    "episode_step": episode_step,
+                    "instruction": instruction,
+                }
+                extra_control = {
+                    "cfg_scale": args.cfg_scale,
+                }
+                request_start = time.perf_counter()
+                response = client.predict_action(
+                    **build_rpc_payload(
+                        payload_builder,
+                        canonical_obs,
+                        ctx,
+                        disable_action_cache=stepper.disable_action_cache,
+                        return_action_chunk=stepper.return_action_chunk,
+                        extra_control=extra_control,
+                    )
+                )
+                e2e_latency_ms = (time.perf_counter() - request_start) * 1000.0
+                if not response.get("ok", False):
+                    raise RuntimeError(f"Policy error: {response}")
+                return response["data"], e2e_latency_ms
 
-            data = response["data"]
-            raw_chunk = np.asarray(data["actions"], dtype=np.float32)
-            if raw_chunk.ndim == 1:
-                raw_chunk = raw_chunk.reshape(1, -1)
-            # Feed the response back into the PayloadBuilder so stateful
-            # encodings (ee6d_widowx) can backfill proprio[:10] = action[:10].
-            payload_builder.update_from_response(data)
+            decision = stepper.next_action(_request)
+            raw_chunk = decision.action
             if action_decoder_key:
                 env_action = action_decoder(raw_chunk[0:1], {"benchmark_name": "simplerenv"})[0].astype(np.float32)
                 flat_action = raw_chunk[0]
             else:
-                action_chunk = raw_chunk.reshape(-1, 7)
+                action_chunk = (decision.raw_actions if args.action_ensemble else raw_chunk).reshape(-1, 7)
                 flat_action = action_chunk[0]
                 if args.action_ensemble:
                     flat_action = _ensemble_action(action_history, action_chunk, args.action_ensemble_alpha)
@@ -265,7 +277,7 @@ def run_evaluation(args: argparse.Namespace) -> Dict[str, Any]:
                         "done": bool(done),
                         "truncated": bool(truncated),
                         "success": bool(info.get("success", False)),
-                        "inference_latency_ms": response.get("data", {}).get("inference_latency_ms"),
+                        "inference_latency_ms": decision.inference_latency_ms,
                     }
                 )
 
@@ -396,6 +408,11 @@ def build_argparser() -> argparse.ArgumentParser:
     # (gripper passed through); GR00T Fractal configs set benchmark.google_sticky_gripper.
     parser.add_argument("--google-sticky-gripper", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--disable-action-cache", action="store_true")
+    parser.add_argument(
+        "--return-action-chunk",
+        action="store_true",
+        help="Let the client own the action chunk (T-14 path); default keeps the legacy per-step server cache",
+    )
     parser.add_argument("--action-ensemble", action="store_true")
     parser.add_argument("--action-ensemble-horizon", type=int, default=7)
     parser.add_argument("--action-ensemble-alpha", type=float, default=0.1)
