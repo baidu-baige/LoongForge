@@ -30,7 +30,7 @@ from loongforge.embodied.data.datasets.transforms.collator import (
     BasePreprocessor,
     register_preprocessor,
 )
-from loongforge.embodied.data.datasets.giga_brain07.dataset import utils
+from loongforge.embodied.data.datasets.giga_brain07.transforms import utils
 
 
 class GigaBrainCollator:

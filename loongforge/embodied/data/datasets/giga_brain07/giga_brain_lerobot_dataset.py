@@ -18,7 +18,8 @@ sibling modules into one file:
   and selective-column repacking (was ``lerobot_dataset.py``).
 
 Merged verbatim (logic unchanged); the former cross-module relative imports
-(``.base_dataset`` / ``.dataset``) became intra-module references.
+(``.base_dataset`` / ``.dataset``) became intra-module references. Lives at the
+giga_brain07 package root; shared helpers come from ``giga_brain07.transforms.utils``.
 """
 
 from bisect import bisect_left, bisect_right
@@ -65,8 +66,8 @@ import pyarrow.parquet as pq
 import torch
 import torchvision
 
-from loongforge.embodied.data.datasets.giga_brain07.dataset import utils
-from loongforge.embodied.data.datasets.giga_brain07.dataset.utils import Timer
+from loongforge.embodied.data.datasets.giga_brain07.transforms import utils
+from loongforge.embodied.data.datasets.giga_brain07.transforms.utils import Timer
 
 # ===================== base dataset abstractions =====================
 

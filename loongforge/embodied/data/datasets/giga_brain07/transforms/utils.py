@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""giga_brain07 dataset support utilities (self-contained).
+"""giga_brain07 dataset support utilities (self-contained; ``giga_brain07.transforms.utils``).
 
 Consolidation of the former ``giga_datasets/utils/`` package (file/time/paths/
 utils/import_utils) into a single module. Only the helpers actually used by the

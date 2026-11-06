@@ -18,9 +18,29 @@ pull the heavy transform / lerobot dependencies.
 The collator now lives in this same ``transforms`` package
 (``giga_brain07.transforms.giga_brain_collator.GigaBrainCollator``); it is
 re-exported here for backward compatibility.
+
+The shared dataset helpers (``utils``: ``Timer`` / ``stack_data`` /
+``is_lerobot_available`` ...) also live here (moved from the former
+``giga_brain07/dataset`` package); the giga LeRobot reader is
+``giga_brain07.giga_brain_lerobot_dataset`` at the package root.
 """
 
 from __future__ import annotations
+
+
+def _preload_torchcodec_decoder_before_decord() -> None:
+    try:
+        # Decord can load FFmpeg symbols before torchcodec and break AV1 stream
+        # detection in torchcodec. Preloading keeps torchcodec usable when this
+        # package later imports decord-backed helpers. (Moved verbatim from the
+        # former ``giga_brain07/dataset/__init__.py``, which ran it on first
+        # import of ``utils`` -- i.e. at the same point as here.)
+        from torchcodec.decoders import VideoDecoder as _VideoDecoder  # noqa: F401
+    except Exception:
+        return
+
+
+_preload_torchcodec_decoder_before_decord()
 
 # Eager (unchanged): slim dataclass consumed by train/config_map.py.
 from loongforge.embodied.data.datasets.giga_brain07.transforms.data_configuration_giga_brain07 import (
@@ -36,8 +56,13 @@ from loongforge.embodied.data.datasets.giga_brain07.transforms.giga_brain_collat
     GigaBrainCollator,
 )
 
+from loongforge.embodied.data.datasets.giga_brain07.transforms.utils import (  # noqa: E402,F401
+    is_lerobot_available,
+)
+
 __all__ = [
     "GigaBrain07DataConfig",
+    "is_lerobot_available",
     "GigaBrain07Transform",
     "GigaBrainCollator",
     "build_giga_brain07_dataset",
