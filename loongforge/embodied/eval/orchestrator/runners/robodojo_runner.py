@@ -47,6 +47,10 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--loongforge-root", default=os.environ.get("LOONGFORGE_ROOT", ""))
     parser.add_argument("--robodojo-root", default=os.environ.get("ROBODOJO_ROOT", ""))
     parser.add_argument("--robodojo-python", default=os.environ.get("ROBODOJO_PYTHON", sys.executable))
+    # XPolicyLab's policy server needs websockets>=14 (websockets.asyncio), while RoboDojo's
+    # Isaac Sim env pins websockets 12, so the bridge runs in a separate "policy env"
+    # (by default the LoongForge server's Python).
+    parser.add_argument("--policy-python", default="")
     parser.add_argument("--policy-ckpt-path", default="")
     parser.add_argument("--task-name", default="")
     parser.add_argument("--seed", type=int, default=0, help="RoboDojo layout seed (Eval_Layout/<env>/<seed>)")
@@ -97,6 +101,8 @@ def _apply_config(args: argparse.Namespace, config: Dict[str, Any]) -> argparse.
         (env, "loongforge_root", "loongforge_root"),
         (env, "robodojo_root", "robodojo_root"),
         (env, "robodojo_python", "robodojo_python"),
+        (env, "policy_python", "policy_python"),
+        (server, "python", "server_python"),
         (env, "sim_env", "sim_env"),
         (run, "output_dir", "output_dir"),
         (run, "run_id", "run_id"),
@@ -123,6 +129,8 @@ def _apply_config(args: argparse.Namespace, config: Dict[str, Any]) -> argparse.
             args.chunk_len = args.chunk_len or rest
     if args.device_id is None and run.get("cuda_visible_devices") is not None:
         args.device_id = int(str(run["cuda_visible_devices"]).split(",")[0])
+    if not args.policy_python:
+        args.policy_python = getattr(args, "server_python", "") or sys.executable
     return args
 def ensure_plugin_link(robodojo_root: pathlib.Path) -> pathlib.Path:
     """Link the LoongForge plugin into ``XPolicyLab/policy``; never replace a foreign entry."""
@@ -209,7 +217,8 @@ def write_policy_deploy_config(args: argparse.Namespace, path: pathlib.Path) -> 
     return cfg
 
 
-def _base_env(args: argparse.Namespace) -> Dict[str, str]:
+def _base_env(args: argparse.Namespace, python: str) -> Dict[str, str]:
+    """Environment for a RoboDojo-side process run by ``python`` (sim venv or policy env)."""
     env = os.environ.copy()
     for key in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "all_proxy", "ALL_PROXY"):
         env.pop(key, None)
@@ -219,9 +228,12 @@ def _base_env(args: argparse.Namespace) -> Dict[str, str]:
     if env.get("PYTHONPATH"):
         py_paths.append(env["PYTHONPATH"])
     env["PYTHONPATH"] = ":".join(py_paths)
-    python_bin = str(pathlib.Path(args.robodojo_python).parent)
+    python_bin = pathlib.Path(python).parent
     env["PATH"] = f"{python_bin}:{env.get('PATH', '')}"
-    env["VIRTUAL_ENV"] = str(pathlib.Path(args.robodojo_python).parent.parent)
+    if (python_bin.parent / "pyvenv.cfg").is_file():
+        env["VIRTUAL_ENV"] = str(python_bin.parent)
+    else:
+        env.pop("VIRTUAL_ENV", None)
     env["PYTHONNOUSERSITE"] = "1"
     return env
 
@@ -229,10 +241,10 @@ def _base_env(args: argparse.Namespace) -> Dict[str, str]:
 def start_policy_server(args: argparse.Namespace, deploy_cfg_path: pathlib.Path, log_path: pathlib.Path) -> subprocess.Popen:
     """Start the XPolicyLab policy server hosting the LoongForge bridge (CPU only)."""
     robodojo_root = pathlib.Path(args.robodojo_root).resolve()
-    env = _base_env(args)
+    env = _base_env(args, args.policy_python)
     env["CUDA_VISIBLE_DEVICES"] = ""
     command = [
-        args.robodojo_python,
+        args.policy_python,
         str(robodojo_root / "XPolicyLab" / "setup_policy_server.py"),
         "--config_path",
         str(deploy_cfg_path),
@@ -368,7 +380,7 @@ def run_evaluation(args: argparse.Namespace) -> Dict[str, Any]:
         policy_proc = start_policy_server(args, deploy_cfg_path, policy_log)
         _wait_port("127.0.0.1", int(args.policy_server_port), float(args.policy_server_start_timeout_sec), policy_proc)
 
-        env = _base_env(args)
+        env = _base_env(args, args.robodojo_python)
         env["ROBODOJO_RUN_ID"] = args.run_id
         if args.eval_num:
             env["EVAL_NUM"] = str(int(args.eval_num))
