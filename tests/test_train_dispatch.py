@@ -16,6 +16,8 @@ from loongforge.models import catalog
     "GrootN1d6Trainer", "GrootN1d7Trainer", "LingBotFinetuneTrainer",
 ])
 def test_torch_trainer_loads_only_selected_class(trainer_name):
+    from loongforge import training
+
     args = SimpleNamespace(trainer_type=trainer_name)
     configs = (args, object(), object())
     trainer = Mock()
@@ -23,10 +25,12 @@ def test_torch_trainer_loads_only_selected_class(trainer_name):
     parser = SimpleNamespace(parse_train_args=Mock(return_value=configs))
     with (
         patch.dict(sys.modules, {"loongforge.training.torch_args": parser}),
-        patch.object(train.importlib, "import_module", return_value=module) as load,
+        patch.object(training.importlib, "import_module", return_value=module) as load,
     ):
         train._run_torch()
-    load.assert_called_once_with(train.TORCH_TRAINER_TYPES[trainer_name].rsplit(".", 1)[0])
+    load.assert_called_once_with(
+        training._TRAINER_CLASSES[trainer_name].rsplit(".", 1)[0]
+    )
     trainer.assert_called_once_with(*configs)
     trainer.return_value.train.assert_called_once_with()
 

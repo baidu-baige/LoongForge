@@ -3,6 +3,7 @@
 
 """Training recipe registration."""
 
+import importlib
 from typing import Union, List, Callable
 import logging
 
@@ -11,6 +12,35 @@ _TRAINERS_LOADED = False
 _TRAINERS_LOADING = False
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+_TRAINER_CLASSES = {
+    "FinetuneTrainer": "loongforge.training.embodied.sft.FinetuneTrainer",
+    "TensorWiseTrainer": "loongforge.training.embodied.custom.tensor_wise_trainer.TensorWiseTrainer",
+    "VLDAFinetuneTrainer": "loongforge.training.embodied.custom.vlda.VLDAFinetuneTrainer",
+    "GrootN1d6Trainer": "loongforge.training.embodied.custom.gr00t_n1_6.GrootN1d6Trainer",
+    "LingBotFinetuneTrainer": "loongforge.training.embodied.custom.lingbot_va.LingBotFinetuneTrainer",
+    "GrootN1d7Trainer": "loongforge.training.embodied.custom.gr00t_n1_7.GrootN1d7Trainer",
+    "LingbotVlaV2Trainer": "loongforge.training.embodied.custom.lingbot_vla_v2.LingbotVlaV2Trainer",
+}
+
+
+def resolve_torch_trainer(trainer_type: str):
+    """Load the Torch trainer selected by ``--trainer-type``."""
+    if not trainer_type:
+        raise ValueError(
+            "--trainer-type is required. "
+            f"Available: {list(_TRAINER_CLASSES.keys())}"
+        )
+
+    entry = _TRAINER_CLASSES.get(trainer_type)
+    if entry is None:
+        raise ValueError(
+            f"Unknown --trainer-type '{trainer_type}'. "
+            f"Available: {list(_TRAINER_CLASSES.keys())}"
+        )
+
+    module_path, class_name = entry.rsplit(".", 1)
+    return getattr(importlib.import_module(module_path), class_name)
 
 
 def register_model_trainer(

@@ -43,13 +43,17 @@ class TrainingEntryTests(unittest.TestCase):
         recipe.return_value.train.assert_called_once_with()
 
     def test_unknown_trainer_fails_before_import(self):
-        with patch.object(train.importlib, "import_module") as import_module:
+        from loongforge import training
+
+        with patch.object(training.importlib, "import_module") as import_module:
             for name in ("", "WallOss05Trainer", "unknown"):
                 with self.subTest(name=name), self.assertRaises(ValueError):
-                    train.resolve_torch_trainer(name)
+                    training.resolve_torch_trainer(name)
             import_module.assert_not_called()
 
     def test_wall_oss_uses_shared_finetune_recipe(self):
+        from loongforge import training
+
         args = SimpleNamespace(trainer_type="FinetuneTrainer")
         configs = (args, object(), object())
         trainer_type = Mock()
@@ -57,7 +61,7 @@ class TrainingEntryTests(unittest.TestCase):
         recipe = SimpleNamespace(FinetuneTrainer=trainer_type)
         with (
             patch.dict(sys.modules, {"loongforge.training.torch_args": parser}),
-            patch.object(train.importlib, "import_module", return_value=recipe) as load,
+            patch.object(training.importlib, "import_module", return_value=recipe) as load,
             patch.object(sys, "argv", ["train.py", "--model-name", "wall_oss_0_5"]),
         ):
             train.main()
@@ -194,9 +198,13 @@ class SFTRecipeTests(unittest.TestCase):
         self.assertIsInstance(model_cfg.tensor_wise, TensorWiseConfig)
         self.assertEqual(model_cfg.tensor_wise.grad_reduce_dtype, "fp32")
         self.assertEqual(model_cfg.tensor_wise.comm_bucket_mb, 256)
-        tensor_wise = train.resolve_torch_trainer("TensorWiseTrainer")
+        from loongforge import training
+
+        tensor_wise = training.resolve_torch_trainer("TensorWiseTrainer")
         self.assertTrue(issubclass(tensor_wise, FinetuneTrainer))
-        self.assertTrue(issubclass(train.resolve_torch_trainer(args.trainer_type), tensor_wise))
+        self.assertTrue(
+            issubclass(training.resolve_torch_trainer(args.trainer_type), tensor_wise)
+        )
         with patch.object(sys, "argv", argv + ["model.tensor_wise.unknown=1"]):
             with self.assertRaises(ConfigKeyError):
                 parse_train_args()

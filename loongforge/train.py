@@ -4,41 +4,10 @@
 """Training entry for Megatron and Torch model families."""
 
 import argparse
-import importlib
 import logging
 import sys
 
 from loongforge.models.catalog import TORCH_MODEL_NAMES
-
-
-TORCH_TRAINER_TYPES = {
-    "FinetuneTrainer": "loongforge.training.embodied.sft.FinetuneTrainer",
-    "TensorWiseTrainer": "loongforge.training.embodied.custom.tensor_wise_trainer.TensorWiseTrainer",
-    "VLDAFinetuneTrainer": "loongforge.training.embodied.custom.vlda.VLDAFinetuneTrainer",
-    "GrootN1d6Trainer": "loongforge.training.embodied.custom.gr00t_n1_6.GrootN1d6Trainer",
-    "LingBotFinetuneTrainer": "loongforge.training.embodied.custom.lingbot_va.LingBotFinetuneTrainer",
-    "GrootN1d7Trainer": "loongforge.training.embodied.custom.gr00t_n1_7.GrootN1d7Trainer",
-    "LingbotVlaV2Trainer": "loongforge.training.embodied.custom.lingbot_vla_v2.LingbotVlaV2Trainer",
-}
-
-
-def resolve_torch_trainer(trainer_type: str):
-    """Load the Torch recipe selected by ``--trainer-type``."""
-    if not trainer_type:
-        raise ValueError(
-            "--trainer-type is required. "
-            f"Available: {list(TORCH_TRAINER_TYPES.keys())}"
-        )
-
-    entry = TORCH_TRAINER_TYPES.get(trainer_type)
-    if entry is None:
-        raise ValueError(
-            f"Unknown --trainer-type '{trainer_type}'. "
-            f"Available: {list(TORCH_TRAINER_TYPES.keys())}"
-        )
-
-    module_path, class_name = entry.rsplit(".", 1)
-    return getattr(importlib.import_module(module_path), class_name)
 
 
 def _run_megatron():
@@ -65,6 +34,7 @@ def _run_megatron():
 def _run_torch():
     """Parse the Torch arguments and run the trainer selected by ``--trainer-type``."""
     from loongforge.training.torch_args import parse_train_args
+    from loongforge.training import resolve_torch_trainer
 
     training_args, model_cfg, data_cfg = parse_train_args()
     trainer_type = resolve_torch_trainer(training_args.trainer_type)
