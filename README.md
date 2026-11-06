@@ -158,8 +158,34 @@ Since optimal training strategies differ across model families and scales, Loong
 
 * **Unified Evaluation** — Closed-loop evaluation of trained policies in the **LIBERO / CALVIN / SimplerEnv / RoboTwin / ManiSkill** simulators; coverage is expanding continuously. [[README](./loongforge/embodied/eval)]
 
-> [!NOTE]
-> Coming soon: evaluation results for models trained with LoongForge.
+* **Evaluation Results** — Success rates on par with the corresponding open-source baselines, measured per model across **LIBERO / RoboTwin / SimplerEnv**:
+
+<table align="center">
+<thead><tr><th align="left">Model</th><th align="left">Benchmark</th><th align="left">Suite</th><th><div align="right">Baseline</div></th><th><div align="right">LoongForge</div></th></tr></thead>
+<tbody>
+<tr><td rowspan="6">Pi0.5</td><td rowspan="5">LIBERO</td><td>Spatial</td><td align="right">97.0%</td><td align="right">99.6%</td></tr>
+<tr><td>Object</td><td align="right">99.0%</td><td align="right">99.6%</td></tr>
+<tr><td>Goal</td><td align="right">98.0%</td><td align="right">98.8%</td></tr>
+<tr><td>Long</td><td align="right">96.0%</td><td align="right">97.0%</td></tr>
+<tr><td>Avg.</td><td align="right">97.50%</td><td align="right">98.75%</td></tr>
+<tr><td>RoboTwin</td><td>Easy</td><td align="right">67.91%</td><td align="right">77.56%</td></tr>
+<tr><td rowspan="7">GR00T N1.7</td><td rowspan="5">LIBERO</td><td>Spatial</td><td align="right">97.65%</td><td align="right">98.0%</td></tr>
+<tr><td>Object</td><td align="right">98.45%</td><td align="right">98.5%</td></tr>
+<tr><td>Goal</td><td align="right">97.50%</td><td align="right">96.5%</td></tr>
+<tr><td>Long</td><td align="right">94.35%</td><td align="right">95.5%</td></tr>
+<tr><td>Avg.</td><td align="right">96.99%</td><td align="right">97.13%</td></tr>
+<tr><td rowspan="2">SimplerEnv</td><td>Bridge</td><td align="right">62.3%</td><td align="right">62.6%</td></tr>
+<tr><td>Fractal</td><td align="right">72.5%</td><td align="right">72.1%</td></tr>
+<tr><td rowspan="5">FastWAM</td><td rowspan="5">LIBERO</td><td>Spatial</td><td align="right">98.2%</td><td align="right">97.0%</td></tr>
+<tr><td>Object</td><td align="right">99.2%</td><td align="right">99.6%</td></tr>
+<tr><td>Goal</td><td align="right">97.8%</td><td align="right">97.2%</td></tr>
+<tr><td>Long</td><td align="right">95.8%</td><td align="right">94.2%</td></tr>
+<tr><td>Avg.</td><td align="right">97.75%</td><td align="right">97.00%</td></tr>
+<tr><td rowspan="3">LingBot-VA</td><td>LIBERO</td><td>Long</td><td align="right">78.8%</td><td align="right">84.6%</td></tr>
+<tr><td rowspan="2">RoboTwin</td><td>Easy</td><td align="right">86.1%</td><td align="right">87.6%</td></tr>
+<tr><td>Hard</td><td align="right">85.1%</td><td align="right">85.7%</td></tr>
+</tbody>
+</table>
 
 <a id="llm-vlm"></a>
 ## 🚀 LLM · VLM · Diffusion
