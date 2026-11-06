@@ -68,6 +68,7 @@ def _auto_import_factory_modules() -> None:
         "loongforge.evaluation.embodied.factories.lingbot_va_factory",
         "loongforge.evaluation.embodied.factories.dreamzero_factory",
         "loongforge.evaluation.embodied.factories.fastwam_factory",
+        "loongforge.evaluation.embodied.factories.giga_brain07_factory",
     ]
     for mod in _FACTORY_MODULES:
         try:

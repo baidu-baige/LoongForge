@@ -17,6 +17,7 @@ TORCH_MODEL_NAMES = frozenset({
     "dreamzero_lora_wan22_5b",
     "dreamzero_yam_wan21_14b",
     "fastwam",
+    "giga_brain07",
     "gr00t_n1_6",
     "gr00t_n1_7",
     "lingbot_va_libero",

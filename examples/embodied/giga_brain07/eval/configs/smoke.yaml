@@ -1,0 +1,20 @@
+model:
+  backend: loongforge
+  model_type: giga_brain07
+  pretrained: /workspace/ckpt/open-gigaai/GigaBrain-0.7-3.5B-Base
+  state_encoding: ee6d
+  action_encoding: ee6d
+  action_horizon: 50
+  max_action_dim: 32
+  emb_id: 0
+
+server:
+  host: 127.0.0.1
+  port: 13391
+  health_port: 13392
+  random_init: false
+  ckpt_path: /workspace/ckpt/open-gigaai/GigaBrain-0.7-3.5B-Base
+  tokenizer_path: /workspace/ckpt/paligemma-3b-pt-224
+  dataset_statistics_path: /workspace/data/agibot-world/AgiBotWorldLerobot/agibot_a2d_norm_stats.json
+  use_bf16: true
+  loongforge_root: /workspace/LoongForge

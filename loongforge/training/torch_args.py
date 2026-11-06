@@ -73,6 +73,12 @@ from loongforge.models.embodied.wall_oss_0_5.model_configuration_wall_oss_0_5 im
 from loongforge.data.embodied.wall_oss_0_5.transforms.data_configuration_wall_oss_0_5 import (
     WallOss05DataConfig,
 )
+from loongforge.models.embodied.giga_brain07.model_configuration_giga_brain07 import (
+    GigaBrain07ModelConfig,
+)
+from loongforge.data.embodied.giga_brain07.transforms.data_configuration_giga_brain07 import (
+    GigaBrain07DataConfig,
+)
 from loongforge.models.embodied.lingbot_vla_v2.model_configuration_lingbot_vla_v2 import (
     LingbotVLAV2ModelConfig,
 )
@@ -142,6 +148,9 @@ MODEL_SCHEMA = {
         "dreamzero/dreamzero_yam_wan21_14b.yaml", DreamZeroConfig, DreamZeroDataConfig
     ),
     "wall_oss_0_5": ModelSchema("wall_oss_0_5/wall_oss_0_5.yaml", WallOss05ModelConfig, WallOss05DataConfig),
+    "giga_brain07": ModelSchema(
+        "giga_brain07/giga_brain07.yaml", GigaBrain07ModelConfig, GigaBrain07DataConfig
+    ),
 }
 
 
@@ -578,6 +587,7 @@ class _LearningRateArgs:
                 "lambda_linear",
                 "linear_warmup_cosine_annealing",
                 "cosine_decay_with_warmup",
+                "giga_warmup_cosine",
             ],
             "help": "Learning-rate scheduler name. Most values are passed to "
                     "transformers.get_scheduler; lambda_linear uses the custom "
