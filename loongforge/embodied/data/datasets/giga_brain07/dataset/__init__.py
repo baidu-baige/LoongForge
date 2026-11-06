@@ -1,7 +1,9 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""giga_datasets compatibility package for giga_brain07: lazily re-exports the relocated dataset reader, collator and samplers under their original names so existing imports keep resolving to the same objects."""
+"""giga_brain07 dataset-support package: hosts the shared ``utils`` helpers and
+lazily re-exports the relocated dataset reader / collator / sampler under their
+original names so existing imports keep resolving to the same objects."""
 
 __version__ = '1.1.0'
 
@@ -26,11 +28,11 @@ from .utils import is_lerobot_available
 # ``transforms`` package (single merged reader module
 # ``transforms.giga_brain_lerobot_dataset`` + ``transforms.giga_brain_collator``)
 # to mirror the xvla-style layout. They are re-exported here under their original
-# names so every existing ``from giga_datasets import ...`` keeps resolving to
+# names so every existing ``from ...dataset import ...`` keeps resolving to
 # the exact same objects (logic unchanged); only their on-disk location moved.
 #
 # Resolution is lazy (PEP 562 ``__getattr__``): the relocated reader imports
-# ``giga_datasets.utils`` back, so importing those modules eagerly here would
+# ``...dataset.utils`` back, so importing those modules eagerly here would
 # create an import cycle. Deferring keeps the original eager-import *effects*
 # (e.g. ``register_dataset`` populating the registry before ``load_dataset`` is
 # used) without the cycle.
@@ -49,15 +51,7 @@ _READER_NAMES = frozenset(
         "LeRobotDataset",
     }
 )
-_SAMPLER_NAMES = frozenset(
-    {
-        "AspectRatioSampler",
-        "BucketBatchSampler",
-        "BucketSampler",
-        "GigaBrainSampler",
-        "SpecialDatasetSampler",
-    }
-)
+_SAMPLER_NAMES = frozenset({"GigaBrainSampler"})
 
 __all__ = [
     "GigaBrainCollator",
@@ -87,5 +81,7 @@ def __getattr__(name):
         module = importlib.import_module(_PKG + ".transforms.giga_brain_lerobot_dataset")
         return getattr(module, name)
     if name in _SAMPLER_NAMES:
-        return getattr(importlib.import_module(__name__ + ".samplers"), name)
+        # GigaBrainSampler now lives at the giga_brain07 package root
+        # (``giga_brain07.sampler``); re-exported here for backward compatibility.
+        return getattr(importlib.import_module(_PKG + ".sampler"), name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

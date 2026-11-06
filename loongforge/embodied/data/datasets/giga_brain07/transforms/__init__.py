@@ -64,7 +64,7 @@ def __getattr__(name):
         return GigaBrainCollator
     if name == "build_giga_brain07_dataset":
         # Route-B dataset builder on the shared LeRobot reader (pulls lerobot).
-        from loongforge.embodied.data.datasets.giga_brain07.transforms.giga_brain07_dataset import (
+        from loongforge.embodied.data.datasets.giga_brain07.builder import (
             build_giga_brain07_dataset,
         )
 

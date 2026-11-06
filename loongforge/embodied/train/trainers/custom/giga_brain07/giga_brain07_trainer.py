@@ -316,7 +316,7 @@ class GigaBrain07Trainer(FinetuneTrainer):
         from loongforge.embodied.data.datasets.transforms.collator import (
             build_preprocessor,
         )
-        from loongforge.embodied.data.datasets.giga_brain07.giga_datasets.samplers import (
+        from loongforge.embodied.data.datasets.giga_brain07.sampler import (
             GigaBrainSampler,
         )
         from loongforge.embodied.data.datasets.transforms.pipeline import (

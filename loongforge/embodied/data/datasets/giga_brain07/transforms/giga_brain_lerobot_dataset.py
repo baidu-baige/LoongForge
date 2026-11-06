@@ -65,8 +65,8 @@ import pyarrow.parquet as pq
 import torch
 import torchvision
 
-from loongforge.embodied.data.datasets.giga_brain07.giga_datasets import utils
-from loongforge.embodied.data.datasets.giga_brain07.giga_datasets.utils import Timer
+from loongforge.embodied.data.datasets.giga_brain07.dataset import utils
+from loongforge.embodied.data.datasets.giga_brain07.dataset.utils import Timer
 
 # ===================== base dataset abstractions =====================
 

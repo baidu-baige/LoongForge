@@ -13,7 +13,7 @@ __all__ = ["build_giga_brain07_dataset"]
 
 def __getattr__(name):
     if name == "build_giga_brain07_dataset":
-        from loongforge.embodied.data.datasets.giga_brain07.transforms.giga_brain07_dataset import (
+        from loongforge.embodied.data.datasets.giga_brain07.builder import (
             build_giga_brain07_dataset,
         )
 
