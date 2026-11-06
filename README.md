@@ -390,6 +390,7 @@ https://github.com/user-attachments/assets/8563afca-f79a-4a45-bb4f-36e06c0ccbcb
 <a id="blogs"></a>
 ## 📝 Community Blogs
 
+- [百度&哈工大提出机器人操作新范式VLDA，从预测未来转向学习变化！](https://mp.weixin.qq.com/s/CFiPalRXwskMJLEDx475mA)
 - [VLA 训练如何一步步提速：以 Pi0.5 为例的 3 倍加速实践](https://zhuanlan.zhihu.com/p/2095555587304117777)
 - [百度百舸 LoongForge 团队提出 TAOT：拓扑感知传输破解大规模 MoE 训练端到端加速 1.43 倍](https://mp.weixin.qq.com/s/Op-KpFe5G1Q2IxzIUgm2KA)
 - [加速 GR00T N1.6 具身 VLA 模型训练！LoongForge 开源框架实现三层全链路优化，吞吐提升 2.3 倍、训练周期缩短 56.6%](https://mp.weixin.qq.com/s/lIMsQ0Q5G9KaDKGtrBt-Nw)
