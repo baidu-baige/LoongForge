@@ -21,14 +21,54 @@ Merged verbatim (logic unchanged); the former cross-module relative imports
 (``.base_dataset`` / ``.dataset``) became intra-module references.
 """
 
-# ===================== base dataset abstractions =====================
-import os
+from bisect import bisect_left, bisect_right
+from collections import OrderedDict
+from collections.abc import Iterable, Mapping, Sequence
+from contextlib import contextmanager
+from pathlib import Path
+from threading import Lock
 from typing import Any
+from typing import Callable
+import bisect
+import contextvars
+import json
+import logging
+import os
+import shutil
+import socket
+import time
+import warnings
 
-import torch
+from datasets.info import DatasetInfo
+from datasets.naming import filenames_for_dataset_split
+from datasets.table import InMemoryTable
+from filelock import FileLock, Timeout
+from lerobot.datasets.lerobot_dataset import LeRobotDataset as _LeRobotDataset
+from lerobot.datasets.lerobot_dataset import LeRobotDatasetMetadata as _OriginalLeRobotDatasetMetadata
+from lerobot.datasets.utils import embed_images, validate_episode_buffer, validate_frame
+from lerobot.datasets.video_utils import (
+    FrameTimestampError,
+    decode_video_frames,
+    decode_video_frames_torchcodec,
+    get_safe_default_codec,
+)
+from PIL import Image
 from tqdm import tqdm
+from typing_extensions import override
+import av
+import datasets
+import datasets.config as hf_datasets_config
+import lerobot.datasets.lerobot_dataset as _lerobot_dataset_module
+import numpy as np
+import pyarrow as pa
+import pyarrow.parquet as pq
+import torch
+import torchvision
 
+from loongforge.embodied.data.datasets.giga_brain07.giga_datasets import utils
 from loongforge.embodied.data.datasets.giga_brain07.giga_datasets.utils import Timer
+
+# ===================== base dataset abstractions =====================
 
 
 def _get_data_worker_context() -> str:
@@ -274,12 +314,7 @@ class BaseDataset(torch.utils.data.Dataset):
 
 
 # ===================== dataset composition framework =====================
-import bisect
-import logging
-import os
-from typing import Any
 
-from loongforge.embodied.data.datasets.giga_brain07.giga_datasets import utils
 
 DATASETS = dict()
 
@@ -757,46 +792,6 @@ class WeightedConcatDataset(ConcatDataset):
 
 
 # ===================== giga LeRobot v3 reader =====================
-import contextvars
-import json
-import logging
-import os
-import shutil
-import socket
-import time
-import warnings
-from bisect import bisect_left, bisect_right
-from collections import OrderedDict
-from collections.abc import Iterable, Mapping, Sequence
-from contextlib import contextmanager
-from pathlib import Path
-from threading import Lock
-from typing import Callable
-
-import av
-import datasets
-import datasets.config as hf_datasets_config
-import lerobot.datasets.lerobot_dataset as _lerobot_dataset_module
-import numpy as np
-import pyarrow as pa
-import pyarrow.parquet as pq
-import torch
-import torchvision
-from datasets.info import DatasetInfo
-from datasets.naming import filenames_for_dataset_split
-from datasets.table import InMemoryTable
-from filelock import FileLock, Timeout
-from lerobot.datasets.lerobot_dataset import LeRobotDataset as _LeRobotDataset
-from lerobot.datasets.lerobot_dataset import LeRobotDatasetMetadata as _OriginalLeRobotDatasetMetadata
-from lerobot.datasets.utils import embed_images, validate_episode_buffer, validate_frame
-from lerobot.datasets.video_utils import (
-    FrameTimestampError,
-    decode_video_frames,
-    decode_video_frames_torchcodec,
-    get_safe_default_codec,
-)
-from PIL import Image
-from typing_extensions import override
 
 
 TemporalOffsetSpec = int | list[int] | dict[str, int | list[int]]
