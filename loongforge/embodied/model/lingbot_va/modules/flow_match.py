@@ -25,13 +25,19 @@ class LingBotVAFlowMatchScheduler:
         sigma_max: float = 1.0,
         sigma_min: float = 0.003 / 1.002,
         extra_one_step: bool = False,
+        fp32_step: bool = False,
     ) -> None:
-        """Store the schedule shape and build a default 100-step timestep table."""
+        """Store the schedule shape and build a default 100-step timestep table.
+
+        ``fp32_step`` makes ``step`` take the sigma difference in fp32, as upstream
+        ``wan_va_server`` does, instead of casting both sigmas to the sample dtype first.
+        """
         self.num_train_timesteps = num_train_timesteps
         self.shift = shift
         self.sigma_max = sigma_max
         self.sigma_min = sigma_min
         self.extra_one_step = extra_one_step
+        self.fp32_step = fp32_step
         self._device_cache = {}
         self.set_timesteps(100)
 
@@ -92,6 +98,14 @@ class LingBotVAFlowMatchScheduler:
             timestep = torch.tensor(timestep)
         timesteps = self.timesteps.to(timestep.device)
         index = int(torch.argmin((timesteps - timestep.reshape(-1)[0]).abs()))
+        if self.fp32_step:
+            # Upstream: a 0-dim fp32 CPU step size, applied as a scalar to the sample.
+            sigma = self.sigmas[index]
+            if index + 1 < len(self.sigmas):
+                sigma_next = self.sigmas[index + 1]
+            else:
+                sigma_next = torch.zeros_like(sigma)
+            return sample + model_output * (sigma_next - sigma)
         sigma = self.sigmas[index].to(sample)
         if index + 1 < len(self.sigmas):
             sigma_next = self.sigmas[index + 1].to(sample)

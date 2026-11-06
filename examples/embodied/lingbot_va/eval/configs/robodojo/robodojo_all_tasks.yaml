@@ -52,6 +52,10 @@ model:
   camera_layout: width_concat
   obs_cam_keys: [cam_high, cam_left_wrist, cam_right_wrist]
   image_hflip: false
+  # Official recipe also offloads the frozen VAE / text encoder to CPU and uses upstream
+  # wan_va_server arithmetic (fp32 scheduler step, bf16 (a+1)/2, env-scale feedback round trip).
+  frozen_modules_device: cpu
+  upstream_numerics: true
   # The official config masks no channel; keep all 30 (masking the 16 unused ones
   # would zero them during denoising and in the KV-cache feedback).
   used_action_channel_ids: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29]
