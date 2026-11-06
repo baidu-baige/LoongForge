@@ -61,6 +61,7 @@ class ModelClient:
         timeout: float = 300,
         disable_action_cache: bool = False,
         return_action_chunk: bool = False,
+        chunk_execute_steps: int = 0,
         action_bridge: str = "ee6d_dual",
         trace_path: Optional[str] = None,
         domain_id: Optional[int] = None,
@@ -85,6 +86,12 @@ class ModelClient:
         self.unnorm_key = unnorm_key
         self.disable_action_cache = disable_action_cache
         self.return_action_chunk = return_action_chunk
+        self.chunk_execute_steps = int(chunk_execute_steps)
+        self._chunk: Optional[np.ndarray] = None
+        self._chunk_cursor = 0
+        self._chunk_len = 0
+        self._chunk_state: Optional[np.ndarray] = None
+        self._chunk_endpose: Any = None
         self.action_bridge = action_bridge
         self.domain_id = domain_id
 
@@ -100,6 +107,9 @@ class ModelClient:
         # frames. The YAML flag can only turn the cache off, never back on.
         if getattr(self.payload_builder, "disable_action_cache", False):
             self.disable_action_cache = True
+            # A closed-loop model needs every intermediate frame; a cached chunk
+            # would skip those observations.
+            self.return_action_chunk = False
         self.decoder = build_action_decoder(decoder_key)
 
         self.task_description: Optional[str] = None
@@ -113,9 +123,34 @@ class ModelClient:
         self.episode_id = episode_id or f"robotwin/{self.adapter.task_name}/{task_description or 'default'}"
         self.payload_builder.reset(self.episode_id)
         self.decoder.reset()
+        self._chunk = None
+        self._chunk_cursor = 0
+        self._chunk_len = 0
+        self._chunk_state = None
+        self._chunk_endpose = None
         self.trace_records = []
         self.client.reset(self.episode_id)
         self._flush_trace()
+
+    def needs_obs(self) -> bool:
+        """True when the next ``step()`` call will issue a policy request.
+
+        With a client-owned chunk the intermediate steps only replay buffered
+        actions (the decoders read proprio, not images), so the caller may skip
+        camera rendering for them. Closed-loop models never take this path:
+        they force ``return_action_chunk = False`` at construction.
+        """
+        return (
+            not self.return_action_chunk
+            or self._chunk is None
+            or self._chunk_cursor >= self._chunk_len
+        )
+
+    def _take_chunk_row(self) -> np.ndarray:
+        """Return the next buffered action row as a ``(1, D)`` batch."""
+        row = np.asarray(self._chunk[self._chunk_cursor], dtype=np.float32).reshape(1, -1)
+        self._chunk_cursor += 1
+        return row
 
     def step(self, observation: Dict[str, Any], instruction: str, step: int = 0) -> np.ndarray:
         """Run one plugin step: adapter -> PayloadBuilder -> client -> decoder."""
@@ -123,43 +158,63 @@ class ModelClient:
             self.reset(task_description=instruction)
 
         joint = np.asarray(observation["joint_action"]["vector"], dtype=np.float32).reshape(-1)
-        canonical_obs = self.adapter.obs_to_canonical(
-            observation,
-            {
-                "instruction": instruction,
+        fresh_chunk = False
+        if self.needs_obs():
+            # Only a request needs the rendered views; buffered steps run on
+            # proprio alone, so the caller may pass a proprio-only observation.
+            canonical_obs = self.adapter.obs_to_canonical(
+                observation,
+                {
+                    "instruction": instruction,
+                    "episode_id": self.episode_id,
+                    "episode_step": step,
+                },
+            )
+            ctx = {
+                "benchmark_name": "robotwin",
                 "episode_id": self.episode_id,
                 "episode_step": step,
-            },
-        )
-        ctx = {
-            "benchmark_name": "robotwin",
-            "episode_id": self.episode_id,
-            "episode_step": step,
-            "instruction": instruction,
-        }
-        model_kwargs = self.payload_builder.build(canonical_obs, ctx)
-        response = self.client.predict_action(
-            episode_id=canonical_obs["meta"]["episode_id"],
-            episode_step=canonical_obs["meta"]["episode_step"],
-            disable_action_cache=self.disable_action_cache,
-            return_action_chunk=self.return_action_chunk,
-            **model_kwargs,
-        )
-        if not response.get("ok", False):
-            raise RuntimeError(f"Policy error: {response}")
+                "instruction": instruction,
+            }
+            model_kwargs = self.payload_builder.build(canonical_obs, ctx)
+            response = self.client.predict_action(
+                episode_id=canonical_obs["meta"]["episode_id"],
+                episode_step=canonical_obs["meta"]["episode_step"],
+                disable_action_cache=self.disable_action_cache,
+                return_action_chunk=self.return_action_chunk,
+                **model_kwargs,
+            )
+            if not response.get("ok", False):
+                raise RuntimeError(f"Policy error: {response}")
 
-        data = response["data"]
-        raw_chunk = np.asarray(data["actions"], dtype=np.float32).reshape(1, -1)
+            data = response["data"]
+            actions = np.asarray(data["actions"], dtype=np.float32)
+            if actions.ndim == 1:
+                actions = actions.reshape(1, -1)
+            self._chunk = actions
+            self._chunk_cursor = 0
+            limit = self.chunk_execute_steps if self.chunk_execute_steps > 0 else actions.shape[0]
+            self._chunk_len = max(1, min(int(limit), actions.shape[0]))
+            # Anchor delta actions on the proprio/endpose captured at request
+            # time, not on the current step (the decoder already caches this,
+            # but keeping it here makes the contract explicit).
+            self._chunk_state = model_kwargs.get("state")
+            self._chunk_endpose = canonical_obs["state_raw"].get("endpose")
+            fresh_chunk = data.get("inference_latency_ms") is not None
+        else:
+            response = {"data": {"inference_latency_ms": None}}
+
+        raw_chunk = self._take_chunk_row()
         decode_ctx = {
             "current_joint": joint,
             # aloha_pi decoder anchors delta->abs on the pi-space proprio the
             # Pi05PayloadBuilder produced (== adapt_to_pi_decode_state(joint)).
             # For ee6d_dual the decoder ignores ctx, so this is harmless.
-            "pi_state": model_kwargs.get("state"),
+            "pi_state": self._chunk_state,
             # lingbot_va anchors its relative dual-arm ee pose on the endpose of
             # the episode's first step; the other decoders ignore this key.
-            "endpose": canonical_obs["state_raw"].get("endpose"),
-            "is_fresh_chunk": data.get("inference_latency_ms") is not None,
+            "endpose": self._chunk_endpose,
+            "is_fresh_chunk": fresh_chunk,
         }
         env_action = np.asarray(self.decoder(raw_chunk, decode_ctx), dtype=np.float32)[0]
         # Closed-loop endpose backfill for ee6d_dual (no-op for aloha_pi).
@@ -225,6 +280,7 @@ def get_model(usr_args: Dict[str, Any]) -> ModelClient:
         timeout=float(usr_args.get("timeout", 300)),
         disable_action_cache=bool(usr_args.get("disable_action_cache", False)),
         return_action_chunk=bool(usr_args.get("return_action_chunk", False)),
+        chunk_execute_steps=int(usr_args.get("chunk_execute_steps", 0) or 0),
         action_bridge=usr_args.get("action_bridge", "ee6d_dual"),
         trace_path=usr_args.get("trace_path"),
         domain_id=usr_args.get("domain_id"),

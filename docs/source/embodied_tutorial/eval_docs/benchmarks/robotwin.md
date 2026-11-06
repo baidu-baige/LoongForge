@@ -72,3 +72,98 @@ Key config fields (see `examples/embodied/<model>/eval/configs/robotwin/adjust_b
 ## Outputs
 
 In addition to the standard outputs (see the user guide §4 Outputs), RoboTwin collects the official evaluator logs, deploy config, result file, and `mp4` videos under `artifacts/robotwin/<task_name>/<task_config>/`, and writes one `results.jsonl` row per completed episode.
+
+## Parallel evaluation
+
+The parallel entry point runs one inference service per GPU plus `N` sim workers per GPU
+behind a global queue. It is configured by adding `servers` and `pools` to the YAML; the
+benchmark client is unchanged. Background: [Parallel evaluation](../parallel_eval.md).
+
+```bash
+examples/embodied/pi05/eval/run_robotwin_eval_parallel.sh
+```
+
+Start from `configs/robotwin/robotwin_pi05_parallel.yaml`. The RoboTwin-specific switches:
+
+| Key | Value in the parallel config | Why |
+|---|---|---|
+| `pools.gpu_sim.n_sims_per_server` | 8 | Fits the per-sim memory of the reference tasks |
+| `benchmark.episodes_per_chunk` | `floor(E/S)` | One wave, one process start per unit |
+| `benchmark.return_action_chunk` | `true` | The client owns the action chunk |
+| `benchmark.skip_intra_chunk_obs` | `true` | No camera render inside a chunk — the largest single win |
+| `benchmark.sim_cpu_threads` | 1 | Avoids thread oversubscription with many sims per card |
+
+`return_action_chunk` + `skip_intra_chunk_obs` make the policy open-loop inside a chunk
+(one observation per `chunk_execute_steps` actions). Keep them off if you need
+per-episode agreement with a per-step closed-loop run — see
+[Result alignment](../parallel_eval.md#8-result-alignment). For this reason both switches
+default to `false` in the runner.
+
+### Offline expert check
+
+RoboTwin's official loop runs an expert rollout before the policy rollout to reject
+unsolvable seeds. That pass can be cached and reused:
+
+1. **Scan** — `benchmark.offline_expert_check_scan: <dir>` runs the expert pass only (no
+   inference service) and writes `<task>.pkl`. `offline_expert_check_scan_shards: k`
+   splits each task's candidate seeds into `k` residue classes (`start+i`, stride `k`)
+   and merges the parts at the end of the run.
+2. **Consume** — `benchmark.offline_expert_check: <dir>` skips the expert pass and reads
+   seeds by index. The planner writes the per-unit cache offset; `start_seed` remains a
+   seed value and does not index the cache.
+3. **Staleness** — the cache is only valid for the environment that produced it, and
+   "environment" means the **full compute stack**: GPU model, driver and CUDA version,
+   Python and library versions (torch, SAPIEN/svulkan, cuRobo), the benchmark assets and
+   the task/scene definition. GPU or driver changes can alter which seeds are stable, so
+   a cache produced on another machine may admit a seed that is unstable here. This
+   implementation does **not** record or verify an environment digest, so re-scan
+   whenever any of the above changes, and treat the cache as a property of one machine
+   configuration. If a cached seed turns out to be unstable at consume time the unit
+   fails with `CACHE STALE` and the coordinator retries it; re-scan rather than silently
+   skipping.
+
+Scan cost scales with the number of candidate seeds and the expert rollout length; use
+one shard per available slot to keep the scan short.
+
+## Calibration results
+
+Reference environment: 8×A800-80GB, pi05, `adjust_bottle`, official 400-step limit, offline
+expert check, `E = 16N`, two episodes per unit.
+
+| N | unit wall | startup | rollout / episode | wall throughput (per GPU) | steady throughput (per GPU) | peak VRAM |
+|---|---|---|---|---|---|---|
+| 6 | 204.5 s | 167 s | 17.0 s | 3.52 ep/min | 21.1 ep/min | — |
+| 8 | 266.6 s | 221 s | 20.8 s | 3.60 ep/min | 23.1 ep/min | — |
+| 10 | 323.8 s | 275 s | 22.0 s | 3.71 ep/min | 27.3 ep/min | ~58–60 GB |
+| 12 | 389.0 s | 341 s | 21.9 s | 3.70 ep/min | 32.9 ep/min | ~75 GB |
+
+Observations from this run: steady throughput keeps rising through `N=12` (no plateau
+yet), while peak memory grows roughly linearly with `N` and approaches the 80 GB card
+limit at `N=12`; process startup dominates the wall metric at these unit sizes. Memory
+depends on the benchmark scene, the model and the renderer settings — measure on your
+setup with `calibrate.py` and keep headroom.
+
+## Measured speedup
+
+Single-task comparison against the original entry point (pi05, same task, 50 episodes,
+official step limits, 8 GPUs):
+
+| Task | Baseline | Parallel config | Speedup |
+|---|---|---|---|
+| `adjust_bottle` (400 steps) | 1040 s total / 699 s episode phase | 513 s / 199 s | 2.0× / 3.5× |
+| `open_microwave` (1500 steps) | 4984 s / 4701 s | 756 s / 453 s | 6.6× / 10.4× |
+
+The second number excludes model loading and service startup (about 5 min for eight
+services); sim-worker process startup is included. The two runs use different seed sets
+(see [Result alignment](../parallel_eval.md#8-result-alignment)), so the failure counts
+are not directly comparable. Full-scale numbers (50 tasks × 50 episodes) will be added
+once measured.
+
+> **Reproducibility note.** This pipeline is not bit-reproducible on GPU: two identical
+> runs (same config, fixed `model.noise_seed`, `max_batch_size: 1`) still differ by 1–3
+> steps on the same seed. Per-episode regression against another run is therefore not a
+> usable equivalence test; compare aggregate success rates instead (n≥50 has ±7pt
+> binomial noise at 1σ, ±14pt at 95%). This is also why the chunk switches above stay
+> off by default: their per-episode effect cannot be separated from that noise floor.
+
+

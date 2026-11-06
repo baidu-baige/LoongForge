@@ -98,3 +98,59 @@ Caveat on the GR00T-N1.6 LIBERO numbers: the shipped configs do not set
 `server.chunk_execute_steps`, so the whole 16-step chunk is executed open-loop,
 whereas the official GR00T LIBERO client uses `--n_action_steps 8`. The numbers
 above are therefore not strictly the official protocol.
+
+## Parallel evaluation
+
+The parallel entry point runs one inference service per GPU plus `N` sim workers per GPU
+behind a global queue. Add `servers` and `pools` to the YAML; the LIBERO client is
+unchanged. Background and the shared configuration reference:
+[Parallel evaluation](../parallel_eval.md).
+
+```bash
+examples/embodied/pi05/eval/run_libero_eval_parallel.sh
+```
+
+Start from `configs/libero/libero_pi05_parallel.yaml`. LIBERO-specific notes:
+
+- `benchmark.return_action_chunk` defaults to `true` on this branch: the client owns the
+  action chunk, which needs one request per chunk instead of one per environment step.
+  It was validated against the legacy server-cache path over 80 episodes (no success
+  flips, 79/80 identical step counts, ~9.8× fewer requests). Pass
+  `--no-return-action-chunk` (or set it to `false`) to restore the per-step path.
+- `benchmark.env_seed_mode: per_task` binds a scene to "seed + reset count in this
+  process", so a task must stay in one worker. Episode-level sharding under `per_task`
+  requires scene snapshots (`benchmark.scene_snapshot_dir`); otherwise keep the default
+  `per_episode`.
+- `server.chunk_execute_steps` selects how many actions of a chunk are executed before
+  re-planning (the reference runs use 10).
+
+## Calibration results
+
+Reference environment: 8×A800-80GB, one inference service per GPU, FastWAM epilogue
+(`chunk_execute_steps=10`), 512 concurrent clients at `N=64`:
+
+| N (sims per service) | 16 | 24 | 48 | 80 |
+|---|---|---|---|---|
+| steady capacity (eps/min) | 70.7 | 77.8 | 81.8 | 81.9 |
+
+The curve plateaus around `N≈48` on this machine: beyond that, extra sims mostly add
+memory and CPU contention. Capacity is a property of the model, the benchmark and the
+machine — re-measure with `calibrate.py`, and note that the server-side batcher changes
+the request cadence and therefore the knee.
+
+## Measured speedup
+
+Full-suite comparison against the official evaluation script (FastWAM, 2000 episodes,
+8 GPUs, `per_task` + scene snapshots, `chunk_execute_steps=10`, `N=64`, batching on):
+
+| Measurement | Wall | Speedup vs official |
+|---|---|---|
+| Official script (8-card equivalent) | 173.7 min | 1.0× |
+| Parallel evaluation, worker phase | 35.5 min | **4.9×** |
+| Parallel evaluation, including model loading | ~41 min | **~4.3×** |
+
+Other configurations land lower (`episodes_per_chunk=1`: 43.6 min worker phase; `=4`:
+36.1 min), so `episodes_per_chunk` and the client-owned chunk path both matter. Numbers
+are for this checkpoint and protocol; the aggregate success rate is aligned within
+binomial noise (96.35% vs 96.65% reference).
+

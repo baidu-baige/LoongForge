@@ -214,46 +214,60 @@ def run_evaluation(args: argparse.Namespace) -> Dict[str, Any]:
     replay_frames: List[np.ndarray] = []
     action_trace: List[Dict[str, Any]] = []
     start_time = time.time()
+    stepper = _common.EpisodePolicyStepper(
+        chunk_steps=int(client.metadata.get("chunk_execute_steps") or 0),
+        return_action_chunk=bool(getattr(args, "return_action_chunk", False)),
+        # A closed-loop-within-chunk model must see every frame; the
+        # PayloadBuilder capability can only turn the cache off, never back on.
+        disable_action_cache=bool(
+            args.disable_action_cache
+            or getattr(payload_builder, "disable_action_cache", False)
+        ),
+        payload_builder=payload_builder,
+    )
 
     try:
         for episode_step in range(max_steps):
-            canonical_obs = adapter.obs_to_canonical(
-                obs,
-                {
-                    "instruction": instruction,
-                    "episode_id": episode_id,
-                    "episode_step": episode_step,
-                },
-            )
             if args.save_replay:
                 replay_frames.append(_render_frame(env, obs, adapter))
 
-            ctx = {
-                "benchmark_name": "maniskill",
-                "episode_id": episode_id,
-                "episode_step": episode_step,
-                "instruction": instruction,
-            }
-            extra_control = {"cfg_scale": args.cfg_scale}
-            response = client.predict_action(
-                **build_rpc_payload(
-                    payload_builder,
-                    canonical_obs,
-                    ctx,
-                    disable_action_cache=args.disable_action_cache,
-                    extra_control=extra_control,
+            def _request(_request_step: int) -> tuple[Dict[str, Any], float]:
+                canonical_obs = adapter.obs_to_canonical(
+                    obs,
+                    {
+                        "instruction": instruction,
+                        "episode_id": episode_id,
+                        "episode_step": episode_step,
+                    },
                 )
-            )
-            if not response.get("ok", False):
-                raise RuntimeError(f"Policy error: {response}")
+                ctx = {
+                    "benchmark_name": "maniskill",
+                    "episode_id": episode_id,
+                    "episode_step": episode_step,
+                    "instruction": instruction,
+                }
+                extra_control = {"cfg_scale": args.cfg_scale}
+                request_start = time.perf_counter()
+                response = client.predict_action(
+                    **build_rpc_payload(
+                        payload_builder,
+                        canonical_obs,
+                        ctx,
+                        disable_action_cache=stepper.disable_action_cache,
+                        return_action_chunk=stepper.return_action_chunk,
+                        extra_control=extra_control,
+                    )
+                )
+                e2e_latency_ms = (time.perf_counter() - request_start) * 1000.0
+                if not response.get("ok", False):
+                    raise RuntimeError(f"Policy error: {response}")
+                return response["data"], e2e_latency_ms
 
             # X-VLA ee6d is 20D; pi05 is already 7D. Composed decoder key
             # (payload_builder.action_encoding × adapter.action_space) selects
             # the right converter — IdentityDecoder is a no-op passthrough for pi05.
-            raw_chunk = np.asarray(response["data"]["actions"], dtype=np.float32)
-            if raw_chunk.ndim == 1:
-                raw_chunk = raw_chunk.reshape(1, -1)
-            payload_builder.update_from_response(response["data"])
+            decision = stepper.next_action(_request)
+            raw_chunk = decision.action
             processed = action_decoder(raw_chunk, {"benchmark_name": "maniskill"})
             if processed.shape[-1] < 7:
                 raise ValueError(
@@ -278,7 +292,7 @@ def run_evaluation(args: argparse.Namespace) -> Dict[str, Any]:
                         "done": done_flag,
                         "truncated": truncated_flag,
                         "success": _is_success(done, reward, info, args),
-                        "inference_latency_ms": response.get("data", {}).get("inference_latency_ms"),
+                        "inference_latency_ms": decision.inference_latency_ms,
                     }
                 )
 
@@ -389,6 +403,11 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--success-reward-threshold", type=float, default=None)
     parser.add_argument("--allow-dummy-image", action="store_true")
     parser.add_argument("--disable-action-cache", action="store_true")
+    parser.add_argument(
+        "--return-action-chunk",
+        action="store_true",
+        help="Let the client own the action chunk (T-14 path); default keeps the legacy per-step server cache",
+    )
     parser.add_argument("--cfg-scale", type=float, default=1.5)
     parser.add_argument("--episode-idx", type=int, default=0)
     parser.add_argument("--max-steps", type=int, default=5)
