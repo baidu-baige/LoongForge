@@ -16,8 +16,8 @@ set -euo pipefail
 
 export LOONGFORGE_PATH="${LOONGFORGE_PATH:-/workspace/LoongForge}"
 
-GB_MODEL_DIR="$LOONGFORGE_PATH/loongforge/embodied/model/giga_brain07"
-GB_DATA_DIR="$LOONGFORGE_PATH/loongforge/embodied/data/datasets/giga_brain07"
+GB_MODEL_DIR="$LOONGFORGE_PATH/loongforge/models/embodied/giga_brain07"
+GB_DATA_DIR="$LOONGFORGE_PATH/loongforge/data/embodied/giga_brain07"
 export PYTHONPATH="$LOONGFORGE_PATH:${PYTHONPATH:-}"  # giga code imported via loongforge.* absolute paths (no bare giga_* dirs)
 
 export GB0_PRETRAINED="${GB0_PRETRAINED:-/workspace/ckpt/open-gigaai/GigaBrain-0.7-3.5B-Base}"

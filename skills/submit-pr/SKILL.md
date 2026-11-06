@@ -55,10 +55,11 @@ Or for breaking changes:
 2. Map changed paths to modules:
    - `loongforge/models/foundation/` → `llm`
    - `loongforge/models/encoder/`, `loongforge/models/omni_models/` → `vlm`
-   - `loongforge/train/` → `train`
+   - `loongforge/engines/`, `loongforge/training/` → `train`
    - `loongforge/data/` → `data`
+   - `loongforge/train.py` → `train`
    - `tools/mcore_checkpoint_convert/` → `ckpt`
-   - `loongforge/models/peft/` → `peft`
+   - `loongforge/models/common/peft/` → `peft`
    - `ops/` → `ops`
    - `configs/` → relevant model type (`llm`/`vlm`)
    - `examples_xpu/` → `xpu`
@@ -67,7 +68,8 @@ Or for breaking changes:
    - `tests/` → `tests`
    - `.github/workflows/` → `ci`
    - `examples/`, `scripts/` → `scripts`
-   - `loongforge/models/custom/` → check model type (`diffusion`/`vla`)
+   - `loongforge/models/embodied/` → check model type (`diffusion`/`vla`)
+   - `loongforge/models/diffusion/` → `diffusion`
 3. Determine type from commit messages and nature of changes
 4. Write a concise description (imperative mood, lowercase start)
 
@@ -151,13 +153,13 @@ After PR is created:
 |--------|-------|
 | llm | `loongforge/models/foundation/`, `configs/models/<llm>/` |
 | vlm | `loongforge/models/encoder/`, `loongforge/models/omni_models/` |
-| vla | `loongforge/models/custom/` (VLA models) |
-| diffusion | `loongforge/models/custom/` (diffusion models) |
-| train | `loongforge/train/` |
+| vla | `loongforge/models/embodied/` (VLA models) |
+| diffusion | `loongforge/models/diffusion/`, `loongforge/models/embodied/` (diffusion models) |
+| train | `loongforge/engines/`, `loongforge/training/`, `loongforge/train.py` |
 | data | `loongforge/data/` |
 | ops | `ops/` |
 | ckpt | `tools/mcore_checkpoint_convert/` |
-| peft | `loongforge/models/peft/` |
+| peft | `loongforge/models/common/peft/` |
 | docker | `docker/` |
 | xpu | `examples_xpu/` |
 | ci | `.github/workflows/` |

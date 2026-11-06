@@ -10,7 +10,7 @@
 ```bash
 LOCAL_MODEL_PATH=/data/models \
 OUTPUT=$LOONGFORGE_PATH/checkpoints/ActionDiT_linear_interp_Wan22_alphascale_1024hdim.pt \
-    bash examples/embodied/fastwam/preprocess_action_dit_backbone.sh
+    bash examples/fastwam/finetuning/preprocess_action_dit_backbone.sh
 ```
 
 #### 0.1.2 Wan-AI/Wan2.2-TI2V-5B 权重
@@ -25,7 +25,7 @@ hf download Wan-AI/Wan2.2-TI2V-5B --local-dir /workspace/huggingface.co/Wan-AI/W
 ```bash
 DATASET_PATH=/data/libero \
 TEXT_EMBEDDING_CACHE_DIR=/data/cache/fastwam_text_embeds \
-    bash examples/embodied/fastwam/precompute_text_embeds.sh
+    bash examples/fastwam/finetuning/precompute_text_embeds.sh
 ```
 
 ### 0.3 数据集
@@ -66,7 +66,7 @@ export DIFFSYNTH_MODEL_BASE_PATH=/workspace/huggingface.co/Wan-AI/Wan2.2-TI2V-5B
 单机 DDP 训练示例：
 
 ```bash
-bash examples/embodied/fastwam/run_fastwam_sft_ddp_finetune.sh
+bash examples/fastwam/finetuning/sft_fastwam_ddp.sh
 ```
 
 ### 2.2 正确性验证
@@ -88,8 +88,8 @@ SAVE_FORMAT=dcp ASYNC_SAVE=1 \
 GPUS_PER_NODE=8 TRAIN_ITERS=20000 PER_DEVICE_BATCH_SIZE=16 SEED=42 \
 EXTRA_MODEL_OVERRIDES="model.mot_compile_blocks=none" \
 EXTRA_DATA_OVERRIDES="data.norm_stats_path=/path/to/dataset_stats.json" \
-bash examples/embodied/fastwam/run_fastwam_sft_ddp_zero1_finetune.sh \
-  --config-file configs/models/embodied/fastwam.yaml \
+bash examples/fastwam/finetuning/sft_fastwam_ddp_zero1.sh \
+  --config-file configs/models/fastwam/fastwam.yaml \
   --optimizer TorchFusedAdamW \
   --lr-base 1e-4 --lr-warmup-iters 1000 --min-lr 1e-6
 ```
@@ -116,11 +116,11 @@ bash examples/embodied/fastwam/run_fastwam_sft_ddp_zero1_finetune.sh \
 环境准备与协议说明见 [LIBERO 评测文档](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/embodied_tutorial/eval_docs/benchmarks/libero.md)。运行前先把 suite YAML 里的 `/path/to/...` 占位符（checkpoint、Wan2.2 路径、`dataset_stats.json`）填好：
 
 ```bash
-CONFIG=examples/embodied/fastwam/eval/configs/libero/libero_10.yaml \
+CONFIG=examples/fastwam/eval/configs/libero/libero_10.yaml \
 REPO_ROOT=/path/to/LoongForge-VLA \
 BENCHMARK_PYTHON=/path/to/libero/bin/python \
 DIFFSYNTH_MODEL_BASE_PATH=/path/to/models_root \
-bash examples/embodied/fastwam/eval/run_libero_eval.sh
+bash examples/fastwam/eval/run_libero_eval.sh
 ```
 
 随附 YAML 使用的是参考评测协议：`episodes_per_task: 50`，`max_steps` 400（`spatial`/`object`/`goal`）与 700（`libero_10`），action `sigma_shift: 1.0`，`num_steps_wait: 30`，`controller_force_update: false`，`prefer_controller_ee: false`，二值化夹爪，`noise_seed: 42`。

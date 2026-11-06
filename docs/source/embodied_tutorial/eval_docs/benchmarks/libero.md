@@ -41,19 +41,19 @@ Run from inside the **benchmark** environment. The run scripts and eval YAMLs sh
 cd /path/to/LoongForge-VLA
 
 # pi05
-examples/embodied/pi05/eval/run_libero_eval.sh
+examples/pi05/eval/run_libero_eval.sh
 
 # xvla
-examples/embodied/xvla/eval/run_libero_eval.sh
+examples/xvla/eval/run_libero_eval.sh
 
 # GR00T-N1.6
-examples/embodied/gr00t_n1_6/eval/run_libero_eval.sh
+examples/gr00t_n1_6/eval/run_libero_eval.sh
 
 # LingBot-VA (default config: libero_10_full.yaml, 10 tasks x 50 episodes)
-examples/embodied/lingbot_va/eval/run_libero_eval.sh
+examples/lingbot_va/eval/run_libero_eval.sh
 
 # FastWAM (default config: libero_spatial.yaml; set CONFIG for another suite)
-examples/embodied/fastwam/eval/run_libero_eval.sh
+examples/fastwam/eval/run_libero_eval.sh
 ```
 
 Environment variables:
@@ -67,7 +67,7 @@ Environment variables:
 | `MUJOCO_GL` / `PYOPENGL_PLATFORM` | MuJoCo offscreen GL backend | `osmesa` |
 | `LD_LIBRARY_PATH` | NVIDIA libs (xvla script) | `/path/to/nvidia_lib:/usr/lib64` |
 
-Key config fields (see `examples/embodied/<model>/eval/configs/libero/*.yaml`):
+Key config fields (see `examples/<model>/eval/configs/libero/*.yaml`):
 
 - `benchmark.suite` — `libero_object` | `libero_spatial` | `libero_goal` | `libero_10`
 - `benchmark.max_tasks` / `benchmark.episodes_per_task` — raise for full-suite / multi-episode eval (e.g. `max_tasks: 0`, `episodes_per_task: 10`)

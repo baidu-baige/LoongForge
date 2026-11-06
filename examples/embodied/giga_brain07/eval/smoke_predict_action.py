@@ -30,8 +30,8 @@ def main() -> int:
     ap.add_argument("--action-dim", type=int, default=32)
     args = ap.parse_args()
 
-    from loongforge.embodied.eval.transport.client import PolicyClient
-    from loongforge.embodied.eval.payload_builders.registry import build_payload_builder
+    from loongforge.evaluation.embodied.transport.client import PolicyClient
+    from loongforge.evaluation.embodied.payload_builders.registry import build_payload_builder
 
     client = PolicyClient(host=args.host, port=args.port, timeout=args.timeout)
     meta = client.metadata  # property, not a method

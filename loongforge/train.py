@@ -1,30 +1,69 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Training entry for the Megatron-based core stack (LLM / VLM / Diffusion).
+"""Training entry for Megatron and Torch model families."""
 
-This is NOT a unified entry for the whole framework. Embodied / VLA models run on a
-separate torch-native (DDP/FSDP) subsystem with its own entry at
-``loongforge/embodied/train.py`` — see ``loongforge/embodied/README.md``.
-"""
-
+import argparse
 import logging
-logging.basicConfig(level=logging.WARNING)
-from loongforge.train import parse_train_args
-from loongforge.train import build_model_trainer
+import sys
+
+from loongforge.models.catalog import TORCH_MODEL_NAMES
+
+
+def _run_megatron():
+    """Parse the Megatron arguments and run the recipe for their family and phase."""
+    logging.basicConfig(level=logging.WARNING)
+    from loongforge.engines.megatron.parser import parse_train_args
+    from loongforge.training import MODEL_FAMILY_TRAINER_FACTORY, _load_builtin_trainers
+
+    _load_builtin_trainers()
+    args = parse_train_args()
+    model_family = args.model_family
+
+    if model_family not in MODEL_FAMILY_TRAINER_FACTORY:
+        raise ValueError(f"Not found trainer for family: {model_family}")
+    if args.training_phase not in MODEL_FAMILY_TRAINER_FACTORY[model_family]:
+        raise ValueError(
+            f"Loongforge not support {args.training_phase} phase for {args.model_name} (family: {model_family})"
+        )
+
+    trainer = MODEL_FAMILY_TRAINER_FACTORY[model_family][args.training_phase](args)
+    trainer.train()
+
+
+def _run_torch():
+    """Parse the Torch arguments and run the trainer selected by ``--trainer-type``."""
+    from loongforge.training.torch_args import parse_train_args
+    from loongforge.training import resolve_torch_trainer
+
+    training_args, model_cfg, data_cfg = parse_train_args()
+    trainer_type = resolve_torch_trainer(training_args.trainer_type)
+    trainer = trainer_type(training_args, model_cfg, data_cfg)
+    trainer.train()
 
 
 def main():
-    """train cmd"""
+    """Pick the engine for ``--model-name`` and run the selected recipe."""
+    argv = sys.argv[1:]
+    for index, arg in enumerate(argv):
+        if arg in ("-h", "--help", "--"):
+            argv = argv[:index]
+            break
 
-    # parse args and config
-    args = parse_train_args()
+    parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    # Let the selected engine report missing values.
+    parser.add_argument("--model-name", nargs="?")
+    args, _ = parser.parse_known_args(argv)
+    if args.model_name is None:
+        # Only Torch accepts model-name abbreviations.
+        parser.allow_abbrev = True
+        args, _ = parser.parse_known_args(argv)
 
-    # get model trainer
-    trainer = build_model_trainer(args)
-
-    # start training
-    trainer.train()
+    # Keep validation and help in the selected engine's original parser.
+    if args.model_name and args.model_name.lower().replace("-", "_") in TORCH_MODEL_NAMES:
+        _run_torch()
+    else:
+        _run_megatron()
 
 
 if __name__ == "__main__":

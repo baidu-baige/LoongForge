@@ -29,8 +29,8 @@ fi
 # giga_models lives under the model dir; the dataset transforms under the data
 # dir. Both must precede REPO_ROOT on PYTHONPATH (same order as the training
 # entry run_giga_brain07_torchrun.sh) so ``import giga_models`` resolves.
-GB_MODEL_DIR=${GB_MODEL_DIR:-${REPO_ROOT}/loongforge/embodied/model/giga_brain07}
-GB_DATA_DIR=${GB_DATA_DIR:-${REPO_ROOT}/loongforge/embodied/data/datasets/giga_brain07}
+GB_MODEL_DIR=${GB_MODEL_DIR:-${REPO_ROOT}/loongforge/models/embodied/giga_brain07}
+GB_DATA_DIR=${GB_DATA_DIR:-${REPO_ROOT}/loongforge/data/embodied/giga_brain07}
 export PYTHONPATH=${GB_MODEL_DIR}:${GB_DATA_DIR}:${REPO_ROOT}:${PYTHONPATH:-}
 
 # ── Runtime env ─────────────────────────────────────────────────────────────
@@ -92,7 +92,7 @@ echo "  server_log=${SERVER_LOG}"
 echo "════════════════════════════════════════════════════════════"
 
 # ── 1. Start the policy server in the background ────────────────────────────
-"${PYTHON}" loongforge/embodied/eval/servers/loongforge_server.py \
+"${PYTHON}" loongforge/evaluation/embodied/servers/loongforge_server.py \
   --config "${CONFIG}" > "${SERVER_LOG}" 2>&1 &
 SERVER_PID=$!
 echo "[run] server started pid=${SERVER_PID}; waiting for health on :${HEALTH_PORT} (<=${START_TIMEOUT_SEC}s)"

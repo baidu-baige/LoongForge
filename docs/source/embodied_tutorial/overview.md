@@ -10,24 +10,24 @@ This chapter describes the directory layout and launch script convention under e
 
 | Path | Description |
 | --- | --- |
-| `examples/embodied/` | Model-level launch scripts; default configs can be overridden via the trailing pass-through arguments at the end of each script |
-| `configs/models/embodied/` | Default YAML configs per model, containing two top-level sections: `model:` and `data:` |
-| `loongforge/embodied/train.py` | Training entry point; parses config, builds the Trainer, and starts training |
-| `loongforge/embodied/train/training_args.py` | Definition file for common training arguments; generates the shell CLI |
-| `loongforge/embodied/train/config_map.py` | Model config routing table; binds `--model-name` to a YAML, `ModelConfig`, and `DataConfig` |
-| `loongforge/embodied/model/` | Model architecture and model registration |
-| `loongforge/embodied/data/datasets/` | Data processing components |
+| `examples/` | Model-level launch scripts; default configs can be overridden via the trailing pass-through arguments at the end of each script |
+| `configs/models/` | Default YAML configs per model, containing two top-level sections: `model:` and `data:` |
+| `loongforge/train.py` | Training entry point; parses config, builds the Trainer, and starts training |
+| `loongforge/training/torch_args.py` and `loongforge/training/embodied/args.py` | Definition files for common training arguments; generates the shell CLI |
+| `loongforge/training/torch_args.py` | Model config routing table; binds `--model-name` to a YAML, `ModelConfig`, and `DataConfig` |
+| `loongforge/models/embodied/` | Model architecture and model registration |
+| `loongforge/data/embodied/` | Data processing components |
 
 The training pipeline is:
 
 ```text
-examples/embodied/<model>/run_*.sh
+examples/<model>/finetuning/sft_*.sh
     ↓
-loongforge/embodied/train.py
+loongforge/train.py
     ↓
 parse_train_args()
     ↓
-build_model_trainer()
+resolve_torch_trainer()
     ↓
 trainer.train()
 ```
@@ -39,7 +39,7 @@ Launch scripts typically set environment variables, paths, distributed arguments
 ```bash
 PYTHONPATH=$LOONGFORGE_PATH:${PYTHONPATH:-} \
 torchrun "${DISTRIBUTED_ARGS[@]}" \
-    "$LOONGFORGE_PATH/loongforge/embodied/train.py" \
+    "$LOONGFORGE_PATH/loongforge/train.py" \
     "${MODEL_CONFIG_ARGS[@]}" \
     "${DATA_ARGS[@]}" \
     "${TRAINING_ARGS[@]}" \
@@ -51,7 +51,7 @@ torchrun "${DISTRIBUTED_ARGS[@]}" \
 Example:
 
 ```bash
-bash examples/embodied/pi05/run_pi05_ddp_finetune.sh \
+bash examples/pi05/finetuning/sft_pi05_ddp.sh \
     --train-iters 10000 \
     --per-device-batch-size 8 \
     model.action_horizon=64 \
@@ -144,7 +144,7 @@ Supported capabilities:
 
 | Feature | Argument | Default | Values / Type | Description |
 | --- | --- | --- | --- | --- |
-| Select model | `--model-name` | `None` | Model name registered in `config_map.py` | Selects the model schema, default YAML, `ModelConfig`, and `DataConfig` |
+| Select model | `--model-name` | `None` | Model name registered in `torch_args.py` | Selects the model schema, default YAML, `ModelConfig`, and `DataConfig` |
 | Specify YAML | `--config-file` | `None` | YAML file path | Overrides the default YAML bound to `--model-name` |
 | Specify tokenizer | `--tokenizer-path` | `None` | Local path or HF repo id | Sets the tokenizer path and syncs it to the `TOKENIZER_PATH` environment variable |
 
@@ -247,7 +247,7 @@ Use `--lr-group` to assign independent learning rates to different modules. A co
 Example:
 
 ```bash
-bash examples/embodied/pi05/run_pi05_ddp_finetune.sh \
+bash examples/pi05/finetuning/sft_pi05_ddp.sh \
     --lr-base 1.0e-4 \
     --lr-group "model.backbone=1.0e-5,model.action_head=1.0e-4"
 ```
@@ -279,7 +279,7 @@ The checkpoint module offers:
 Resume example:
 
 ```bash
-bash examples/embodied/pi05/run_pi05_ddp_finetune.sh \
+bash examples/pi05/finetuning/sft_pi05_ddp.sh \
     --output-dir /path/to/previous_run \
     --resume
 ```
@@ -317,7 +317,7 @@ The Trainer module orchestrates the training lifecycle, including distributed co
 
 ### 4.1 Trainer Selection
 
-Select the trainer with `--trainer-type`. Valid values are the Trainer class names registered in `trainer_builder.py`. The default `FinetuneTrainer` covers standard single-data-stream supervised fine-tuning; for multiple data streams, unusual loss combinations, or non-standard step scheduling, register a custom Trainer class in `trainer_builder.py`.
+Select the trainer with `--trainer-type`. Valid values are the Trainer class names registered in `loongforge/training/__init__.py`. The default `FinetuneTrainer` covers standard single-data-stream supervised fine-tuning; for multiple data streams, unusual loss combinations, or non-standard step scheduling, register a custom Trainer class in `loongforge/training/__init__.py`.
 
 ### 4.2 Distributed Strategy
 
@@ -338,7 +338,7 @@ Training precision supports `bfloat16` (default), `float16`, and `float32`.
 DDP example:
 
 ```bash
-bash examples/embodied/pi05/run_pi05_ddp_finetune.sh \
+bash examples/pi05/finetuning/sft_pi05_ddp.sh \
     --distributed-strategy ddp \
     --dtype bfloat16
 ```
@@ -346,7 +346,7 @@ bash examples/embodied/pi05/run_pi05_ddp_finetune.sh \
 FSDP example:
 
 ```bash
-bash examples/embodied/pi05/run_pi05_fsdp_finetune.sh \
+bash examples/pi05/finetuning/sft_pi05_fsdp.sh \
     --distributed-strategy fsdp \
     --dtype bfloat16
 ```
@@ -354,7 +354,7 @@ bash examples/embodied/pi05/run_pi05_fsdp_finetune.sh \
 DDP + ZeRO-1 example:
 
 ```bash
-bash examples/embodied/pi05/run_pi05_ddp_finetune.sh \
+bash examples/pi05/finetuning/sft_pi05_ddp.sh \
     --distributed-strategy ddp \
     --zero-optimizer
 ```
@@ -388,7 +388,7 @@ The following arguments give fine-grained control over DDP communication behavio
 Example:
 
 ```bash
-bash examples/embodied/pi05/run_pi05_ddp_finetune.sh \
+bash examples/pi05/finetuning/sft_pi05_ddp.sh \
     --distributed-strategy ddp \
     --no-ddp-find-unused-parameters \
     --ddp-static-graph

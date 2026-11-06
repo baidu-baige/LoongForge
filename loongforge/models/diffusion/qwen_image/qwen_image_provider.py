@@ -7,15 +7,15 @@ import torch
 from megatron.core.transformer.spec_utils import import_module
 
 from loongforge.models.factory import register_model_provider
-from loongforge.utils import build_transformer_config, get_args, print_rank_0
-from loongforge.utils.constants import CustomModelFamilies
+from loongforge.engines.megatron import build_transformer_config, get_args, print_rank_0
+from loongforge.models.catalog import DiffusionModelFamilies
 
 from .qwen_image_config import QwenImageConfig
 from .qwen_image_layer_spec import get_qwen_image_layer_with_te_spec
 from .qwen_image_model import QwenImageModel
 
 
-@register_model_provider(model_family=[CustomModelFamilies.QWEN_IMAGE])
+@register_model_provider(model_family=[DiffusionModelFamilies.QWEN_IMAGE])
 def qwen_image_model_provider(
     pre_process: bool = True,
     post_process: bool = True,

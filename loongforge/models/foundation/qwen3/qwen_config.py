@@ -6,7 +6,7 @@
 from typing import List
 from dataclasses import dataclass
 from loongforge.models.common.base_model_config import BaseModelConfig
-from loongforge.utils.constants import LanguageModelFamilies
+from loongforge.models.catalog import LanguageModelFamilies
 
 
 @dataclass

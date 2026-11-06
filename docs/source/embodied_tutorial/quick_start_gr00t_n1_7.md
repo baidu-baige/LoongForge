@@ -68,19 +68,19 @@ After downloading, run the following steps from the LoongForge root (replace `{s
 
 ```bash
 # 1. Overwrite modality.json (all four suites)
-cp examples/embodied/gr00t_n1_7/LIBERO/dataset/modality.json \
+cp examples/gr00t_n1_7/LIBERO/dataset/modality.json \
    /path/to/IPEC-COMMUNITY/{suite}/meta/modality.json
 
 # 2. Generate meta/stats.json (normalization stats with q01/q99) for all four suites;
 #    the script overwrites each dataset's meta/stats.json in place
-python examples/embodied/gr00t_n1_7/gen_stats.py \
+python examples/gr00t_n1_7/gen_stats.py \
    /path/to/IPEC-COMMUNITY/libero_spatial_no_noops_1.0.0_lerobot \
    /path/to/IPEC-COMMUNITY/libero_object_no_noops_1.0.0_lerobot \
    /path/to/IPEC-COMMUNITY/libero_goal_no_noops_1.0.0_lerobot \
    /path/to/IPEC-COMMUNITY/libero_10_no_noops_1.0.0_lerobot
 
 # 3. Goal suite only: replace one corrupted video
-cp examples/embodied/gr00t_n1_7/LIBERO/dataset/Goal/patches/episode_000082.mp4 \
+cp examples/gr00t_n1_7/LIBERO/dataset/Goal/patches/episode_000082.mp4 \
    /path/to/IPEC-COMMUNITY/libero_goal_no_noops_1.0.0_lerobot/videos/chunk-000/observation.images.wrist_image/
 ```
 
@@ -90,7 +90,7 @@ cp examples/embodied/gr00t_n1_7/LIBERO/dataset/Goal/patches/episode_000082.mp4 \
 
 ### 2.1 Launch Training
 
-Training script: `examples/embodied/gr00t_n1_7/LIBERO/run_libero_sft.sh`
+Training script: `examples/gr00t_n1_7/LIBERO/run_libero_sft.sh`
 
 Set the LoongForge, pretrained-weight and dataset paths in the script (or pass them as environment variables), then start training:
 
@@ -99,7 +99,7 @@ Set the LoongForge, pretrained-weight and dataset paths in the script (or pass t
 > - If a CUDA Graph replay fails, training automatically falls back to eager mode and continues normally.
 
 ```bash
-cd examples/embodied/gr00t_n1_7/LIBERO
+cd examples/gr00t_n1_7/LIBERO
 
 # Finetune a single suite, e.g. Spatial
 LOONGFORGE_PATH=/path/to/LoongForge \
@@ -136,7 +136,7 @@ Each suite is trained separately. Checkpoints are saved to `$OUTPUT_ROOT/libero_
 | `SAVE_INTERVAL` | 1000 | Checkpoint save interval (iterations) |
 | `LR_WARMUP_ITERS` | `TRAIN_ITERS / 20` | Learning-rate warmup iterations (5%), followed by cosine decay to 0; peak learning rate is 1e-4 |
 
-**Model and data configuration**: model and data parameters are configured in `configs/models/embodied/gr00t_n1_7.yaml`. Commonly used fields:
+**Model and data configuration**: model and data parameters are configured in `configs/models/gr00t_n1_7/gr00t_n1_7.yaml`. Commonly used fields:
 
 | Field | Default | Description |
 |---|:---:|---|
@@ -247,10 +247,10 @@ Evaluation uses a server / client architecture: the LoongForge policy server loa
 
 ### 4.1 Launch
 
-`examples/embodied/gr00t_n1_7/eval/run_libero_eval.sh` evaluates the four suites serially, 200 episodes per suite (10 tasks × 20 episodes). The script starts and stops the policy server itself; no manual deployment is needed:
+`examples/gr00t_n1_7/eval/run_libero_eval.sh` evaluates the four suites serially, 200 episodes per suite (10 tasks × 20 episodes). The script starts and stops the policy server itself; no manual deployment is needed:
 
 ```bash
-cd examples/embodied/gr00t_n1_7/eval
+cd examples/gr00t_n1_7/eval
 
 COSMOS_PATH=/path/to/Cosmos-Reason2-2B \
 CKPT_PATH=/path/to/outputs/gr00t_n1_7_libero/libero_{suite}/checkpoints/steps_20000 \

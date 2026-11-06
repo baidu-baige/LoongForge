@@ -122,3 +122,9 @@ def register_model_provider(model_family: Union[str, List[str]]):
 def get_model_provider(family: str):
     """get model provider from model factory"""
     return MODEL_FAMILY_TO_PROVIDER.get(family, None)
+
+
+# Load the registry before imported model configs register providers.
+from . import foundation  # noqa: F401
+from . import encoder  # noqa: F401
+from . import diffusion  # noqa: F401

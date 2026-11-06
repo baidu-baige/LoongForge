@@ -8,13 +8,13 @@ import torch
 from megatron.core.transformer import MLATransformerConfig, TransformerConfig
 from megatron.core.activations import squared_relu
 import torch.nn.functional as F
-from loongforge.utils import constants
+from loongforge.models import catalog as constants
 from copy import deepcopy
 from omegaconf import OmegaConf
 from hydra.utils import instantiate
 from loongforge.models.common.vlm_model_config import VLMModelConfig
 from collections.abc import Iterable
-from loongforge.utils.global_vars import get_args_dict
+from loongforge.engines.megatron.utils.global_vars import get_args_dict
 
 
 def import_module(module_path: Tuple[str], config: TransformerConfig, **kwargs):
@@ -112,7 +112,7 @@ def build_model_config(args, config):
 
     if (hasattr(config, "model_type") and config.model_type in
             (set(constants.LanguageModelFamilies.names()) |
-            set(constants.CustomModelFamilies.names()) |
+            set(constants.DiffusionModelFamilies.names()) |
             set(constants.VisionLanguageActionModelFamilies.names()))):
         model_type = config.model_type
         model_config = config
@@ -123,7 +123,7 @@ def build_model_config(args, config):
         model_config = config.model
 
     # assert hasattr(config.model, "model_type"), "model_type is required in model config"
-    vision_custom_names = {*constants.VisionLanguageModelFamilies.names(), *constants.CustomModelFamilies.names()}
+    vision_custom_names = {*constants.VisionLanguageModelFamilies.names(), *constants.DiffusionModelFamilies.names()}
     if model_type in vision_custom_names:
         # get the global args dict which contains all model component args
         global_args_dict = get_args_dict()
@@ -145,7 +145,7 @@ def build_model_config(args, config):
                 model_cfgs[name] = config_values
         model_cfgs = VLMModelConfig(**model_cfgs)
     elif model_type in (set(constants.LanguageModelFamilies.names())
-                        | set(constants.CustomModelFamilies.names())):
+                        | set(constants.DiffusionModelFamilies.names())):
         if "_target_" not in model_config:
             raise ValueError(
                 "Model config missing '_target_' field.\n"

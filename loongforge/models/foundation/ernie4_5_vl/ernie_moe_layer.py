@@ -18,7 +18,7 @@ from megatron.core.transformer.moe.moe_utils import get_default_pg_collection
 from megatron.core.transformer.spec_utils import ModuleSpec, build_module
 from megatron.core.transformer import TransformerConfig
 from megatron.core.extensions.transformer_engine import te_checkpoint
-from loongforge.utils import get_args
+from loongforge.engines.megatron import get_args
 from megatron.core.transformer.moe.token_dispatcher import MoEAlltoAllTokenDispatcher
 from megatron.core.tensor_parallel import all_to_all
 from .ernie_router import TopKRouter

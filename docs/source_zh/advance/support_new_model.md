@@ -22,7 +22,7 @@ num_attention_heads: 64
 ```
 
 ### 1.2 注册模型名称
-在 loongforge/utils/config_map.py 的 MODEL_CONFIG_REGISTRY 中注册，之后即可直接通过名称引用模型（如 `llama3-70b`）。
+在 loongforge/models/catalog.py 的 MODEL_CONFIG_REGISTRY 中注册，之后即可直接通过名称引用模型（如 `llama3-70b`）。
 
 ```python
 MODEL_CONFIG_REGISTRY = {
@@ -39,7 +39,7 @@ VLM 可以看作 **ViT + 投影层 + LLM**。添加新 VLM 模型时，LLM 部�
 
     1. **准备组件配置**：定义 LLM 基座、视觉编码器和投影层配置。
     2. **创建组合配置**：编写 VLM 的顶层 YAML 配置文件。
-    3. **注册模型名称**：在 config_map.py 中注册新模型。
+    3. **注册模型名称**：在 catalog.py 中注册新模型。
 
 ### 2.1 视觉编码器（ViT）配置
 定义 Vision Transformer 参数。
@@ -112,7 +112,7 @@ model:
 ```
 
 ### 2.4 模型注册
-你需要在 loongforge/utils/config_map.py 中注册。打开 loongforge/utils/config_map.py 并向 MODEL_CONFIG_REGISTRY 字典中添加条目：
+你需要在 loongforge/models/catalog.py 中注册。打开 loongforge/models/catalog.py 并向 MODEL_CONFIG_REGISTRY 字典中添加条目：
 
 ```python
 MODEL_CONFIG_REGISTRY = {

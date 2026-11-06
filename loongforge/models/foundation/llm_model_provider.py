@@ -11,7 +11,7 @@ from typing import Optional
 from contextlib import nullcontext
 from transformers import AutoModel
 
-from loongforge.utils import (
+from loongforge.engines.megatron import (
     get_args, get_model_config, print_rank_0
 )
 from loongforge.models.common import BaseMegatronLanguageModule

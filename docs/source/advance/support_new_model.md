@@ -22,7 +22,7 @@ num_attention_heads: 64
 ```
 
 ### 1.2 Register Model Name
-Register in the MODEL_CONFIG_REGISTRY in loongforge/utils/config_map.py, then you can reference the model directly by name (e.g., `llama3-70b`).
+Register in the MODEL_CONFIG_REGISTRY in loongforge/models/catalog.py, then you can reference the model directly by name (e.g., `llama3-70b`).
 
 ```python
 MODEL_CONFIG_REGISTRY = {
@@ -39,7 +39,7 @@ VLM can be viewed as **ViT + Projector + LLM**. When adding new VLM models, the 
 
     1. **Prepare component configurations**: Define LLM base, vision encoder, and projector configurations.
     2. **Create combination configuration**: Write the top-level YAML configuration file for VLM.
-    3. **Register model name**: Register the new model in config_map.py.
+    3. **Register model name**: Register the new model in catalog.py.
 
 ### 2.1 Vision Encoder (ViT) Configuration
 Define Vision Transformer parameters.
@@ -112,7 +112,7 @@ model:
 ```
 
 ### 2.4 Model Registration
-You need to register in loongforge/utils/config_map.py. Open loongforge/utils/config_map.py and add entries to the MODEL_CONFIG_REGISTRY dictionary:
+You need to register in loongforge/models/catalog.py. Open loongforge/models/catalog.py and add entries to the MODEL_CONFIG_REGISTRY dictionary:
 
 ```python
 MODEL_CONFIG_REGISTRY = {

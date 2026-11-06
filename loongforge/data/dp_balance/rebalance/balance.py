@@ -23,7 +23,7 @@ from megatron.core import mpu
 import torch.distributed as dist
 
 from megatron.training import get_args
-from loongforge.utils import constants
+from loongforge.models import catalog as constants
 from loongforge.data.dp_balance.rebalance.pack import (
     # intern_vl
     InternVLDataSample,
@@ -131,7 +131,7 @@ def get_dp_group_by_device(tensor):
     Returns:
         The data parallel group for the tensor's device.
     """
-    from loongforge.train.initialize import change_parallel_state
+    from loongforge.engines.megatron.initialize import change_parallel_state
 
     # if tensor is on CUDA, it's for vit balance
     if tensor.is_cuda:

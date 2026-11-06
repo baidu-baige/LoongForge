@@ -17,8 +17,8 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-import loongforge.embodied.distributed.checkpoint as ck
-from loongforge.embodied.distributed import DistributedContext
+import loongforge.engines.torch.distributed.checkpoint as ck
+from loongforge.engines.torch.distributed import DistributedContext
 
 
 @pytest.fixture(autouse=True)

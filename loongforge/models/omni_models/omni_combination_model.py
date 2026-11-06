@@ -14,7 +14,7 @@ from .utils import get_inputs_on_this_cp_rank
 from transformers.models.auto.modeling_auto import AutoModel
 from loongforge.models.common import BaseMegatronModule, BaseModelConfig
 from megatron.core import InferenceParams, tensor_parallel
-from loongforge.train.initialize import (
+from loongforge.engines.megatron.initialize import (
     mpu,
     get_encoder_dp_size,
 )
@@ -452,12 +452,12 @@ class OmniCombinationModel(BaseMegatronModule):
                     deepstack_visual_embeds.append(tmp_deepstack_visual_embeds)
 
         if self.add_encoder and mpu.is_pipeline_first_stage() and enable_full_hetero_dp:
-            from loongforge.train.pretrain.pretrain_vlm import (
+            from loongforge.training.vlm.pretrain_vlm import (
                 get_grad_list, get_embedding_list,
                 get_visual_pos_masks_list, get_deepstack_visual_embeds_list,
                 get_deepstack_grad_list, get_cpu_offload_manager,
             )
-            from loongforge.train.initialize import get_model_size
+            from loongforge.engines.megatron.initialize import get_model_size
             group = mpu.get_tensor_model_parallel_group()
             src_rank = torch.distributed.get_global_rank(group, 0)
             local_rank = torch.distributed.get_rank()
@@ -473,7 +473,7 @@ class OmniCombinationModel(BaseMegatronModule):
 
             # Reload embedding from CPU if offloaded
             if _offload_mgr.enabled and local_rank == src_rank:
-                from loongforge.train.full_hetero_cpu_offload import reload_list_item
+                from loongforge.engines.megatron.full_hetero_cpu_offload import reload_list_item
                 reload_list_item(
                     _offload_mgr, embedding_list[round_num], inner_num,
                     f"emb_r{round_num}"
@@ -520,7 +520,7 @@ class OmniCombinationModel(BaseMegatronModule):
             if self.vit_contexts[round_num]["local_visual_pos_masks"] is not None:
                 # Reload visual_pos_masks from CPU if offloaded
                 if _offload_mgr.enabled and local_rank == src_rank:
-                    from loongforge.train.full_hetero_cpu_offload import reload_list_item
+                    from loongforge.engines.megatron.full_hetero_cpu_offload import reload_list_item
                     reload_list_item(
                         _offload_mgr, visual_pos_masks_list[round_num], inner_num,
                         f"vpm_r{round_num}"
@@ -549,7 +549,7 @@ class OmniCombinationModel(BaseMegatronModule):
                 for i in range(len(ref_embeds)):
                     # Reload deepstack embed from CPU if offloaded
                     if _offload_mgr.enabled and local_rank == src_rank:
-                        from loongforge.train.full_hetero_cpu_offload import reload_list_item
+                        from loongforge.engines.megatron.full_hetero_cpu_offload import reload_list_item
                         reload_list_item(
                             _offload_mgr, deepstack_visual_embeds_list[round_num][i],
                             inner_num, f"ds_r{round_num}_l{i}"
