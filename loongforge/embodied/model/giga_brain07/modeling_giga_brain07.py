@@ -705,6 +705,25 @@ class GigaBrain07Policy(ModelMixin, ConfigMixin):
             return self._train_step(args[0])
         return self._forward_network(*args, **kwargs)
 
+    def on_train_begin(self, ctx=None) -> None:
+        """FinetuneTrainer hook, called once after distributed wrapping.
+
+        Applies the opt-in ``model.decoder_kv_slice`` and regional
+        ``model.compile_model`` patches (both no-ops by default). The typed
+        model config is attached by ``build_giga_brain07_policy``.
+        """
+        model_cfg = getattr(self, "_train_model_cfg", None)
+        if model_cfg is None:
+            return
+        from loongforge.embodied.model.giga_brain07.train_hooks import (
+            apply_decoder_kv_slice,
+            apply_regional_compile,
+        )
+
+        is_main = bool(getattr(ctx, "is_main", True))
+        apply_decoder_kv_slice(self, model_cfg, is_main)
+        apply_regional_compile(self, model_cfg, is_main)
+
     def _train_step(self, batch):
         """Flow-matching training step: assemble noisy inputs, run the network,
         and compute the giga loss. Moved verbatim from the former
@@ -2211,6 +2230,8 @@ def build_giga_brain07_policy(model_cfg) -> "GigaBrain07Policy":
         model._num_embodiments = int(
             getattr(cfg, "num_embodiments", model_cfg.num_embodiments)
         )
+    # Read back by on_train_begin (kv-slice / regional compile switches).
+    model._train_model_cfg = model_cfg
     return model
 
 

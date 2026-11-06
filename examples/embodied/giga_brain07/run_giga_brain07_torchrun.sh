@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Copyright 2026 The LoongForge Authors.
-# SPDX-License-Identifier: Apache-2.0
 # ═══════════════════════════════════════════════════════════════
 # run_giga_brain07_torchrun_8gpu.sh — 8×A800 FSDP2 variant for perf/bs sweep
 # Derived from run_giga_brain07_torchrun.sh (kept intact). Adds:
@@ -27,16 +25,16 @@ export GB0_DATA_PATH_V30="${GB0_DATA_PATH_V30:-/workspace/data/agibot-world/AgiB
 export GB0_NORM_STATS="${GB0_NORM_STATS:-/workspace/data/agibot-world/AgiBotWorldLerobot/agibot_a2d_norm_stats.json}"
 
 OUTPUT_DIR="${OUTPUT_DIR:-/workspace/LoongForge/experiments/giga_brain07_planB/sweep8gpu}"
-GB0_COMPILE=decoder,vision GB0_KV_SLICE=1 GB0_BATCH_SIZE=96 \
-GB0_MAX_STEPS="${GB0_MAX_STEPS:-12}"
+GB0_BATCH_SIZE="${GB0_BATCH_SIZE:-80}"
+GB0_COMPILE="${GB0_COMPILE-decoder,vision}"
+GB0_KV_SLICE="${GB0_KV_SLICE-1}"
+GB0_MAX_STEPS="${GB0_MAX_STEPS:-100}"
 GB0_NUM_WORKERS="${GB0_NUM_WORKERS:-8}"
 GB0_ENABLE_IMAGE_AUG="${GB0_ENABLE_IMAGE_AUG:-false}"
-GB0_BATCH_SIZE="${GB0_BATCH_SIZE:-10}"
 GB0_DTYPE="${GB0_DTYPE:-float32}"
 GB0_AC_PATTERNS="${GB0_AC_PATTERNS:-paligemma_with_expert.layers.0,paligemma_with_expert.layers.1,paligemma_with_expert.layers.2,paligemma_with_expert.layers.3,paligemma_with_expert.layers.4,paligemma_with_expert.layers.5,paligemma_with_expert.layers.6,paligemma_with_expert.layers.7,paligemma_with_expert.layers.8,paligemma_with_expert.layers.9,paligemma_with_expert.layers.10,paligemma_with_expert.layers.11,paligemma_with_expert.layers.12,paligemma_with_expert.layers.13,paligemma_with_expert.layers.14,paligemma_with_expert.layers.15,paligemma_with_expert.layers.16,paligemma_with_expert.layers.17,paligemma_with_expert.layers.18,paligemma_with_expert.layers.19,paligemma_with_expert.layers.20,paligemma_with_expert.layers.21,paligemma_with_expert.layers.22,paligemma_with_expert.layers.23,paligemma_with_expert.layers.24,paligemma_with_expert.layers.25,paligemma_with_expert.vision_tower.encoder.layers.*}"
 GB0_FSDP_WRAP="${GB0_FSDP_WRAP:-}"
 GB0_AC_SKIP="${GB0_AC_SKIP:-}"
-GB0_COMPILE="${GB0_COMPILE:-}"
 GB0_COMPILE_MODE="${GB0_COMPILE_MODE:-default}"
 GB0_COMPILE_DYNAMIC="${GB0_COMPILE_DYNAMIC:-false}"
 GB0_COMPILE_FULLGRAPH="${GB0_COMPILE_FULLGRAPH:-false}"
@@ -46,7 +44,6 @@ GB0_COMPILE_FULLGRAPH="${GB0_COMPILE_FULLGRAPH:-false}"
 GB0_COMPILE_EMULATE_CASTS="${GB0_COMPILE_EMULATE_CASTS:-1}"
 GB0_COMPILE_ARGS=()
 # Measured best fp32 throughput config (8xA800, 2026-10-27, ~73 samples/s vs 31.7 default):
-GB0_KV_SLICE="${GB0_KV_SLICE:-}"
 if [ -n "$GB0_KV_SLICE" ] && [ "$GB0_KV_SLICE" != 0 ]; then
     GB0_COMPILE_ARGS+=(model.decoder_kv_slice=true)
 fi
@@ -94,7 +91,9 @@ echo "════════════════════════�
 PYTHONPATH="$PYTHONPATH" torchrun "${DISTRIBUTED_ARGS[@]}" \
     "$LOONGFORGE_PATH/loongforge/embodied/train.py" \
     --model-name giga_brain07 \
-    --trainer-type GigaBrain07Trainer \
+    --trainer-type FinetuneTrainer \
+    --dataset-format lerobot_datasets \
+    --dataset-strategy giga_brain07 \
     --train-iters "$GB0_MAX_STEPS" \
     --per-device-batch-size "$GB0_BATCH_SIZE" \
     --gradient-accumulation-steps 1 \
@@ -107,6 +106,11 @@ PYTHONPATH="$PYTHONPATH" torchrun "${DISTRIBUTED_ARGS[@]}" \
     --dtype "$GB0_DTYPE" \
     $GB0_EXTRA_ARGS \
     --optimizer AdamW \
+    --lr-base 2.5e-5 \
+    --adam-beta1 0.9 \
+    --adam-beta2 0.95 \
+    --adam-eps 1e-8 \
+    --weight-decay 1e-10 \
     --lr-decay-style giga_warmup_cosine \
     --lr-warmup-iters 10 \
     --lr-decay-iters 300 \
@@ -116,6 +120,7 @@ PYTHONPATH="$PYTHONPATH" torchrun "${DISTRIBUTED_ARGS[@]}" \
     --save-interval 0 \
     --log-interval 1 \
     --num-workers "$GB0_NUM_WORKERS" \
+    --dataloader-prefetch-factor 4 \
     --wandb-mode disabled \
     --dataset-path "$GB0_DATA_PATH_V30" \
     --tokenizer-path "$GB0_TOKENIZER" \

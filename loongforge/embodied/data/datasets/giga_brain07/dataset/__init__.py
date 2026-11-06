@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """giga_brain07 dataset-support package: hosts the shared ``utils`` helpers and
-lazily re-exports the relocated dataset reader / collator / sampler under their
+lazily re-exports the relocated dataset reader / collator under their
 original names so existing imports keep resolving to the same objects."""
 
 __version__ = '1.1.0'
@@ -51,13 +51,10 @@ _READER_NAMES = frozenset(
         "LeRobotDataset",
     }
 )
-_SAMPLER_NAMES = frozenset({"GigaBrainSampler"})
-
 __all__ = [
     "GigaBrainCollator",
     "is_lerobot_available",
     *sorted(_READER_NAMES),
-    *sorted(_SAMPLER_NAMES),
 ]
 
 
@@ -80,8 +77,4 @@ def __getattr__(name):
             raise AttributeError(name)
         module = importlib.import_module(_PKG + ".transforms.giga_brain_lerobot_dataset")
         return getattr(module, name)
-    if name in _SAMPLER_NAMES:
-        # GigaBrainSampler now lives at the giga_brain07 package root
-        # (``giga_brain07.sampler``); re-exported here for backward compatibility.
-        return getattr(importlib.import_module(_PKG + ".sampler"), name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

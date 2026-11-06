@@ -42,6 +42,9 @@ class GigaBrain07ModelConfig:
     llm_loss_weight: float = 0.0
 
     # ── Optimizer hyper-params (giga: AdamW betas(0.9,0.95) eps1e-8 wd1e-10) ──
+    # Reference values only: FinetuneTrainer builds the optimizer from the CLI
+    # (--lr-base / --adam-beta1/2 / --adam-eps / --weight-decay); the launcher
+    # passes these same numbers.
     lr: float = 2.5e-5
     adam_beta1: float = 0.9
     adam_beta2: float = 0.95
@@ -63,8 +66,14 @@ class GigaBrain07ModelConfig:
     enable_multi_flow_samples: bool = False
     flow_matching_batch_mul: int = 4
 
+    # giga runs the outer step without autocast (mixed_precision="no"; the
+    # vendored decoder enters its own bf16 autocast). Tells FinetuneTrainer to
+    # skip its torch.autocast(--dtype) wrapper around model(batch).
+    disable_train_autocast: bool = True
+
     # ── [compile] Opt-in regional torch.compile (default OFF = eager, unchanged) ──
-    # Applied by GigaBrain07Trainer AFTER AC + FSDP2 wrapping by replacing the
+    # Applied by GigaBrain07Policy.on_train_begin (train_hooks.py) AFTER AC +
+    # FSDP2 wrapping by replacing the
     # *inner* module's instance ``forward`` (so FSDP2 hooks and the AC
     # CheckpointWrapper stay eager around the compiled region).
     # compile_scope: comma list of regions:

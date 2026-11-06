@@ -7,10 +7,12 @@ Route B: the actual dataset + preprocessing are the *giga originals*
 (``giga_datasets.LeRobotDataset`` + ``GigaBrain07Transform``). This dataclass
 carries every value needed to reconstruct the giga ``data_or_config`` +
 ``transform`` dicts exactly as in
-``configs/giga_brain_0_07_a2d_finetune.py`` (A2D v3.0 finetune). The
-``GigaBrain07Trainer._build_dataloaders`` override reads these fields and hands
-them to the vendored giga ``load_dataset`` / ``build_transform`` so loss stays
-aligned with the giga-brain-0 baseline.
+``configs/giga_brain_0_07_a2d_finetune.py`` (A2D v3.0 finetune). The shared
+FinetuneTrainer dataloader (``dataset_strategy=giga_brain07`` + the registered
+giga_brain07 transform builder / preprocessor / sampler) reads these fields so
+loss stays aligned with the giga-brain-0 baseline. Loader knobs (batch size,
+workers, prefetch, shuffle, seed) come from the CLI training args instead of the
+``batch_size_per_gpu`` .. ``sampler_seed`` fields below.
 
 Frozen dataclass; defaults are the single source of truth and are overridable
 by the YAML ``data:`` section (paths via oc.env for env-driven runs).
