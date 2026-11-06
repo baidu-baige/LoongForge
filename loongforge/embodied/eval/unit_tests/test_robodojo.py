@@ -247,7 +247,8 @@ def test_bridge_episode_boundaries_and_payload(monkeypatch, tmp_path):
     model.get_action(_obs(2))
     assert model.client.resets[-1] == "robodojo/stack_bowls/seed1/ep0001"
     assert model.client.calls[-1]["episode_step"] == 0
-    assert (tmp_path / "trace" / "ep0000.json").is_file()
+    lines = (tmp_path / "trace" / "ep0000.jsonl").read_text(encoding="utf-8").splitlines()
+    assert [json.loads(line)["step"] for line in lines] == [0, 1]
 
 
 def test_bridge_update_obs_then_get_action(monkeypatch):

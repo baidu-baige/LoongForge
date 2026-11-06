@@ -154,6 +154,10 @@ class RoboDojoPolicyModel:
         self.payload_builder.note_env_action(decoded[0])
         chunk_end = self.schedule.is_chunk_end(step)
         self._record(step, instruction, raw[0], action, chunk_end, data, time.perf_counter() - start)
+        if chunk_end:
+            # Flush per chunk: the policy server is killed after the last episode, so a
+            # flush on the next reset alone would drop the final episode's trace.
+            self._flush_trace()
         self.episode_step += 1
         self._obs = None
         return {"actions": [action], "chunk_end": chunk_end}
@@ -192,13 +196,15 @@ class RoboDojoPolicyModel:
         )
 
     def _flush_trace(self) -> None:
-        # Written once per episode (at the next reset / trial end), not per step.
+        # Appends the buffered steps (one JSON line each) to ep<NNNN>.jsonl at every
+        # chunk end and at reset / trial end.
         if self.trace_dir is None or not self._trace or self.episode_id is None:
             return
         self.trace_dir.mkdir(parents=True, exist_ok=True)
-        path = self.trace_dir / f"ep{self.episode_index:04d}.json"
-        payload = {"benchmark": "robodojo", "episode_id": self.episode_id, "steps": self._trace}
-        path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        path = self.trace_dir / f"ep{self.episode_index:04d}.jsonl"
+        with path.open("a", encoding="utf-8") as handle:
+            for record in self._trace:
+                handle.write(json.dumps({"episode_id": self.episode_id, **record}, ensure_ascii=False) + "\n")
         self._trace = []
 
 
