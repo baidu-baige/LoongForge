@@ -161,29 +161,29 @@
 * **评测结果** —— 各模型在 **LIBERO / RoboTwin / SimplerEnv** 上的成功率与对应开源基线持平：
 
 <table width="100%">
-<thead><tr><th align="left" width="200">模型</th><th align="left" width="200">评测基准</th><th align="left" width="200">任务集</th><th width="200"><div align="right">基线</div></th><th width="200"><div align="right">LoongForge</div></th></tr></thead>
+<thead><tr><th align="left" width="200">模型</th><th align="left" width="200">评测基准</th><th align="left" width="200">任务集</th><th align="left" width="200">基线</th><th align="left" width="200">LoongForge</th></tr></thead>
 <tbody>
-<tr><td rowspan="6">Pi0.5</td><td rowspan="5">LIBERO</td><td>Spatial</td><td align="right">97.0%</td><td align="right">99.6%</td></tr>
-<tr><td>Object</td><td align="right">99.0%</td><td align="right">99.6%</td></tr>
-<tr><td>Goal</td><td align="right">98.0%</td><td align="right">98.8%</td></tr>
-<tr><td>Long</td><td align="right">96.0%</td><td align="right">97.0%</td></tr>
-<tr><td>平均</td><td align="right">97.50%</td><td align="right">98.75%</td></tr>
-<tr><td>RoboTwin</td><td>Easy</td><td align="right">67.91%</td><td align="right">77.56%</td></tr>
-<tr><td rowspan="7">GR00T N1.7</td><td rowspan="5">LIBERO</td><td>Spatial</td><td align="right">97.65%</td><td align="right">98.0%</td></tr>
-<tr><td>Object</td><td align="right">98.45%</td><td align="right">98.5%</td></tr>
-<tr><td>Goal</td><td align="right">97.50%</td><td align="right">96.5%</td></tr>
-<tr><td>Long</td><td align="right">94.35%</td><td align="right">95.5%</td></tr>
-<tr><td>平均</td><td align="right">96.99%</td><td align="right">97.13%</td></tr>
-<tr><td rowspan="2">SimplerEnv</td><td>Bridge</td><td align="right">62.3%</td><td align="right">62.6%</td></tr>
-<tr><td>Fractal</td><td align="right">72.5%</td><td align="right">72.1%</td></tr>
-<tr><td rowspan="5">FastWAM</td><td rowspan="5">LIBERO</td><td>Spatial</td><td align="right">98.2%</td><td align="right">97.0%</td></tr>
-<tr><td>Object</td><td align="right">99.2%</td><td align="right">99.6%</td></tr>
-<tr><td>Goal</td><td align="right">97.8%</td><td align="right">97.2%</td></tr>
-<tr><td>Long</td><td align="right">95.8%</td><td align="right">94.2%</td></tr>
-<tr><td>平均</td><td align="right">97.75%</td><td align="right">97.00%</td></tr>
-<tr><td rowspan="3">LingBot-VA</td><td>LIBERO</td><td>Long</td><td align="right">78.8%</td><td align="right">84.6%</td></tr>
-<tr><td rowspan="2">RoboTwin</td><td>Easy</td><td align="right">86.1%</td><td align="right">87.6%</td></tr>
-<tr><td>Hard</td><td align="right">85.1%</td><td align="right">85.7%</td></tr>
+<tr><td rowspan="6">Pi0.5</td><td rowspan="5">LIBERO</td><td>Spatial</td><td>97.0%</td><td>99.6%</td></tr>
+<tr><td>Object</td><td>99.0%</td><td>99.6%</td></tr>
+<tr><td>Goal</td><td>98.0%</td><td>98.8%</td></tr>
+<tr><td>Long</td><td>96.0%</td><td>97.0%</td></tr>
+<tr><td>平均</td><td>97.50%</td><td>98.75%</td></tr>
+<tr><td>RoboTwin</td><td>Easy</td><td>67.91%</td><td>77.56%</td></tr>
+<tr><td rowspan="7">GR00T N1.7</td><td rowspan="5">LIBERO</td><td>Spatial</td><td>97.65%</td><td>98.0%</td></tr>
+<tr><td>Object</td><td>98.45%</td><td>98.5%</td></tr>
+<tr><td>Goal</td><td>97.50%</td><td>96.5%</td></tr>
+<tr><td>Long</td><td>94.35%</td><td>95.5%</td></tr>
+<tr><td>平均</td><td>96.99%</td><td>97.13%</td></tr>
+<tr><td rowspan="2">SimplerEnv</td><td>Bridge</td><td>62.3%</td><td>62.6%</td></tr>
+<tr><td>Fractal</td><td>72.5%</td><td>72.1%</td></tr>
+<tr><td rowspan="5">FastWAM</td><td rowspan="5">LIBERO</td><td>Spatial</td><td>98.2%</td><td>97.0%</td></tr>
+<tr><td>Object</td><td>99.2%</td><td>99.6%</td></tr>
+<tr><td>Goal</td><td>97.8%</td><td>97.2%</td></tr>
+<tr><td>Long</td><td>95.8%</td><td>94.2%</td></tr>
+<tr><td>平均</td><td>97.75%</td><td>97.00%</td></tr>
+<tr><td rowspan="3">LingBot-VA</td><td>LIBERO</td><td>Long</td><td>78.8%</td><td>84.6%</td></tr>
+<tr><td rowspan="2">RoboTwin</td><td>Easy</td><td>86.1%</td><td>87.6%</td></tr>
+<tr><td>Hard</td><td>85.1%</td><td>85.7%</td></tr>
 </tbody>
 </table>
 
