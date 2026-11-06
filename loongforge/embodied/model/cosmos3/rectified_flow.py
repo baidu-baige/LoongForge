@@ -170,13 +170,13 @@ class RectifiedFlow:
     ):
         """Cosmos-equivalent analytic shift formula.
 
-        timesteps = shift * (1 - t_raw) / (1 + (shift - 1) * (1 - t_raw)) * max_timestep
-        sigmas    = timesteps / max_timestep
+        The shift is applied to the raw sampled time, without inversion:
+        sigmas    = shift * t_raw / (1 + (shift - 1) * t_raw)
+        timesteps = sigmas * max_timestep
         """
         if tensor_kwargs is None:
             tensor_kwargs = {"device": t_raw.device, "dtype": torch.float32}
-        t_raw = t_raw.to(**tensor_kwargs)
-        t = 1.0 - t_raw  # invert (cosmos shifts the inverted time)
-        timesteps = shift * t / (1.0 + (shift - 1.0) * t) * max_timestep  # [B]
-        sigmas = timesteps / max_timestep  # [B]
+        t = t_raw.to(**tensor_kwargs)
+        sigmas = shift * t / (1 + (shift - 1) * t)  # [B]
+        timesteps = sigmas * max_timestep  # [B]
         return timesteps, sigmas

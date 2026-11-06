@@ -15,7 +15,13 @@ https://github.com/2toinf/X-VLA/blob/main/models/transformer.py
 """
 
 import torch
+import torch.nn.functional as F
+from packaging.version import Version
 from torch import nn
+
+# cosmos-framework: on torch >= 2.10 bf16 CUDA inputs go through one public
+# grouped matrix multiplication instead of gather + bmm.
+_USE_PUBLIC_GROUPED_MM = Version(torch.__version__.split("+")[0]).release[:2] >= (2, 10)
 
 
 class DomainAwareLinear(nn.Module):
@@ -63,6 +69,9 @@ class DomainAwareLinear(nn.Module):
         """
         B = domain_id.shape[0]
 
+        if _USE_PUBLIC_GROUPED_MM and x.numel() > 0 and x.is_cuda and x.dtype == torch.bfloat16:
+            return self._grouped_linear(x, domain_id)
+
         # Retrieve per-sample weights: [B, input_size, output_size]
         W = self.fc(domain_id).view(B, self.input_size, self.output_size)  # [B,input_size,output_size]
 
@@ -80,3 +89,26 @@ class DomainAwareLinear(nn.Module):
             return torch.bmm(x, W) + b.unsqueeze(
                 1
             )  # [B,T,input_size] @ [B,input_size,output_size] -> [B,T,output_size]
+
+    def _grouped_linear(self, x: torch.Tensor, domain_id: torch.LongTensor) -> torch.Tensor:
+        """Apply each domain projection with one public grouped matrix multiplication."""
+        flat_x = x.flatten(0, -2)
+        tokens_per_sample = flat_x.shape[0] // domain_id.shape[0]
+        flat_domain_id = domain_id.view(-1, 1).expand(-1, tokens_per_sample).reshape(-1)
+        permutation = torch.argsort(flat_domain_id)
+        sorted_x = torch.gather(flat_x, 0, permutation[:, None].expand(-1, self.input_size))
+
+        counts = torch.histc(
+            flat_domain_id.to(torch.int32), bins=self.num_domains, min=0, max=self.num_domains - 1
+        ).to(torch.int32)
+        offsets = torch.cumsum(counts, dim=0, dtype=torch.int32)
+        weight = self.fc.weight.view(self.num_domains, self.input_size, self.output_size)
+        sorted_output = F.grouped_mm(sorted_x, weight, offs=offsets)
+        output = torch.scatter(
+            torch.empty_like(sorted_output),
+            0,
+            permutation[:, None].expand(-1, self.output_size),
+            sorted_output,
+        )
+        output = output + self.bias.weight.index_select(0, flat_domain_id)
+        return output.view(*x.shape[:-1], self.output_size)

@@ -231,7 +231,14 @@ class BaseTrainer(ABC):
                 start_msg=f"materializing meta tensors on {self.ctx.device}",
                 end_msg="materialized in {elapsed}",
             ):
-                self.model.materialize(self.ctx.device, training_args.dtype)
+                # Keep the --fsdp-original-param-dtype storage (e.g. fp32 masters)
+                # instead of re-casting the materialized params to --dtype.
+                storage_dtype = None
+                if training_args.fsdp_original_param_dtype is not None:
+                    from loongforge.embodied.train.training_args import parse_dtype_from_str
+
+                    storage_dtype = parse_dtype_from_str(training_args.fsdp_original_param_dtype)
+                self.model.materialize(self.ctx.device, training_args.dtype, storage_dtype=storage_dtype)
             if training_args.pretrained_checkpoint:
                 with log_stage(
                     "ckpt",
