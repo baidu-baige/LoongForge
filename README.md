@@ -161,14 +161,7 @@ Since optimal training strategies differ across model families and scales, Loong
 * **Evaluation Results** — Success rates on par with the corresponding open-source baselines, measured per model across **LIBERO / RoboTwin / SimplerEnv**:
 
 <table width="100%">
-<colgroup>
-<col width="20%">
-<col width="20%">
-<col width="20%">
-<col width="20%">
-<col width="20%">
-</colgroup>
-<thead><tr><th align="left" width="20%">Model</th><th align="left" width="20%">Benchmark</th><th align="left" width="20%">Suite</th><th width="20%"><div align="right">Baseline</div></th><th width="20%"><div align="right">LoongForge</div></th></tr></thead>
+<thead><tr><th align="left" width="200">Model</th><th align="left" width="200">Benchmark</th><th align="left" width="200">Suite</th><th width="200"><div align="right">Baseline</div></th><th width="200"><div align="right">LoongForge</div></th></tr></thead>
 <tbody>
 <tr><td rowspan="6">Pi0.5</td><td rowspan="5">LIBERO</td><td>Spatial</td><td align="right">97.0%</td><td align="right">99.6%</td></tr>
 <tr><td>Object</td><td align="right">99.0%</td><td align="right">99.6%</td></tr>
