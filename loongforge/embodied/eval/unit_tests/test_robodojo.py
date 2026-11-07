@@ -146,16 +146,17 @@ class _FakeEnv:
 
 
 class _ChunkClient:
-    """Official LingBot_VA style: get_action returns a whole chunk (12, then 24)."""
+    """Official adapter style: get_action returns a whole chunk (``first``, then ``rest``)."""
 
-    def __init__(self):
+    def __init__(self, first=12, rest=24):
         self.next_i = 0
         self.first = True
+        self.lengths = (first, rest)
 
     def call(self, func_name, obs=None):
         if func_name != "get_action":
             return None
-        n = 12 if self.first else 24
+        n = self.lengths[0] if self.first else self.lengths[1]
         self.first = False
         chunk = [{"i": self.next_i + k} for k in range(n)]
         self.next_i += n
@@ -165,8 +166,8 @@ class _ChunkClient:
 class _StepClient:
     """LoongForge bridge style: one action per call plus the chunk_end flag."""
 
-    def __init__(self):
-        self.schedule = ChunkSchedule(12, 24)
+    def __init__(self, first=12, rest=24):
+        self.schedule = ChunkSchedule(first, rest)
         self.i = 0
 
     def call(self, func_name, obs=None):
@@ -363,5 +364,114 @@ def test_example_configs_match_official_lingbot_va_settings():
 
 
 def test_bridge_wiring_is_known():
-    assert set(robodojo_policy._BRIDGE_WIRING) == {"lingbot_va_joint30"}
+    assert set(robodojo_policy._BRIDGE_WIRING) == {"lingbot_va_joint30", "xvla_ee20"}
     assert json.loads(json.dumps(LINGBOT_VA_JOINT_CHANNELS)) == LINGBOT_VA_JOINT_CHANNELS
+
+
+# ── X-VLA (official XPolicyLab/policy/X_VLA) ─────────────────────────────
+def _official_xvla_funcs():
+    """Pure helpers of the official X_VLA adapter, taken from source (no torch / xvla imports)."""
+    import ast
+
+    model_py = _ROBODOJO_ROOT / "XPolicyLab" / "policy" / "X_VLA" / "model.py"
+    if not model_py.is_file():
+        pytest.skip("set ROBODOJO_ROOT to a RoboDojo checkout for the X-VLA parity check")
+    from scipy.spatial.transform import Rotation
+
+    wanted = {"quat_to_rotate6d", "rotate6d_to_quat", "build_xvla_proprio", "action_chunk_to_ee_dict_list"}
+    tree = ast.parse(model_py.read_text())
+    nodes = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in wanted]
+    ns = {"np": np, "R": Rotation, "Any": object}
+    exec(compile(ast.Module(nodes, []), str(model_py), "exec"), ns)
+    return ns
+
+
+def _ee_obs(seed: int) -> dict:
+    rng = np.random.default_rng(seed)
+    obs = _obs(seed)
+    for side in ("left", "right"):
+        quat = rng.normal(size=4)
+        obs["state"][f"{side}_ee_pose"] = np.concatenate([rng.normal(size=3), quat / np.linalg.norm(quat)])
+        obs["state"][f"{side}_ee_joint_state"] = np.array([rng.uniform()])
+    return obs
+
+
+@pytest.mark.parametrize("seed", range(8))
+def test_xvla_robodojo_proprio_matches_official(seed):
+    from loongforge.embodied.eval.payload_builders.xvla import build_robodojo_proprio
+
+    official = _official_xvla_funcs()
+    obs = _ee_obs(seed)
+    canonical = RoboDojoAdapter(action_space="ee20").obs_to_canonical(obs, {"instruction": "x"})
+    ours = build_robodojo_proprio(canonical["state_raw"])
+    ref = official["build_xvla_proprio"](obs)
+    assert ours.dtype == np.float32 and ours.shape == (20,)
+    np.testing.assert_array_equal(ours, ref)
+
+
+@pytest.mark.parametrize("seed", range(8))
+def test_xvla_ee20_action_dict_matches_official(seed):
+    official = _official_xvla_funcs()
+    chunk = np.random.default_rng(100 + seed).normal(size=(30, 20)).astype(np.float32)
+    ref = official["action_chunk_to_ee_dict_list"](chunk)
+    adapter = RoboDojoAdapter(action_space="ee20")
+    for row, expected in zip(chunk, ref):
+        ours = adapter.action_from_canonical(row)
+        assert set(ours) == set(expected)
+        for key in expected:
+            np.testing.assert_array_equal(np.asarray(ours[key], dtype=np.float32), expected[key])
+
+
+@pytest.mark.parametrize("n_actions", [5, 30, 31, 61, 100])
+def test_plugin_deploy_replays_official_xvla_env_call_order(n_actions):
+    ours = _load_module(_PLUGIN_DIR / "deploy.py", "lf_robodojo_deploy")
+    env_ours = _FakeEnv(n_actions)
+    ours.eval_one_episode(env_ours, _StepClient(30, 30))
+
+    official_path = _ROBODOJO_ROOT / "XPolicyLab" / "policy" / "X_VLA" / "deploy.py"
+    if not official_path.is_file():
+        pytest.skip("set ROBODOJO_ROOT to a RoboDojo checkout for the parity check")
+    official = _load_module(official_path, "official_xvla_deploy")
+    env_official = _FakeEnv(n_actions)
+    official.eval_one_episode(env_official, _ChunkClient(30, 30))
+    assert env_ours.calls == env_official.calls
+    assert env_ours.taken == n_actions
+
+
+class _FakeXVLAClient(_FakePolicyClient):
+    def predict_action(self, **payload):
+        self.calls.append(payload)
+        return {"ok": True, "data": {"actions": [np.linspace(-1, 1, 20, dtype=np.float32).tolist()]}}
+
+
+def test_bridge_xvla_payload_and_ee_action(monkeypatch):
+    import loongforge.embodied.eval.transport as transport
+
+    monkeypatch.setattr(transport, "PolicyClient", _FakeXVLAClient)
+    model = RoboDojoPolicyModel(
+        {"task_name": "build_tower", "action_bridge": "xvla_ee20", "first_chunk_len": 30, "chunk_len": 30, "lf_port": 1}
+    )
+    assert not model.disable_action_cache  # one inference per chunk, the server cache serves the rest
+    model.reset()
+    outs = [model.get_action(_ee_obs(i)) for i in range(31)]
+    call = model.client.calls[0]
+    assert len(call["images"]) == 1 and call["images"][0] is not None  # head camera only
+    assert call["domain_id"] == 0 and np.asarray(call["state"]).shape == (20,)
+    assert [i for i, out in enumerate(outs) if out["chunk_end"]] == [29]
+    action = outs[0]["actions"][0]
+    assert set(action) == {"left_ee_pose", "left_ee_joint_state", "right_ee_pose", "right_ee_joint_state"}
+    assert len(action["left_ee_pose"]) == 7 and np.linalg.norm(action["left_ee_pose"][3:]) == pytest.approx(1.0, abs=1e-5)
+
+
+def test_example_xvla_config_matches_official_adapter():
+    cfg = yaml.safe_load(
+        (_REPO_ROOT / "examples/embodied/xvla/eval/configs/robodojo/put_bottles_into_dustbin.yaml").read_text()
+    )
+    assert cfg["benchmark"]["action_bridge"] == "xvla_ee20"
+    assert cfg["benchmark"]["first_chunk_len"] == cfg["benchmark"]["chunk_len"] == cfg["model"]["num_actions"] == 30
+    assert cfg["server"]["use_bf16"] is False and cfg["server"]["chunk_execute_steps"] < 0
+    deploy = _ROBODOJO_ROOT / "XPolicyLab" / "policy" / "X_VLA" / "deploy.yml"
+    if not deploy.is_file():
+        pytest.skip("set ROBODOJO_ROOT to a RoboDojo checkout for the deploy.yml check")
+    official = yaml.safe_load(deploy.read_text())
+    assert official["action_type"] == "ee" and int(official["domain_id"]) == 0 and int(official["steps"]) == 10

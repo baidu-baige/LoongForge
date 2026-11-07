@@ -1,0 +1,64 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+# X-VLA on RoboDojo (Isaac Sim 5.1, dual-arm ARX X5) -- one task, one seed tag.
+# put_bottles_into_dustbin, native episode count (50). Change benchmark.task_name for other tasks;
+# set benchmark.eval_num to cap the episode count.
+#
+# Checkpoint: the RoboDojo-released X-VLA SFT (HF dataset RoboDojo-Benchmark/RoboDojo,
+# ckpt/RoboDojo/X_VLA/RoboDojo-sim-arx_x5-ee-<seed>/ckpt-100000). It ships no processor files;
+# server.tokenizer_path points at the preprocessor / tokenizer files of 2toINF/X-VLA-Pt
+# (the official adapter's default processor_path).
+#
+# bridge=xvla_ee20 mirrors the official RoboDojo X_VLA adapter (XPolicyLab/policy/X_VLA):
+# head camera only, 20-D proprio (measured ee xyz + quaternion -> interleaved rot6d + raw
+# gripper joint, per arm), domain_id 0, 10 denoising steps in fp32, and the whole 30-step
+# chunk executed as ee control (rot6d -> quaternion, gripper passed through).
+# Fill /path/to/... below. Do not commit machine-specific absolute paths.
+
+benchmark:
+  name: robodojo
+  task_name: put_bottles_into_dustbin
+  seed: 0              # result tag (RoboDojo uses it for the training-seed column)
+  env_cfg_type: arx_x5
+  action_bridge: xvla_ee20
+  first_chunk_len: 30  # = model.num_actions; every chunk runs to the end
+  chunk_len: 30
+
+model:
+  backend: loongforge
+  model_type: xvla
+  action_mode: ee6d
+  num_actions: 30
+  action_horizon: 30
+  max_action_dim: 20
+  real_action_dim: 20
+
+server:
+  host: 127.0.0.1
+  port: 62111
+  health_port: 62112
+  python: /path/to/loongforge/bin/python
+  start_timeout_sec: 1800
+  random_init: false
+  ckpt_path: /path/to/X_VLA/RoboDojo-sim-arx_x5-ee-0/ckpt-100000
+  tokenizer_path: /path/to/X-VLA-Pt   # 3 processor view slots; the payload sends the head view only
+  dataset_statistics_path: ""
+  use_bf16: false          # official adapter runs fp32
+  chunk_execute_steps: -1  # no truncation: the official deploy executes all 30 actions
+
+env:
+  eval_root: /path/to/LoongForge/loongforge/embodied/eval
+  loongforge_root: /path/to/LoongForge
+  robodojo_root: /path/to/RoboDojo          # with Assets/ downloaded (scripts/init_assets.sh)
+  robodojo_python: /path/to/robodojo/bin/python   # Isaac Sim 5.1 + IsaacLab + curobo env
+  sim_env: {}          # extra env vars for the sim client (e.g. VK_ICD_FILENAMES)
+
+run:
+  output_dir: /path/to/reports/xvla/robodojo/put_bottles_into_dustbin_seed0
+  cuda_visible_devices: "0"   # GPU of the sim client; the policy server inherits CUDA_VISIBLE_DEVICES
+  timestamped_output: false
+
+timeouts:
+  per_task_sec: 0             # whole official client run for this task; 0 = no limit
+  policy_call_sec: 900

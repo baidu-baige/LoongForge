@@ -12,13 +12,19 @@ as that ``Model``; it hosts the shared 4-component chain
 env step to the LoongForge policy server.
 
 Per-model protocol wiring (``action_bridge`` -> model_type, decoder key,
-raw-action channels that form RoboDojo's 14-D joint action):
+raw-action channels, RoboDojo action space, PayloadBuilder defaults):
 
 - ``lingbot_va_joint30``: LingBot-VA's 30-D action layout (left/right ee 7+7,
   left/right joints 7+7, left/right gripper 1+1). The official RoboDojo
-  LingBot_VA client executes channels [14..19, 28, 21..26, 29].
+  LingBot_VA client executes channels [14..19, 28, 21..26, 29] as joint control.
+  The model sees every env step (its own action queue), so the server-side
+  chunk cache is off.
+- ``xvla_ee20``: X-VLA's 20-D ee6d action executed as ee control, as the official
+  RoboDojo X_VLA adapter does: head camera only, 20-D proprio from the measured
+  ee poses and raw gripper joints, ``domain_id`` 0. One inference per chunk; the
+  server-side chunk cache serves the rest of the chunk step by step.
 
-Chunk boundaries: the official LingBot_VA ``deploy.py`` executes one predicted
+Chunk boundaries: the official ``deploy.py`` of both policies executes one predicted
 chunk per ``get_action`` and calls ``is_episode_end()`` once more at every chunk
 end. The plugin's ``deploy.py`` replays that call order, so the bridge reports
 ``chunk_end`` from the model's fixed chunk schedule (first chunk
@@ -40,9 +46,16 @@ from loongforge.embodied.eval.payload_builders import build_payload_builder
 
 LINGBOT_VA_JOINT_CHANNELS = [14, 15, 16, 17, 18, 19, 28, 21, 22, 23, 24, 25, 26, 29]
 
-# action_bridge -> (model_type, decoder key, raw channels for the 14-D joint action).
+# action_bridge -> (model_type, decoder key, raw channels, RoboDojo action space, PayloadBuilder defaults).
 _BRIDGE_WIRING = {
-    "lingbot_va_joint30": ("lingbot_va", "", LINGBOT_VA_JOINT_CHANNELS),
+    "lingbot_va_joint30": ("lingbot_va", "", LINGBOT_VA_JOINT_CHANNELS, "joint14", {}),
+    "xvla_ee20": (
+        "xvla",
+        "",
+        None,
+        "ee20",
+        {"state_encoding": "ee6d_robodojo", "max_image_views": 1, "domain_id": 0},
+    ),
 }
 
 
@@ -76,7 +89,7 @@ class RoboDojoPolicyModel:
             raise ValueError(
                 f"Unsupported RoboDojo action_bridge {self.action_bridge!r}. Supported: {sorted(_BRIDGE_WIRING)}"
             )
-        model_type, decoder_key, default_channels = _BRIDGE_WIRING[self.action_bridge]
+        model_type, decoder_key, default_channels, action_space, builder_defaults = _BRIDGE_WIRING[self.action_bridge]
         channels = cfg.get("action_channel_ids") or default_channels
         self.task_name = str(cfg.get("task_name") or "robodojo_task")
         self.seed = int(cfg.get("seed") or 0)
@@ -85,10 +98,12 @@ class RoboDojoPolicyModel:
             env_cfg_type=str(cfg.get("env_cfg_type") or "arx_x5"),
             seed=self.seed,
             action_channel_ids=channels,
+            action_space=action_space,
         )
-        self.payload_builder = build_payload_builder(model_type, yaml_model=dict(cfg.get("payload_builder") or {}))
+        builder_cfg = {**builder_defaults, **dict(cfg.get("payload_builder") or {})}
+        self.payload_builder = build_payload_builder(model_type, yaml_model=builder_cfg)
         self.decoder = build_action_decoder(decoder_key)
-        # LingBot-VA must see every env step (closed loop within a chunk).
+        # LingBot-VA must see every env step (closed loop within a chunk); chunked models keep it on.
         self.disable_action_cache = bool(
             cfg.get("disable_action_cache", False) or getattr(self.payload_builder, "disable_action_cache", False)
         )
