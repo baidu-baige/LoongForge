@@ -122,6 +122,30 @@ def _pack_images(images_by_cam: Dict[str, Optional[np.ndarray]]) -> List[np.ndar
     return packed
 
 
+def openpi_resize_with_pad(image: np.ndarray, size: int) -> np.ndarray:
+    """openpi ``image_tools.resize_with_pad`` for HWC uint8 images (antialiased bilinear, rounded).
+
+    openpi resizes with ``jax.image.resize(method="linear")``, which antialiases when downscaling,
+    rounds back to uint8 and pads with black (extra row/column at the bottom/right). torch's
+    antialiased bilinear reproduces it to within 1 LSB; the default non-antialiased resize does not
+    (up to 80 LSB on 640x480 -> 224).
+    """
+    import torch
+    import torch.nn.functional as F
+
+    img = np.asarray(image)
+    h, w = img.shape[:2]
+    ratio = max(w / size, h / size)
+    rh, rw = int(h / ratio), int(w / ratio)
+    x = torch.from_numpy(np.ascontiguousarray(img)).permute(2, 0, 1)[None].float()
+    x = F.interpolate(x, size=(rh, rw), mode="bilinear", align_corners=False, antialias=True)
+    x = x.round().clamp(0, 255).to(torch.uint8)[0].permute(1, 2, 0).numpy()
+    out = np.zeros((size, size, img.shape[2]), dtype=np.uint8)
+    top, left = (size - rh) // 2, (size - rw) // 2
+    out[top:top + rh, left:left + rw] = x
+    return out
+
+
 @register_payload_builder("pi05")
 class Pi05PayloadBuilder(PayloadBuilder):
     """Pi0.5 client-side payload assembly."""
@@ -139,6 +163,9 @@ class Pi05PayloadBuilder(PayloadBuilder):
     action_encoding: str = "axis_angle"  # pos(3)+axis_angle(3)+grip(1)
     action_dim: int = 7
     action_horizon: int = 50
+    # >0: resize every view to this square size the openpi way before sending (RoboDojo Pi_05);
+    # the model-side resize is then a no-op. 0 keeps the model-side (non-antialiased) resize.
+    openpi_image_size: int = 0
 
     # Non-annotated attributes are internal (not YAML-overridable).
     unnorm_key = ""
@@ -172,6 +199,8 @@ class Pi05PayloadBuilder(PayloadBuilder):
     def build(self, canonical: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:
         """Return the kwargs consumed by ``Pi05.predict_action``."""
         images = _pack_images(canonical["images"])
+        if int(self.openpi_image_size) > 0:
+            images = [openpi_resize_with_pad(img, int(self.openpi_image_size)) for img in images]
         kwargs: Dict[str, Any] = {
             "images": images,
             "instructions": [str(canonical["instruction"])],

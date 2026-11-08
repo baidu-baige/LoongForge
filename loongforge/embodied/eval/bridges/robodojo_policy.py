@@ -20,7 +20,8 @@ raw-action channels, RoboDojo action space, PayloadBuilder defaults):
   The model sees every env step (its own action queue), so the server-side
   chunk cache is off.
 - ``pi05_joint14``: pi0.5 as the official RoboDojo Pi_05 adapter (openpi aloha protocol,
-  ``adapt_to_pi=False``): three cameras, the 14-D joint state passed through, delta arm
+  ``adapt_to_pi=False``): three cameras resized the openpi way (antialiased, uint8) to 224,
+  the 14-D joint state passed through, delta arm
   joints made absolute against the chunk's state, 14-D joint control.
 - ``xvla_ee20``: X-VLA's 20-D ee6d action executed as ee control, as the official
   RoboDojo X_VLA adapter does: head camera only, 20-D proprio from the measured
@@ -52,7 +53,7 @@ LINGBOT_VA_JOINT_CHANNELS = [14, 15, 16, 17, 18, 19, 28, 21, 22, 23, 24, 25, 26,
 # action_bridge -> (model_type, decoder key, raw channels, RoboDojo action space, PayloadBuilder defaults).
 _BRIDGE_WIRING = {
     "lingbot_va_joint30": ("lingbot_va", "", LINGBOT_VA_JOINT_CHANNELS, "joint14", {}),
-    "pi05_joint14": ("pi05", "pi05_aloha_robodojo", None, "joint14", {"state_encoding": "passthrough", "action_dim": 14}),
+    "pi05_joint14": ("pi05", "pi05_aloha_robodojo", None, "joint14", {"state_encoding": "passthrough", "action_dim": 14, "openpi_image_size": 224}),
     "xvla_ee20": (
         "xvla",
         "",

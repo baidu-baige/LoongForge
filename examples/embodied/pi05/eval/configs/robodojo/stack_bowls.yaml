@@ -49,7 +49,7 @@ server:
   ckpt_path: /path/to/pi05_robodojo_seed0_pytorch
   dataset_statistics_path: /path/to/pi05_robodojo_seed0_pytorch/dataset_statistics.json
   tokenizer_path: /path/to/paligemma-3b-pt-224
-  use_bf16: true                     # openpi restores the params in bfloat16 for inference
+  use_bf16: false                    # the LF pi05 eval path is fp32 (bf16 cast breaks the time MLP); openpi runs bf16 params
   chunk_execute_steps: 0             # no truncation: the official deploy executes all 50 actions
   eval_image_normalize_mode: siglip  # [0, 1] -> [-1, 1], as openpi feeds the model
   eval_normalization_mode: q99

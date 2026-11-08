@@ -550,3 +550,12 @@ def test_example_pi05_config_matches_official_adapter():
     assert cfg["benchmark"]["first_chunk_len"] == cfg["benchmark"]["chunk_len"] == cfg["model"]["action_horizon"] == 50
     assert cfg["model"]["action_dim"] == cfg["model"]["state_dim"] == 14
     assert cfg["server"]["chunk_execute_steps"] == 0 and cfg["server"]["eval_normalization_mode"] == "q99"
+
+
+def test_pi05_openpi_resize_with_pad_matches_openpi_layout():
+    from loongforge.embodied.eval.payload_builders.pi05 import openpi_resize_with_pad
+
+    img = np.random.default_rng(0).integers(0, 255, (480, 640, 3), dtype=np.uint8)
+    out = openpi_resize_with_pad(img, 224)
+    assert out.shape == (224, 224, 3) and out.dtype == np.uint8
+    assert (out[:28] == 0).all() and (out[196:] == 0).all() and out[28:196].any()  # 168 rows, centered
