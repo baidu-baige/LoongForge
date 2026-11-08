@@ -364,7 +364,7 @@ def test_example_configs_match_official_lingbot_va_settings():
 
 
 def test_bridge_wiring_is_known():
-    assert set(robodojo_policy._BRIDGE_WIRING) == {"lingbot_va_joint30", "xvla_ee20"}
+    assert set(robodojo_policy._BRIDGE_WIRING) == {"lingbot_va_joint30", "pi05_joint14", "xvla_ee20"}
     assert json.loads(json.dumps(LINGBOT_VA_JOINT_CHANNELS)) == LINGBOT_VA_JOINT_CHANNELS
 
 
@@ -475,3 +475,78 @@ def test_example_xvla_config_matches_official_adapter():
         pytest.skip("set ROBODOJO_ROOT to a RoboDojo checkout for the deploy.yml check")
     official = yaml.safe_load(deploy.read_text())
     assert official["action_type"] == "ee" and int(official["domain_id"]) == 0 and int(official["steps"]) == 10
+
+
+# ── pi0.5 (official XPolicyLab/policy/Pi_05, openpi aloha protocol, adapt_to_pi=False) ──
+def test_pi05_robodojo_decoder_delta_to_absolute_with_chunk_anchor():
+    from loongforge.embodied.eval.action_decoders import build_action_decoder
+
+    dec = build_action_decoder("pi05_aloha_robodojo")
+    state0 = np.arange(14, dtype=np.float32)
+    delta = np.full((1, 32), 0.5, dtype=np.float32)
+    out0 = dec(delta, {"pi_state": state0, "is_fresh_chunk": True})[0]
+    expect = state0 + 0.5
+    expect[[6, 13]] = 0.5  # grippers absolute (make_bool_mask(6, -1, 6, -1))
+    np.testing.assert_allclose(out0, expect)
+    # a cached step keeps the chunk's anchor even though the env state moved
+    out1 = dec(delta, {"pi_state": state0 + 100, "is_fresh_chunk": False})[0]
+    np.testing.assert_allclose(out1, expect)
+    out2 = dec(delta, {"pi_state": state0 + 100, "is_fresh_chunk": True})[0]
+    assert out2[0] == pytest.approx(100.5)
+
+
+def test_pi05_robodojo_matches_official_openpi_output_transforms():
+    """AbsoluteActions + AlohaOutputs(adapt_to_pi=False) of the vendored openpi, from source."""
+    import ast
+
+    tf_py = _ROBODOJO_ROOT / "XPolicyLab/policy/Pi_05/openpi/src/openpi/transforms.py"
+    if not tf_py.is_file():
+        pytest.skip("set ROBODOJO_ROOT to a RoboDojo checkout for the openpi parity check")
+    tree = ast.parse(tf_py.read_text())
+    nodes = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "make_bool_mask"]
+    ns = {}
+    exec(compile(ast.Module(nodes, []), str(tf_py), "exec"), ns)
+    mask = np.asarray(ns["make_bool_mask"](6, -1, 6, -1))
+    from loongforge.embodied.eval.action_decoders.joint import _PI05_DELTA_JOINT_MASK
+
+    np.testing.assert_array_equal(mask, _PI05_DELTA_JOINT_MASK)
+    cfg = (_ROBODOJO_ROOT / "XPolicyLab/policy/Pi_05/openpi/src/openpi/training/config.py").read_text()
+    start = cfg.index('name="pi05_base_aloha_full_sim_arx-x5_seed_0"')
+    block = cfg[start:cfg.index("TrainConfig(", start)]
+    assert "LeRobotAlohaDataConfig(" in block and "adapt_to_pi" not in block  # default False
+
+
+class _FakePi05Client(_FakePolicyClient):
+    def predict_action(self, **payload):
+        self.calls.append(payload)
+        latency = 5.0 if len(self.calls) % 50 == 1 else None  # server cache: fresh every 50 steps
+        return {"ok": True, "data": {"actions": [np.zeros(32, dtype=np.float32).tolist()],
+                                     "inference_latency_ms": latency}}
+
+
+def test_bridge_pi05_payload_and_joint_action(monkeypatch):
+    import loongforge.embodied.eval.transport as transport
+
+    monkeypatch.setattr(transport, "PolicyClient", _FakePi05Client)
+    model = RoboDojoPolicyModel(
+        {"task_name": "stack_bowls", "action_bridge": "pi05_joint14", "first_chunk_len": 50, "chunk_len": 50, "lf_port": 1}
+    )
+    assert not model.disable_action_cache
+    model.reset()
+    outs = [model.get_action(_obs(i)) for i in range(51)]
+    call = model.client.calls[0]
+    assert len(call["images"]) == 3
+    np.testing.assert_allclose(call["state"], RoboDojoAdapter().obs_to_canonical(_obs(0), {"instruction": "x"})["state_raw"]["joint"])
+    assert [i for i, o in enumerate(outs) if o["chunk_end"]] == [49]
+    # zero delta -> the chunk anchor's joints (state of step 0), grippers 0
+    act = outs[10]["actions"][0]
+    assert act["left_arm_joint_state"] == pytest.approx(list(np.arange(6) * 0.1))
+    assert act["left_ee_joint_state"] == pytest.approx([0.0])
+
+
+def test_example_pi05_config_matches_official_adapter():
+    cfg = yaml.safe_load((_REPO_ROOT / "examples/embodied/pi05/eval/configs/robodojo/stack_bowls.yaml").read_text())
+    assert cfg["benchmark"]["action_bridge"] == "pi05_joint14"
+    assert cfg["benchmark"]["first_chunk_len"] == cfg["benchmark"]["chunk_len"] == cfg["model"]["action_horizon"] == 50
+    assert cfg["model"]["action_dim"] == cfg["model"]["state_dim"] == 14
+    assert cfg["server"]["chunk_execute_steps"] == 0 and cfg["server"]["eval_normalization_mode"] == "q99"

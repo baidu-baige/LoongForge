@@ -3,8 +3,8 @@
 
 """ActionDecoders for models that output **joint(-delta)** actions.
 
-Currently only pi0.5 RoboTwin (openpi aloha protocol). Add future joint-space
-models' decoders here.
+pi0.5 on RoboTwin (openpi aloha protocol with ``adapt_to_pi``) and on RoboDojo
+(openpi aloha protocol without it). Add future joint-space models' decoders here.
 """
 
 from __future__ import annotations
@@ -105,3 +105,34 @@ class RoboTwinPi05AlohaDecoder(ActionDecoder):
             abs_action = delta_to_absolute_actions(row[:ROBOTWIN_ACTION_DIM], self._chunk_pi_state)
             out.append(adapt_to_pi_encode_actions(abs_action))
         return np.stack(out).astype(np.float32)
+
+
+@register_action_decoder("pi05_aloha_robodojo")
+class RoboDojoPi05AlohaDecoder(ActionDecoder):
+    """Stateful pi0.5 RoboDojo ``pi05_joint14``: delta joints -> absolute env joints.
+
+    The official RoboDojo Pi_05 config is openpi ``LeRobotAlohaDataConfig`` with
+    ``adapt_to_pi=False``: AlohaOutputs is the identity on the 14 joints, and
+    AbsoluteActions (mask 6, -1, 6, -1) anchors the delta arm joints to the
+    state the chunk was inferred from. ``ctx["pi_state"]`` is that state (the
+    passthrough 14-D joint vector); ``is_fresh_chunk`` marks a model forward, so
+    server chunk-cache hits keep the chunk's anchor.
+    """
+
+    def __init__(self) -> None:
+        """Initialize with no chunk anchor."""
+        self._chunk_state: Optional[np.ndarray] = None
+
+    def reset(self) -> None:
+        """Clear the per-chunk anchor at episode boundaries."""
+        self._chunk_state = None
+
+    def __call__(self, actions: np.ndarray, ctx: Dict[str, Any]) -> np.ndarray:
+        """Decode unnormalized delta joints into absolute env joint commands."""
+        chunk = np.asarray(actions, dtype=np.float32).reshape(-1, actions.shape[-1])
+        state = np.asarray(ctx["pi_state"], dtype=np.float32)
+        if ctx.get("is_fresh_chunk", True) or self._chunk_state is None:
+            self._chunk_state = state.copy()
+        return np.stack(
+            [delta_to_absolute_actions(row[:ROBOTWIN_ACTION_DIM], self._chunk_state) for row in chunk]
+        ).astype(np.float32)
