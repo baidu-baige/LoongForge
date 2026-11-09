@@ -30,7 +30,7 @@ from loongforge.models.diffusion.wan.wan_flow_match import FlowMatchScheduler
 from megatron.core.packed_seq_params import PackedSeqParams
 
 from loongforge.engines.megatron.runner import MegatronTrainer
-from loongforge.training import register_model_trainer
+from loongforge.training.trainer_builder import register_model_trainer
 from megatron.core import parallel_state
 import numpy as np
 

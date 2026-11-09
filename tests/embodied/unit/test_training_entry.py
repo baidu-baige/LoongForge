@@ -26,46 +26,41 @@ class TrainingEntryTests(unittest.TestCase):
             check=True,
         )
 
-    def test_megatron_uses_registered_trainer(self):
-        from loongforge.training import MODEL_FAMILY_TRAINER_FACTORY
+    def test_megatron_uses_recipe_builder(self):
+        from loongforge.training import trainer_builder
 
         args = SimpleNamespace(model_name="qwen3-8b", model_family="qwen3", training_phase="pretrain")
-        recipe = Mock()
+        trainer = Mock()
         parser = SimpleNamespace(parse_train_args=Mock(return_value=args))
         with (
-            patch.dict(MODEL_FAMILY_TRAINER_FACTORY, {"qwen3": {"pretrain": recipe}}, clear=True),
-            patch("loongforge.training._load_builtin_trainers"),
+            patch.object(trainer_builder, "build_model_trainer", return_value=trainer) as build,
             patch.dict(sys.modules, {"loongforge.engines.megatron.parser": parser}),
         ):
             self.assertIsNone(train._run_megatron())
         parser.parse_train_args.assert_called_once_with()
-        recipe.assert_called_once_with(args)
-        recipe.return_value.train.assert_called_once_with()
+        build.assert_called_once_with(args)
+        trainer.train.assert_called_once_with()
 
-    def test_unknown_trainer_fails_before_import(self):
-        from loongforge import training
+    def test_unknown_trainer_is_rejected(self):
+        from loongforge.training.embodied import trainer_builder
 
-        with patch.object(training.importlib, "import_module") as import_module:
-            for name in ("", "WallOss05Trainer", "unknown"):
-                with self.subTest(name=name), self.assertRaises(ValueError):
-                    training.resolve_torch_trainer(name)
-            import_module.assert_not_called()
+        for name in ("", "WallOss05Trainer", "unknown"):
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                trainer_builder.build_embodied_trainer(SimpleNamespace(trainer_type=name), None, None)
 
     def test_wall_oss_uses_shared_finetune_recipe(self):
-        from loongforge import training
+        from loongforge.training.embodied import trainer_builder
 
         args = SimpleNamespace(trainer_type="FinetuneTrainer")
         configs = (args, object(), object())
         trainer_type = Mock()
         parser = SimpleNamespace(parse_train_args=Mock(return_value=configs))
-        recipe = SimpleNamespace(FinetuneTrainer=trainer_type)
         with (
             patch.dict(sys.modules, {"loongforge.training.torch_args": parser}),
-            patch.object(training.importlib, "import_module", return_value=recipe) as load,
+            patch.dict(trainer_builder._TRAINER_CLASSES, {"FinetuneTrainer": trainer_type}),
             patch.object(sys, "argv", ["train.py", "--model-name", "wall_oss_0_5"]),
         ):
             train.main()
-        load.assert_called_once_with("loongforge.training.embodied.sft")
         trainer_type.assert_called_once_with(*configs)
         trainer_type.return_value.train.assert_called_once_with()
 
@@ -198,12 +193,12 @@ class SFTRecipeTests(unittest.TestCase):
         self.assertIsInstance(model_cfg.tensor_wise, TensorWiseConfig)
         self.assertEqual(model_cfg.tensor_wise.grad_reduce_dtype, "fp32")
         self.assertEqual(model_cfg.tensor_wise.comm_bucket_mb, 256)
-        from loongforge import training
+        from loongforge.training.embodied.trainer_builder import _TRAINER_CLASSES
 
-        tensor_wise = training.resolve_torch_trainer("TensorWiseTrainer")
+        tensor_wise = _TRAINER_CLASSES["TensorWiseTrainer"]
         self.assertTrue(issubclass(tensor_wise, FinetuneTrainer))
         self.assertTrue(
-            issubclass(training.resolve_torch_trainer(args.trainer_type), tensor_wise)
+            issubclass(_TRAINER_CLASSES[args.trainer_type], tensor_wise)
         )
         with patch.object(sys, "argv", argv + ["model.tensor_wise.unknown=1"]):
             with self.assertRaises(ConfigKeyError):

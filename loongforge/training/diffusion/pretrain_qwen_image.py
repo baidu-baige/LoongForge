@@ -16,7 +16,7 @@ from torch.utils.data import DataLoader
 from loongforge.data.diffusion.latent_dataset import TensorDataset
 from loongforge.models.factory import get_model_provider
 from loongforge.engines.megatron.runner import MegatronTrainer
-from loongforge.training import register_model_trainer
+from loongforge.training.trainer_builder import register_model_trainer
 from loongforge.engines.megatron import get_args, get_model_config, print_rank_0
 from loongforge.models.catalog import DiffusionModelFamilies
 from loongforge.data.constants import TrainingPhase

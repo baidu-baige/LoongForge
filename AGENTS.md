@@ -41,7 +41,7 @@ pre-commit run --files <file>                                      # SPDX header
 | Path | Purpose |
 |---|---|
 | `loongforge/train.py` | Training entry point that selects the engine and a registered Megatron recipe or Torch `--trainer-type` |
-| `loongforge/training/` | What one run does: args and validation (`megatron_args.py`, `torch_args.py`, per-family `args.py`), recipe registration (`__init__.py`), per-family recipes (`llm/`, `vlm/`, `diffusion/`, `embodied/`), and single-model training flows (`embodied/custom/`) |
+| `loongforge/training/` | What one run does: args and validation (`megatron_args.py`, `torch_args.py`, per-family `args.py`), Megatron recipe registration and lookup (`loongforge/training/trainer_builder.py`), per-family recipes (`llm/`, `vlm/`, `diffusion/`, `embodied/`), and single-model training flows (`embodied/custom/`); Embodied trainer lookup is in `loongforge/training/embodied/trainer_builder.py` |
 | `loongforge/engines/` | How training runs for any model: Megatron and torch wrappers for the parallel runtime, precision, model wrapping, optimizer, step loop, and checkpoint I/O (`megatron/`, `torch/`) |
 | `loongforge/models/` | What the network computes (`foundation/`, `encoder/`, `omni_models/`, `diffusion/`, `embodied/`, `common/`), including EP-overlap callables and FSDP/LoRA/FP8 targets; `factory.py` registers and queries Megatron models; `catalog.py` holds model families, Megatron config paths, and Torch names for engine selection |
 | `loongforge/data/` | How samples become batches: per-family datasets, transforms, collators, samplers, and shared chat templates (`chat_templates/`: registry in `template.py`, plugins in `plugins/`, Jinja files in `jinja/`) |

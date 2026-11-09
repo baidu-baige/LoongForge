@@ -128,13 +128,12 @@ assert not any(name in sys.modules for name in (
 
 
 def test_recipe_registry_keeps_family_case_and_override_rules(monkeypatch):
-    from loongforge import training
+    from loongforge.training import trainer_builder
 
     registry = {}
-    monkeypatch.setattr(training, "MODEL_FAMILY_TRAINER_FACTORY", registry)
-    monkeypatch.setattr(training, "_load_builtin_trainers", Mock())
+    monkeypatch.setattr(trainer_builder, "MODEL_FAMILY_TRAINER_FACTORY", registry)
     original, replacement, sft = Mock(), Mock(), Mock()
-    register = training.register_model_trainer
+    register = trainer_builder.register_model_trainer
     assert register(["LLAMA", "qwen3"], "pretrain")(original) is original
     assert registry == {"llama": {"pretrain": original}, "qwen3": {"pretrain": original}}
     register("llama", "pretrain")(replacement)
@@ -145,37 +144,30 @@ def test_recipe_registry_keeps_family_case_and_override_rules(monkeypatch):
     assert registry["llama"]["sft"] is sft
 
 
-def test_recipe_loader_retries_import_errors_and_loads_defaults_once(monkeypatch):
-    from loongforge import training
+def test_megatron_builder_uses_registered_phase(monkeypatch):
+    from loongforge.training import trainer_builder
 
-    monkeypatch.setattr(training, "_TRAINERS_LOADED", False)
-    monkeypatch.setattr(training, "_TRAINERS_LOADING", False)
+    recipe = Mock()
+    args = NS(model_name="qwen3-8b", model_family="qwen3", training_phase="pretrain")
+    monkeypatch.setattr(
+        trainer_builder,
+        "MODEL_FAMILY_TRAINER_FACTORY",
+        {"qwen3": {"pretrain": recipe}},
+    )
     original_import = __import__
-    imported = []
-    fail = True
 
     def import_recipes(name, globals=None, locals=None, fromlist=(), level=0):
         if name in {
-            "loongforge.training.llm", "loongforge.training.vlm", "loongforge.training.diffusion",
+            "loongforge.training.llm",
+            "loongforge.training.vlm",
+            "loongforge.training.diffusion",
         }:
-            imported.extend(fromlist)
-            if fail and "pretrain_vlm" in fromlist:
-                raise ImportError("recipe dependency unavailable")
             return NS(**dict.fromkeys(fromlist))
         return original_import(name, globals, locals, fromlist, level)
 
     with patch("builtins.__import__", side_effect=import_recipes):
-        with pytest.raises(ImportError, match="recipe dependency unavailable"):
-            training._load_builtin_trainers()
-        assert training._TRAINERS_LOADED is False
-        assert training._TRAINERS_LOADING is False
-        fail = False
-        imported.clear()
-        training._load_builtin_trainers()
-        assert "pretrain_vlm" in imported
-        first_imports = imported[:]
-        training._load_builtin_trainers()
-        assert imported == first_imports
+        trainer_builder.build_model_trainer(args)
+    recipe.assert_called_once_with(args)
 
 
 def test_engine_registers_loss_and_keeps_original_training_provider(monkeypatch):

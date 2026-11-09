@@ -31,7 +31,7 @@ from loongforge.engines.megatron import get_args, get_model_config
 
 # from loongforge.models.qwen_vl.utils import get_inputs_on_this_cp_rank_by_tex # TODO:@yizhan
 from loongforge.engines.megatron.runner import MegatronTrainer
-from loongforge.training import register_model_trainer
+from loongforge.training.trainer_builder import register_model_trainer
 from loongforge.engines.megatron.runner import dump_model_input_example_once
 from loongforge.data.utils import (
     build_sft_data_collator,

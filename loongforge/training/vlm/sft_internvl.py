@@ -22,7 +22,7 @@ from loongforge.models import catalog as constants
 from loongforge.data import constants as data_constants
 from loongforge.models.factory import get_model_provider
 from loongforge.engines.megatron.runner import MegatronTrainer
-from loongforge.training import register_model_trainer
+from loongforge.training.trainer_builder import register_model_trainer
 from loongforge.data.vlm.encoder.internvl_task_encoder import InternVLTaskEncoder
 from loongforge.data.utils import (
     build_sft_data_collator,

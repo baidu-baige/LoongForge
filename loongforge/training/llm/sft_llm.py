@@ -39,7 +39,7 @@ from loongforge.data.llm.sft_data_collator import DataCollatorForSupervisedDatas
 from loongforge.engines.megatron import get_model_config
 
 from loongforge.engines.megatron.runner import MegatronTrainer
-from loongforge.training import register_model_trainer
+from loongforge.training.trainer_builder import register_model_trainer
 
 from loongforge.data.utils import (
     get_batch_on_this_tp_rank,

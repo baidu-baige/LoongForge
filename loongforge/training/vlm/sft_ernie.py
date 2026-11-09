@@ -15,7 +15,7 @@ from loongforge.data.constants import TrainingPhase
 from loongforge.models.catalog import VisionLanguageModelFamilies
 from loongforge.data.vlm.ernie.data_utils import ErnieTensorDataset
 from loongforge.engines.megatron.runner import MegatronTrainer
-from loongforge.training import register_model_trainer
+from loongforge.training.trainer_builder import register_model_trainer
 from megatron.core import parallel_state
 from megatron.core import mpu, tensor_parallel
 from megatron.core.packed_seq_params import PackedSeqParams

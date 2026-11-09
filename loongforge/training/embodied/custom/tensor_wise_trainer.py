@@ -58,8 +58,9 @@ class TensorWiseTrainer(FinetuneTrainer):
                                       e.g. regional compile
 
     The rest is the loop contract of ``TensorWiseOptimizer``. A subclass is
-    registered in ``loongforge/training/__init__.py`` and in
-    ``TENSOR_WISE_TRAINERS`` (``tensor_wise_optimizer/validation.py``).
+    registered in ``loongforge/training/embodied/trainer_builder.py`` and in
+    ``TENSOR_WISE_TRAINERS``
+    (``tensor_wise_optimizer/validation.py``).
     """
 
     # -- extension points -------------------------------------------------------

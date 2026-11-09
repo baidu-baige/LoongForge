@@ -18,7 +18,7 @@ from loongforge.models.omni_models.omni_model_provider import (
 
 
 from loongforge.engines.megatron.runner import MegatronTrainer
-from loongforge.training import register_model_trainer
+from loongforge.training.trainer_builder import register_model_trainer
 
 from loongforge.engines.megatron import get_args, get_model_config
 

@@ -27,7 +27,7 @@ loongforge/train.py
     ↓
 parse_train_args()
     ↓
-resolve_torch_trainer()
+build_embodied_trainer()
     ↓
 trainer.train()
 ```
@@ -317,7 +317,7 @@ The Trainer module orchestrates the training lifecycle, including distributed co
 
 ### 4.1 Trainer Selection
 
-Select the trainer with `--trainer-type`. Valid values are the Trainer class names registered in `loongforge/training/__init__.py`. The default `FinetuneTrainer` covers standard single-data-stream supervised fine-tuning; for multiple data streams, unusual loss combinations, or non-standard step scheduling, register a custom Trainer class in `loongforge/training/__init__.py`.
+Select the trainer with `--trainer-type`. Valid values are the Trainer class names registered in `loongforge/training/embodied/trainer_builder.py`. The default `FinetuneTrainer` covers standard single-data-stream supervised fine-tuning; for multiple data streams, unusual loss combinations, or non-standard step scheduling, register a custom Trainer class in that file.
 
 ### 4.2 Distributed Strategy
 

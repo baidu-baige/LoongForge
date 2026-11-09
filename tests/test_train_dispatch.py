@@ -12,29 +12,6 @@ import loongforge.train as train
 from loongforge.models import catalog
 
 
-@pytest.mark.parametrize("trainer_name", [
-    "GrootN1d6Trainer", "GrootN1d7Trainer", "LingBotFinetuneTrainer",
-])
-def test_torch_trainer_loads_only_selected_class(trainer_name):
-    from loongforge import training
-
-    args = SimpleNamespace(trainer_type=trainer_name)
-    configs = (args, object(), object())
-    trainer = Mock()
-    module = SimpleNamespace(**{trainer_name: trainer})
-    parser = SimpleNamespace(parse_train_args=Mock(return_value=configs))
-    with (
-        patch.dict(sys.modules, {"loongforge.training.torch_args": parser}),
-        patch.object(training.importlib, "import_module", return_value=module) as load,
-    ):
-        train._run_torch()
-    load.assert_called_once_with(
-        training._TRAINER_CLASSES[trainer_name].rsplit(".", 1)[0]
-    )
-    trainer.assert_called_once_with(*configs)
-    trainer.return_value.train.assert_called_once_with()
-
-
 @pytest.mark.parametrize("argv", [
     ["train.py", "--model-name", "GR00T-N1-6"],
     ["train.py", "--model-name", "pi05", "--config-file", "custom.yaml"],
@@ -56,23 +33,21 @@ def test_torch_model_name_controls_engine_selection(argv):
     ("intern_vl", "pretrain"),
     ("qwen3_vl", "sft"),
 ])
-def test_megatron_uses_parsed_family_and_registered_phase(family, phase):
-    from loongforge import training
+def test_megatron_dispatches_to_recipe_builder(family, phase):
+    from loongforge.training import trainer_builder
 
     args = SimpleNamespace(model_name="selected-model", model_family=family, training_phase=phase)
-    recipes = {"pretrain": Mock(), "sft": Mock()}
+    trainer = Mock()
     parser = SimpleNamespace(parse_train_args=Mock(return_value=args))
     with (
-        patch.dict(training.MODEL_FAMILY_TRAINER_FACTORY, {family: recipes}, clear=True),
-        patch.object(training, "_load_builtin_trainers"),
+        patch.object(trainer_builder, "build_model_trainer", return_value=trainer) as build,
         patch.dict(sys.modules, {
             "loongforge.engines.megatron.parser": parser,
         }),
     ):
         train._run_megatron()
-    recipes[phase].assert_called_once_with(args)
-    recipes[phase].return_value.train.assert_called_once_with()
-    recipes["sft" if phase == "pretrain" else "pretrain"].assert_not_called()
+    build.assert_called_once_with(args)
+    trainer.train.assert_called_once_with()
 
 
 @pytest.mark.parametrize(("family", "phase", "message"), [
@@ -86,24 +61,24 @@ def test_megatron_uses_parsed_family_and_registered_phase(family, phase):
     ),
 ])
 def test_megatron_rejects_unregistered_family_or_phase(family, phase, message):
-    from loongforge import training
+    from loongforge.training import trainer_builder
 
     args = SimpleNamespace(model_name="selected-model", model_family=family, training_phase=phase)
     recipe = Mock()
     parser = SimpleNamespace(parse_train_args=Mock(return_value=args))
     with (
-        patch.dict(
-            training.MODEL_FAMILY_TRAINER_FACTORY,
-            {"qwen_image": {"pretrain": recipe}},
-            clear=True,
-        ),
-        patch.object(training, "_load_builtin_trainers"),
+        patch.object(
+            trainer_builder,
+            "build_model_trainer",
+            side_effect=ValueError(message),
+        ) as build,
         patch.dict(sys.modules, {
             "loongforge.engines.megatron.parser": parser,
         }),
         pytest.raises(ValueError, match=message),
     ):
         train._run_megatron()
+    build.assert_called_once_with(args)
     recipe.assert_not_called()
 
 

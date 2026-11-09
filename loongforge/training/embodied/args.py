@@ -17,8 +17,7 @@ class _EmbodiedRoutingArgs:
         default="FinetuneTrainer",
         metadata={
             "help": "Trainer class to instantiate (e.g. FinetuneTrainer, "
-                    "GrootN1d6Trainer); resolved by the trainer registry in "
-                    "loongforge/training/__init__.py."
+                    "GrootN1d6Trainer); resolved by the trainer builder registry."
         },
     )
 

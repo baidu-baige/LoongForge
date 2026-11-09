@@ -14,31 +14,20 @@ def _run_megatron():
     """Parse the Megatron arguments and run the recipe for their family and phase."""
     logging.basicConfig(level=logging.WARNING)
     from loongforge.engines.megatron.parser import parse_train_args
-    from loongforge.training import MODEL_FAMILY_TRAINER_FACTORY, _load_builtin_trainers
+    from loongforge.training.trainer_builder import build_model_trainer
 
-    _load_builtin_trainers()
     args = parse_train_args()
-    model_family = args.model_family
-
-    if model_family not in MODEL_FAMILY_TRAINER_FACTORY:
-        raise ValueError(f"Not found trainer for family: {model_family}")
-    if args.training_phase not in MODEL_FAMILY_TRAINER_FACTORY[model_family]:
-        raise ValueError(
-            f"Loongforge not support {args.training_phase} phase for {args.model_name} (family: {model_family})"
-        )
-
-    trainer = MODEL_FAMILY_TRAINER_FACTORY[model_family][args.training_phase](args)
+    trainer = build_model_trainer(args)
     trainer.train()
 
 
 def _run_torch():
     """Parse the Torch arguments and run the trainer selected by ``--trainer-type``."""
     from loongforge.training.torch_args import parse_train_args
-    from loongforge.training import resolve_torch_trainer
+    from loongforge.training.embodied.trainer_builder import build_embodied_trainer
 
     training_args, model_cfg, data_cfg = parse_train_args()
-    trainer_type = resolve_torch_trainer(training_args.trainer_type)
-    trainer = trainer_type(training_args, model_cfg, data_cfg)
+    trainer = build_embodied_trainer(training_args, model_cfg, data_cfg)
     trainer.train()
 
 
