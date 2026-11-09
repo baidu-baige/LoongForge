@@ -272,7 +272,11 @@ def plan_robotwin(config: Dict[str, Any], total_workers: int) -> List[Shard]:
         for task in tasks:
             chunk = chunk_override if chunk_override > 0 else chunk_size(episodes, total_workers)
             ranges = list(_ranges(start, episodes, chunk))
-            seed_stride = len(ranges) * chunk
+            # One unit = one sequential seed walk: an unstable scene advances to
+            # the next seed (+1), exactly like the legacy single-process run.
+            # With several units each walks its own block and skips past the
+            # other blocks, so it advances by the full stride instead.
+            seed_stride = 1 if len(ranges) == 1 else len(ranges) * chunk
             per_task.append(
                 [
                     {

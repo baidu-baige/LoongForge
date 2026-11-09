@@ -340,7 +340,9 @@ def test_plan_robotwin_tasks_all_reads_the_official_task_set(tmp_path) -> None:
         "click_bell",
     ]
     assert all(shard["expected"] == 2 for shard in shards)
-    assert all(shard["overrides"]["benchmark"]["seed_stride"] == 2 for shard in shards)
+    # One unit per task: an unstable seed advances to the next one (+1), as in the
+    # legacy single-process run; a multi-unit plan uses the full block stride.
+    assert all(shard["overrides"]["benchmark"]["seed_stride"] == 1 for shard in shards)
 
 
 def test_plan_robotwin_rejects_tasks_all_without_a_root() -> None:
