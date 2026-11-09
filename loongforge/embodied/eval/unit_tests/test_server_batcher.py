@@ -6,6 +6,9 @@
 from __future__ import annotations
 
 import asyncio
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
@@ -202,3 +205,32 @@ def test_batch_without_noise_seed_samples_per_row() -> None:
     assert model.calls == 1
     assert model.seeds == [None]  # predict_action called without a seeds kwarg
     assert [response["actions"].shape for response in responses] == [(1, 7), (1, 7)]
+
+
+class _ConcurrencyProbe:
+    """Records how many model calls run at once."""
+
+    def __init__(self) -> None:
+        self._guard = threading.Lock()
+        self.active = 0
+        self.max_active = 0
+
+    def predict_action(self, images, instructions, state=None, dataset_stats=None):
+        with self._guard:
+            self.active += 1
+            self.max_active = max(self.max_active, self.active)
+        time.sleep(0.02)
+        with self._guard:
+            self.active -= 1
+        return np.zeros((len(images), 2, 7), dtype=np.float32)
+
+
+def test_concurrent_requests_never_enter_the_model_together() -> None:
+    """Wan-VAE feat caches / streaming KV caches live on the model instance."""
+    model = _ConcurrencyProbe()
+    policy = GenericPredictActionPolicy(model=model, metadata={"action_dim": 7}, action_dim=7)
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(lambda index: policy.predict_action(**_policy_payload(index)), range(8)))
+
+    assert model.max_active == 1

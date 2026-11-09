@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -44,6 +45,14 @@ class GenericPredictActionPolicy:
         self._dataset_stats = self._load_dataset_stats(dataset_statistics_path)
         self._chunk_cache: Dict[str, tuple[int, np.ndarray]] = {}
         self._request_id_prefix = request_id_prefix
+        # One model instance serves every sim client pinned to this server, and
+        # the RPC server dispatches their requests from an executor. Models that
+        # keep state across calls (Wan-style causal-VAE feat caches, streaming
+        # KV caches, per-episode buffers) must never see two calls at once: a
+        # VAE cache collision raises a shape error, a KV-cache collision silently
+        # mixes episodes. Serialize at the policy boundary so the guarantee does
+        # not depend on the transport path (with or without batching).
+        self._infer_lock = threading.RLock()
         self._episode_kwargs = self._supported_episode_kwargs(model)
         self._metadata = {
             "protocol_version": PROTOCOL_VERSION,
@@ -105,6 +114,19 @@ class GenericPredictActionPolicy:
         The value handed to ``model.predict_action`` is a batch-of-1
         list-of-list of views: ``[[view_primary, view_wrist]]``.
         """
+        with self._infer_lock:
+            return self._predict_action(images, instructions, episode_id, episode_step, state, **kwargs)
+
+    def _predict_action(
+        self,
+        images: list,
+        instructions: list,
+        episode_id: str = "default",
+        episode_step: int = 0,
+        state: Optional[np.ndarray] = None,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """Unlocked body of :meth:`predict_action` (caller holds ``_infer_lock``)."""
         disable_action_cache = bool(kwargs.pop("disable_action_cache", False))
         return_action_chunk = bool(kwargs.pop("return_action_chunk", False))
         # When the client owns the chunk it will not come back until the chunk is
@@ -217,13 +239,16 @@ class GenericPredictActionPolicy:
         seed_kwargs = (
             {"seeds": [int(base_seed)] * len(payloads)} if base_seed is not None else {}
         )
-        result = self._model.predict_action(
-            images=images,
-            instructions=instructions,
-            state=state_batch,
-            dataset_stats=self._dataset_stats,
-            **seed_kwargs,
-        )
+        # Same instance-level state as the sequential path: hold the lock so a
+        # batched call cannot overlap a plain request from the no-batcher path.
+        with self._infer_lock:
+            result = self._model.predict_action(
+                images=images,
+                instructions=instructions,
+                state=state_batch,
+                dataset_stats=self._dataset_stats,
+                **seed_kwargs,
+            )
         latency_ms = (time.perf_counter() - start) * 1000.0
         actions = np.asarray(result, dtype=np.float32)
         if actions.ndim == 2:
