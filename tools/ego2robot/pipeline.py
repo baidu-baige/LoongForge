@@ -6,14 +6,16 @@ run-all orchestration: call each step's run(args) in order, automatically feed
 one step's output directory into the next, and store intermediate artifacts in
 fixed subdirectories under --output_dir.
 
-Pipeline (--with_depth inserts depth after inpaint for z-buffer compositing):
-    load -> align -> mask -> inpaint [-> depth] -> retarget -> lerobot -> demo
+Pipeline (optional DA3/DVLT depth for occlusion compositing):
+    load -> align -> mask -> inpaint [-> depth] [-> gauss-recon] -> retarget -> lerobot -> demo
+    --with_depth and --with_gauss can coexist; --scene_backend selects the depth source.
+    DVLT provides metric scene depth and caches, not a gsplat trainer.
 
 Fixed subdirectory names:
     01_load/   02_align/   03_mask/   04_inpaint/
-    05_depth/ (optional)   06_retarget/   07_lerobot/   08_demo/
+    05_depth/ and 05_gauss/ (optional)   06_retarget/   07_lerobot/   08_demo/
 
-Individual commands (load/align/mask/inpaint/depth/retarget/lerobot/validate/demo
+Individual commands (load/align/mask/inpaint/depth/gauss-recon/retarget/lerobot/validate/demo
 in cli.py) still require all input and output paths explicitly. This supports
 isolated debugging and nonstandard directory layouts. run-all is simply a fixed
 orchestration of those individual run() functions.
@@ -32,6 +34,7 @@ from steps import (
     hand_mask,
     inpaint,
     depth_estimate,
+    gauss_recon,
     robot_retarget,
     lerobot_writer,
     demo_grid,
@@ -135,6 +138,37 @@ def build_arg_parser():
             "requires the official depth-anything-3 package"
         ),
     )
+    ap.add_argument(
+        "--with_gauss",
+        action="store_true",
+        help=(
+            "Insert DVLT (Déjà View) scene reconstruction after inpaint and "
+            "write 05_gauss/; the reconstructed metric scene depth replaces DA3 "
+            "for occlusion compositing (see --scene_backend). Requires the dvlt "
+            "package and a local nvidia/dvlt checkpoint."
+        ),
+    )
+    ap.add_argument(
+        "--scene_backend", choices=("auto", "da3", "gauss"), default="auto",
+        help="Which scene-depth backend feeds retarget compositing. "
+             "auto = gauss when --with_gauss is on, otherwise da3")
+    ap.add_argument("--gauss_checkpoint", default=None,
+                    help="Local directory with nvidia/dvlt weights "
+                         "(config.json + model.safetensors); required for --with_gauss")
+    ap.add_argument("--gauss_dinov2_weights", default=None,
+                    help="Optional local DINOv2 ViT-B/14 reg4 weights (only if "
+                         "the checkpoint lacks patch_embed weights)")
+    ap.add_argument("--gauss_sample_fps", type=float, default=2.0,
+                    help="Frames per second fed to DVLT (default 2.0)")
+    ap.add_argument("--gauss_fy", type=float, default=None,
+                    help="Vertical focal length in pixels for projection "
+                         "(default: DVLT prediction scaled to output height)")
+    ap.add_argument("--gauss_conf_threshold", type=float, default=0.2,
+                    help="DVLT world-point confidence cutoff")
+    ap.add_argument("--gauss_points_per_frame", type=int, default=8192,
+                    help="Max world points kept per DVLT view")
+    ap.add_argument("--gauss_inference_steps", type=int, default=None,
+                    help="DVLT loop steps (default: model choice)")
     ap.add_argument("--depth_mode", choices=("depth-aware", "alpha"), default="depth-aware",
                     help="depth-aware uses scene/robot depth for occlusion; alpha uses the original mask composite")
     ap.add_argument(
@@ -178,12 +212,24 @@ def run(args):
     # Depth is both estimated and consumed only in depth-aware mode.  The
     # explicit alpha/skip switches keep the previous mask-only pipeline intact.
     with_depth = requested_with_depth and requested_depth_mode == "depth-aware" and not skip_depth
-    effective_depth_mode = "depth-aware" if with_depth else "alpha"
+    with_gauss = (bool(getattr(args, "with_gauss", False))
+                  and requested_depth_mode == "depth-aware" and not skip_depth)
+    # Select which scene-depth backend feeds retarget compositing.  auto
+    # prefers the gauss reconstruction (metric, frame-consistent) and falls
+    # back to DA3 when gauss was not requested.
+    scene_backend = getattr(args, "scene_backend", "auto")
+    scene_depth_dir = None
+    if with_gauss and scene_backend != "da3":
+        scene_depth_dir = str(root / "05_gauss")
+    elif with_depth:
+        scene_depth_dir = str(root / "05_depth")
+    effective_depth_mode = "depth-aware" if scene_depth_dir else "alpha"
     dir_load = root / "01_load"
     dir_align = root / "02_align"
     dir_mask = root / "03_mask"
     dir_inpaint = root / "04_inpaint"
     dir_depth = root / "05_depth"
+    dir_gauss = root / "05_gauss"
     dir_retarget = root / "06_retarget"
     dir_lerobot = root / "07_lerobot"
     dir_demo = root / "08_demo"
@@ -264,16 +310,62 @@ def run(args):
             episodes=args.episodes,
         ))
 
+    if with_gauss:
+        print("\n" + "=" * 60)
+        print(f"[5/{n_steps}] Gauss: DVLT scene reconstruction -> metric depth")
+        print(f"            output -> {dir_gauss} (checkpoint: "
+              f"{getattr(args, 'gauss_checkpoint', None) or 'nvidia/dvlt'})")
+        print("=" * 60)
+        gauss_recon.run(SimpleNamespace(
+            zarr_dir=args.input_dir,
+            state_dir=str(dir_align),
+            bg_dir=str(dir_inpaint),
+            output_dir=str(dir_gauss),
+            checkpoint=getattr(args, "gauss_checkpoint", None),
+            dinov2_weights=getattr(args, "gauss_dinov2_weights", None),
+            img_size=504,
+            patch_size=14,
+            sample_fps=float(getattr(args, "gauss_sample_fps", 2.0)),
+            fps=None,
+            fy=getattr(args, "gauss_fy", None),
+            conf_threshold=float(getattr(args, "gauss_conf_threshold", 0.2)),
+            points_per_frame=int(getattr(args, "gauss_points_per_frame", 8192)),
+            hole_fill_iters=6,
+            inference_steps=getattr(args, "gauss_inference_steps", None),
+            device=args.device,
+            episodes=args.episodes,
+            seed=0,
+            check=False,
+        ))
+
     print("\n" + "=" * 60)
     print(f"[6/{n_steps}] Retarget: {args.robot_type} dual-arm retargeting + rendering + composite")
     print("=" * 60)
+    # The rendered robot and the gauss scene depth must share one field of
+    # view.  An explicit --gauss_fy wins; otherwise adopt the gauss
+    # reconstruction's measured focal length (meta.json) so both grids align
+    # pixel-for-pixel.
+    retarget_fy = getattr(args, "gauss_fy", None)
+    if retarget_fy is None and scene_depth_dir == str(dir_gauss):
+        for ep in (args.episodes or [p.name for p in dir_gauss.iterdir()
+                                     if (p / "meta.json").exists()]):
+            fy = None
+            try:
+                import json
+                fy = json.loads((dir_gauss / ep / "meta.json").read_text()).get(
+                    "fy_recommended_retarget")
+            except Exception:
+                fy = None
+            if fy:
+                retarget_fy = float(fy)
+                break
     robot_retarget.run(SimpleNamespace(
         zarr_dir=args.input_dir,
         bg_dir=str(dir_inpaint),
         mask_dir=str(dir_mask),
         state_dir=str(dir_align),
         output_dir=str(dir_retarget),
-        scene_depth_dir=str(dir_depth) if with_depth else None,
+        scene_depth_dir=scene_depth_dir,
         depth_mode=effective_depth_mode,
         depth_epsilon=float(getattr(args, "depth_epsilon", 0.02)),
         depth_temporal_window=int(getattr(args, "depth_temporal_window", 5)),
@@ -324,7 +416,7 @@ def run(args):
         no_scene_support=getattr(args, "no_scene_support", False),
         fps=pipeline_fps,
         feather=5,
-        fy=None,  # Derive from each episode's intrinsics; fall back to 490.1961.
+        fy=retarget_fy,  # gauss-consistent fov when gauss is on; else derive/fallback
         height=360,
         debug=False,
         episodes=args.episodes,
@@ -351,7 +443,7 @@ def run(args):
         mask_dir=str(dir_mask),
         inpaint_dir=str(dir_inpaint),
         ik_dir=str(dir_retarget),
-        depth_dir=str(dir_depth) if with_depth else None,
+        depth_dir=scene_depth_dir,
         output_dir=str(dir_demo),
         episodes=args.episodes,
         fps=pipeline_fps,

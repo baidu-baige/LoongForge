@@ -182,12 +182,12 @@ def build_arg_parser():
     ap.add_argument(
         "--depth_dir",
         default=None,
-        help="Depth-step output containing {ep}/scene_depth.npz; enables numeric depth consistency checks",
+        help="DA3/DVLT output containing {ep}/scene_depth.npz; enables sampled depth diagnostics",
     )
     ap.add_argument(
         "--depth_ik_dir",
         default=None,
-        help="Retarget IK directory containing {ep}_ik.npz, used for robot and DA3 depth comparison",
+        help="Retarget IK directory containing {ep}_ik.npz, used for robot and DA3/DVLT scene-depth comparison",
     )
     ap.add_argument("--depth_samples", type=int, default=12,
                     help="Number of frames sampled for depth consistency checks (default: 12)")
@@ -195,7 +195,7 @@ def build_arg_parser():
 
 
 def check_depth_consistency(args):
-    """Optional section 8: compare sampled DA3 metric depth with rendered robot view depth."""
+    """Optional section 8: compare sampled DA3/DVLT metric scene depth with rendered robot view depth."""
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     import mujoco
     from steps.robot_retarget import build_dual_model
@@ -247,7 +247,7 @@ def check_depth_consistency(args):
         a = np.array(ratios)
         cv = float(a.std() / a.mean()) if a.mean() > 1e-9 else float("nan")
         print(f"{ep:<30}{len(ratios):>8}{np.median(zmeds):>9.3f}{np.median(dmeds):>9.3f}{a.mean():>9.3f}{cv:>8.2f}")
-    print("  (z=robot view depth, d=DA3 metric depth; ratio near 1 means agreement, low CV means stability)")
+    print("  (z=robot view depth, d=DA3/DVLT metric scene depth; ratio near 1 means agreement, low CV means stability)")
 
 
 
