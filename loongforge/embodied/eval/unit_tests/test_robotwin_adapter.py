@@ -753,6 +753,57 @@ def test_fill_missing_task_attrs_mirrors_play_once() -> None:
     assert not hasattr(env, "arm_tag")
 
 
+def test_deploy_policy_can_disable_step_trace(tmp_path: pathlib.Path) -> None:
+    """run.write_trace=false drops trace_path, skipping ~5% per-step CPU."""
+    from loongforge.embodied.eval.orchestrator.runners import robotwin_runner
+
+    def write(**kw) -> str:
+        fields = dict(
+            policy_ckpt_path="/ckpt",
+            task_name="adjust_bottle",
+            task_config="demo_clean",
+            ckpt_setting="t",
+            seed=0,
+            instruction_type="unseen",
+            host="127.0.0.1",
+            port=1,
+            unnorm_key=None,
+            action_mode="abs",
+            no_action_reorder=False,
+            max_steps=400,
+            control_hz=10,
+            disable_action_cache=False,
+            return_action_chunk=True,
+            skip_intra_chunk_obs=True,
+            chunk_execute_steps=30,
+            action_bridge="pi05_aloha_14d",
+            domain_id=None,
+            disable_eval_video_log=True,
+            output_dir=str(tmp_path),
+        )
+        fields.update(kw)
+        path = tmp_path / f"deploy_{kw.get('write_trace', 'default')}.yml"
+        robotwin_runner._write_deploy_policy(argparse.Namespace(**fields), path)
+        return path.read_text(encoding="utf-8")
+
+    assert "trace_path:" in write()  # default keeps tracing
+    assert "trace_path:" in write(write_trace=True)
+    assert "trace_path" not in write(write_trace=False)
+
+
+def test_trace_recording_is_skipped_without_a_path() -> None:
+    """No trace_path -> the bridge must not build per-step records."""
+    from loongforge.embodied.eval.bridges.robotwin_policy import ModelClient
+
+    client = ModelClient.__new__(ModelClient)
+    client.trace_path = None
+    client.trace_records = []
+    client.episode_id = "ep"
+    client.action_bridge = "pi05_aloha_14d"
+    client._record_trace(1, "go", np.zeros(14), np.zeros(14), np.zeros(14), {"data": {}})
+    assert client.trace_records == []
+
+
 def test_official_step_limit_lookup(tmp_path: pathlib.Path) -> None:
     """use_official_step_limits keeps per-task horizons from RoboTwin's YAML."""
     from loongforge.embodied.eval.orchestrator.runners import robotwin_runner

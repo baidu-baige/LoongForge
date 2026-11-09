@@ -54,8 +54,11 @@ def _write_deploy_policy(args: argparse.Namespace, path: pathlib.Path) -> None:
         "chunk_execute_steps": int(getattr(args, "chunk_execute_steps", 0) or 0),
         "action_bridge": getattr(args, "action_bridge", "ee6d_dual"),
         "domain_id": getattr(args, "domain_id", None),
-        "trace_path": str(_robotwin_artifact_dir(args) / "trace.json"),
     }
+    if getattr(args, "write_trace", True):
+        # Per-step tracing costs ~5% of the sim CPU (tolist + JSON) and is only a
+        # debugging artifact; run.write_trace=false drops it from the deploy config.
+        fields["trace_path"] = str(_robotwin_artifact_dir(args) / "trace.json")
     if args.disable_eval_video_log:
         fields["eval_video_log"] = False
     path.write_text(yaml.safe_dump(fields, allow_unicode=True, sort_keys=False), encoding="utf-8")
@@ -727,6 +730,7 @@ def _apply_config(args: argparse.Namespace, config: Dict[str, object]) -> argpar
         (env, "robotwin_root", "robotwin_path"),
         (env, "robotwin_python", "robotwin_python"),
         (run, "seed", "seed"),
+        (run, "write_trace", "write_trace"),
         (run, "output_dir", "output_dir"),
         (run, "ckpt_setting", "ckpt_setting"),
         (run, "disable_eval_video_log", "disable_eval_video_log"),

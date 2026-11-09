@@ -232,6 +232,9 @@ class ModelClient:
         response: Dict[str, Any],
     ) -> None:
         """Append and persist a RoboTwin step trace record."""
+        if self.trace_path is None:
+            # Tracing disabled: skip the per-step tolist()/dict work entirely.
+            return
         data = response.get("data", {})
         self.trace_records.append(
             {
