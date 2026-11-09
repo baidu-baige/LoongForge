@@ -61,6 +61,36 @@ def _write_deploy_policy(args: argparse.Namespace, path: pathlib.Path) -> None:
     path.write_text(yaml.safe_dump(fields, allow_unicode=True, sort_keys=False), encoding="utf-8")
 
 
+def fill_missing_task_attrs(env: Any, task_name: str, arm_tag_factory: Any = None, face_prod: Any = None) -> None:
+    """Seed task state that ``play_once()`` normally sets for ``check_success()``.
+
+    The official loop only runs the expert demo when ``expert_check`` is on. With
+    the offline seed cache (or ``--disable-expert-check``) it never runs, so the
+    few tasks that initialise ``arm_tag`` / ``origin_z`` inside ``play_once``
+    would fail in ``check_success``. The values mirror those ``play_once()``
+    lines exactly, so the RoboTwin source can stay untouched.
+
+    ``arm_tag_factory`` / ``face_prod`` are injectable for tests; production
+    calls resolve them from ``envs.utils`` (importable in the sim worker).
+    """
+    if arm_tag_factory is None or face_prod is None:
+        from envs.utils import ArmTag as _ArmTag, get_face_prod as _get_face_prod
+
+        arm_tag_factory = arm_tag_factory or _ArmTag
+        face_prod = face_prod or _get_face_prod
+    obj = getattr(env, "object", None)
+    if task_name == "open_laptop" and not hasattr(env, "arm_tag"):
+        face = face_prod(env.laptop.get_pose().q, [1, 0, 0], [1, 0, 0])
+        env.arm_tag = arm_tag_factory("left" if face > 0 else "right")
+    elif task_name == "place_object_scale" and obj is not None and not hasattr(env, "arm_tag"):
+        env.arm_tag = arm_tag_factory("right" if obj.get_pose().p[0] > 0 else "left")
+    elif task_name == "put_object_cabinet" and obj is not None:
+        if not hasattr(env, "arm_tag"):
+            env.arm_tag = arm_tag_factory("right" if obj.get_pose().p[0] > 0 else "left")
+        if not hasattr(env, "origin_z"):
+            env.origin_z = obj.get_pose().p[2]
+
+
 def _write_worker_eval_step_limit(args: argparse.Namespace) -> Optional[pathlib.Path]:
     """Run _write_worker_eval_step_limit."""
     if not args.worker_local_files or args.step_limit_override is None:
@@ -455,6 +485,29 @@ def _worker_eval_script(args: argparse.Namespace) -> Optional[pathlib.Path]:
                 text = text.replace(loop_anchor, loop_new, 1)
             else:
                 raise ValueError("offline_expert_check: eval loop anchor not found in worker script")
+    # Without the expert pre-pass the official loop never calls play_once(), and a
+    # few tasks initialise check_success() state (arm_tag / origin_z) there. Seed
+    # it right after setup_demo instead of editing the RoboTwin source.
+    if cache_dir or getattr(args, "disable_expert_check", False):
+        env_anchor = '    TASK_ENV = class_decorator(args["task_name"])\n'
+        if env_anchor not in text:
+            raise ValueError("env init shim: task-env anchor not found in worker script")
+        env_shim = (
+            env_anchor
+            + "\n    # --- env init shim (injected) ---\n"
+            "    from loongforge.embodied.eval.orchestrator.runners.robotwin_runner import (\n"
+            "        fill_missing_task_attrs as _vla_fill_attrs,\n"
+            "    )\n"
+            '    _vla_task_name = args["task_name"]\n'
+            "    _vla_orig_setup = TASK_ENV.setup_demo\n\n"
+            "    def _vla_setup_with_attrs(*_a, **_k):\n"
+            "        _ret = _vla_orig_setup(*_a, **_k)\n"
+            "        _vla_fill_attrs(TASK_ENV, _vla_task_name)\n"
+            "        return _ret\n\n"
+            "    TASK_ENV.setup_demo = _vla_setup_with_attrs\n"
+            "    # --- end env init shim ---\n"
+        )
+        text = text.replace(env_anchor, env_shim, 1)
     script_dir = pathlib.Path(args.output_dir) / "worker_files"
     script_dir.mkdir(parents=True, exist_ok=True)
     worker_script = script_dir / f"eval_policy_{args.ckpt_setting}.py"

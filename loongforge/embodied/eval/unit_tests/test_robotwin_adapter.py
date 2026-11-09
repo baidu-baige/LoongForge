@@ -638,6 +638,7 @@ def test_worker_script_offline_expert_check_modes(tmp_path: pathlib.Path) -> Non
         "import numpy as np\n"
         "def main(x):\n"
         "    model = get_model(usr_args)\n"
+        '    TASK_ENV = class_decorator(args["task_name"])\n'
         "def eval_policy(task_name, TASK_ENV, args, model, st_seed, test_num=1):\n"
         "    expert_check = True\n"
         "    while succ_seed < test_num:\n"
@@ -680,6 +681,10 @@ def test_worker_script_offline_expert_check_modes(tmp_path: pathlib.Path) -> Non
     assert "_idx = _S_OFFSET + succ_seed" in consume
     assert "cache exhausted" in consume
     assert "CACHE STALE" in consume
+    # No expert pre-pass -> play_once() never runs -> the shim must seed the
+    # check_success() state instead of patching the RoboTwin source.
+    assert "_vla_fill_attrs" in consume
+    assert "TASK_ENV.setup_demo = _vla_setup_with_attrs" in consume
 
     # Consume mode uses the explicit cache index, not start_seed (which stays a
     # seed value); a leftover start_seed=100000 must not shift the index.
@@ -693,10 +698,59 @@ def test_worker_script_offline_expert_check_modes(tmp_path: pathlib.Path) -> Non
 
     plain = gen()
     assert "_S_SCAN_DIR" not in plain and "_S_CACHE_PATH" not in plain
+    assert "_vla_fill_attrs" not in scan and "_vla_fill_attrs" not in plain
 
     # Every generated worker script must at least be syntactically valid.
     for label, src in (("scan", scan), ("consume", consume), ("plain", plain)):
         compile(src, f"<{label}>", "exec")
+
+
+def test_fill_missing_task_attrs_mirrors_play_once() -> None:
+    """Offline consume skips play_once(); the shim must set what it would have."""
+    from loongforge.embodied.eval.orchestrator.runners.robotwin_runner import fill_missing_task_attrs
+
+    class _Pose:
+        q = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        p = [0.2, 0.0, 0.5]
+
+    class _Actor:
+        def get_pose(self):
+            return _Pose()
+
+    class _Env:
+        laptop = _Actor()
+        object = _Actor()
+
+    def _arm(value):
+        return value
+
+    def _face(*_args):
+        return 1.0
+
+    env = _Env()
+    fill_missing_task_attrs(env, "open_laptop", arm_tag_factory=_arm, face_prod=_face)
+    assert env.arm_tag == "left"  # face_prod > 0 -> left
+
+    env = _Env()
+    fill_missing_task_attrs(env, "place_object_scale", arm_tag_factory=_arm, face_prod=_face)
+    assert env.arm_tag == "right"  # object x > 0
+
+    env = _Env()
+    fill_missing_task_attrs(env, "put_object_cabinet", arm_tag_factory=_arm, face_prod=_face)
+    assert env.arm_tag == "right"
+    assert env.origin_z == 0.5
+
+    # play_once() already ran -> the existing values win.
+    env = _Env()
+    env.arm_tag = "left"
+    env.origin_z = 0.9
+    fill_missing_task_attrs(env, "put_object_cabinet", arm_tag_factory=_arm, face_prod=_face)
+    assert (env.arm_tag, env.origin_z) == ("left", 0.9)
+
+    # Every other task is a no-op.
+    env = _Env()
+    fill_missing_task_attrs(env, "adjust_bottle", arm_tag_factory=_arm, face_prod=_face)
+    assert not hasattr(env, "arm_tag")
 
 
 def test_official_step_limit_lookup(tmp_path: pathlib.Path) -> None:
