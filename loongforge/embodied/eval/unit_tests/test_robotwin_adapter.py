@@ -705,6 +705,47 @@ def test_worker_script_offline_expert_check_modes(tmp_path: pathlib.Path) -> Non
         compile(src, f"<{label}>", "exec")
 
 
+def test_worker_script_uses_the_task_episode_count_for_instructions(tmp_path: pathlib.Path) -> None:
+    """A 25-episode unit must draw from the same instruction list as a 100-episode task."""
+    from loongforge.embodied.eval.orchestrator.runners import robotwin_runner
+
+    robotwin = tmp_path / "RoboTwin"
+    (robotwin / "script").mkdir(parents=True)
+    source = (
+        "def main(x):\n"
+        '    TASK_ENV = class_decorator(args["task_name"])\n'
+        "def eval_policy(task_name, TASK_ENV, args, model, st_seed, test_num=1):\n"
+        '    results = generate_episode_descriptions(args["task_name"], episode_info_list, test_num)\n'
+    )
+    (robotwin / "script" / "eval_policy.py").write_text(source, encoding="utf-8")
+
+    def gen(**kw) -> str:
+        fields = dict(
+            worker_local_files=True,
+            robotwin_path=str(robotwin),
+            output_dir=str(tmp_path / f"out_{abs(hash(str(kw)))}"),
+            ckpt_setting="t",
+            step_limit_override=None,
+            start_seed_override=None,
+            test_num_override=25,
+            disable_expert_check=False,
+            disable_eval_video_log=True,
+            seed_stride=1,
+            skip_intra_chunk_obs=False,
+            settle_early_stop=False,
+            task_name="place_dual_shoes",
+        )
+        fields.update(kw)
+        text = robotwin_runner._worker_eval_script(argparse.Namespace(**fields)).read_text(encoding="utf-8")
+        compile(text, "<generated>", "exec")
+        return text
+
+    assert "episode_info_list, 100)" in gen(episodes_per_task=100)
+    assert "episode_info_list, 100)" in gen(test_num_override=100, episodes_per_task=100)
+    # No task-level count available -> keep the unit's own test_num.
+    assert "episode_info_list, 25)" in gen()
+
+
 def test_fill_missing_task_attrs_mirrors_play_once() -> None:
     """Offline consume skips play_once(); the shim must set what it would have."""
     from loongforge.embodied.eval.orchestrator.runners.robotwin_runner import fill_missing_task_attrs

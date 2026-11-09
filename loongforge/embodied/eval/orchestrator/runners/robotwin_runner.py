@@ -511,6 +511,21 @@ def _worker_eval_script(args: argparse.Namespace) -> Optional[pathlib.Path]:
             "    # --- end env init shim ---\n"
         )
         text = text.replace(env_anchor, env_shim, 1)
+    # Instruction sampling must see the same candidate list as the single-process
+    # protocol: ``generate_episode_descriptions(..., max_descriptions)`` fills a
+    # list whose length feeds ``np.random.choice``, so a 25-episode unit would
+    # otherwise draw a different paraphrase than a 100-episode task for the same
+    # seed (observed as task-level success shifts on identical seeds).
+    desc_count = int(getattr(args, "episodes_per_task", 0) or 0)
+    if desc_count <= 0:
+        desc_count = int(getattr(args, "test_num_override", 0) or 0)
+    desc_old = 'generate_episode_descriptions(args["task_name"], episode_info_list, test_num)'
+    if desc_count > 0 and desc_old in text:
+        text = text.replace(
+            desc_old,
+            f'generate_episode_descriptions(args["task_name"], episode_info_list, {desc_count})',
+            1,
+        )
     script_dir = pathlib.Path(args.output_dir) / "worker_files"
     script_dir.mkdir(parents=True, exist_ok=True)
     worker_script = script_dir / f"eval_policy_{args.ckpt_setting}.py"
@@ -701,6 +716,7 @@ def _apply_config(args: argparse.Namespace, config: Dict[str, object]) -> argpar
         # episodes_per_task is the whole-run default; a shard's explicit test_num
         # must win, so it is applied after this line.
         (benchmark, "episodes_per_task", "test_num_override"),
+        (benchmark, "episodes_per_task", "episodes_per_task"),
         (benchmark, "test_num", "test_num_override"),
         (benchmark, "disable_expert_check", "disable_expert_check"),
         (benchmark, "domain_id", "domain_id"),
