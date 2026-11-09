@@ -15,7 +15,6 @@ from __future__ import annotations
 import functools
 import logging
 from dataclasses import dataclass
-from pathlib import Path
 from typing import List, Optional
 
 import numpy as np
@@ -87,7 +86,6 @@ def load_model(checkpoint: str,
                 f"checkpoint is missing {len(pe_missing)} patch_embed weights "
                 f"(e.g. {pe_missing[0]}) and no DINOv2 weights were supplied: "
                 f"pass --dinov2_weights <DINOv2-vitb14-reg4 .pth>")
-        from dvlt.model_components import dinov2
         patch = model.model.patch_embed_encoder
         sd = torch.load(dinov2_weights, map_location="cpu")
         sd = sd.get("state_dict", sd)

@@ -11,7 +11,6 @@ frame.  The ``01_load`` head-relative outputs are intentionally *not* used.
 
 from __future__ import annotations
 
-import os
 import re
 import subprocess as sp
 from pathlib import Path

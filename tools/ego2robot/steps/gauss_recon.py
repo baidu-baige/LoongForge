@@ -230,7 +230,6 @@ def process_episode(ep, args, model=None) -> dict:
     if bg_path.exists():
         H, W, crop_top, crop_bottom = scene_io.bg_effective_size(str(bg_path))
     elif len(frames):
-        import cv2
         fh, fw = np.asarray(frames[0]).shape[:2]
         H, W, crop_top, crop_bottom = fh, fw, 0, 0
     else:
