@@ -27,12 +27,21 @@ raw-action channels, RoboDojo action space, PayloadBuilder defaults):
   RoboDojo X_VLA adapter does: head camera only, 20-D proprio from the measured
   ee poses and raw gripper joints, ``domain_id`` 0. One inference per chunk; the
   server-side chunk cache serves the rest of the chunk step by step.
+- ``fastwam_joint14``: FastWAM as the official RoboDojo FastWAM adapter (its RoboTwin
+  ``deploy_policy`` reused): three cameras INTER_AREA-resized to 320x240, then packed to the
+  384x320 T layout model-side; the raw 14-D joint state, z-score normalized; 24 of the 32
+  absolute joint targets executed per chunk.
 
 Chunk boundaries: the official ``deploy.py`` of both policies executes one predicted
 chunk per ``get_action`` and calls ``is_episode_end()`` once more at every chunk
 end. The plugin's ``deploy.py`` replays that call order, so the bridge reports
 ``chunk_end`` from the model's fixed chunk schedule (first chunk
 ``first_chunk_len`` actions, then ``chunk_len``).
+
+Episode-end checks: ``is_episode_end()`` also latches success, so when it is called matters.
+The official LingBot_VA / Pi_05 / X_VLA ``deploy.py`` call it after every action; the official
+FastWAM ``deploy.py`` only at chunk ends (``_EPISODE_END_CHECK``). The bridge reports the mode
+with every action and the plugin ``deploy.py`` follows it.
 """
 
 from __future__ import annotations
@@ -61,7 +70,18 @@ _BRIDGE_WIRING = {
         "ee20",
         {"state_encoding": "ee6d_robodojo", "max_image_views": 1, "domain_id": 0},
     ),
+    "fastwam_joint14": (
+        "fastwam",
+        "",
+        None,
+        "joint14",
+        {"state_encoding": "robotwin_joint14", "action_dim": 14, "pre_resize_width": 320, "pre_resize_height": 240},
+    ),
 }
+
+# action_bridge -> when the plugin deploy.py calls is_episode_end(): "action" (after every
+# action, the default) or "chunk" (only at chunk ends).
+_EPISODE_END_CHECK = {"fastwam_joint14": "chunk"}
 
 
 class ChunkSchedule:
@@ -113,6 +133,7 @@ class RoboDojoPolicyModel:
             cfg.get("disable_action_cache", False) or getattr(self.payload_builder, "disable_action_cache", False)
         )
         self.schedule = ChunkSchedule(int(cfg["first_chunk_len"]), int(cfg["chunk_len"]))
+        self.episode_end_check = _EPISODE_END_CHECK.get(self.action_bridge, "action")
         self.client = PolicyClient(
             host=str(cfg.get("lf_host", "127.0.0.1")),
             port=int(cfg["lf_port"]),
@@ -143,7 +164,7 @@ class RoboDojoPolicyModel:
         self._obs = obs
 
     def get_action(self, obs: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Return ``{"actions": [one action dict], "chunk_end": bool}`` for the current observation."""
+        """Return ``{"actions": [one action dict], "chunk_end": bool, "end_check": str}`` for the current observation."""
         if obs is not None:
             self._obs = obs
         if self._obs is None:
@@ -190,7 +211,7 @@ class RoboDojoPolicyModel:
             self._flush_trace()
         self.episode_step += 1
         self._obs = None
-        return {"actions": [action], "chunk_end": chunk_end}
+        return {"actions": [action], "chunk_end": chunk_end, "end_check": self.episode_end_check}
 
     def prepare_case(self, case_meta=None) -> None:
         """Run prepare_case (no-op)."""

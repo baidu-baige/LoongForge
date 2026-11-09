@@ -364,7 +364,8 @@ def test_example_configs_match_official_lingbot_va_settings():
 
 
 def test_bridge_wiring_is_known():
-    assert set(robodojo_policy._BRIDGE_WIRING) == {"lingbot_va_joint30", "pi05_joint14", "xvla_ee20"}
+    assert set(robodojo_policy._BRIDGE_WIRING) == {"lingbot_va_joint30", "pi05_joint14", "xvla_ee20", "fastwam_joint14"}
+    assert set(robodojo_policy._EPISODE_END_CHECK) <= set(robodojo_policy._BRIDGE_WIRING)
     assert json.loads(json.dumps(LINGBOT_VA_JOINT_CHANNELS)) == LINGBOT_VA_JOINT_CHANNELS
 
 
@@ -559,3 +560,121 @@ def test_pi05_openpi_resize_with_pad_matches_openpi_layout():
     out = openpi_resize_with_pad(img, 224)
     assert out.shape == (224, 224, 3) and out.dtype == np.uint8
     assert (out[:28] == 0).all() and (out[196:] == 0).all() and out[28:196].any()  # 168 rows, centered
+
+
+# ── FastWAM (official XPolicyLab/policy/FastWAM, RoboTwin deploy_policy reused) ──
+class _StepClientChunkCheck(_StepClient):
+    """Bridge style with ``end_check: chunk`` (FastWAM)."""
+
+    def call(self, func_name, obs=None):
+        out = super().call(func_name, obs)
+        if out is not None:
+            out["end_check"] = "chunk"
+        return out
+
+
+@pytest.mark.parametrize("n_actions", [5, 23, 24, 25, 48, 60])
+def test_plugin_deploy_replays_official_fastwam_env_call_order(n_actions):
+    ours = _load_module(_PLUGIN_DIR / "deploy.py", "lf_robodojo_deploy")
+    env_ours = _FakeEnv(n_actions)
+    ours.eval_one_episode(env_ours, _StepClientChunkCheck(24, 24))
+
+    official_path = _ROBODOJO_ROOT / "XPolicyLab" / "policy" / "FastWAM" / "deploy.py"
+    if not official_path.is_file():
+        pytest.skip("set ROBODOJO_ROOT to a RoboDojo checkout for the parity check")
+    official = _load_module(official_path, "official_fastwam_deploy")
+    env_official = _FakeEnv(n_actions)
+    official.eval_one_episode(env_official, _ChunkClient(24, 24))
+    # is_episode_end only at chunk ends; the rest of a chunk is still sent (no-ops in the real env)
+    assert env_ours.calls == env_official.calls
+    assert "end?" not in env_ours.calls[2:2 + 2 * 23]
+
+
+def _official_fastwam_standardize():
+    import ast
+
+    model_py = _ROBODOJO_ROOT / "XPolicyLab" / "policy" / "FastWAM" / "model.py"
+    if not model_py.is_file():
+        pytest.skip("set ROBODOJO_ROOT to a RoboDojo checkout for the FastWAM parity check")
+    import cv2
+
+    tree = ast.parse(model_py.read_text())
+    nodes = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_standardize_rgb"]
+    ns = {"np": np, "cv2": cv2}
+    exec(compile(ast.Module(nodes, []), str(model_py), "exec"), ns)
+    return ns["_standardize_rgb"]
+
+
+@pytest.mark.parametrize("shape", [(480, 640, 3), (240, 320, 3), (720, 1280, 3)])
+def test_fastwam_standardize_rgb_matches_official(shape):
+    from loongforge.embodied.eval.payload_builders.fastwam import standardize_rgb
+
+    official = _official_fastwam_standardize()
+    img = np.random.default_rng(0).integers(0, 255, shape, dtype=np.uint8)
+    np.testing.assert_array_equal(standardize_rgb(img, 320, 240), official(img))
+
+
+class _FakeFastWAMClient(_FakePolicyClient):
+    def predict_action(self, **payload):
+        self.calls.append(payload)
+        latency = 5.0 if len(self.calls) % 24 == 1 else None  # server cache: fresh every 24 steps
+        return {"ok": True, "data": {"actions": [np.linspace(-1, 1, 14, dtype=np.float32).tolist()],
+                                     "inference_latency_ms": latency}}
+
+
+def test_bridge_fastwam_payload_and_joint_action(monkeypatch):
+    import loongforge.embodied.eval.transport as transport
+
+    monkeypatch.setattr(transport, "PolicyClient", _FakeFastWAMClient)
+    model = RoboDojoPolicyModel(
+        {"task_name": "stack_bowls", "action_bridge": "fastwam_joint14", "first_chunk_len": 24, "chunk_len": 24, "lf_port": 1}
+    )
+    assert not model.disable_action_cache  # one inference per chunk, the server cache serves the rest
+    model.reset()
+    outs = [model.get_action(_obs(i)) for i in range(25)]
+    call = model.client.calls[0]
+    assert [np.asarray(v).shape for v in call["images"]] == [(240, 320, 3)] * 3  # head, left, right
+    assert call["instructions"] == [
+        "A video recorded from a robot's point of view executing the following instruction: stack the bowls"
+    ]
+    # the official adapter casts the packed state to float32 (``.astype(np.float32)``)
+    np.testing.assert_array_equal(call["state"], pack_joint_state(_obs(0)["state"]).astype(np.float32))
+    assert [i for i, o in enumerate(outs) if o["chunk_end"]] == [23]
+    assert {o["end_check"] for o in outs} == {"chunk"}
+    expected = joint14_to_action_dict(np.linspace(-1, 1, 14, dtype=np.float32))  # absolute joints, no decoder
+    for key, value in expected.items():
+        np.testing.assert_allclose(outs[0]["actions"][0][key], value)
+    if (_ROBODOJO_ROOT / "XPolicyLab" / "utils" / "process_data.py").is_file():
+        import sys
+
+        sys.path.insert(0, str(_ROBODOJO_ROOT))
+        sys.path.insert(0, str(_ROBODOJO_ROOT / "XPolicyLab"))
+        from XPolicyLab.utils.process_data import get_robot_action_dim_info, pack_robot_state
+
+        ref = pack_robot_state(_obs(0), "joint", get_robot_action_dim_info("arx_x5"), source_type="obs", state_type="state")
+        np.testing.assert_array_equal(call["state"], np.asarray(ref, dtype=np.float32))
+
+
+def test_example_fastwam_config_matches_official_adapter():
+    cfg = yaml.safe_load(
+        (_REPO_ROOT / "examples/embodied/fastwam/eval/configs/robodojo/put_bottles_into_dustbin.yaml").read_text()
+    )
+    bench, model, server = cfg["benchmark"], cfg["model"], cfg["server"]
+    assert bench["action_bridge"] == "fastwam_joint14"
+    assert bench["first_chunk_len"] == bench["chunk_len"] == 24 and server["chunk_execute_steps"] == 0
+    assert model["camera_layout"] == "robotwin_t" and model["norm_mode"] == "z-score" and model["variant"] == "uncond"
+    assert model["noise_seed"] == bench["seed"] and model["redirect_common_files"] is True
+    deploy = _ROBODOJO_ROOT / "XPolicyLab" / "policy" / "FastWAM" / "deploy.yml"
+    if not deploy.is_file():
+        pytest.skip("set ROBODOJO_ROOT to a RoboDojo checkout for the deploy.yml check")
+    official = yaml.safe_load(deploy.read_text())
+    assert int(official["replan_steps"]) == bench["chunk_len"]
+    assert int(official["num_inference_steps"]) == model["num_inference_steps"]
+    assert official["mixed_precision"] == "bf16" and model["dtype"] == "bfloat16" and server["use_bf16"] is True
+    assert official["sigma_shift"] is None and model["sigma_shift"] == 5.0  # scheduler infer_shift
+    assert float(official["text_cfg_scale"]) == 1.0 and official["rand_device"] == "cpu"
+    sim_task = yaml.safe_load(
+        (_ROBODOJO_ROOT / "XPolicyLab/policy/FastWAM/FastWAM/configs/model/fastwam.yaml").read_text()
+    )
+    assert sim_task["action_scheduler"]["infer_shift"] == model["sigma_shift"]
+    assert sim_task["model_id"] == model["model_id"] and sim_task["tokenizer_model_id"] == model["tokenizer_model_id"]

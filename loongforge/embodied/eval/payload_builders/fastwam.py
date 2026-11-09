@@ -16,6 +16,11 @@ Per-benchmark geometry (matched to the checkpoint via ``state_encoding``):
   14D dual-arm joint vector passed through as-is (state == observation
   ``joint_action.vector``; the official client does no joint remapping).
 
+- ``pre_resize_width`` / ``pre_resize_height`` (RoboDojo): every view is first
+  resized to this size with OpenCV ``INTER_AREA`` (official RoboDojo FastWAM
+  adapter ``_standardize_rgb``, 320x240 = the RoboTwin camera size the
+  checkpoint's T-layout pack expects); 0 keeps the env-native views.
+
 Replan protocol (official FastWAM rollout): the model emits a 32-step chunk
 and ``replan_steps`` are executed open-loop before the next call (LIBERO 10 /
 RoboTwin 24), so the default chunk-cached behaviour is kept
@@ -75,6 +80,20 @@ def _pack_fastwam_images(
     if wrist is None:
         raise ValueError("images_by_cam must contain 'wrist' for FastWAM LIBERO eval")
     return [np.asarray(agent), np.asarray(wrist)]
+
+
+def standardize_rgb(image: np.ndarray, width: int, height: int) -> np.ndarray:
+    """Official RoboDojo FastWAM ``_standardize_rgb``: uint8 clip, then INTER_AREA to (width, height)."""
+    import cv2
+
+    image = np.asarray(image)
+    if image.ndim != 3 or image.shape[-1] != 3:
+        raise ValueError(f"Expected HWC image with 3 channels, got {image.shape}")
+    if image.dtype != np.uint8:
+        image = np.clip(image, 0, 255).astype(np.uint8)
+    if image.shape[:2] != (height, width):
+        image = cv2.resize(image, (width, height), interpolation=cv2.INTER_AREA)
+    return image
 
 
 def _quat_to_axisangle(quat_xyzw: np.ndarray) -> np.ndarray:
@@ -151,6 +170,10 @@ class FastWAMPayloadBuilder(PayloadBuilder):
     # exhausted (or truncated to chunk_execute_steps server-side), which is
     # the official replan protocol — no per-step model call needed.
     disable_action_cache: bool = False
+    # Pre-resize of every view before the model-side pack (RoboDojo: 320x240,
+    # INTER_AREA); 0 = off.
+    pre_resize_width: int = 0
+    pre_resize_height: int = 0
 
     def _encode_state(self, canonical: Dict[str, Any]) -> Optional[np.ndarray]:
         """Encode ``canonical.state_raw`` per ``self.state_encoding``."""
@@ -164,6 +187,8 @@ class FastWAMPayloadBuilder(PayloadBuilder):
     def build(self, canonical: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:
         """Return the kwargs consumed by the FastWAM eval wrapper."""
         images = _pack_fastwam_images(canonical["images"], self.state_encoding)
+        if self.pre_resize_width > 0 and self.pre_resize_height > 0:
+            images = [standardize_rgb(v, self.pre_resize_width, self.pre_resize_height) for v in images]
         return {
             "images": images,
             "instructions": [FASTWAM_PROMPT_TEMPLATE.format(task=canonical["instruction"])],
