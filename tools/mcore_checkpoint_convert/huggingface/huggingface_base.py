@@ -60,6 +60,8 @@ def is_dsv4_hybrid_config(c_config):
     except (AttributeError, KeyError, TypeError):
         common_args = {}
     module_args = c_config.get("module", {}) if hasattr(c_config, "get") else {}
+    if module_args.get("model_type") == "ernie5_5":
+        return False
     return (
         common_args.get("experimental_attention_variant") == "dsv4_hybrid"
         or module_args.get("experimental_attention_variant") == "dsv4_hybrid"
@@ -248,6 +250,8 @@ class HuggingfaceBase:
                     since we capture the rotary_emb op"
         hf_name, is_direct_name, is_dict_for_expert, need_transpose, no_layer_id, depend_on_key, _ = \
                 self.get_hf_name_and_args(self.name_map[spec_name])
+        if need_transpose and name != MLP_DENSE_H_TO_4H and expert_name is None and weight is not None:
+            weight = weight.T.contiguous()
         if hf_layer_id is None or no_layer_id:
             if is_direct_name:
                 hf_weight_path = hf_name
@@ -378,11 +382,11 @@ class HuggingfaceBase:
             layer_id = None
         common_key = CommonCheckpoint.get_key(name, layer_id=layer_id)
         if is_valid_name:
-            hf_name, is_direct_name, _, _, no_layer_id, depend_on_key, _ = \
+            hf_name, is_direct_name, _, need_transpose, no_layer_id, depend_on_key, _ = \
                     self.get_hf_name_and_args(self.name_map[spec_name])
             if depend_on_key is not None:
                 assert depend_on_key in self.name_map, f"depend_on_key {depend_on_key} is not in self.name_map"
-                d_hf_name, is_direct_name_2, no_layer_id_2, _, _, _, _ = self.get_hf_name_and_args(self.name_map[depend_on_key])
+                d_hf_name, is_direct_name_2, _, _, no_layer_id_2, _, _ = self.get_hf_name_and_args(self.name_map[depend_on_key])
                 depend_weight, _, _ = self.get_weight(depend_on_key, h_dict, layer_id, hf_layer_id, layer_prefix,
                                                       expert_name, transformer, d_hf_name, is_direct_name_2, no_layer_id_2, True)
                 if depend_weight is None:
@@ -395,9 +399,12 @@ class HuggingfaceBase:
                 hf_name = self.name_map[WORD_EMBEDDINGS]
             is_direct_name = False
             no_layer_id = False
+            need_transpose = False
         weight, bias, weight_scale = self.get_weight(name, h_dict, layer_id, hf_layer_id, layer_prefix,
                                                      expert_name, transformer, hf_name, is_direct_name,
                                                      no_layer_id, is_valid_name, spec_name=spec_name)
+        if need_transpose and name != MLP_DENSE_H_TO_4H and expert_name is None and weight is not None:
+            weight = weight.T.contiguous()
         c_ckpt.set(common_key, weight, bias, weight_scale)
 
     def get_weight(self, name, h_dict, layer_id, hf_layer_id, layer_prefix, expert_name,

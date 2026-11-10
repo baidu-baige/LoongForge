@@ -24,6 +24,7 @@ import json
 import logging
 import re
 from abc import ABC, abstractmethod
+from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import (
@@ -700,6 +701,24 @@ class HFChatTemplate(ChatTemplate):
 
 
 @dataclass
+class Ernie55HFTemplate(HFChatTemplate):
+    def _tokenize_with_generation_indices(
+        self,
+        tokenizer: "AutoTokenizerFromHF",
+        messages: Sequence[Dict[str, Any]],
+        tools: Optional[Sequence[Dict[str, Any]]] = None,
+    ) -> Tuple[List[int], List[int]]:
+        """Parse JSON function arguments before ERNIE template rendering."""
+        normalized = deepcopy(list(messages))
+        for message in normalized:
+            for tool_call in message.get("tool_calls") or []:
+                function = tool_call["function"]
+                if isinstance(function.get("arguments"), str):
+                    function["arguments"] = json.loads(function["arguments"])
+        return super()._tokenize_with_generation_indices(tokenizer, normalized, tools)
+
+
+@dataclass
 class Llama2Template(ChatTemplate):
     """LLaMA-2 Template"""
 
@@ -1347,4 +1366,11 @@ _register_chat_template(
         image_prefix="<|begin_of_image|>",
         image_suffix="<|end_of_image|>",
     ),
+)
+
+_register_chat_template(
+    name="ernie5.5-hf",
+    cls=Ernie55HFTemplate,
+    chat_template=_read_builtin_chat_template("ernie55_hf_training.jinja"),
+    stop_words=["<|ernie:im_end|>"],
 )

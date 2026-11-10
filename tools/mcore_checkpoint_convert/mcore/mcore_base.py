@@ -37,7 +37,7 @@ from mcore_checkpoint_convert.common.common_checkpoint import (
     MOE_EXPERT_H_TO_4H, MTP_WORD_EMBEDDING, LAYER_IS_DIRECT_NAME,
     LAYER_PREFIX, MTP_NAME_PREFIX_FOR_LAYER, EXTRA_DATA, LAYER_NAME, LAYER_EXTRA_DATA,
     LAYER_IS_LAYERNORM, LAYER_IS_FP8, LAYER_FP8_IGNORE_TP, LAYER_IGNORE_TP,
-    LAYER_DTYPE
+    LAYER_DTYPE, LAYER_DEPEND_ON_KEY
 )
 
 from mcore_checkpoint_convert.mcore.util.mcore_attn_converter import McoreAttnGateQkvConverter, McoreMixerAttnConverter
@@ -222,6 +222,7 @@ class McoreBase:
         layer_prefix = self.layer_prefix if layer_prefix is None else layer_prefix
         if name == MTP_WORD_EMBEDDING:
             layer_id = None
+            m_layer_id = None
         common_key = CommonCheckpoint.get_key(name, layer_id=layer_id)
         if name == MTP_SHARED_HEAD_HEAD:
             name = WORD_EMBEDDINGS_FOR_HEAD
@@ -527,6 +528,19 @@ class McoreBase:
 
         if path_info is None:
             return
+        mapping = self.name_map[name]
+        dependency = mapping.get(LAYER_DEPEND_ON_KEY) if isinstance(mapping, (dict, DictConfig)) else None
+        if dependency is not None:
+            dependency_path = self.build_mcore_paths(
+                dependency, layer_id, m_layer_id, layer_prefix, expert_name, name_prefix,
+            )
+            if dependency_path is None:
+                raise ValueError(f"Unknown checkpoint mapping dependency: {dependency}.")
+            weights, _, _ = self.get_mcore_weight_list(
+                m_dict, t_name, dependency_path.mcore_weight_path, None,
+            )
+            if weights is None:
+                return
         name = path_info.name
         mcore_weight_path = path_info.mcore_weight_path
         mcore_bias_path = path_info.mcore_bias_path

@@ -1,0 +1,99 @@
+_target_: loongforge.models.foundation.ernie5_5.Ernie55Config
+num_layers: 43
+hidden_size: 4096
+ffn_hidden_size: 14336
+num_attention_heads: 64
+
+# MoE
+num_experts: 512
+moe_router_topk: 10
+moe_ffn_hidden_size: 2048
+moe_shared_expert_intermediate_size: 2048
+moe_router_topk_scaling_factor: 3.0
+moe_router_bias_update_rate: 0.0001
+moe_router_score_function: sigmoid
+moe_router_enable_expert_bias: true
+moe_router_load_balancing_type: none
+moe_router_dtype: fp32
+moe_aux_loss_coeff: 0.0
+moe_grouped_gemm: true
+moe_token_dispatcher_type: alltoall
+first_k_dense_replace: 1
+
+# Attention layout
+compress_ratios: [128, 128, 128, 128, 128, 128, 128, -2, 128, 128, 128, 128, 128, 128, -2, 128, 128, 128, 128, 128, 128, -2, 128, 128, 128, 128, 128, 128, -2, 128, 128, 128, 128, 128, 128, -2, 128, 128, 128, 128, 128, 128, -2]
+
+# H attention
+q_lora_rank: 1024
+kv_lora_rank: 512
+v_head_dim: 512
+qk_head_dim: 448
+qk_pos_emb_head_dim: 64
+o_groups: 8
+o_lora_rank: 1024
+
+# D attention
+d_num_attention_heads: 64
+d_q_lora_rank: 1024
+d_kv_lora_rank: 512
+d_qk_head_dim: 192
+d_qk_pos_emb_head_dim: 64
+d_v_head_dim: 256
+
+# DSA indexer
+index_n_heads: 64
+index_head_dim: 128
+index_topk: 2048
+dsa_indexer_loss_coeff: 0.01
+dsa_indexer_use_sparse_loss: true
+
+# Compressed attention
+csa_window_size: 128
+csa_compress_rotary_base: 160000.0
+csa_dense_mode: true
+
+# RoPE
+hca_rope_type: yarn
+rope_type: rope
+rotary_base: 8000000.0
+rotary_scaling_factor: 16
+original_max_position_embeddings: 65536
+beta_fast: 32.0
+beta_slow: 1.0
+mscale: 1.0
+mscale_all_dim: 0.0
+
+# Hyper-connections
+hc_mult: 4
+hc_sinkhorn_iters: 20
+
+# Vocabulary
+vocab_size_in_config_file: 201216
+make_vocab_size_divisible_by: 1
+
+# Normalization and projections
+normalization: RMSNorm
+swiglu: true
+qk_layernorm: true
+multi_latent_attention: true
+experimental_attention_variant: dsv4_hybrid
+group_query_attention: true
+num_query_groups: 1
+position_embedding_type: none
+untie_embeddings_and_output_weights: true
+add_bias_linear: false
+add_qkv_bias: false
+attention_dropout: 0.0
+hidden_dropout: 0.0
+apply_rope_fusion: false
+
+# MTP
+mtp_num_layers: 1
+moe_latent_size: 2048
+moe_use_norm_before_up_proj: true
+activation_situ_beta: 4.0
+activation_situ_linear_beta: 25.0
+mtp_shared_last_layer: true
+
+model_type: ernie5_5
+convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/ernie5_5/ckpt_convert/ernie5_5_convert.yaml
