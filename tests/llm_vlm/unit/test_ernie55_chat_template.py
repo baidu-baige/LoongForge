@@ -1,6 +1,6 @@
 # Copyright 2026 The LoongForge Authors.
-# Copyright (c) 2026, NVIDIA CORPORATION. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026, NVIDIA CORPORATION. All rights reserved.
 
 """SFT text and supervision against the Bridge ERNIE template fixtures."""
 
