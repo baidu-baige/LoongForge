@@ -8,7 +8,6 @@ MEGATRON_PATH=${MEGATRON_PATH:-/workspace/Loong-Megatron}
 CONVERT_CHECKPOINT_PATH="$LOONGFORGE_PATH/tools/mcore_checkpoint_convert"
 TORCHRUN=${TORCHRUN:-torchrun}
 
-OFFICIAL_HF_PATH=${OFFICIAL_HF_PATH:?Set OFFICIAL_HF_PATH to Kimi K3 metadata and tokenizer files}
 LOAD=${LOAD:?Set LOAD to the MCore checkpoint directory}
 SAVE=${SAVE:?Set SAVE to the BF16 HuggingFace output directory}
 MODEL_CONFIG_FILE=${MODEL_CONFIG_FILE:-"$LOONGFORGE_PATH/configs/models/kimi_k3/kimi_k3.yaml"}
@@ -27,11 +26,6 @@ NODE_RANK=${NODE_RANK:-0}
 MASTER_ADDR=${MASTER_ADDR:-127.0.0.1}
 MASTER_PORT=${MASTER_PORT:-29500}
 MAX_WORKERS=${MAX_WORKERS:-4}
-
-if [[ ! -d "$LOAD" || ! -f "$OFFICIAL_HF_PATH/config.json" ]]; then
-  echo "LOAD must be an MCore directory and OFFICIAL_HF_PATH must contain config.json" >&2
-  exit 1
-fi
 
 PYTHONPATH="$MEGATRON_PATH:$LOONGFORGE_PATH:${PYTHONPATH:-}" \
   "$TORCHRUN" \
@@ -62,21 +56,3 @@ PYTHONPATH="$MEGATRON_PATH:$LOONGFORGE_PATH:${PYTHONPATH:-}" \
   --moe-grouped-gemm \
   --distributed_convert \
   --max_workers "$MAX_WORKERS"
-
-if [[ "$NODE_RANK" == "0" ]]; then
-  python - "$OFFICIAL_HF_PATH" "$SAVE" <<'PY'
-import shutil
-import sys
-from pathlib import Path
-
-source = Path(sys.argv[1])
-target = Path(sys.argv[2])
-target.mkdir(parents=True, exist_ok=True)
-skip = {"model.safetensors", "model.safetensors.index.json", "pytorch_model.bin.index.json"}
-for path in source.iterdir():
-    if path.is_file() and path.name not in skip and not path.name.startswith(("model-", "pytorch_model")):
-        shutil.copy2(path, target / path.name)
-PY
-fi
-
-echo "Saved BF16 HuggingFace checkpoint to: $SAVE"
