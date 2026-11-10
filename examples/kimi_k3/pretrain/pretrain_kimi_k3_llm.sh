@@ -49,6 +49,7 @@ DISTRIBUTED_ARGS=(
 MODEL_CONFIG_FILE=${MODEL_CONFIG_FILE:-${LOONGFORGE_PATH}/configs/models/kimi_k3/kimi_k3_backbone.yaml}
 MODEL_CONFIG_ARGS=(
   --config-file $MODEL_CONFIG_FILE
+  --enable-fa-within-mla
 )
 
 DATA_ARGS=(

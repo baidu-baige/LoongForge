@@ -50,6 +50,7 @@ ROWS = [
     ("DreamZero",          "WAM", 4.38),
     ("FastWAM",            "WAM", 2.61),
     ("LingBot VA",         "WAM", 2.20),
+    ("GigaBrain0.7",       "WAM", 1.60),
     # VLM
     ("Qwen3-VL-30B-A3B",   "VLM", 1.45),
     # LLM

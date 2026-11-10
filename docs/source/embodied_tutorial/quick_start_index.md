@@ -13,6 +13,7 @@ quick_start_pi05
 quick_start_gr00t_n1_6
 quick_start_gr00t_n1_7
 quick_start_xvla
+quick_start_giga_brain07
 ```
 
 ## WAM Models

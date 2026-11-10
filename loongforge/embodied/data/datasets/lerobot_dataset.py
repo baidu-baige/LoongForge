@@ -116,12 +116,17 @@ class LeRobotV3Dataset(LeRobotDataset):
         delta_timestamps_fn: Callable | None = None,
         length_fn: Callable | None = None,
         index_map_fn: Callable | None = None,
+        meta_name: str | None = None,
         **strategy_kwargs,
     ):
         self._action_horizon = action_horizon
         self._transform = transform
         self._length_fn = length_fn
         self._index_map_fn = index_map_fn
+        # When set, attach the dataset-level meta object under this key in every
+        # returned sample (route-B parity with giga's ``meta_name`` injection).
+        # Default ``None`` keeps the stock output untouched for all other models.
+        self._meta_name = meta_name
         self._strategy_kwargs = dict(strategy_kwargs)
 
         # Resolve root for reading info.json before parent __init__
@@ -166,6 +171,8 @@ class LeRobotV3Dataset(LeRobotDataset):
         if self._index_map_fn is not None:
             idx = self._index_map_fn(self, idx)
         data = super().__getitem__(idx)
+        if self._meta_name is not None and self._meta_name not in data:
+            data[self._meta_name] = self.meta
         if self._transform is not None:
             data = self._transform(data)
         return data
