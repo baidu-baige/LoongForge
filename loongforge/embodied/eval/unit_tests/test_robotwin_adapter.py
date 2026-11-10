@@ -746,6 +746,80 @@ def test_worker_script_uses_the_task_episode_count_for_instructions(tmp_path: pa
     assert "episode_info_list, 25)" in gen()
 
 
+def test_cached_play_once_attrs_win_over_derivation() -> None:
+    """Offline consume must apply the values the scan captured, not re-derive them."""
+    from loongforge.embodied.eval.orchestrator.runners.robotwin_runner import fill_missing_task_attrs
+
+    class _Pose:
+        q = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        p = [0.2, 0.0, 0.5]
+
+    class _Actor:
+        def get_pose(self):
+            return _Pose()
+
+    class _Env:
+        laptop = _Actor()
+        object = _Actor()
+
+    # The cached value disagrees with the re-derived one: the cache must win.
+    env = _Env()
+    fill_missing_task_attrs(
+        env, "open_laptop", cached={"arm_tag": "right"}, arm_tag_factory=str, face_prod=lambda *_: 1.0
+    )
+    assert env.arm_tag == "right"
+
+    env = _Env()
+    fill_missing_task_attrs(
+        env, "put_object_cabinet", cached={"arm_tag": "left", "origin_z": 0.9},
+        arm_tag_factory=str, face_prod=lambda *_: 1.0,
+    )
+    assert (env.arm_tag, env.origin_z) == ("left", 0.9)
+
+
+def test_worker_script_carries_play_once_attrs_through_the_cache(tmp_path: pathlib.Path) -> None:
+    """Scan records play_once attrs; consume applies them for each cached seed."""
+    from loongforge.embodied.eval.orchestrator.runners import robotwin_runner
+
+    robotwin = tmp_path / "RoboTwin"
+    (robotwin / "script").mkdir(parents=True)
+    source = (
+        "def main(x):\n"
+        '    TASK_ENV = class_decorator(args["task_name"])\n'
+        "def eval_policy(task_name, TASK_ENV, args, model, st_seed, test_num=1):\n"
+        "    expert_check = True\n"
+        "    while succ_seed < test_num:\n"
+        '        render_freq = args["render_freq"]\n'
+        "        try:\n"
+        "            TASK_ENV.setup_demo(now_ep_num=now_id, seed=now_seed, is_test=True, **args)\n"
+        "        except UnStableError:\n"
+        "            TASK_ENV.close_env()\n"
+        '        episode_info_list = [episode_info["info"]]\n'
+    )
+    (robotwin / "script" / "eval_policy.py").write_text(source, encoding="utf-8")
+
+    def gen(**kw) -> str:
+        fields = dict(
+            worker_local_files=True, robotwin_path=str(robotwin),
+            output_dir=str(tmp_path / f"o{abs(hash(str(kw)))}"), ckpt_setting="t",
+            step_limit_override=None, start_seed_override=None, test_num_override=5,
+            disable_expert_check=False, disable_eval_video_log=True, seed_stride=1,
+            skip_intra_chunk_obs=False, settle_early_stop=False, task_name="open_laptop",
+        )
+        fields.update(kw)
+        text = robotwin_runner._worker_eval_script(argparse.Namespace(**fields)).read_text(encoding="utf-8")
+        compile(text, "<generated>", "exec")
+        return text
+
+    scan = gen(offline_expert_check_scan=str(tmp_path / "cache"))
+    assert "_s_task_attrs(TASK_ENV)" in scan
+    assert "'attrs':" in scan
+
+    consume = gen(offline_expert_check=str(tmp_path / "cache"))
+    assert "_S_CURRENT_ATTRS.update(_S_ATTRS.get(str(now_seed), {}))" in consume
+    assert "_vla_fill_attrs(TASK_ENV, _vla_task_name, _S_CURRENT_ATTRS)" in consume
+
+
 def test_fill_missing_task_attrs_mirrors_play_once() -> None:
     """Offline consume skips play_once(); the shim must set what it would have."""
     from loongforge.embodied.eval.orchestrator.runners.robotwin_runner import fill_missing_task_attrs

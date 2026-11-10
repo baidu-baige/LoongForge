@@ -64,7 +64,13 @@ def _write_deploy_policy(args: argparse.Namespace, path: pathlib.Path) -> None:
     path.write_text(yaml.safe_dump(fields, allow_unicode=True, sort_keys=False), encoding="utf-8")
 
 
-def fill_missing_task_attrs(env: Any, task_name: str, arm_tag_factory: Any = None, face_prod: Any = None) -> None:
+def fill_missing_task_attrs(
+    env: Any,
+    task_name: str,
+    cached: Optional[Dict[str, Any]] = None,
+    arm_tag_factory: Any = None,
+    face_prod: Any = None,
+) -> None:
     """Seed task state that ``play_once()`` normally sets for ``check_success()``.
 
     The official loop only runs the expert demo when ``expert_check`` is on. With
@@ -73,14 +79,21 @@ def fill_missing_task_attrs(env: Any, task_name: str, arm_tag_factory: Any = Non
     would fail in ``check_success``. The values mirror those ``play_once()``
     lines exactly, so the RoboTwin source can stay untouched.
 
-    ``arm_tag_factory`` / ``face_prod`` are injectable for tests; production
-    calls resolve them from ``envs.utils`` (importable in the sim worker).
+    ``cached`` carries the values the offline scan recorded from ``play_once``
+    itself; when present they win over the re-derived values. ``arm_tag_factory``
+    / ``face_prod`` are injectable for tests; production calls resolve them from
+    ``envs.utils`` (importable in the sim worker).
     """
     if arm_tag_factory is None or face_prod is None:
         from envs.utils import ArmTag as _ArmTag, get_face_prod as _get_face_prod
 
         arm_tag_factory = arm_tag_factory or _ArmTag
         face_prod = face_prod or _get_face_prod
+    cached = cached or {}
+    if cached.get("arm_tag") is not None and not hasattr(env, "arm_tag"):
+        env.arm_tag = arm_tag_factory(cached["arm_tag"])
+    if cached.get("origin_z") is not None and not hasattr(env, "origin_z"):
+        env.origin_z = float(cached["origin_z"])
     obj = getattr(env, "object", None)
     if task_name == "open_laptop" and not hasattr(env, "arm_tag"):
         face = face_prod(env.laptop.get_pose().q, [1, 0, 0], [1, 0, 0])
@@ -394,7 +407,18 @@ def _worker_eval_script(args: argparse.Namespace) -> Optional[pathlib.Path]:
             "    _S_CACHE = _spk.load(open(_S_CACHE_PATH, 'rb')) if _S_CACHE_PATH else None\n"
             "    _S_SEEDS = list(_S_CACHE['seeds']) if _S_CACHE else []\n"
             "    _S_INFO = dict(_S_CACHE.get('episode_info') or {}) if _S_CACHE else {}\n"
+            "    _S_ATTRS = dict(_S_CACHE.get('attrs') or {}) if _S_CACHE else {}\n"
+            "    _S_CURRENT_ATTRS = {}\n"
             "    _S_SCAN = []\n"
+            "    def _s_task_attrs(env):\n"
+            "        _d = {}\n"
+            "        _a = getattr(env, 'arm_tag', None)\n"
+            "        if _a is not None:\n"
+            "            _d['arm_tag'] = str(getattr(_a, 'value', _a))\n"
+            "        _z = getattr(env, 'origin_z', None)\n"
+            "        if _z is not None:\n"
+            "            _d['origin_z'] = float(_z)\n"
+            "        return _d\n"
             "    def _s_dump_scan(task_name, task_config):\n"
             "        if not _S_SCAN_DIR:\n"
             "            return\n"
@@ -404,8 +428,9 @@ def _worker_eval_script(args: argparse.Namespace) -> Optional[pathlib.Path]:
             "        with open(_p, 'wb') as _f:\n"
             "            _spk.dump({'schema': 1, 'task': task_name, 'task_config': task_config,\n"
             "                       'n': len(_S_SCAN),\n"
-            "                       'seeds': [int(_s) for _s, _ in _S_SCAN],\n"
-            "                       'episode_info': {str(int(_s)): _i for _s, _i in _S_SCAN}}, _f)\n"
+            "                       'seeds': [int(_s) for _s, _i, _a in _S_SCAN],\n"
+            "                       'episode_info': {str(int(_s)): _i for _s, _i, _a in _S_SCAN},\n"
+            "                       'attrs': {str(int(_s)): _a for _s, _i, _a in _S_SCAN}}, _f)\n"
             "        print(f'[offline-expert-check] {_p} -> {len(_S_SCAN)} seeds', flush=True)\n"
             "except Exception as _e:\n"
             "    print(f'[offline-expert-check] disabled: {_e}')\n"
@@ -424,7 +449,8 @@ def _worker_eval_script(args: argparse.Namespace) -> Optional[pathlib.Path]:
             )
             scan_block = (
                 "        if _S_SCAN_DIR:\n"
-                "            _S_SCAN.append((int(now_seed), episode_info.get('info', {})))\n"
+                "            _S_SCAN.append((int(now_seed), episode_info.get('info', {}),\n"
+                "                            _s_task_attrs(TASK_ENV)))\n"
                 "            _s_dump_scan(args['task_name'], args['task_config'])\n"
                 "            args['render_freq'] = render_freq\n"
                 f"            now_seed += {_scan_stride}\n"
@@ -481,6 +507,8 @@ def _worker_eval_script(args: argparse.Namespace) -> Optional[pathlib.Path]:
                 "            raise SystemExit('[offline-expert-check] cache exhausted at index %d (n=%d)'\n"
                 "                             % (_idx, len(_S_SEEDS)))\n"
                 "        now_seed = _S_SEEDS[_idx]\n"
+                "        _S_CURRENT_ATTRS.clear()\n"
+                "        _S_CURRENT_ATTRS.update(_S_ATTRS.get(str(now_seed), {}))\n"
                 "        episode_info = {'info': _S_INFO.get(now_seed, _S_INFO.get(str(now_seed), {}))}\n"
                 '        render_freq = args["render_freq"]\n'
             )
@@ -505,7 +533,7 @@ def _worker_eval_script(args: argparse.Namespace) -> Optional[pathlib.Path]:
             "    _vla_orig_setup = TASK_ENV.setup_demo\n\n"
             "    def _vla_setup_with_attrs(*_a, **_k):\n"
             "        _ret = _vla_orig_setup(*_a, **_k)\n"
-            "        _vla_fill_attrs(TASK_ENV, _vla_task_name)\n"
+            "        _vla_fill_attrs(TASK_ENV, _vla_task_name, _S_CURRENT_ATTRS)\n"
             "        return _ret\n\n"
             "    TASK_ENV.setup_demo = _vla_setup_with_attrs\n"
             "    # --- end env init shim ---\n"
@@ -1030,15 +1058,19 @@ def merge_offline_expert_check_scan(config: Dict[str, Any]) -> Optional[Dict[str
     for task, chunks in by_task.items():
         seeds: list = []
         info: Dict[str, Any] = {}
+        attrs: Dict[str, Any] = {}
         task_config = None
         for chunk in chunks:
             task_config = task_config or chunk.get("task_config")
             chunk_info = chunk.get("episode_info") or {}
+            chunk_attrs = chunk.get("attrs") or {}
             for seed in chunk.get("seeds") or []:
                 key = str(int(seed))
                 if key in info:
                     continue
                 info[key] = chunk_info.get(key, {})
+                if key in chunk_attrs:
+                    attrs[key] = chunk_attrs[key]
                 seeds.append(int(seed))
         seeds.sort()
         if want > 0:
@@ -1050,6 +1082,7 @@ def merge_offline_expert_check_scan(config: Dict[str, Any]) -> Optional[Dict[str
             "n": len(seeds),
             "seeds": seeds,
             "episode_info": {str(s): info[str(s)] for s in seeds},
+            "attrs": {str(s): attrs[str(s)] for s in seeds if str(s) in attrs},
         }
         (base / f"{task}.pkl").write_bytes(pickle.dumps(merged))
         summary[task] = len(seeds)
