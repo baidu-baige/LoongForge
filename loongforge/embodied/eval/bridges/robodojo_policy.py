@@ -31,6 +31,10 @@ raw-action channels, RoboDojo action space, PayloadBuilder defaults):
   ``deploy_policy`` reused): three cameras INTER_AREA-resized to 320x240, then packed to the
   384x320 T layout model-side; the raw 14-D joint state, z-score normalized; 24 of the 32
   absolute joint targets executed per chunk.
+- ``gr00t_n17_joint14``: GR00T-N1.7 as the official RoboDojo GR00T_N17 adapter: the three
+  env-native views and the raw 14-D joint state (embodiment ``robodojo_arx_x5``, the
+  checkpoint's NEW_EMBODIMENT projector); the 16-step chunk of relative joints is made absolute
+  inside the model and executed in full.
 
 Chunk boundaries: the official ``deploy.py`` of both policies executes one predicted
 chunk per ``get_action`` and calls ``is_episode_end()`` once more at every chunk
@@ -76,6 +80,13 @@ _BRIDGE_WIRING = {
         None,
         "joint14",
         {"state_encoding": "robotwin_joint14", "action_dim": 14, "pre_resize_width": 320, "pre_resize_height": 240},
+    ),
+    "gr00t_n17_joint14": (
+        "gr00tn1d7",
+        "",
+        None,
+        "joint14",
+        {"state_encoding": "robodojo_joint14", "action_dim": 14, "action_horizon": 16},
     ),
 }
 

@@ -1,0 +1,73 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+# GR00T-N1.7 on RoboDojo (Isaac Sim 5.1, dual-arm ARX X5) -- one task, one seed tag.
+# put_bottles_into_dustbin, native episode count. Change benchmark.task_name for other tasks;
+# set benchmark.eval_num to cap the episode count.
+#
+# Checkpoint: the RoboDojo-released GR00T_N17 SFT (HF dataset RoboDojo-Benchmark/RoboDojo,
+# ckpt/RoboDojo/GR00T_N17/RoboDojo-sim-arx_x5-joint-<seed>/RoboDojo-cotrain-arx_x5-3500-joint-<seed>/
+# checkpoint-60000; statistics.json next to the weights). Backbone / processor:
+# nvidia/Cosmos-Reason2-2B (gated HF repo), overwritten by the checkpoint's backbone tensors.
+#
+# bridge=gr00t_n17_joint14 mirrors the official RoboDojo GR00T_N17 adapter: embodiment
+# robodojo_arx_x5 (the checkpoint's NEW_EMBODIMENT projector and statistics), the three env-native
+# views [head, left wrist, right wrist], the raw 14-D joint state, 16 relative joint actions made
+# absolute against the current state inside the model, and the whole 16-step chunk executed as
+# joint control (the official deploy checks is_episode_end after every action).
+# Fill /path/to/... below. Do not commit machine-specific absolute paths.
+
+benchmark:
+  name: robodojo
+  task_name: put_bottles_into_dustbin
+  seed: 0              # result tag (RoboDojo uses it for the training-seed column)
+  env_cfg_type: arx_x5
+  action_bridge: gr00t_n17_joint14
+  first_chunk_len: 16  # = len(action delta_indices); every chunk runs to the end
+  chunk_len: 16
+
+model:
+  backend: loongforge
+  model_type: Gr00tN1d7
+  base_model_path: /path/to/Cosmos-Reason2-2B
+  model_name: /path/to/Cosmos-Reason2-2B
+  state_encoding: robodojo_joint14
+  use_flash_attention: true
+  # Inference-only: keep the frozen backbone in bf16 and every head frozen (official
+  # Gr00tPolicy casts the whole model to bf16).
+  backbone_trainable_params_fp32: false
+  tune_projector: false
+  tune_diffusion_model: false
+  tune_vlln: false
+  # Remaining structure fields (select_layer 16, action_horizon 40, num_inference_timesteps 4,
+  # use_alternate_vl_dit, ...) already match the checkpoint's config.json via GrootN1d7Config
+  # defaults.
+
+server:
+  host: 127.0.0.1
+  port: 62141
+  health_port: 62142
+  python: /path/to/loongforge/bin/python
+  start_timeout_sec: 2400
+  random_init: false
+  ckpt_path: /path/to/GR00T_N17/RoboDojo-sim-arx_x5-joint-0/RoboDojo-cotrain-arx_x5-3500-joint-0/checkpoint-60000
+  dataset_statistics_path: /path/to/GR00T_N17/RoboDojo-sim-arx_x5-joint-0/RoboDojo-cotrain-arx_x5-3500-joint-0/checkpoint-60000/statistics.json
+  embodiment_tag: robodojo_arx_x5
+  chunk_execute_steps: 0   # no truncation: the official deploy executes all 16 actions
+  use_bf16: true
+
+env:
+  eval_root: /path/to/LoongForge/loongforge/embodied/eval
+  loongforge_root: /path/to/LoongForge
+  robodojo_root: /path/to/RoboDojo          # with Assets/ downloaded (scripts/init_assets.sh)
+  robodojo_python: /path/to/robodojo/bin/python   # Isaac Sim 5.1 + IsaacLab + curobo env
+  sim_env: {}          # extra env vars for the sim client (e.g. VK_ICD_FILENAMES)
+
+run:
+  output_dir: /path/to/reports/gr00t_n1_7/robodojo/put_bottles_into_dustbin_seed0
+  cuda_visible_devices: "0"   # GPU of the sim client; the policy server inherits CUDA_VISIBLE_DEVICES
+  timestamped_output: false
+
+timeouts:
+  per_task_sec: 0             # whole official client run for this task; 0 = no limit
+  policy_call_sec: 900

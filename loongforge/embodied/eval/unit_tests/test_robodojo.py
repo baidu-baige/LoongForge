@@ -364,7 +364,7 @@ def test_example_configs_match_official_lingbot_va_settings():
 
 
 def test_bridge_wiring_is_known():
-    assert set(robodojo_policy._BRIDGE_WIRING) == {"lingbot_va_joint30", "pi05_joint14", "xvla_ee20", "fastwam_joint14"}
+    assert set(robodojo_policy._BRIDGE_WIRING) == {"lingbot_va_joint30", "pi05_joint14", "xvla_ee20", "fastwam_joint14", "gr00t_n17_joint14"}
     assert set(robodojo_policy._EPISODE_END_CHECK) <= set(robodojo_policy._BRIDGE_WIRING)
     assert json.loads(json.dumps(LINGBOT_VA_JOINT_CHANNELS)) == LINGBOT_VA_JOINT_CHANNELS
 
@@ -678,3 +678,115 @@ def test_example_fastwam_config_matches_official_adapter():
     )
     assert sim_task["action_scheduler"]["infer_shift"] == model["sigma_shift"]
     assert sim_task["model_id"] == model["model_id"] and sim_task["tokenizer_model_id"] == model["tokenizer_model_id"]
+
+
+# ── GR00T-N1.7 (official XPolicyLab/policy/GR00T_N17) ──
+def _official_gr00t_funcs():
+    import ast
+
+    model_py = _ROBODOJO_ROOT / "XPolicyLab" / "policy" / "GR00T_N17" / "model.py"
+    if not model_py.is_file():
+        pytest.skip("set ROBODOJO_ROOT to a RoboDojo checkout for the GR00T_N17 parity check")
+    wanted = {"_ensure_hwc_uint8", "_extract_image", "_to_rgb_hwc", "_as_1d", "_extract_prompt",
+              "_pack_arm_state", "_encode_observation", "_gr00t_action_to_env"}
+    tree = ast.parse(model_py.read_text())
+    nodes = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in wanted]
+    nodes += [n for n in tree.body if isinstance(n, ast.Assign) and any(
+        getattr(t, "id", "") == "VIDEO_KEY_CANDIDATES" for t in n.targets)]
+    ns = {"np": np, "Any": object}
+    exec(compile(ast.Module(nodes, []), str(model_py), "exec"), ns)
+    return ns
+
+
+@pytest.mark.parametrize("n_actions", [5, 16, 17, 40])
+def test_plugin_deploy_replays_official_gr00t_env_call_order(n_actions):
+    ours = _load_module(_PLUGIN_DIR / "deploy.py", "lf_robodojo_deploy")
+    env_ours = _FakeEnv(n_actions)
+    ours.eval_one_episode(env_ours, _StepClient(16, 16))
+    official_path = _ROBODOJO_ROOT / "XPolicyLab" / "policy" / "GR00T_N17" / "deploy.py"
+    if not official_path.is_file():
+        pytest.skip("set ROBODOJO_ROOT to a RoboDojo checkout for the parity check")
+    official = _load_module(official_path, "official_gr00t_deploy")
+    env_official = _FakeEnv(n_actions)
+    official.eval_one_episode(env_official, _ChunkClient(16, 16))
+    assert env_ours.calls == env_official.calls
+    assert env_ours.taken == n_actions
+
+
+class _FakeGr00tClient(_FakePolicyClient):
+    def predict_action(self, **payload):
+        self.calls.append(payload)
+        latency = 5.0 if len(self.calls) % 16 == 1 else None
+        return {"ok": True, "data": {"actions": [np.linspace(-1, 1, 14, dtype=np.float32).tolist()],
+                                     "inference_latency_ms": latency}}
+
+
+def test_bridge_gr00t_payload_matches_official_encode(monkeypatch):
+    import loongforge.embodied.eval.transport as transport
+
+    monkeypatch.setattr(transport, "PolicyClient", _FakeGr00tClient)
+    model = RoboDojoPolicyModel(
+        {"task_name": "stack_bowls", "action_bridge": "gr00t_n17_joint14", "first_chunk_len": 16, "chunk_len": 16, "lf_port": 1}
+    )
+    assert not model.disable_action_cache and model.episode_end_check == "action"
+    model.reset()
+    outs = [model.get_action(_obs(i)) for i in range(17)]
+    call = model.client.calls[0]
+    assert [i for i, o in enumerate(outs) if o["chunk_end"]] == [15]
+    assert call["instructions"] == ["stack the bowls"]
+    expected = joint14_to_action_dict(np.linspace(-1, 1, 14, dtype=np.float32))  # absolute joints, no decoder
+    for key, value in expected.items():
+        np.testing.assert_allclose(outs[0]["actions"][0][key], value)
+
+    official = _official_gr00t_funcs()
+    enc = official["_encode_observation"](_obs(0), "default")
+    ref_state = np.concatenate([enc["state"]["left_arm"][0, 0], enc["state"]["right_arm"][0, 0]])
+    assert call["state"].dtype == np.float32
+    np.testing.assert_array_equal(call["state"], ref_state)
+    for ours, key in zip(call["images"], ["front", "left_wrist", "right_wrist"]):
+        np.testing.assert_array_equal(np.asarray(ours), enc["video"][key][0, 0])  # native views, same order
+    assert enc["language"]["annotation.human.task_description"] == [call["instructions"]]
+    chunk = np.linspace(-1, 1, 28, dtype=np.float32).reshape(2, 14)
+    ref_actions = official["_gr00t_action_to_env"]({"left_arm": chunk[None, :, :7], "right_arm": chunk[None, :, 7:]}, "joint")
+    for step, ref in enumerate(ref_actions):
+        ours = joint14_to_action_dict(chunk[step])
+        assert set(ours) == set(ref)
+        for key in ref:
+            np.testing.assert_allclose(np.asarray(ours[key]), ref[key])
+
+
+def test_gr00t_robodojo_modality_matches_official_checkpoint_layout():
+    from loongforge.embodied.data.datasets.gr00t_n1_7.transforms.gr00t_transform import (
+        EMBODIMENT_STAT_CONFIGS,
+        EMBODIMENT_TAG_TO_PROJECTOR_INDEX,
+        MODALITY_CONFIGS,
+        STATISTICS_TAG_ALIASES,
+    )
+
+    cfg = MODALITY_CONFIGS["robodojo_arx_x5"]
+    assert EMBODIMENT_TAG_TO_PROJECTOR_INDEX["robodojo_arx_x5"] == EMBODIMENT_TAG_TO_PROJECTOR_INDEX["new_embodiment"]
+    assert STATISTICS_TAG_ALIASES["robodojo_arx_x5"] == "new_embodiment"
+    meta = EMBODIMENT_STAT_CONFIGS["robodojo_arx_x5"]["modality_meta"]
+    assert meta["state"] == meta["action"] == {"left_arm": {"start": 0, "end": 7}, "right_arm": {"start": 7, "end": 14}}
+    ckpt = os.environ.get("GR00T_N17_ROBODOJO_CKPT")
+    if not ckpt:
+        pytest.skip("set GR00T_N17_ROBODOJO_CKPT to the checkpoint dir for the processor_config check")
+    official = json.loads((pathlib.Path(ckpt) / "processor_config.json").read_text())
+    official = official["processor_kwargs"]["modality_configs"]["new_embodiment"]
+    for modality in ("video", "state", "action", "language"):
+        assert list(cfg[modality].delta_indices) == official[modality]["delta_indices"]
+        assert list(cfg[modality].modality_keys) == official[modality]["modality_keys"]
+    reps = [str(getattr(c.rep, "name", c.rep)) for c in cfg["action"].action_configs]
+    assert reps == [c["rep"] for c in official["action"]["action_configs"]]
+    embodiment_ids = json.loads((pathlib.Path(ckpt) / "embodiment_id.json").read_text())
+    assert embodiment_ids["new_embodiment"] == EMBODIMENT_TAG_TO_PROJECTOR_INDEX["robodojo_arx_x5"]
+
+
+def test_example_gr00t_config_matches_official_adapter():
+    cfg = yaml.safe_load(
+        (_REPO_ROOT / "examples/embodied/gr00t_n1_7/eval/configs/robodojo/put_bottles_into_dustbin.yaml").read_text()
+    )
+    assert cfg["benchmark"]["action_bridge"] == "gr00t_n17_joint14"
+    assert cfg["benchmark"]["first_chunk_len"] == cfg["benchmark"]["chunk_len"] == 16
+    assert cfg["server"]["embodiment_tag"] == "robodojo_arx_x5" and cfg["server"]["chunk_execute_steps"] == 0
+    assert cfg["server"]["use_bf16"] is True and "action_horizon" not in cfg["model"]

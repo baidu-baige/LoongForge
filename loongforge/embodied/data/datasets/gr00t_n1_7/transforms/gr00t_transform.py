@@ -60,7 +60,14 @@ EMBODIMENT_TAG_TO_PROJECTOR_INDEX = {
     "simpler_env_widowx": 1,
     "libero_sim": 2,
     "new_embodiment": 10,
+    # RoboDojo ARX X5 (dual arm) was fine-tuned under the NEW_EMBODIMENT tag, i.e. the
+    # new_embodiment projector; its modality layout differs from LoongForge's own
+    # new_embodiment entry (SO-101 single arm), so it gets its own tag here.
+    "robodojo_arx_x5": 10,
 }
+
+# Eval-side tags whose checkpoint statistics are stored under another tag.
+STATISTICS_TAG_ALIASES = {"robodojo_arx_x5": "new_embodiment"}
 
 
 LIBERO_SIM_MODALITY_META = {
@@ -264,11 +271,59 @@ NEW_EMBODIMENT_MODALITY_CONFIG = {
 }
 
 
+# RoboDojo ARX X5: XPolicyLab/policy/GR00T_N17/configs/arx_x5_config.py (= the checkpoint's
+# processor_config.json new_embodiment entry). Raw state / action = [left 6 joints + gripper,
+# right 6 joints + gripper]; both groups are relative to the current state, 16 steps.
+ROBODOJO_ARX_X5_MODALITY_META = {
+    "state": {
+        "left_arm": {"start": 0, "end": 7},
+        "right_arm": {"start": 7, "end": 14},
+    },
+    "action": {
+        "left_arm": {"start": 0, "end": 7},
+        "right_arm": {"start": 7, "end": 14},
+    },
+}
+
+
+ROBODOJO_ARX_X5_MODALITY_CONFIG = {
+    "video": ModalityConfig(
+        delta_indices=[0],
+        modality_keys=["front", "left_wrist", "right_wrist"],
+    ),
+    "state": ModalityConfig(
+        delta_indices=[0],
+        modality_keys=["left_arm", "right_arm"],
+    ),
+    "action": ModalityConfig(
+        delta_indices=list(range(16)),
+        modality_keys=["left_arm", "right_arm"],
+        action_configs=[
+            ActionConfig(
+                rep=ActionRepresentation.RELATIVE,
+                type=ActionType.NON_EEF,
+                format=ActionFormat.DEFAULT,
+            ),
+            ActionConfig(
+                rep=ActionRepresentation.RELATIVE,
+                type=ActionType.NON_EEF,
+                format=ActionFormat.DEFAULT,
+            ),
+        ],
+    ),
+    "language": ModalityConfig(
+        delta_indices=[0],
+        modality_keys=["annotation.human.task_description"],
+    ),
+}
+
+
 MODALITY_CONFIGS = {
     "libero_sim": LIBERO_SIM_MODALITY_CONFIG,
     "simpler_env_google": SIMPLER_ENV_GOOGLE_MODALITY_CONFIG,
     "simpler_env_widowx": SIMPLER_ENV_WIDOWX_MODALITY_CONFIG,
     "new_embodiment": NEW_EMBODIMENT_MODALITY_CONFIG,
+    "robodojo_arx_x5": ROBODOJO_ARX_X5_MODALITY_CONFIG,
 }
 
 
@@ -288,6 +343,10 @@ EMBODIMENT_STAT_CONFIGS = {
     "new_embodiment": {
         "modality_meta": NEW_EMBODIMENT_MODALITY_META,
         "modality_config": NEW_EMBODIMENT_MODALITY_CONFIG,
+    },
+    "robodojo_arx_x5": {
+        "modality_meta": ROBODOJO_ARX_X5_MODALITY_META,
+        "modality_config": ROBODOJO_ARX_X5_MODALITY_CONFIG,
     },
 }
 
