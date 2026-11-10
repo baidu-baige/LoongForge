@@ -80,9 +80,12 @@ def fill_missing_task_attrs(
     lines exactly, so the RoboTwin source can stay untouched.
 
     ``cached`` carries the values the offline scan recorded from ``play_once``
-    itself; when present they win over the re-derived values. ``arm_tag_factory``
-    / ``face_prod`` are injectable for tests; production calls resolve them from
-    ``envs.utils`` (importable in the sim worker).
+    itself and is authoritative: the worker calls :func:`clear_episode_task_attrs`
+    before every ``setup_demo``, so whatever is cached is applied. When the cache
+    has nothing for the seed, the pose-based tasks are re-derived from the scene
+    exactly like ``play_once`` would. ``arm_tag_factory`` / ``face_prod`` are
+    injectable for tests; production calls resolve them from ``envs.utils``
+    (importable in the sim worker).
     """
     if arm_tag_factory is None or face_prod is None:
         from envs.utils import ArmTag as _ArmTag, get_face_prod as _get_face_prod
@@ -90,9 +93,9 @@ def fill_missing_task_attrs(
         arm_tag_factory = arm_tag_factory or _ArmTag
         face_prod = face_prod or _get_face_prod
     cached = cached or {}
-    if cached.get("arm_tag") is not None and not hasattr(env, "arm_tag"):
+    if cached.get("arm_tag") is not None:
         env.arm_tag = arm_tag_factory(cached["arm_tag"])
-    if cached.get("origin_z") is not None and not hasattr(env, "origin_z"):
+    if cached.get("origin_z") is not None:
         env.origin_z = float(cached["origin_z"])
     obj = getattr(env, "object", None)
     if task_name == "open_laptop" and not hasattr(env, "arm_tag"):
@@ -105,6 +108,22 @@ def fill_missing_task_attrs(
             env.arm_tag = arm_tag_factory("right" if obj.get_pose().p[0] > 0 else "left")
         if not hasattr(env, "origin_z"):
             env.origin_z = obj.get_pose().p[2]
+
+
+def clear_episode_task_attrs(env: Any) -> None:
+    """Drop ``play_once``-seeded attributes before the next episode's scene build.
+
+    The official loop runs ``setup_demo`` on a *new* ``TASK_ENV`` attribute state
+    only once; from episode 2 on it reuses the same object, so ``hasattr`` stays
+    true and a stale ``arm_tag`` from the previous episode would be scored
+    against this episode's scene. Clearing them makes every episode take the
+    same path as the first one.
+    """
+    for name in ("arm_tag", "origin_z"):
+        try:
+            delattr(env, name)
+        except AttributeError:
+            pass
 
 
 def _write_worker_eval_step_limit(args: argparse.Namespace) -> Optional[pathlib.Path]:
@@ -527,11 +546,17 @@ def _worker_eval_script(args: argparse.Namespace) -> Optional[pathlib.Path]:
             env_anchor
             + "\n    # --- env init shim (injected) ---\n"
             "    from loongforge.embodied.eval.orchestrator.runners.robotwin_runner import (\n"
+            "        clear_episode_task_attrs as _vla_clear_attrs,\n"
             "        fill_missing_task_attrs as _vla_fill_attrs,\n"
             "    )\n"
             '    _vla_task_name = args["task_name"]\n'
             "    _vla_orig_setup = TASK_ENV.setup_demo\n\n"
             "    def _vla_setup_with_attrs(*_a, **_k):\n"
+            "        # Task envs are reused across episodes, so the previous episode's\n"
+            "        # arm_tag / origin_z are still on the object; hasattr() would then\n"
+            "        # shadow this episode's value and check_success would score\n"
+            "        # against the wrong arm.\n"
+            "        _vla_clear_attrs(TASK_ENV)\n"
             "        _ret = _vla_orig_setup(*_a, **_k)\n"
             "        _vla_fill_attrs(TASK_ENV, _vla_task_name, _S_CURRENT_ATTRS)\n"
             "        return _ret\n\n"

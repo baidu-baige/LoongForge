@@ -685,6 +685,9 @@ def test_worker_script_offline_expert_check_modes(tmp_path: pathlib.Path) -> Non
     # check_success() state instead of patching the RoboTwin source.
     assert "_vla_fill_attrs" in consume
     assert "TASK_ENV.setup_demo = _vla_setup_with_attrs" in consume
+    # ... and drop the previous episode's state before rebuilding the scene.
+    assert "_vla_clear_attrs(TASK_ENV)" in consume
+    assert consume.index("_vla_clear_attrs(TASK_ENV)") < consume.index("_ret = _vla_orig_setup(*_a, **_k)")
 
     # Consume mode uses the explicit cache index, not start_seed (which stays a
     # seed value); a leftover start_seed=100000 must not shift the index.
@@ -775,6 +778,34 @@ def test_cached_play_once_attrs_win_over_derivation() -> None:
         arm_tag_factory=str, face_prod=lambda *_: 1.0,
     )
     assert (env.arm_tag, env.origin_z) == ("left", 0.9)
+
+    # A stale value from the previous episode must not shadow the cache: the
+    # worker clears the attrs before setup_demo, then the cache is re-applied.
+    env = _Env()
+    env.arm_tag = "right"
+    env.origin_z = 0.1
+    fill_missing_task_attrs(
+        env, "put_object_cabinet", cached={"arm_tag": "left", "origin_z": 0.9},
+        arm_tag_factory=str, face_prod=lambda *_: 1.0,
+    )
+    assert (env.arm_tag, env.origin_z) == ("left", 0.9)
+
+
+def test_clear_episode_task_attrs_drops_previous_episode_state() -> None:
+    """Episode 2+ reuses the task env; play_once attrs must not leak across."""
+    from loongforge.embodied.eval.orchestrator.runners.robotwin_runner import clear_episode_task_attrs
+
+    class _Env:
+        pass
+
+    env = _Env()
+    env.arm_tag = "left"
+    env.origin_z = 0.5
+    clear_episode_task_attrs(env)
+    assert not hasattr(env, "arm_tag")
+    assert not hasattr(env, "origin_z")
+    # Idempotent: a fresh env has nothing to clear.
+    clear_episode_task_attrs(env)
 
 
 def test_worker_script_carries_play_once_attrs_through_the_cache(tmp_path: pathlib.Path) -> None:
