@@ -37,7 +37,13 @@ XPolicyLab ``GR00T_N17`` adapter) sends the three env-native views
 ``[head, left_wrist, right_wrist]`` (= ``front`` / ``left_wrist`` / ``right_wrist``)
 and the raw 14D joint state ``[left 6 joints, left gripper, right 6 joints,
 right gripper]`` as float32 (``state_encoding: robodojo_joint14``); the decoded
-16-step chunk is absolute joints in the same order. Do **not** set ``action_horizon`` there: YAML ``model:`` keys are also
+16-step chunk is absolute joints in the same order. The GR00T build vendored by the
+official RoboDojo adapter always letterboxes every view to a square (black bars,
+centered) before the shortest-edge resize / 95% center crop, whereas the released
+``processor_config.json`` says ``letter_box_transform: false`` and the model-side
+eval pipeline follows that; ``letterbox_pad: true`` applies the same padding
+client-side so non-square RoboDojo views (640x480) reach the model as the official
+adapter feeds them. Do **not** set ``action_horizon`` there: YAML ``model:`` keys are also
 merged into ``GrootN1d7Config``, whose ``action_horizon`` is the DiT
 flow-matching sequence length (40 in the released checkpoints), and shortening it
 changes every DiT output. The decoded chunk length comes from the embodiment's
@@ -155,6 +161,21 @@ def _encode_robodojo_joint14(state_raw: Dict[str, Any]) -> Optional[np.ndarray]:
     return joint
 
 
+def letterbox_pad(image: np.ndarray) -> np.ndarray:
+    """Pad to a square with centered black bars (official GR00T ``LetterBoxPad``)."""
+    import cv2
+
+    image = np.asarray(image)
+    h, w = image.shape[:2]
+    if h == w:
+        return image
+    side = max(h, w)
+    pad_h, pad_w = side - h, side - w
+    return cv2.copyMakeBorder(
+        image, pad_h // 2, pad_h - pad_h // 2, pad_w // 2, pad_w - pad_w // 2, cv2.BORDER_CONSTANT, value=0
+    )
+
+
 @register_payload_builder("gr00tn1d7")
 class GrootN1d7PayloadBuilder(PayloadBuilder):
     """GR00T-N1.7 client-side payload assembly."""
@@ -176,6 +197,8 @@ class GrootN1d7PayloadBuilder(PayloadBuilder):
     # own action_horizon (40) is the DiT sequence length, not the decoded length.
     # simpler_env_widowx uses delta_indices=range(8) — override in YAML.
     action_horizon: int = 16
+    # Letterbox every view to a square before sending (RoboDojo; see module docstring).
+    letterbox_pad: bool = False
 
     def _encode_state(self, canonical: Dict[str, Any]) -> Optional[np.ndarray]:
         """Encode ``canonical.state_raw`` per ``self.state_encoding``."""
@@ -226,6 +249,8 @@ class GrootN1d7PayloadBuilder(PayloadBuilder):
                 cv2.resize(np.asarray(img), size) if img is not None else img
                 for img in images
             ]
+        if self.letterbox_pad:
+            images = [letterbox_pad(img) if img is not None else img for img in images]
         return {
             "images": images,
             "instructions": [str(canonical["instruction"])],

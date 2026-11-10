@@ -743,8 +743,17 @@ def test_bridge_gr00t_payload_matches_official_encode(monkeypatch):
     ref_state = np.concatenate([enc["state"]["left_arm"][0, 0], enc["state"]["right_arm"][0, 0]])
     assert call["state"].dtype == np.float32
     np.testing.assert_array_equal(call["state"], ref_state)
+    import albumentations as A
+
+    from loongforge.embodied.data.datasets.gr00t_n1_7.transforms.image_augmentations import LetterBoxPad
+
+    # same order as the official video keys; letterboxed to 640x640 exactly as the official
+    # (vendored) eval transform's first step LetterBoxPad does
+    letterbox = A.Compose([LetterBoxPad()])
     for ours, key in zip(call["images"], ["front", "left_wrist", "right_wrist"]):
-        np.testing.assert_array_equal(np.asarray(ours), enc["video"][key][0, 0])  # native views, same order
+        native = enc["video"][key][0, 0]
+        assert np.asarray(ours).shape == (640, 640, 3)
+        np.testing.assert_array_equal(np.asarray(ours), letterbox(image=native)["image"])
     assert enc["language"]["annotation.human.task_description"] == [call["instructions"]]
     chunk = np.linspace(-1, 1, 28, dtype=np.float32).reshape(2, 14)
     ref_actions = official["_gr00t_action_to_env"]({"left_arm": chunk[None, :, :7], "right_arm": chunk[None, :, 7:]}, "joint")
@@ -790,3 +799,15 @@ def test_example_gr00t_config_matches_official_adapter():
     assert cfg["benchmark"]["first_chunk_len"] == cfg["benchmark"]["chunk_len"] == 16
     assert cfg["server"]["embodiment_tag"] == "robodojo_arx_x5" and cfg["server"]["chunk_execute_steps"] == 0
     assert cfg["server"]["use_bf16"] is True and "action_horizon" not in cfg["model"]
+
+
+def test_gr00t_official_vendored_eval_transform_always_letterboxes():
+    """The vendored GR00T eval transform starts with LetterBoxPad unconditionally (no flag)."""
+    src = _ROBODOJO_ROOT / "XPolicyLab/policy/GR00T_N17/gr00t_n17/gr00t/model/gr00t_n1d7/image_augmentations.py"
+    if not src.is_file():
+        pytest.skip("set ROBODOJO_ROOT to a RoboDojo checkout for the GR00T_N17 source check")
+    text = src.read_text()
+    body = text[text.index("def build_image_transformations_albumentations"):]
+    assert "letter_box_transform" not in body.split("):", 1)[0]  # no switch in the signature
+    eval_block = body[body.index("eval_transform = A.Compose("):]
+    assert eval_block.index("LetterBoxPad()") < eval_block.index("SmallestMaxSize")

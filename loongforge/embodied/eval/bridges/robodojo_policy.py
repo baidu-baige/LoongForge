@@ -32,7 +32,8 @@ raw-action channels, RoboDojo action space, PayloadBuilder defaults):
   384x320 T layout model-side; the raw 14-D joint state, z-score normalized; 24 of the 32
   absolute joint targets executed per chunk.
 - ``gr00t_n17_joint14``: GR00T-N1.7 as the official RoboDojo GR00T_N17 adapter: the three
-  env-native views and the raw 14-D joint state (embodiment ``robodojo_arx_x5``, the
+  env-native views letterboxed to squares (as its vendored GR00T eval transform does) and the
+  raw 14-D joint state (embodiment ``robodojo_arx_x5``, the
   checkpoint's NEW_EMBODIMENT projector); the 16-step chunk of relative joints is made absolute
   inside the model and executed in full.
 
@@ -86,7 +87,7 @@ _BRIDGE_WIRING = {
         "",
         None,
         "joint14",
-        {"state_encoding": "robodojo_joint14", "action_dim": 14, "action_horizon": 16},
+        {"state_encoding": "robodojo_joint14", "action_dim": 14, "action_horizon": 16, "letterbox_pad": True},
     ),
 }
 
