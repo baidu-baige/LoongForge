@@ -335,7 +335,7 @@ def _add_run_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
         default=None,
         required=False,
         help="Name identifier for the model architecture. Must match a registered model "
-             "in the MEGATRON_MODEL_CONFIG_REGISTRY. "
+             "in the MODEL_CONFIG_REGISTRY. "
              "Example: 'llama2-7b', 'qwen2-7b'. Default: None",
     )
     group.add_argument(

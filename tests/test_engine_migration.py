@@ -131,7 +131,7 @@ def test_recipe_registry_keeps_family_case_and_override_rules(monkeypatch):
     from loongforge.training import trainer_builder
 
     registry = {}
-    monkeypatch.setattr(trainer_builder, "MEGATRON_TRAINERS_BY_FAMILY", registry)
+    monkeypatch.setitem(trainer_builder.TRAINERS_BY_ENGINE, "megatron", registry)
     original = Mock(__name__="original")
     replacement = Mock(__name__="replacement")
     sft = Mock(__name__="sft")
@@ -156,8 +156,8 @@ def test_builder_uses_the_registered_phase_of_the_selected_engine(monkeypatch):
     args = NS(model_name="qwen3-8b", model_family="qwen3", training_phase="pretrain")
     monkeypatch.setattr(
         trainer_builder,
-        "MEGATRON_TRAINERS_BY_FAMILY",
-        {"qwen3": {"pretrain": recipe}},
+        "TRAINERS_BY_ENGINE",
+        {"megatron": {"qwen3": {"pretrain": recipe}}, "torch": {}},
     )
     monkeypatch.setitem(
         trainer_builder.ENGINES,

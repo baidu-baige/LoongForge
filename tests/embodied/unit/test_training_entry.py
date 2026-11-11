@@ -75,8 +75,8 @@ class TrainingEntryTests(unittest.TestCase):
             ),
             patch.object(
                 trainer_builder,
-                "TORCH_TRAINERS_BY_FAMILY",
-                {"wall_oss_0_5": {"sft": recipe}},
+                "TRAINERS_BY_ENGINE",
+                {"megatron": {}, "torch": {"wall_oss_0_5": {"sft": recipe}}},
             ),
             patch.object(sys, "argv", ["train.py", "--model-name", "wall_oss_0_5"]),
         ):
@@ -92,8 +92,8 @@ class TrainingEntryTests(unittest.TestCase):
             train.main()
         build.assert_called_once_with("megatron")
 
-    def test_help_and_unknown_model_reach_the_megatron_parser(self):
-        for argv in (["--help"], ["--model-name", "unknown"], []):
+    def test_help_and_missing_model_reach_the_megatron_parser(self):
+        for argv in (["--help"], []):
             with (
                 self.subTest(argv=argv),
                 patch.object(sys, "argv", ["train.py", *argv]),
@@ -102,6 +102,15 @@ class TrainingEntryTests(unittest.TestCase):
                 self.assertIsNone(train.main())
                 self.assertEqual(sys.argv, ["train.py", *argv])
                 build.assert_called_once_with("megatron")
+
+    def test_unknown_model_is_rejected_before_engine_dispatch(self):
+        with (
+            patch.object(sys, "argv", ["train.py", "--model-name", "unknown"]),
+            patch.object(train, "build_model_trainer") as build,
+            self.assertRaisesRegex(KeyError, "Unknown model_name"),
+        ):
+            train.main()
+        build.assert_not_called()
 
     def test_torch_model_name_keeps_the_original_unique_abbreviation(self):
         with (
@@ -213,7 +222,7 @@ class SFTRecipeTests(unittest.TestCase):
         self.assertTrue(issubclass(TensorWiseTrainer, FinetuneTrainer))
         self.assertTrue(
             issubclass(
-                trainer_builder.TORCH_TRAINERS_BY_NAME["sft"][args.trainer_type],
+                trainer_builder.TRAINERS_BY_NAME["torch"]["sft"][args.trainer_type],
                 TensorWiseTrainer,
             )
         )

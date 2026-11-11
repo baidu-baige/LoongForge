@@ -39,8 +39,8 @@ def torch_engine(monkeypatch):
         return key["family"], key["phase"], key["trainer_type"], key["configs"]
 
     monkeypatch.setitem(trainer_builder.ENGINES, "torch", adapter)
-    monkeypatch.setattr(trainer_builder, "TORCH_TRAINERS_BY_FAMILY", {})
-    monkeypatch.setattr(trainer_builder, "TORCH_TRAINERS_BY_NAME", {})
+    monkeypatch.setitem(trainer_builder.TRAINERS_BY_ENGINE, "torch", {})
+    monkeypatch.setitem(trainer_builder.TRAINERS_BY_NAME, "torch", {})
     return key
 
 
@@ -104,6 +104,9 @@ def test_same_trainer_registered_twice_is_allowed(torch_engine):
 
 def test_default_config_lookup_is_independent_of_working_directory(tmp_path, monkeypatch):
     expected = catalog.get_config_from_model_name("qwen3-0.6b")
+    spec = catalog.get_model_spec("qwen3-0.6b")
+    assert spec.engine == "megatron"
+    assert spec.model_family == catalog.LanguageModelFamilies.QWEN
     monkeypatch.chdir(tmp_path)
     actual = catalog.get_config_from_model_name("QWEN3-0.6B")
     assert actual == expected
@@ -115,3 +118,17 @@ def test_default_config_lookup_is_independent_of_working_directory(tmp_path, mon
 def test_unknown_model_config_is_rejected():
     with pytest.raises(KeyError, match="Unknown model_name"):
         catalog.get_config_from_model_name("missing")
+
+
+def test_catalog_groups_models_by_engine_and_family():
+    qwen_config = catalog.MODEL_CONFIG_REGISTRY["megatron"][catalog.LanguageModelFamilies.QWEN]
+    assert qwen_config["qwen3-8b"] == "qwen3/qwen3_8b.yaml"
+
+    pi05_config = catalog.MODEL_CONFIG_REGISTRY["torch"][catalog.EmbodiedModelFamilies.PI05]
+    assert pi05_config["pi05"][0] == "pi05/pi05.yaml"
+    assert len(pi05_config["pi05"]) == 3
+
+    spec = catalog.get_model_spec("GR00T-N1-6")
+    assert spec.engine == "torch"
+    assert spec.model_family == catalog.EmbodiedModelFamilies.GR00T_N1_6
+    assert spec.yaml_file == "gr00t_n1_6/gr00t_n1_6.yaml"

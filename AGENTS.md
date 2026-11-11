@@ -113,16 +113,19 @@ formatter or lint settings.
 ## Architecture and model integration
 
 `loongforge/models/factory.py` registers Megatron model configs and providers.
-`loongforge/models/catalog.py` owns model-name routing, including
-`MEGATRON_MODEL_CONFIG_REGISTRY`, `EMBODIED_MODEL_NAMES`, and the language,
-vision-language, diffusion, and embodied family constants.
+`loongforge/models/catalog.py` owns model-name routing through the single
+`MODEL_CONFIG_REGISTRY`. The registry is grouped as
+`engine -> model family -> model name`; Megatron leaves are YAML path strings,
+and Torch leaves are `(yaml_file, model_config_type, data_config_type)` tuples.
+The same module defines the language, vision-language, diffusion, and embodied
+family constants.
 
 The main ownership boundaries are:
 
 - `models/foundation/`, `models/encoder/`, `models/omni_models/`, and `models/diffusion/` contain Megatron model implementations.
 - `models/embodied/` contains Torch embodied models and typed configs.
 - `data/llm/`, `data/vlm/`, `data/embodied/`, and `data/chat_templates/` own their respective data paths.
-- `training/trainer_builder.py` registers and queries both engines. Megatron uses `MEGATRON_TRAINERS_BY_FAMILY`; Torch uses `TORCH_TRAINERS_BY_FAMILY` and the name table `TORCH_TRAINERS_BY_NAME` for `--trainer-type`.
+- `training/trainer_builder.py` registers and queries both engines through `TRAINERS_BY_ENGINE`; `TRAINERS_BY_NAME["torch"]` serves the optional `--trainer-type` override.
 - `engines/megatron/` and `engines/torch/` own runtime execution and checkpoint behavior.
 
 Configuration and dispatch follow this contract:
@@ -136,10 +139,13 @@ CLI + YAML
     -> engine runtime
 ```
 
-Megatron model names resolve through `MEGATRON_MODEL_CONFIG_REGISTRY`. Torch
-model names resolve through `MODEL_SCHEMA` in `training/torch_args.py`, which
-binds a name to a YAML file and typed model/data config classes. Keep these
-registries and family constants consistent when adding a model.
+All model names resolve through `models/catalog.py:get_model_spec()` and the
+single `MODEL_CONFIG_REGISTRY`. The lookup returns the engine, catalog family,
+and configuration binding before the selected engine parser runs. The parser
+then produces the runtime model family and training phase, and
+`training/trainer_builder.py` resolves the trainer from
+`(engine, model_family, training_phase)`. Keep the catalog group, YAML
+`model_type`, and trainer registration consistent when adding a model.
 
 For a new model, first identify the owning model, data, training, and example
 modules. Reuse an existing recipe or trainer when its contract fits. Register

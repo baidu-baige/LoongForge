@@ -34,8 +34,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from functools import partial
-from pathlib import Path
-from typing import Any, List, Optional, Type, Union, get_args, get_origin
+from typing import Any, List, Optional, Union, get_args, get_origin
 
 import torch
 
@@ -48,42 +47,7 @@ from loongforge.training.cli_utils import (
     parse_positive_int,
 )
 from loongforge.training.embodied.args import _EmbodiedDataArgs, _EmbodiedRoutingArgs
-from loongforge.models.embodied.pi05.model_configuration_pi05 import Pi05ModelConfig
-from loongforge.models.embodied.vlda.model_configuration_vlda import VLDAModelConfig
-from loongforge.data.embodied.vlda.transforms.data_configuration_vlda import VLDADataConfig
-from loongforge.data.embodied.pi05.transforms.data_configuration_pi05 import Pi05DataConfig
-from loongforge.models.embodied.gr00t_n1_6.model_configuration_gr00t_n1_6 import GrootN1d6ModelConfig
-from loongforge.data.embodied.gr00t_n1_6.transforms.data_configuration_gr00t_n1_6 import GrootN1d6DataConfig
-from loongforge.models.embodied.xvla.model_configuration_xvla import XvlaModelConfig
-from loongforge.data.embodied.xvla.transforms.data_configuration_xvla import XvlaDataConfig
-from loongforge.models.embodied.fastwam.modeling_configuration_fastwam import FastWAMModelConfig
-from loongforge.data.embodied.fastwam.transforms.data_configuration_fastwam import FastWAMDataConfig
-from loongforge.models.embodied.gr00t_n1_7.model_configuration_gr00t_n1_7 import GrootN1d7Config
-from loongforge.data.embodied.gr00t_n1_7.transforms.data_configuration_gr00t_n1_7 import (
-    GrootN1d7DataConfig,
-)
-from loongforge.models.embodied.cosmos3.modeling_configuration_cosmos3 import Cosmos3ModelConfig
-from loongforge.data.embodied.cosmos3.data_configuration_cosmos3 import Cosmos3DroidConfig
-from loongforge.models.embodied.dreamzero.model_configuration_dreamzero import DreamZeroConfig
-from loongforge.data.embodied.dreamzero.transforms.data_configuration_dreamzero import DreamZeroDataConfig
-from loongforge.models.embodied.lingbot_va.model_configuration_lingbot_va import LingBotVAModelConfig
-from loongforge.data.embodied.lingbot_va.transforms.data_configuration_lingbot_va import LingBotVADataConfig
-from loongforge.models.embodied.wall_oss_0_5.model_configuration_wall_oss_0_5 import WallOss05ModelConfig
-from loongforge.data.embodied.wall_oss_0_5.transforms.data_configuration_wall_oss_0_5 import (
-    WallOss05DataConfig,
-)
-from loongforge.models.embodied.giga_brain07.model_configuration_giga_brain07 import (
-    GigaBrain07ModelConfig,
-)
-from loongforge.data.embodied.giga_brain07.transforms.data_configuration_giga_brain07 import (
-    GigaBrain07DataConfig,
-)
-from loongforge.models.embodied.lingbot_vla_v2.model_configuration_lingbot_vla_v2 import (
-    LingbotVLAV2ModelConfig,
-)
-from loongforge.data.embodied.lingbot_vla_v2.transforms.data_configuration_lingbot_vla_v2 import (
-    LingbotVLAV2DataConfig,
-)
+from loongforge.models.catalog import get_model_schema, get_config_path
 from loongforge.engines.torch.utils.global_vars import (
     set_data_config,
     set_model_config,
@@ -91,85 +55,6 @@ from loongforge.engines.torch.utils.global_vars import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-_CONFIGS_DIR = (
-    Path(__file__).resolve().parent.parent.parent
-    / "configs" / "models"
-)
-
-
-@dataclass(frozen=True)
-class ModelSchema:
-    """Binding of a model name to its YAML file and typed config classes."""
-
-    yaml_file: str
-    model_config_cls: Type
-    data_config_cls: Type
-
-
-MODEL_SCHEMA = {
-    "lingbot_va_robotwin": ModelSchema(
-        "lingbot_va/lingbot_va_robotwin.yaml", LingBotVAModelConfig, LingBotVADataConfig
-    ),
-    "lingbot_va_libero": ModelSchema(
-        "lingbot_va/lingbot_va_libero.yaml", LingBotVAModelConfig, LingBotVADataConfig
-    ),
-    "lingbot_vla_v2": ModelSchema(
-        "lingbot_vla_v2/lingbot_vla_v2.yaml", LingbotVLAV2ModelConfig, LingbotVLAV2DataConfig
-    ),
-    "pi05": ModelSchema("pi05/pi05.yaml", Pi05ModelConfig, Pi05DataConfig),
-    "vlda": ModelSchema("vlda/vlda.yaml", VLDAModelConfig, VLDADataConfig),
-    "gr00t_n1_6": ModelSchema("gr00t_n1_6/gr00t_n1_6.yaml", GrootN1d6ModelConfig, GrootN1d6DataConfig),
-    "xvla": ModelSchema("xvla/xvla.yaml", XvlaModelConfig, XvlaDataConfig),
-    "fastwam": ModelSchema("fastwam/fastwam.yaml", FastWAMModelConfig, FastWAMDataConfig),
-    "gr00t_n1_7": ModelSchema("gr00t_n1_7/gr00t_n1_7.yaml", GrootN1d7Config, GrootN1d7DataConfig),
-    "cosmos3_nano": ModelSchema("cosmos3/nano.yaml", Cosmos3ModelConfig, Cosmos3DroidConfig),
-    "dreamzero_lora_wan22_5b": ModelSchema(
-        "dreamzero/dreamzero_wan22_5b.yaml", DreamZeroConfig, DreamZeroDataConfig
-    ),
-    "dreamzero_full_wan22_5b": ModelSchema(
-        "dreamzero/dreamzero_wan22_5b.yaml", DreamZeroConfig, DreamZeroDataConfig
-    ),
-    "dreamzero_lora_wan21_14b": ModelSchema(
-        "dreamzero/dreamzero_wan21_14b.yaml", DreamZeroConfig, DreamZeroDataConfig
-    ),
-    "dreamzero_full_wan21_14b": ModelSchema(
-        "dreamzero/dreamzero_wan21_14b.yaml", DreamZeroConfig, DreamZeroDataConfig
-    ),
-    "dreamzero_libero_wan22_5b": ModelSchema(
-        "dreamzero/dreamzero_libero_wan22_5b.yaml", DreamZeroConfig, DreamZeroDataConfig
-    ),
-    "dreamzero_agibot_wan21_14b": ModelSchema(
-        "dreamzero/dreamzero_agibot_wan21_14b.yaml", DreamZeroConfig, DreamZeroDataConfig
-    ),
-    "dreamzero_yam_wan21_14b": ModelSchema(
-        "dreamzero/dreamzero_yam_wan21_14b.yaml", DreamZeroConfig, DreamZeroDataConfig
-    ),
-    "wall_oss_0_5": ModelSchema("wall_oss_0_5/wall_oss_0_5.yaml", WallOss05ModelConfig, WallOss05DataConfig),
-    "giga_brain07": ModelSchema(
-        "giga_brain07/giga_brain07.yaml", GigaBrain07ModelConfig, GigaBrain07DataConfig
-    ),
-}
-
-
-def get_model_schema(model_name: str) -> ModelSchema:
-    """Look up the ModelSchema for a model name."""
-    key = model_name.lower().replace("-", "_")
-    if key not in MODEL_SCHEMA:
-        available = ", ".join(sorted(MODEL_SCHEMA.keys()))
-        raise ValueError(f"Unknown model-name '{model_name}'. Available: [{available}]")
-    return MODEL_SCHEMA[key]
-
-
-def get_config_path(model_name: str) -> str:
-    """Look up config YAML path by model name."""
-    schema = get_model_schema(model_name)
-    path = _CONFIGS_DIR / schema.yaml_file
-    if not path.exists():
-        raise FileNotFoundError(f"Config file not found: {path}")
-    return str(path)
-
 
 # ---------------------------------------------------------------------------
 # Custom CLI value parsers (referenced by field metadata below)
@@ -291,7 +176,7 @@ class _ModelRoutingArgs:
         metadata={
             "help": "Model identifier (e.g. 'pi05', 'gr00t_n1_6'). Selects the "
                     "ModelConfig/DataConfig classes and default YAML via "
-                    "MODEL_SCHEMA. Required."
+                    "MODEL_CONFIG_REGISTRY. Required."
         },
     )
     config_file: Optional[str] = field(

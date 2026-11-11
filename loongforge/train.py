@@ -6,7 +6,7 @@
 import argparse
 import sys
 
-from loongforge.models.catalog import EMBODIED_MODEL_NAMES
+from loongforge.models.catalog import get_model_spec
 from loongforge.training.trainer_builder import build_model_trainer
 
 
@@ -27,9 +27,11 @@ def main():
         parser.allow_abbrev = True
         args, _ = parser.parse_known_args(argv)
 
-    # Keep validation and help in the selected engine's original parser.
-    model_name = (args.model_name or "").lower().replace("-", "_")
-    engine = "torch" if model_name in EMBODIED_MODEL_NAMES else "megatron"
+    # Let the selected engine keep ownership of full argument validation and help.
+    if args.model_name is None:
+        engine = "megatron"
+    else:
+        engine = get_model_spec(args.model_name).engine
 
     build_model_trainer(engine).train()
 

@@ -6,12 +6,10 @@
 import logging
 from typing import Union, List, Callable
 
-# Megatron recipes selected by model family and training phase.
-MEGATRON_TRAINERS_BY_FAMILY = {}
-# Torch trainers selected by model family and training phase.
-TORCH_TRAINERS_BY_FAMILY = {}
-# Torch trainers that --trainer-type selects by name.
-TORCH_TRAINERS_BY_NAME = {}
+# Trainers selected by engine, model family, and training phase.
+TRAINERS_BY_ENGINE = {"megatron": {}, "torch": {}}
+# Explicit trainer-name overrides, currently supported by Torch.
+TRAINERS_BY_NAME = {"torch": {}}
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -46,18 +44,14 @@ def register_model_trainer(
             families = [families]
 
         if engine == "torch":
-            named = TORCH_TRAINERS_BY_NAME.setdefault(phase, {})
+            named = TRAINERS_BY_NAME[engine].setdefault(phase, {})
             existing = named.setdefault(func.__name__, func)
             if existing is not func:
                 raise ValueError(
                     f"Duplicate trainer name '{func.__name__}' for {engine} {phase}: "
                     f"{existing.__module__} and {func.__module__}. Rename one of them."
                 )
-        engine_trainers = (
-            MEGATRON_TRAINERS_BY_FAMILY
-            if engine == "megatron"
-            else TORCH_TRAINERS_BY_FAMILY
-        )
+        engine_trainers = TRAINERS_BY_ENGINE[engine]
         for _family in families:
             _family = _family.lower()
             if _family not in engine_trainers:
@@ -134,7 +128,7 @@ def build_model_trainer(engine):
     family = family.lower()
 
     if trainer_type:
-        named = TORCH_TRAINERS_BY_NAME.get(phase, {})
+        named = TRAINERS_BY_NAME["torch"].get(phase, {})
         if trainer_type not in named:
             raise ValueError(
                 f"Unknown --trainer-type '{trainer_type}'. "
@@ -142,11 +136,7 @@ def build_model_trainer(engine):
             )
         return named[trainer_type](*configs)
 
-    trainers = (
-        MEGATRON_TRAINERS_BY_FAMILY
-        if engine == "megatron"
-        else TORCH_TRAINERS_BY_FAMILY
-    )
+    trainers = TRAINERS_BY_ENGINE[engine]
     if family not in trainers:
         raise ValueError(f"Not found trainer for family: {raw_family}")
     if phase not in trainers[family]:
