@@ -145,6 +145,10 @@
     <td><img align="top" alt="第一人称视角下的人类操作视频" src="./docs/assets/images/demo/ego2robot-human.webp" width="100%"></td>
     <td><img align="top" alt="同一动作被转换到多种机械臂本体上的合成视频" src="./docs/assets/images/demo/ego2robot-robots.webp" width="100%"></td>
   </tr>
+  <tr>
+    <td><img align="top" alt="第一人称视角下的人类操作视频" src="./docs/assets/images/demo/ego2robot-human-2.webp" width="100%"></td>
+    <td><img align="top" alt="同一动作被转换到多种机械臂本体上的合成视频" src="./docs/assets/images/demo/ego2robot-robots-2.webp" width="100%"></td>
+  </tr>
 </table>
 
 ### 训练
