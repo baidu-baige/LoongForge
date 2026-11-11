@@ -25,16 +25,24 @@ Both paths use the same runners and the same output schema, so an existing
 | Key | Default | Effect |
 |---|---|---|
 | `servers[].gpus` | — | GPUs that host one inference service each |
-| `pools.gpu_sim.n_sims_per_server` | 1 | Sim workers per GPU (`N`) |
-| `pools.gpu_sim.placement` | `co_locate` | `co_locate`: sims share the GPU with their inference service. `separate`: sims use `sim_gpus`, the service cards stay dedicated |
+| `pools.gpu_sim.n_sims_per_server` | 1 | Sim workers per GPU (`N`) — **GPU-sim families**: RoboTwin, SimplerEnv, ManiSkill |
+| `pools.cpu_sim.n_sims_per_server` | 1 | Sim workers per GPU (`N`) — **CPU-sim families**: LIBERO, CALVIN |
+| `pools.gpu_sim.placement` | `co_locate` | GPU-sim only. `co_locate`: sims share the GPU with their inference service. `separate`: sims use `sim_gpus`, the service cards stay dedicated |
+| `coordinator.n_workers` | 1 | Fallback `N` when the family's pool section is absent |
 | `benchmark.episodes_per_chunk` | computed: ~4 units per slot (`ceil(E / (4·S))`) | Episodes per eval unit (one worker process) |
 | `benchmark.plan_order` | `task` | `lpt` dispatches the longest units first; `lpt_long` keeps every shard of the long tasks ahead of all short work (see Section 4) |
 | `benchmark.long_task_steps` | unset | Step limit that marks a task as "long" for `lpt_long` (e.g. `1200`); `-1`/unset disables the split |
 | `benchmark.long_task_episodes_per_chunk` | unset | Finer chunk for the long tasks only (e.g. `10`), which shortens the last unit's tail |
 | `benchmark.sim_cpu_threads` | unset | (RoboTwin only) Caps `OMP/MKL/OpenBLAS` + `torch` threads per sim worker. `1` removes thread oversubscription when many sims share a card |
 
-`N` and `episodes_per_chunk` are the two knobs that matter most; see
-[Section 4](#4-choosing-n-and-episodes_per_chunk).
+The pool key must match the benchmark family: LIBERO and CALVIN read `pools.cpu_sim`,
+the GPU-sim families read `pools.gpu_sim`. A pool written under the other key is ignored
+(the coordinator prints a warning) and `N` falls back to `coordinator.n_workers or 1`,
+which only shows up as "the run is slower than the calibration table says".
+
+`N` is per service, so the number of concurrent sims is `len(servers[].gpus) × N`
+(e.g. `N=48` on 8 GPUs = 384 sims). `N` and `episodes_per_chunk` are the two knobs that
+matter most; see [Section 4](#4-choosing-n-and-episodes_per_chunk).
 
 ## 3. Chunk execution
 

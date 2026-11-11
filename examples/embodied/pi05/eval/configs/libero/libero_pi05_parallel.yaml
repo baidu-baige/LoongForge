@@ -52,18 +52,14 @@ server:
     max_batch_size: 8
     max_wait_ms: 5
 
-# One inference service per GPU. The coordinator pins each sim worker to the
-# service's GPU (placement: co_locate) or to a separate sim card (separate).
+# LIBERO is a CPU-sim family: use pools.cpu_sim (gpu_sim is ignored).
 servers:
   - gpus: [0, 1, 2, 3, 4, 5, 6, 7]
 
 pools:
-  gpu_sim:
-    # N sim workers per GPU. 16 is a conservative default; the reference machine
-    # kept improving up to N~48 (70.7 / 77.8 / 81.8 eps/min at N=16/24/48) before
-    # flattening. Calibrate on your own machine before raising it.
+  cpu_sim:
+    # reference machine plateaued around N~48
     n_sims_per_server: 16
-    placement: co_locate
 
 env:
   eval_root: /path/to/LoongForge/loongforge/embodied/eval

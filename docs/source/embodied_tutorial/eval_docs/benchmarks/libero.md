@@ -112,6 +112,8 @@ examples/embodied/pi05/eval/run_libero_eval_parallel.sh
 
 Start from `configs/libero/libero_pi05_parallel.yaml`. LIBERO-specific notes:
 
+- LIBERO is a **CPU-sim family**, so its worker pool is `pools.cpu_sim.n_sims_per_server`
+  (a `pools.gpu_sim` block is ignored and `N` falls back to 1 — the coordinator warns).
 - `benchmark.return_action_chunk` defaults to `true` on this branch: the client owns the
   action chunk, which needs one request per chunk instead of one per environment step.
   It was validated against the legacy server-cache path over 80 episodes (no success

@@ -453,6 +453,42 @@ def test_resolve_placement_uses_cpu_pool_for_libero() -> None:
     assert (server_gpus, n_per_server, sim_gpus, placement, is_gpu) == ([2], 7, [2], "co_locate", False)
 
 
+def test_cpu_sim_family_warns_when_only_gpu_sim_pool_is_set(capsys) -> None:
+    """LIBERO copied from a RoboTwin template: N would silently fall back to 1."""
+    from loongforge.embodied.eval.orchestrator import coordinator as coord
+
+    config = {
+        "benchmark": {"name": "libero_10"},
+        "servers": [{"gpus": [0, 1]}],
+        "pools": {"gpu_sim": {"n_sims_per_server": 16}},
+    }
+    _server_gpus, n_per_server, _sim_gpus, _placement, is_gpu = coord._resolve_placement(config)
+    assert n_per_server == 1  # unchanged behaviour, but no longer silent
+    assert is_gpu is False
+    out = capsys.readouterr().out
+    assert "pools.gpu_sim is set but this benchmark family reads pools.cpu_sim" in out
+
+    # The right key still works and stays quiet.
+    ok = {**config, "pools": {"cpu_sim": {"n_sims_per_server": 16}}}
+    assert coord._resolve_placement(ok)[1] == 16
+    assert capsys.readouterr().out == ""
+
+
+def test_gpu_sim_family_warns_when_only_cpu_sim_pool_is_set(capsys) -> None:
+    """The same typo in the other direction (RoboTwin configured as cpu_sim)."""
+    from loongforge.embodied.eval.orchestrator import coordinator as coord
+
+    config = {
+        "benchmark": {"name": "robotwin"},
+        "servers": [{"gpus": [0]}],
+        "pools": {"cpu_sim": {"n_sims_per_server": 4}},
+    }
+    # Legacy cross-fallback: the GPU-sim lookup also reads cpu_sim, so N=4 here
+    # rather than 1. The point of the test is that it is no longer silent.
+    assert coord._resolve_placement(config)[1] == 4
+    assert "pools.cpu_sim is set but this benchmark family reads pools.gpu_sim" in capsys.readouterr().out
+
+
 def test_separate_placement_requires_sim_gpus() -> None:
     from loongforge.embodied.eval.orchestrator import coordinator as coord
 

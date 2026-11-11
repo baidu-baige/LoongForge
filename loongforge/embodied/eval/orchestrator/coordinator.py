@@ -189,11 +189,23 @@ def _warn_policy_timeout(config: Dict[str, Any], n_per_server: int) -> None:
 
 
 def _resolve_pool(config: Dict[str, Any]) -> tuple[str, Dict[str, Any], bool]:
-    """Return (pool_name, pool_config, is_gpu_sim) for this benchmark family."""
+    """Return (pool_name, pool_config, is_gpu_sim) for this benchmark family.
+
+    A pool written under the other family's key is invisible to the lookup below,
+    so say so instead of letting it fall through to ``N=1``: a LIBERO config
+    copied from a RoboTwin template (``pools.gpu_sim``) then just runs slow.
+    """
     pools = config.get("pools") or {}
-    if benchmark_family(config) in GPU_SIM_FAMILIES:
-        return "gpu_sim", pools.get("gpu_sim") or {}, True
-    return "cpu_sim", pools.get("cpu_sim") or {}, False
+    is_gpu_sim = benchmark_family(config) in GPU_SIM_FAMILIES
+    name, other = ("gpu_sim", "cpu_sim") if is_gpu_sim else ("cpu_sim", "gpu_sim")
+    pool = pools.get(name) or {}
+    if not pool and pools.get(other):
+        print(
+            f"[coordinator] pools.{other} is set but this benchmark family reads pools.{name}; "
+            f"ignoring pools.{other} (N falls back to coordinator.n_workers or 1)",
+            flush=True,
+        )
+    return name, pool, is_gpu_sim
 
 
 def _resolve_placement(config: Dict[str, Any]) -> tuple[List[int], int, List[int], str, bool]:
