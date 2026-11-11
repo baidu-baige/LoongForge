@@ -25,6 +25,9 @@ from loongforge.training.embodied.custom.gr00t_n1_7.gr00t_optimizer import (
 )
 from loongforge.training.embodied.sft import FinetuneTrainer
 from loongforge.engines.torch.utils.runtime import set_seed
+from loongforge.data.constants import TrainingPhase
+from loongforge.models.catalog import EmbodiedModelFamilies
+from loongforge.training.trainer_builder import register_model_trainer
 
 logger = logging.getLogger(__name__)
 
@@ -268,6 +271,8 @@ def _select_cuda_graph_runner_type(trainer):
     )
 
 
+@register_model_trainer(EmbodiedModelFamilies.GR00T_N1_7, TrainingPhase.SFT,
+                        override=True, engine="torch")
 class GrootN1d7Trainer(FinetuneTrainer):
     """GR00T-N1.7 finetune trainer with an optional full-iteration CUDA graph."""
 

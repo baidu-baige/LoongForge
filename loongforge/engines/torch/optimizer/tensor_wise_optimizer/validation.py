@@ -3,13 +3,9 @@
 
 """Startup validation of the tensor_wise trainers (``TensorWiseOptimizer``).
 
-Called from ``train/validators.py``; every tensor_wise-specific rule lives here so the
-generic validator carries a single call.
+Called by ``TensorWiseTrainer.__init__``; every tensor_wise-specific rule lives here so
+the generic validator carries no tensor_wise knowledge.
 """
-
-# --trainer-type values whose trainer drives TensorWiseOptimizer. Selecting one
-# of them is what enables tensor_wise; a new integration adds its trainer here.
-TENSOR_WISE_TRAINERS = ("TensorWiseTrainer", "LingbotVlaV2Trainer")
 
 # tensor_wise takes over gradient communication instead of the DDP wrapper, so any
 # explicitly set DDP knob would be silently ignored. Only knobs whose default is
@@ -26,13 +22,8 @@ _DDP_ONLY_ARGS = (
 )
 
 
-def validate_tensor_wise_args(training_args) -> None:
-    """Reject option combinations a tensor_wise trainer cannot honour; other
-    trainers are not checked here."""
-    trainer = training_args.trainer_type
-    if trainer not in TENSOR_WISE_TRAINERS:
-        return
-
+def validate_tensor_wise_args(training_args, trainer: str) -> None:
+    """Reject option combinations a tensor_wise trainer cannot honour."""
     # Compute replicas are complete on every rank, i.e. data parallel; the
     # optimizer replaces the DDP wrapper rather than an FSDP sharding.
     if training_args.distributed_strategy != "ddp":

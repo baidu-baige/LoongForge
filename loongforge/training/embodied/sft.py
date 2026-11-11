@@ -17,6 +17,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
+from loongforge.data.constants import TrainingPhase
 from loongforge.data.embodied import build_dataloader
 from loongforge.engines.torch.distributed.checkpoint import (
     detect_checkpoint_format,
@@ -27,6 +28,7 @@ from loongforge.engines.torch.distributed.checkpoint import (
 )
 from loongforge.engines.torch.distributed.utils import unwrap_model
 from loongforge.engines.torch.utils.runtime import resolve_dtype
+from loongforge.models.catalog import EmbodiedModelFamilies
 from loongforge.models.embodied import build_model
 from loongforge.engines.torch.optimizer import (
     build_optimizer,
@@ -35,10 +37,14 @@ from loongforge.engines.torch.optimizer import (
     clip_gradients,
 )
 from loongforge.engines.torch.base_trainer import BaseTrainer
+from loongforge.training.trainer_builder import register_model_trainer
 
 logger = logging.getLogger(__name__)
 
 
+@register_model_trainer(
+    EmbodiedModelFamilies.names(), TrainingPhase.SFT, engine="torch"
+)
 class FinetuneTrainer(BaseTrainer):
     """
     Standard single-stream finetune trainer.

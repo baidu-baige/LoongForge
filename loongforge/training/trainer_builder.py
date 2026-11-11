@@ -1,12 +1,17 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""all model trainer"""
+"""Trainer registration and lookup for every engine."""
 
-from typing import Union, List, Callable
 import logging
+from typing import Union, List, Callable
 
-MODEL_FAMILY_TRAINER_FACTORY = {}
+# Megatron recipes selected by model family and training phase.
+MEGATRON_TRAINERS_BY_FAMILY = {}
+# Torch trainers selected by model family and training phase.
+TORCH_TRAINERS_BY_FAMILY = {}
+# Torch trainers that --trainer-type selects by name.
+TORCH_TRAINERS_BY_NAME = {}
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -16,35 +21,57 @@ def register_model_trainer(
     training_phase: str,
     training_func: Callable = None,
     override: bool = False,
+    *,
+    engine: str,
 ):
     """
     register model training function
 
     Args:
-        model_family: need to be consistent with the models.factory definition, otherwise it
-                      cannot be retrieved correctly. (Case-insensitive)
-
+        model_family: the YAML ``model_type`` family. Megatron recipes and Torch
+                      trainers both use it; an empty list registers a Torch trainer
+                      for ``--trainer-type`` only. (Case-insensitive)
         training_phase: need to be consistent with the --training-phase definition in training.megatron_args
-        trainig_func: training function.
+        training_func: training function. Torch trainer names must be unique within
+                       a phase because ``--trainer-type`` selects them.
         override: Whether to overwrite existing training functions for the same model/phase.
                   Default: False (no overwrite).
+        engine: key of ``ENGINES``.
     """
+    if engine not in ENGINES:
+        raise ValueError(f"Unknown engine '{engine}'. Available: {sorted(ENGINES)}")
+
     def _add_trainer(families, phase, func, override):
         if not isinstance(families, list):
             families = [families]
 
+        if engine == "torch":
+            named = TORCH_TRAINERS_BY_NAME.setdefault(phase, {})
+            existing = named.setdefault(func.__name__, func)
+            if existing is not func:
+                raise ValueError(
+                    f"Duplicate trainer name '{func.__name__}' for {engine} {phase}: "
+                    f"{existing.__module__} and {func.__module__}. Rename one of them."
+                )
+        engine_trainers = (
+            MEGATRON_TRAINERS_BY_FAMILY
+            if engine == "megatron"
+            else TORCH_TRAINERS_BY_FAMILY
+        )
         for _family in families:
             _family = _family.lower()
-            if _family not in MODEL_FAMILY_TRAINER_FACTORY:
-                MODEL_FAMILY_TRAINER_FACTORY[_family] = {}
+            if _family not in engine_trainers:
+                engine_trainers[_family] = {}
 
-            if phase in MODEL_FAMILY_TRAINER_FACTORY[_family]:
+            if phase in engine_trainers[_family]:
                 if not override:
                     continue
                 else:
-                    logger.info(f"Overriding existing trainer ({_family} family, {phase} phase)")
+                    logger.info(
+                        f"Overriding existing trainer ({engine}, {_family} family, {phase} phase)"
+                    )
 
-            MODEL_FAMILY_TRAINER_FACTORY[_family][phase] = func
+            engine_trainers[_family][phase] = func
 
     def _register_function(fn):
         _add_trainer(model_family, training_phase, fn, override)
@@ -56,27 +83,72 @@ def register_model_trainer(
         return _register_function
 
 
-def build_model_trainer(args):
-    """create model trainer"""
+def _megatron():
+    """Parse Megatron arguments and load the built-in Megatron recipes."""
+    logging.basicConfig(level=logging.WARNING)
+    from loongforge.engines.megatron.parser import parse_train_args
+
+    args = parse_train_args()
     from loongforge.training.llm import pretrain_llm  # noqa: F401
     from loongforge.training.vlm import pretrain_vlm  # noqa: F401
     from loongforge.training.llm import sft_llm  # noqa: F401
     from loongforge.training.vlm import sft_vlm, sft_internvl, sft_ernie  # noqa: F401
     from loongforge.training.diffusion import pretrain_wan, pretrain_qwen_image  # noqa: F401
+    return args.model_family, args.training_phase, None, (args,)
 
-    model_family = args.model_family
-    # get model family trainer
-    if model_family not in MODEL_FAMILY_TRAINER_FACTORY:
-        raise ValueError(
-            f"Not found trainer for family: {model_family}"
-        )
 
-    if args.training_phase not in MODEL_FAMILY_TRAINER_FACTORY[model_family]:
-        raise ValueError(
-            f"Loongforge not support {args.training_phase} phase for {args.model_name} (family: {model_family})"
-        )
+def _torch():
+    """Parse Torch arguments, then load the built-in trainers."""
+    from loongforge.data.constants import TrainingPhase
+    from loongforge.training.torch_args import parse_train_args
 
-    trainer = MODEL_FAMILY_TRAINER_FACTORY[model_family][
-        args.training_phase
-    ]
-    return trainer(args)
+    training_args, model_cfg, data_cfg = parse_train_args()
+
+    # Shared trainer first: model-specific trainers override it for their family.
+    from loongforge.training.embodied import sft  # noqa: F401
+    from loongforge.training.embodied.custom import (  # noqa: F401
+        gr00t_n1_6,
+        gr00t_n1_7,
+        lingbot_va,
+        lingbot_vla_v2,
+        tensor_wise_trainer,
+        vlda,
+    )
+
+    return (
+        model_cfg.model_type,
+        TrainingPhase.SFT,
+        training_args.trainer_type,
+        (training_args, model_cfg, data_cfg),
+    )
+
+
+# Each engine parses its own arguments, loads its recipes, and returns the lookup key.
+ENGINES = {"megatron": _megatron, "torch": _torch}
+
+
+def build_model_trainer(engine):
+    """Build the trainer registered for this run's engine, family, and phase."""
+    family, phase, trainer_type, configs = ENGINES[engine]()
+    raw_family = family
+    family = family.lower()
+
+    if trainer_type:
+        named = TORCH_TRAINERS_BY_NAME.get(phase, {})
+        if trainer_type not in named:
+            raise ValueError(
+                f"Unknown --trainer-type '{trainer_type}'. "
+                f"Available: {sorted(named)}"
+            )
+        return named[trainer_type](*configs)
+
+    trainers = (
+        MEGATRON_TRAINERS_BY_FAMILY
+        if engine == "megatron"
+        else TORCH_TRAINERS_BY_FAMILY
+    )
+    if family not in trainers:
+        raise ValueError(f"Not found trainer for family: {raw_family}")
+    if phase not in trainers[family]:
+        raise ValueError(f"Loongforge not support {phase} phase for family {raw_family}")
+    return trainers[family][phase](*configs)

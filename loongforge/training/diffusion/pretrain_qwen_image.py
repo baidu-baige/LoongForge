@@ -332,8 +332,9 @@ def train_valid_test_datasets_provider(diffusion, train_val_test_num_samples, vp
     return iter(dataloader), None, None
 
 
-@register_model_trainer(model_family=SUPPORTED_MODELS, training_phase=TrainingPhase.PRETRAIN)
-def default_pretrain_trainer(train_args):
+@register_model_trainer(model_family=SUPPORTED_MODELS, training_phase=TrainingPhase.PRETRAIN,
+                        engine="megatron")
+def pretrain_qwen_image_trainer(train_args):
     """Register the default Qwen-Image pretrain trainer with MegatronTrainer."""
     diffusion = None
     return MegatronTrainer(

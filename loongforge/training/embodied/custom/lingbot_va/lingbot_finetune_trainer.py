@@ -17,9 +17,12 @@ from loongforge.models.embodied.lingbot_va.features import (
     feature_enabled,
 )
 
+from loongforge.data.constants import TrainingPhase
+from loongforge.models.catalog import EmbodiedModelFamilies
 from loongforge.training.embodied.sft import (
     FinetuneTrainer,
 )
+from loongforge.training.trainer_builder import register_model_trainer
 
 
 def _device_loss_guard(loss, grad_accum, threshold):
@@ -59,6 +62,8 @@ def _map_loss_log_dict(log_loss_dict, *, backward_loss, gradient_accumulation_st
     return mapped_log_dict
 
 
+@register_model_trainer(EmbodiedModelFamilies.LINGBOT_VA, TrainingPhase.SFT,
+                        override=True, engine="torch")
 class LingBotFinetuneTrainer(FinetuneTrainer):
     """LingBot-specific construction and diagnostics over the common trainer.
 

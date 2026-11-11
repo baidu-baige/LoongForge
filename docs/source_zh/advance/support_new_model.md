@@ -22,10 +22,10 @@ num_attention_heads: 64
 ```
 
 ### 1.2 注册模型名称
-在 loongforge/models/catalog.py 的 MODEL_CONFIG_REGISTRY 中注册，之后即可直接通过名称引用模型（如 `llama3-70b`）。
+在 loongforge/models/catalog.py 的 MEGATRON_MODEL_CONFIG_REGISTRY 中注册，之后即可直接通过名称引用模型（如 `llama3-70b`）。
 
 ```python
-MODEL_CONFIG_REGISTRY = {
+MEGATRON_MODEL_CONFIG_REGISTRY = {
     # ... 已有模型
     "llama3-70b": {
             "config_path": "configs/models/llama3",
@@ -112,10 +112,10 @@ model:
 ```
 
 ### 2.4 模型注册
-你需要在 loongforge/models/catalog.py 中注册。打开 loongforge/models/catalog.py 并向 MODEL_CONFIG_REGISTRY 字典中添加条目：
+你需要在 loongforge/models/catalog.py 中注册。打开 loongforge/models/catalog.py 并向 MEGATRON_MODEL_CONFIG_REGISTRY 字典中添加条目：
 
 ```python
-MODEL_CONFIG_REGISTRY = {
+MEGATRON_MODEL_CONFIG_REGISTRY = {
     # ... 已有模型
 
     # === 添加你的新模型 ===
@@ -142,7 +142,7 @@ configs/models/wan/<your_wan_variant>.yaml
 
 ### 3.2 注册模型名称
 ```python
-MODEL_CONFIG_REGISTRY = {
+MEGATRON_MODEL_CONFIG_REGISTRY = {
     # ... 已有模型
     "my-wan-variant": {
         "config_path": "configs/models/wan",

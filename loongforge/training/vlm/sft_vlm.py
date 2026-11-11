@@ -38,8 +38,9 @@ def get_embedding_ranks(pp_ranks: List[int]):
     return embedding_ranks
 
 @register_model_trainer(model_family=constants.VisionLanguageModelFamilies.names(),
-                        training_phase=data_constants.TrainingPhase.SFT)
-def default_pretrain_trainer(train_args):
+                        training_phase=data_constants.TrainingPhase.SFT,
+                        engine="megatron")
+def sft_vlm_trainer(train_args):
     """build trainer"""
     from loongforge.training.vlm import pretrain_vlm
     trainer = MegatronTrainer(

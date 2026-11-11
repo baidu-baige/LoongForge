@@ -229,8 +229,9 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
 
 
 @register_model_trainer(model_family=constants.VisionLanguageModelFamilies.INTERN_VL,
-                        training_phase=data_constants.TrainingPhase.SFT, override=True)
-def default_sft_trainer(train_args):
+                        training_phase=data_constants.TrainingPhase.SFT, override=True,
+                        engine="megatron")
+def sft_internvl_trainer(train_args):
     """Build trainer"""
     trainer = MegatronTrainer(
         train_args=train_args,

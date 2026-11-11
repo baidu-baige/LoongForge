@@ -249,8 +249,9 @@ def get_embedding_ranks(pp_ranks: List[int]):
 @register_model_trainer(
     model_family=constants.LanguageModelFamilies.names(),
     training_phase=data_constants.TrainingPhase.PRETRAIN,
+    engine="megatron",
 )
-def default_pretrain_trainer(train_args):
+def pretrain_llm_trainer(train_args):
     """build trainer"""
     trainer = MegatronTrainer(
         train_args=train_args,

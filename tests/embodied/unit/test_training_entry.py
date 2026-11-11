@@ -16,6 +16,19 @@ from unittest.mock import Mock, patch
 from loongforge import train
 
 
+def _builder_that_parses(parsed, engines, use_abbrev):
+    """Emulate an engine parser: record the engine, then parse the argv."""
+    parser = argparse.ArgumentParser(allow_abbrev=use_abbrev)
+    parser.add_argument("--model-name")
+
+    def build(engine):
+        engines.append(engine)
+        parsed.append(parser.parse_known_args())
+        return Mock()
+
+    return build
+
+
 class TrainingEntryTests(unittest.TestCase):
     def test_entry_does_not_import_torch(self):
         subprocess.run(
@@ -26,136 +39,136 @@ class TrainingEntryTests(unittest.TestCase):
             check=True,
         )
 
-    def test_megatron_uses_recipe_builder(self):
-        from loongforge.training import trainer_builder
-
-        args = SimpleNamespace(model_name="qwen3-8b", model_family="qwen3", training_phase="pretrain")
+    def test_megatron_model_uses_the_megatron_engine(self):
         trainer = Mock()
-        parser = SimpleNamespace(parse_train_args=Mock(return_value=args))
         with (
-            patch.object(trainer_builder, "build_model_trainer", return_value=trainer) as build,
-            patch.dict(sys.modules, {"loongforge.engines.megatron.parser": parser}),
+            patch.object(train, "build_model_trainer", return_value=trainer) as build,
+            patch.object(sys, "argv", ["train.py", "--model-name", "qwen3-8b"]),
         ):
-            self.assertIsNone(train._run_megatron())
-        parser.parse_train_args.assert_called_once_with()
-        build.assert_called_once_with(args)
+            self.assertIsNone(train.main())
+        build.assert_called_once_with("megatron")
         trainer.train.assert_called_once_with()
 
-    def test_unknown_trainer_is_rejected(self):
-        from loongforge.training.embodied import trainer_builder
+    def test_unknown_trainer_type_is_rejected(self):
+        from loongforge.training import trainer_builder
 
-        for name in ("", "WallOss05Trainer", "unknown"):
-            with self.subTest(name=name), self.assertRaises(ValueError):
-                trainer_builder.build_embodied_trainer(SimpleNamespace(trainer_type=name), None, None)
+        for name in ("WallOss05Trainer", "unknown"):
+            with (
+                self.subTest(name=name),
+                patch.dict(
+                    trainer_builder.ENGINES,
+                    {"torch": lambda: ("pi05", "sft", name, ())},
+                ),
+                self.assertRaises(ValueError),
+            ):
+                trainer_builder.build_model_trainer("torch")
 
     def test_wall_oss_uses_shared_finetune_recipe(self):
-        from loongforge.training.embodied import trainer_builder
+        from loongforge.training import trainer_builder
 
-        args = SimpleNamespace(trainer_type="FinetuneTrainer")
-        configs = (args, object(), object())
-        trainer_type = Mock()
-        parser = SimpleNamespace(parse_train_args=Mock(return_value=configs))
+        recipe = Mock()
+        configs = (object(), object(), object())
         with (
-            patch.dict(sys.modules, {"loongforge.training.torch_args": parser}),
-            patch.dict(trainer_builder._TRAINER_CLASSES, {"FinetuneTrainer": trainer_type}),
+            patch.dict(
+                trainer_builder.ENGINES,
+                {"torch": lambda: ("wall_oss_0_5", "sft", None, configs)},
+            ),
+            patch.object(
+                trainer_builder,
+                "TORCH_TRAINERS_BY_FAMILY",
+                {"wall_oss_0_5": {"sft": recipe}},
+            ),
             patch.object(sys, "argv", ["train.py", "--model-name", "wall_oss_0_5"]),
         ):
             train.main()
-        trainer_type.assert_called_once_with(*configs)
-        trainer_type.return_value.train.assert_called_once_with()
+        recipe.assert_called_once_with(*configs)
+        recipe.return_value.train.assert_called_once_with()
 
     def test_config_file_keeps_megatron_dispatch(self):
         with (
             patch.object(sys, "argv", ["train.py", "--config-file", "model.yaml"]),
-            patch.object(train, "_run_megatron") as run_megatron,
-            patch.object(train, "_run_torch") as run_torch,
+            patch.object(train, "build_model_trainer") as build,
         ):
             train.main()
-        run_megatron.assert_called_once_with()
-        run_torch.assert_not_called()
+        build.assert_called_once_with("megatron")
 
     def test_help_and_unknown_model_reach_the_megatron_parser(self):
         for argv in (["--help"], ["--model-name", "unknown"], []):
             with (
                 self.subTest(argv=argv),
                 patch.object(sys, "argv", ["train.py", *argv]),
-                patch.object(train, "_run_megatron") as run_megatron,
-                patch.object(train, "_run_torch") as run_torch,
+                patch.object(train, "build_model_trainer") as build,
             ):
                 self.assertIsNone(train.main())
                 self.assertEqual(sys.argv, ["train.py", *argv])
-                run_megatron.assert_called_once_with()
-                run_torch.assert_not_called()
+                build.assert_called_once_with("megatron")
 
     def test_torch_model_name_keeps_the_original_unique_abbreviation(self):
         with (
             patch.object(sys, "argv", ["train.py", "--model-n", "pi05"]),
-            patch.object(train, "_run_megatron") as run_megatron,
-            patch.object(train, "_run_torch") as run_torch,
+            patch.object(train, "build_model_trainer") as build,
         ):
             self.assertIsNone(train.main())
-        run_torch.assert_called_once_with()
-        run_megatron.assert_not_called()
+        build.assert_called_once_with("torch")
 
     def test_help_and_missing_values_reach_the_engine_parser(self):
         cases = (
-            (["--help", "--model-name"], False, 0),
-            (["--help", "--model-name", "pi05"], False, 0),
-            (["--model-name", "pi05", "--help", "--model-name"], True, 0),
-            (["--model-name", "pi05", "--help", "--model-name", "qwen3-8b"], True, 0),
-            (["--model-name", "qwen3-8b", "-h", "--model-name", "pi05"], False, 0),
-            (["--model-n", "pi05", "--help", "--model-name"], True, 0),
-            (["--model-name"], False, 2),
+            (["--help", "--model-name"], "megatron", 0),
+            (["--help", "--model-name", "pi05"], "megatron", 0),
+            (["--model-name", "pi05", "--help", "--model-name"], "torch", 0),
+            (["--model-name", "pi05", "--help", "--model-name", "qwen3-8b"], "torch", 0),
+            (["--model-name", "qwen3-8b", "-h", "--model-name", "pi05"], "megatron", 0),
+            (["--model-n", "pi05", "--help", "--model-name"], "torch", 0),
+            (["--model-name"], "megatron", 2),
         )
-        for argv, use_torch, exit_code in cases:
+        for argv, engine, exit_code in cases:
             with self.subTest(argv=argv):
-                parser = argparse.ArgumentParser(allow_abbrev=use_torch)
-                parser.add_argument("--model-name")
+                engines, parsed = [], []
                 with (
                     patch.object(sys, "argv", ["train.py", *argv]),
-                    patch.object(train, "_run_megatron", side_effect=parser.parse_args) as run_megatron,
-                    patch.object(train, "_run_torch", side_effect=parser.parse_args) as run_torch,
+                    patch.object(
+                        train,
+                        "build_model_trainer",
+                        side_effect=_builder_that_parses(parsed, engines, engine == "torch"),
+                    ),
                     redirect_stdout(io.StringIO()),
                     redirect_stderr(io.StringIO()),
                     self.assertRaises(SystemExit) as result,
                 ):
                     train.main()
                 self.assertEqual(result.exception.code, exit_code)
-                self.assertEqual(run_torch.call_count, int(use_torch))
-                self.assertEqual(run_megatron.call_count, int(not use_torch))
+                self.assertEqual(engines, [engine])
 
     def test_exact_model_name_controls_routing_with_abbreviations(self):
         cases = (
-            (["--model-n", "pi05"], True, "pi05", []),
-            (["--model=pi05"], True, "pi05", []),
-            (["--model-n", "qwen3-8b"], False, None, ["--model-n", "qwen3-8b"]),
+            (["--model-n", "pi05"], "torch", "pi05", []),
+            (["--model=pi05"], "torch", "pi05", []),
+            (["--model-n", "qwen3-8b"], "megatron", None, ["--model-n", "qwen3-8b"]),
             (["--model-name", "qwen3-8b", "--model-n", "pi05"],
-             False, "qwen3-8b", ["--model-n", "pi05"]),
+             "megatron", "qwen3-8b", ["--model-n", "pi05"]),
             (["--model-name", "pi05", "--model-n", "qwen3-8b"],
-             True, "qwen3-8b", []),
+             "torch", "qwen3-8b", []),
             (["--model-name", "pi05", "--model-name", "qwen3-8b"],
-             False, "qwen3-8b", []),
+             "megatron", "qwen3-8b", []),
             (["--model-name", "qwen3-8b", "--model-name", "pi05"],
-             True, "pi05", []),
+             "torch", "pi05", []),
             (["--model-name", "pi05", "--", "--model-name", "qwen3-8b"],
-             True, "pi05", ["--", "--model-name", "qwen3-8b"]),
+             "torch", "pi05", ["--", "--model-name", "qwen3-8b"]),
         )
-        for argv, use_torch, model_name, unknown in cases:
+        for argv, engine, model_name, unknown in cases:
             with self.subTest(argv=argv):
-                parser = argparse.ArgumentParser(allow_abbrev=use_torch)
-                parser.add_argument("--model-name")
-                parsed = []
+                engines, parsed = [], []
                 with (
                     patch.object(sys, "argv", ["train.py", *argv]),
-                    patch.object(train, "_run_megatron",
-                                 side_effect=lambda: parsed.append(parser.parse_known_args())) as run_megatron,
-                    patch.object(train, "_run_torch",
-                                 side_effect=lambda: parsed.append(parser.parse_known_args())) as run_torch,
+                    patch.object(
+                        train,
+                        "build_model_trainer",
+                        side_effect=_builder_that_parses(parsed, engines, engine == "torch"),
+                    ),
                 ):
                     self.assertIsNone(train.main())
                     self.assertEqual(sys.argv, ["train.py", *argv])
-                self.assertEqual(run_torch.call_count, int(use_torch))
-                self.assertEqual(run_megatron.call_count, int(not use_torch))
+                self.assertEqual(engines, [engine])
                 self.assertEqual(parsed[0][0].model_name, model_name)
                 self.assertEqual(parsed[0][1], unknown)
 
@@ -179,6 +192,8 @@ class SFTRecipeTests(unittest.TestCase):
         from omegaconf.errors import ConfigKeyError
 
         from loongforge.engines.torch.optimizer.tensor_wise_optimizer.config import TensorWiseConfig
+        from loongforge.training.embodied.custom import lingbot_vla_v2  # noqa: F401
+        from loongforge.training.embodied.custom.tensor_wise_trainer import TensorWiseTrainer
         from loongforge.training.embodied.sft import FinetuneTrainer
         from loongforge.training.torch_args import parse_train_args
 
@@ -193,12 +208,14 @@ class SFTRecipeTests(unittest.TestCase):
         self.assertIsInstance(model_cfg.tensor_wise, TensorWiseConfig)
         self.assertEqual(model_cfg.tensor_wise.grad_reduce_dtype, "fp32")
         self.assertEqual(model_cfg.tensor_wise.comm_bucket_mb, 256)
-        from loongforge.training.embodied.trainer_builder import _TRAINER_CLASSES
+        from loongforge.training import trainer_builder
 
-        tensor_wise = _TRAINER_CLASSES["TensorWiseTrainer"]
-        self.assertTrue(issubclass(tensor_wise, FinetuneTrainer))
+        self.assertTrue(issubclass(TensorWiseTrainer, FinetuneTrainer))
         self.assertTrue(
-            issubclass(_TRAINER_CLASSES[args.trainer_type], tensor_wise)
+            issubclass(
+                trainer_builder.TORCH_TRAINERS_BY_NAME["sft"][args.trainer_type],
+                TensorWiseTrainer,
+            )
         )
         with patch.object(sys, "argv", argv + ["model.tensor_wise.unknown=1"]):
             with self.assertRaises(ConfigKeyError):

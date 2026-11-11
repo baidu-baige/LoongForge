@@ -31,6 +31,9 @@ from loongforge.engines.torch.optimizer.muon_builder import (
 from loongforge.engines.torch.optimizer.tensor_wise_optimizer.precision_policy import (
     DefaultParameterPolicy,
 )
+from loongforge.engines.torch.optimizer.tensor_wise_optimizer.validation import (
+    validate_tensor_wise_args,
+)
 from loongforge.engines.torch.optimizer.tensor_wise_optimizer.tensor_wise_optimizer import (
     CollectiveConfig,
     TensorWiseOptimizer,
@@ -39,10 +42,13 @@ from loongforge.training.embodied.sft import (
     FinetuneTrainer,
 )
 from loongforge.engines.torch.utils.runtime import resolve_dtype
+from loongforge.data.constants import TrainingPhase
+from loongforge.training.trainer_builder import register_model_trainer
 
 logger = logging.getLogger(__name__)
 
 
+@register_model_trainer([], TrainingPhase.SFT, engine="torch")
 class TensorWiseTrainer(FinetuneTrainer):
     """Finetune loop on ``TensorWiseOptimizer``; subclass it for a new model.
 
@@ -58,10 +64,13 @@ class TensorWiseTrainer(FinetuneTrainer):
                                       e.g. regional compile
 
     The rest is the loop contract of ``TensorWiseOptimizer``. A subclass is
-    registered in ``loongforge/training/embodied/trainer_builder.py`` and in
-    ``TENSOR_WISE_TRAINERS``
-    (``tensor_wise_optimizer/validation.py``).
+    registered with ``@register_model_trainer(..., engine="torch")``; this trainer is
+    the default of no model family, so ``--trainer-type`` selects it by name.
     """
+
+    def __init__(self, training_args, model_cfg, data_cfg):
+        validate_tensor_wise_args(training_args, type(self).__name__)
+        super().__init__(training_args, model_cfg, data_cfg)
 
     # -- extension points -------------------------------------------------------
 

@@ -523,9 +523,10 @@ def train_valid_test_datasets_provider(diffusion, train_val_test_num_samples, vp
 
 # Set random number seed
 @register_model_trainer(
-    model_family=SUPPORTED_MODELS, training_phase=TrainingPhase.PRETRAIN
+    model_family=SUPPORTED_MODELS, training_phase=TrainingPhase.PRETRAIN,
+    engine="megatron",
 )
-def default_pretrain_trainer(train_args):
+def pretrain_wan_trainer(train_args):
     """build trainer"""
     diffusion = gaussian_diffusion()
     trainer = MegatronTrainer(

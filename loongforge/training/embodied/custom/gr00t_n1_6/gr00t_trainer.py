@@ -29,10 +29,15 @@ from loongforge.training.embodied.sft import FinetuneTrainer
 from loongforge.training.embodied.custom.gr00t_n1_6.per_microbatch_cuda_graph import (
     GrootN1d6PerMicrobatchCudaGraphRunner,
 )
+from loongforge.data.constants import TrainingPhase
+from loongforge.models.catalog import EmbodiedModelFamilies
+from loongforge.training.trainer_builder import register_model_trainer
 
 logger = logging.getLogger(__name__)
 
 
+@register_model_trainer(EmbodiedModelFamilies.GR00T_N1_6, TrainingPhase.SFT,
+                        override=True, engine="torch")
 class GrootN1d6Trainer(FinetuneTrainer):
     """GR00T-N1.6 finetune trainer with per-microbatch CUDA graph support.
 

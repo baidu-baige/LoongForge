@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import List
 
 
-TORCH_MODEL_NAMES = frozenset({
+EMBODIED_MODEL_NAMES = frozenset({
     "cosmos3_nano",
     "dreamzero_agibot_wan21_14b",
     "dreamzero_full_wan21_14b",
@@ -30,8 +30,7 @@ TORCH_MODEL_NAMES = frozenset({
 })
 
 
-# registry for model config
-MODEL_CONFIG_REGISTRY = {
+MEGATRON_MODEL_CONFIG_REGISTRY = {
     # deepseek
     "deepseek-v2": {
         "config_path": "configs/models/deepseek2",
@@ -474,19 +473,20 @@ def normalize_model_name(name: str) -> str:
 
 def get_config_from_model_name(model_name: str):
     """
-    Lookup (config_path, config_name) from MODEL_CONFIG_REGISTRY,
+    Look up (config_path, config_name) from the Megatron model config registry,
     and automatically prepend absolute project_root to config_path.
     """
     name = normalize_model_name(model_name)
 
-    if name not in MODEL_CONFIG_REGISTRY:
+    if name not in MEGATRON_MODEL_CONFIG_REGISTRY:
         raise KeyError(
             f"Unknown model_name '{model_name}'. "
             f"You may consider passing the --config-file directly or"
             f"register the config file path in catalog.py to add the model name '{model_name}'."
-            f"Now the available model names are: {list(MODEL_CONFIG_REGISTRY.keys())}"
+            f"Now the available model names are: "
+            f"{list(MEGATRON_MODEL_CONFIG_REGISTRY.keys())}"
         )
-    entry = MODEL_CONFIG_REGISTRY[name]
+    entry = MEGATRON_MODEL_CONFIG_REGISTRY[name]
 
     current_file = Path(__file__).resolve()
     project_root = current_file.parent.parent.parent   # LoongForge root dir
@@ -556,10 +556,20 @@ class DiffusionModelFamilies(_BaseFamilies):
     QWEN_IMAGE = "qwen_image"
 
 
-class VisionLanguageActionModelFamilies(_BaseFamilies):
-    """Vision language action model families"""
+class EmbodiedModelFamilies(_BaseFamilies):
+    """Embodied model families."""
     PI05 = "pi05"
-    GROOT_N1_6 = "gr00t_n1_6"
+    GR00T_N1_6 = "Gr00tN1d6"
+    GR00T_N1_7 = "Gr00tN1d7"
+    XVLA = "xvla"
+    VLDA = "vlda"
+    FASTWAM = "fastwam"
+    LINGBOT_VA = "lingbot_va"
+    LINGBOT_VLA_V2 = "lingbot_vla_v2"
+    COSMOS3 = "cosmos3"
+    DREAMZERO = "dreamzero"
+    WALL_OSS_0_5 = "wall_oss_0_5"
+    GIGA_BRAIN07 = "giga_brain07"
 
 
 def get_all_model_families() -> List[str]:

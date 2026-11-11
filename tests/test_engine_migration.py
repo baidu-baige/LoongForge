@@ -131,42 +131,40 @@ def test_recipe_registry_keeps_family_case_and_override_rules(monkeypatch):
     from loongforge.training import trainer_builder
 
     registry = {}
-    monkeypatch.setattr(trainer_builder, "MODEL_FAMILY_TRAINER_FACTORY", registry)
-    original, replacement, sft = Mock(), Mock(), Mock()
+    monkeypatch.setattr(trainer_builder, "MEGATRON_TRAINERS_BY_FAMILY", registry)
+    original = Mock(__name__="original")
+    replacement = Mock(__name__="replacement")
+    sft = Mock(__name__="sft")
     register = trainer_builder.register_model_trainer
-    assert register(["LLAMA", "qwen3"], "pretrain")(original) is original
-    assert registry == {"llama": {"pretrain": original}, "qwen3": {"pretrain": original}}
-    register("llama", "pretrain")(replacement)
+    assert register(["LLAMA", "qwen3"], "pretrain", engine="megatron")(original) is original
+    assert registry == {
+        "llama": {"pretrain": original},
+        "qwen3": {"pretrain": original},
+    }
+    register("llama", "pretrain", engine="megatron")(replacement)
     assert registry["llama"]["pretrain"] is original
-    register("llama", "pretrain", override=True)(replacement)
+    register("llama", "pretrain", override=True, engine="megatron")(replacement)
     assert registry["llama"]["pretrain"] is replacement
-    assert register("LLAMA", "sft", training_func=sft) is None
+    assert register("LLAMA", "sft", training_func=sft, engine="megatron") is None
     assert registry["llama"]["sft"] is sft
 
 
-def test_megatron_builder_uses_registered_phase(monkeypatch):
+def test_builder_uses_the_registered_phase_of_the_selected_engine(monkeypatch):
     from loongforge.training import trainer_builder
 
     recipe = Mock()
     args = NS(model_name="qwen3-8b", model_family="qwen3", training_phase="pretrain")
     monkeypatch.setattr(
         trainer_builder,
-        "MODEL_FAMILY_TRAINER_FACTORY",
+        "MEGATRON_TRAINERS_BY_FAMILY",
         {"qwen3": {"pretrain": recipe}},
     )
-    original_import = __import__
-
-    def import_recipes(name, globals=None, locals=None, fromlist=(), level=0):
-        if name in {
-            "loongforge.training.llm",
-            "loongforge.training.vlm",
-            "loongforge.training.diffusion",
-        }:
-            return NS(**dict.fromkeys(fromlist))
-        return original_import(name, globals, locals, fromlist, level)
-
-    with patch("builtins.__import__", side_effect=import_recipes):
-        trainer_builder.build_model_trainer(args)
+    monkeypatch.setitem(
+        trainer_builder.ENGINES,
+        "megatron",
+        lambda: ("qwen3", "pretrain", None, (args,)),
+    )
+    trainer_builder.build_model_trainer("megatron")
     recipe.assert_called_once_with(args)
 
 
@@ -457,7 +455,7 @@ def test_master_schema_filters_cli_fields_and_global_dsa_keeps_yaml_priority(fam
         LanguageModelFamilies=NS(names=lambda: {"llm"}),
         VisionLanguageModelFamilies=NS(names=lambda: {"vlm"}, QWEN3_VL="qwen3_vl"),
         DiffusionModelFamilies=NS(names=lambda: {"diffusion"}),
-        VisionLanguageActionModelFamilies=NS(names=lambda: set()),
+        EmbodiedModelFamilies=NS(names=lambda: set()),
     )
     validator = _load_functions(
         "loongforge/training/megatron_args.py", {"_validate_extra_model_args"},
@@ -607,7 +605,14 @@ def test_finetune_keeps_the_original_base_contract_and_iterator_lifecycle():
         classes.extend(node for node in tree.body if isinstance(node, ast.ClassDef))
     future = ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0)
     module = ast.fix_missing_locations(ast.Module(body=[future, *classes], type_ignores=[]))
-    namespace = dict(ABC=ABC, abstractmethod=abstractmethod, contextmanager=contextmanager)
+    namespace = dict(
+        ABC=ABC,
+        abstractmethod=abstractmethod,
+        contextmanager=contextmanager,
+        register_model_trainer=lambda *args, **kwargs: (lambda cls: cls),
+        EmbodiedModelFamilies=NS(names=lambda: []),
+        TrainingPhase=NS(SFT="sft"),
+    )
     exec(compile(module, "trainer_contract", "exec"), namespace)
     base, finetune = namespace["BaseTrainer"], namespace["FinetuneTrainer"]
     assert base.__abstractmethods__ == {

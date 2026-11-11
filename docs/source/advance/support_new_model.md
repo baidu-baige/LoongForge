@@ -22,10 +22,10 @@ num_attention_heads: 64
 ```
 
 ### 1.2 Register Model Name
-Register in the MODEL_CONFIG_REGISTRY in loongforge/models/catalog.py, then you can reference the model directly by name (e.g., `llama3-70b`).
+Register in the MEGATRON_MODEL_CONFIG_REGISTRY in loongforge/models/catalog.py, then you can reference the model directly by name (e.g., `llama3-70b`).
 
 ```python
-MODEL_CONFIG_REGISTRY = {
+MEGATRON_MODEL_CONFIG_REGISTRY = {
     # ... existing models
     "llama3-70b": {
             "config_path": "configs/models/llama3",
@@ -112,10 +112,10 @@ model:
 ```
 
 ### 2.4 Model Registration
-You need to register in loongforge/models/catalog.py. Open loongforge/models/catalog.py and add entries to the MODEL_CONFIG_REGISTRY dictionary:
+You need to register in loongforge/models/catalog.py. Open loongforge/models/catalog.py and add entries to the MEGATRON_MODEL_CONFIG_REGISTRY dictionary:
 
 ```python
-MODEL_CONFIG_REGISTRY = {
+MEGATRON_MODEL_CONFIG_REGISTRY = {
     # ... existing models
     
     # === Add your new model ===
@@ -142,7 +142,7 @@ configs/models/wan/<your_wan_variant>.yaml
 
 ### 3.2 Register Model Name
 ```python
-MODEL_CONFIG_REGISTRY = {
+MEGATRON_MODEL_CONFIG_REGISTRY = {
     # ... existing models
     "my-wan-variant": {
         "config_path": "configs/models/wan",

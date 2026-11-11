@@ -740,12 +740,10 @@ def _training_args(**overrides):
         dict(),
         dict(optimizer="muon"),
         dict(save_interval=10, save_training_state=True),
-        # Other trainers are not checked here.
-        dict(trainer_type="FinetuneTrainer", distributed_strategy="fsdp", fp8=True),
     ],
 )
 def test_validation_accepts_supported_combinations(overrides):
-    validation.validate_tensor_wise_args(_training_args(**overrides))
+    validation.validate_tensor_wise_args(_training_args(**overrides), "TensorWiseTrainer")
 
 
 @pytest.mark.parametrize(
@@ -763,7 +761,14 @@ def test_validation_accepts_supported_combinations(overrides):
 )
 def test_validation_rejects_unsupported_combinations(overrides, match):
     with pytest.raises(ValueError, match=re.escape(match)):
-        validation.validate_tensor_wise_args(_training_args(**overrides))
+        validation.validate_tensor_wise_args(_training_args(**overrides), "TensorWiseTrainer")
+
+
+def test_tensor_wise_trainer_checks_its_options():
+    from loongforge.training.embodied.custom.tensor_wise_trainer import TensorWiseTrainer
+
+    with pytest.raises(ValueError, match="requires --distributed-strategy=ddp"):
+        TensorWiseTrainer(_training_args(distributed_strategy="fsdp"), None, None)
 
 
 @pytest.mark.parametrize("trainer_type", ["FinetuneTrainer", "LingbotVlaV2Trainer"])

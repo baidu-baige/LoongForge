@@ -13,11 +13,11 @@ from loongforge.training.cli_utils import parse_positive_int
 class _EmbodiedRoutingArgs:
     """Trainer selection for embodied recipes."""
 
-    trainer_type: str = field(
-        default="FinetuneTrainer",
+    trainer_type: Optional[str] = field(
+        default=None,
         metadata={
-            "help": "Trainer class to instantiate (e.g. FinetuneTrainer, "
-                    "GrootN1d6Trainer); resolved by the trainer builder registry."
+            "help": "Optional. Overrides the trainer registered for the model and "
+                    "phase, e.g. TensorWiseTrainer."
         },
     )
 

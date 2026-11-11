@@ -91,7 +91,7 @@ echo "  output=$OUTPUT_DIR"
 echo "════════════════════════════════════════════════════════════"
 
 PYTHONPATH="$PYTHONPATH" torchrun "${DISTRIBUTED_ARGS[@]}" \
-    "$LOONGFORGE_PATH/loongforge/embodied/train.py" \
+    "$LOONGFORGE_PATH/loongforge/train.py" \
     --model-name giga_brain07 \
     --trainer-type FinetuneTrainer \
     --dataset-format lerobot_datasets \

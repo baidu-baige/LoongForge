@@ -243,8 +243,8 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
 
 @register_model_trainer(
     model_family=[VisionLanguageModelFamilies.ERNIE4_5_VL],
-    training_phase=TrainingPhase.SFT, override=True)
-def default_pretrain_trainer(train_args):
+    training_phase=TrainingPhase.SFT, override=True, engine="megatron")
+def sft_ernie_trainer(train_args):
     """build trainer"""
     trainer = MegatronTrainer(
         train_args=train_args,

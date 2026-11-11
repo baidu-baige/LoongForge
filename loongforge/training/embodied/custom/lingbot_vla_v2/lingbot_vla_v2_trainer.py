@@ -27,16 +27,21 @@ from loongforge.models.embodied.lingbot_vla_v2.moe_load_balance import (
     moe_expert_lr_scale_for,
     register_moe_load_balance_hook,
 )
+from loongforge.data.constants import TrainingPhase
+from loongforge.models.catalog import EmbodiedModelFamilies
 from loongforge.models.embodied.lingbot_vla_v2.parameter_policy import (
     LingbotVlaV2ParameterPolicy,
 )
 from loongforge.training.embodied.custom.tensor_wise_trainer import (
     TensorWiseTrainer,
 )
+from loongforge.training.trainer_builder import register_model_trainer
 
 logger = logging.getLogger(__name__)
 
 
+@register_model_trainer(EmbodiedModelFamilies.LINGBOT_VLA_V2, TrainingPhase.SFT,
+                        override=True, engine="torch")
 class LingbotVlaV2Trainer(TensorWiseTrainer):
     """LingBot batch/teacher pipeline on the tensor_wise loop."""
 

@@ -23,11 +23,11 @@
 ```text
 examples/<model>/finetuning/sft_*.sh
     ↓
-loongforge/train.py
+loongforge/train.py            # 区分 Megatron 和 Torch 配方
     ↓
 parse_train_args()
     ↓
-build_embodied_trainer()
+按 (引擎, 模型类型, 训练阶段) 登记的 trainer
     ↓
 trainer.train()
 ```
@@ -316,7 +316,7 @@ Trainer 模块负责训练生命周期编排，包括分布式上下文初始化
 
 ### 4.1 Trainer 选择
 
-通过 `--trainer-type` 选择训练器，可选值为 `loongforge/training/embodied/trainer_builder.py` 中注册的 Trainer 类名。默认的 `FinetuneTrainer` 适用于标准单数据流的监督微调；若涉及多数据流、特殊 loss 组合或非标准 step 调度，可在该文件中注册自定义 Trainer 类。
+训练器由模型和训练阶段决定：每个家族在自己的 trainer 模块里用 `@register_model_trainer(..., engine="torch")` 登记，没有专属 trainer 的家族使用 `FinetuneTrainer`。`--trainer-type` 按类名覆盖这个选择（例如 `--trainer-type TensorWiseTrainer`），可选值为该阶段下以 `engine="torch"` 登记过的类。若涉及多数据流、特殊 loss 组合或非标准 step 调度，在新模块里登记自定义 Trainer 类，并把该模块加入 `loongforge/training/trainer_builder.py` 的导入列表。
 
 ### 4.2 分布式策略
 
@@ -449,7 +449,7 @@ tensor_wise（`TensorWiseOptimizer`）是 DDP 下的一种分布式优化器：�
 
 `param_sync_fp8_*` 与 `param_sync_bf16_with_fp8` 只在 `fp8_e4m3_delta` 下生效。
 
-要让其他模型使用 tensor_wise，先用 `--trainer-type TensorWiseTrainer`（`trainers/custom/tensor_wise_trainer.py`）。它不需要模型专属代码，已在 FastWAM 和 Pi0.5 上端到端跑通；用于其他模型前，请先核对下方约束。参数保持 `--dtype`，`--optimizer` 指定的优化器在 fp32 master 上运行，因此 loss 与 `--dtype` 下的 DDP 不一致（后者直接更新低精度参数）。需要自定义精度分类、对 3-D tensor（如 MoE 专家堆叠）用 Muon 或 compile 的模型，参照 `LingbotVlaV2Trainer` 继承它，把新的 `--trainer-type` 名加入 `TENSOR_WISE_TRAINERS`（`tensor_wise_optimizer/validation.py`），并返回 `ParameterClassPolicy` 作为参数策略。两种方式下，模型 config 里的 `tensor_wise: TensorWiseConfig` 字段都承载上述参数；没有该字段时使用默认值。
+要让其他模型使用 tensor_wise，先用 `--trainer-type TensorWiseTrainer`（`trainers/custom/tensor_wise_trainer.py`）。它不需要模型专属代码，已在 FastWAM 和 Pi0.5 上端到端跑通；用于其他模型前，请先核对下方约束。参数保持 `--dtype`，`--optimizer` 指定的优化器在 fp32 master 上运行，因此 loss 与 `--dtype` 下的 DDP 不一致（后者直接更新低精度参数）。需要自定义精度分类、对 3-D tensor（如 MoE 专家堆叠）用 Muon 或 compile 的模型，参照 `LingbotVlaV2Trainer` 继承它并返回 `ParameterClassPolicy` 作为参数策略；继承 `TensorWiseTrainer` 即可获得它的参数校验。两种方式下，模型 config 里的 `tensor_wise: TensorWiseConfig` 字段都承载上述参数；没有该字段时使用默认值。
 
 约束：
 

@@ -4,7 +4,7 @@
 #
 # GigaBrain-0.7 × predict_action server smoke (standalone, no benchmark env).
 #
-# Mirrors examples/embodied/xvla/eval/run_*_eval.sh (env wiring + a single
+# Mirrors examples/xvla/eval/run_*_eval.sh (env wiring + a single
 # CONFIG YAML), but GigaBrain-0.7 has no wired simulation benchmark yet, so
 # instead of launching the orchestrator (server + benchmark env loop) this
 # script runs the verified link smoke: start the LoongForge policy server from
@@ -20,7 +20,7 @@ set -euo pipefail
 
 # ── Repo / example layout (override via env) ────────────────────────────────
 REPO_ROOT=${REPO_ROOT:-/workspace/LoongForge}
-EXAMPLE_EVAL_ROOT=${EXAMPLE_EVAL_ROOT:-${REPO_ROOT}/examples/embodied/giga_brain07/eval}
+EXAMPLE_EVAL_ROOT=${EXAMPLE_EVAL_ROOT:-${REPO_ROOT}/examples/giga_brain07/eval}
 CONFIG=${CONFIG:-${EXAMPLE_EVAL_ROOT}/configs/smoke.yaml}
 if [[ "${CONFIG}" != /* ]]; then
   CONFIG=${REPO_ROOT}/${CONFIG}

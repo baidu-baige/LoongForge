@@ -185,7 +185,7 @@ def parse_arguments(
     if hasattr(hydra_cfg, "model_type") and hydra_cfg.model_type in \
             (set(constants.LanguageModelFamilies.names()) |
             set(constants.DiffusionModelFamilies.names()) |
-            set(constants.VisionLanguageActionModelFamilies.names())):
+            set(constants.EmbodiedModelFamilies.names())):
         model_config = hydra_cfg
         model_type = hydra_cfg.model_type
     else:
@@ -232,7 +232,7 @@ def parse_arguments(
 
     elif model_type in (set(constants.LanguageModelFamilies.names()) |
             set(constants.DiffusionModelFamilies.names()) |
-            set(constants.VisionLanguageActionModelFamilies.names())):
+            set(constants.EmbodiedModelFamilies.names())):
         # Validate arguments.
         if validate_extra_args_provider is not None:
             validate_extra_args_provider(args, hydra_cfg)

@@ -41,7 +41,6 @@ import torch
 
 from omegaconf import OmegaConf
 
-from loongforge.engines.torch.optimizer.tensor_wise_optimizer.validation import validate_tensor_wise_args
 from loongforge.training.cli_utils import (
     parse_class_names,
     parse_non_negative_int,
@@ -1627,7 +1626,7 @@ class _DistributedArgs:
             "choices": ["none", "allgather", "both"],
             "help": "fp8_a2a_allgather_hook only. Carry a quantization point's "
                     "residual into the next step, which bounds the accumulated "
-                    "quantization bias at the cost of ~40% more per-step error. "
+                    "quantization bias at the cost of ~40%% more per-step error. "
                     "'allgather' keeps only the shard residual (0.5 extra bytes "
                     "of resident scratch per element) and covers the larger of the "
                     "two error contributions; 'both' also keeps the bucket-sized "
@@ -1999,9 +1998,6 @@ def validate(training_args, model_cfg, data_cfg):
 
     # ── Muon optimizer options ──
     validate_muon_args(training_args)
-
-    # ── tensor_wise ──
-    validate_tensor_wise_args(training_args)
 
     # ── Profiler mutual exclusion ──
     if training_args.use_pytorch_profiler and training_args.use_nsys_profiler:
