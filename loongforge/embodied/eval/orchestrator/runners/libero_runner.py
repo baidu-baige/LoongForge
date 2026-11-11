@@ -109,6 +109,13 @@ def _scene_snapshot_states(directory: str, suite: str, task_id: int, seed: int):
     states = _SCENE_SNAPSHOT_CACHE.get(key)
     if states is None:
         path = scene_snapshots.snapshot_path(directory, suite, task_id, seed)
+        if not path.is_file():
+            raise FileNotFoundError(
+                f"scene snapshot {path} is missing. Generate it with "
+                f"`python -m loongforge.embodied.eval.orchestrator.scene_snapshots "
+                f"--suite {suite} --task {task_id} --seed {seed} --episodes <E> --out {directory}` "
+                f"— the --seed must match this run's `run.seed` (per_task seeds once per task)."
+            )
         states = scene_snapshots.load_snapshots(path)
         _SCENE_SNAPSHOT_CACHE[key] = states
     return states

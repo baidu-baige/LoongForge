@@ -124,6 +124,50 @@ Start from `configs/libero/libero_pi05_parallel.yaml`. LIBERO-specific notes:
 - `server.chunk_execute_steps` selects how many actions of a chunk are executed before
   re-planning (the reference runs use 10).
 
+## Scene snapshots
+
+Under `per_task` seeding the scene an episode sees depends on how many resets already ran
+in that process, so one task cannot be split across workers. A scene snapshot is the RNG
+state captured just before each reset; replaying it lets any episode run in any worker
+again. Generate them once per `(suite, seed, episodes_per_task)` and point
+`benchmark.scene_snapshot_dir` at the directory.
+
+```bash
+# one task
+python -m loongforge.embodied.eval.orchestrator.scene_snapshots \
+    --suite libero_10 --task 3 --seed 7 --episodes 50 --out /path/to/snapshots
+
+# every task of one suite, 10 at a time
+python -m loongforge.embodied.eval.orchestrator.scene_snapshots \
+    --suite libero_10 --seed 7 --episodes 50 --out /path/to/snapshots --jobs 10
+
+# every suite in one directory (each task is an independent process)
+python -m loongforge.embodied.eval.orchestrator.scene_snapshots \
+    --suites libero_10,libero_object,libero_goal,libero_spatial \
+    --seed 7 --episodes 50 --out /path/to/snapshots --jobs 40
+```
+
+Cost and constraints:
+
+- ~90–105 s per task (create the env + `episodes` resets + write ~300 KB). One suite of
+  10 tasks is ~15 min serially; 40 tasks is ~1 h serially and **~4 min at `--jobs 40`** on a
+  128-core machine (measured: 40 tasks x 50 snapshots in 245 s). The work is pure CPU and the tasks are independent.
+- **All suites share one directory**: file names carry the suite
+  (`{suite}__task{k}__seed{seed}.pkl`), so a four-suite parallel run can point
+  `scene_snapshot_dir` at the parent directory.
+- `--seed` must equal the run's `run.seed` (the template uses `7`): under `per_task`
+  seeding every episode of a task reuses that one seed, and the snapshots are looked up
+  by file name, so a mismatch is a missing file (the runner now says so).
+- `--episodes` must be **>= `benchmark.episodes_per_task`**, otherwise the runner raises
+  `scene snapshot ... has N states but episode_idx=...`. Generation reads every file back
+  and exits non-zero on a length mismatch, so the failure surfaces before the run.
+- Files carry `SNAPSHOT_VERSION`; a mismatch is rejected at load time. Regenerate after
+  upgrading if the format changes, and after changing the benchmark assets or reset logic
+  (snapshots are tied to the version that produced them).
+
+The generator prints one `[i/N]` line per task plus a final `written / failed` summary; a
+failed task does not stop the others and makes the exit code non-zero.
+
 ## Calibration results
 
 Reference environment: 8×A800-80GB, one inference service per GPU, FastWAM epilogue

@@ -182,6 +182,34 @@ examples/embodied/<model>/eval/
 
 默认 suite 为 `libero_object`。在同一 YAML 中修改 `suite`（`libero_object`、`libero_spatial`、`libero_goal`、`libero_10`）、`max_tasks` 和 `episodes_per_task` 即可进行完整扫描。X-VLA 通常需要 `max_steps: 800` 和 `chunk_execute_steps: 10`。
 
+#### 场景快照（`per_task` + episode 级分片）
+
+`benchmark.env_seed_mode: per_task` 下，一个 episode 看到的场景取决于「本进程已 reset 过多少次」，所以一个 task 不能拆到多个 worker。场景快照记录的是每次 reset 之前的 RNG 状态，回放它就能让任意 episode 在任意 worker 里复现同一个场景。按 `(suite, seed, episodes_per_task)` 生成一次，然后让 `benchmark.scene_snapshot_dir` 指向该目录。
+
+```bash
+# 单个 task
+python -m loongforge.embodied.eval.orchestrator.scene_snapshots \
+    --suite libero_10 --task 3 --seed 7 --episodes 50 --out /path/to/snapshots
+
+# 一个 suite 的全部 task，10 路并行
+python -m loongforge.embodied.eval.orchestrator.scene_snapshots \
+    --suite libero_10 --seed 7 --episodes 50 --out /path/to/snapshots --jobs 10
+
+# 多个 suite 写到同一目录（每个 task 是独立进程）
+python -m loongforge.embodied.eval.orchestrator.scene_snapshots \
+    --suites libero_10,libero_object,libero_goal,libero_spatial \
+    --seed 7 --episodes 50 --out /path/to/snapshots --jobs 40
+```
+
+注意事项：
+
+- **成本**：约 90–105 s/task（建 env + `episodes` 次 reset + 写 ~300 KB）。单 suite 10 个 task 串行约 15 min；4 个 suite 40 个 task 串行约 1 h，`--jobs 40` 在 128 核机器上 **~4 min**（实测 40 task × 50 快照 245 s）。纯 CPU、task 之间完全独立。
+- **多 suite 必须放同一目录**：文件名自带 suite（`{suite}__task{k}__seed{seed}.pkl`），所以 `scene_snapshot_dir` 指向父目录即可被多 suite 并行评测直接使用。
+- **`--seed` 必须与评测配置里的 `run.seed` 一致**（模板是 `7`）：`per_task` 模式下每个 task 的所有 episode 都用这一个 seed 建环境，快照按文件名查找，不一致就是「文件不存在」（runner 会直接报错并给出生成命令）。
+- **`--episodes` 必须 ≥ `benchmark.episodes_per_task`**，否则运行时会报 `scene snapshot ... has N states but episode_idx=...`。生成阶段会把每个文件读回校验长度，不匹配直接非零退出，避免跑到一半才失败。
+- 文件带 `SNAPSHOT_VERSION`，加载时校验版本；换版本或改了 benchmark 资源 / reset 逻辑后需要重新生成。
+- 生成过程每完成一个 task 打印一行 `[i/N]`，结束时汇总 `written / failed`；单个 task 失败不影响其余 task，但退出码非零。
+
 ### 4.2 RoboTwin
 
 RoboTwin 通过官方 `script/eval_policy.py` 启动；桥接代码位于 `loongforge/embodied/eval/bridges/robotwin_policy.py`。使用的协议在 YAML 中通过 `benchmark.action_bridge` 设置；当模型指定了 `model.robotwin_action_bridge` 时，该值覆盖 `benchmark.action_bridge`。
