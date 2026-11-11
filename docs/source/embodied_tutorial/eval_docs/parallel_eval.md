@@ -45,6 +45,21 @@ which only shows up as "the run is slower than the calibration table says".
 (e.g. `N=48` on 8 GPUs = 384 sims). `N` and `episodes_per_chunk` are the two knobs that
 matter most; see [Section 4](#4-choosing-n-and-episodes_per_chunk).
 
+Server-side batching (`server.batching`, below) is the third knob, and the only one that
+raises the ceiling for an inference-bound model:
+
+| Key | Default | Effect |
+|---|---|---|
+| `server.batching.enabled` | `true` when the block is non-empty | Master switch |
+| `server.batching.max_batch_size` | 8 | Requests grouped into one model call |
+| `server.batching.max_wait_ms` | 5 | How long the batcher waits to fill a batch (adds that latency to every request) |
+
+The batcher only groups requests that are already queued, so a large `max_wait_ms` does
+not help when the arrival rate is low — watch the `Batcher stats: ... mean_batch=` line
+in the service log. On FastWAM, batch 8 is worth 7.35× per sample in isolation and
+`mean_batch` settles at 2.5–3.0 in the eval (~3× throughput); see
+[the FastWAM section](benchmarks/robotwin.md#fastwam-batching-is-the-lever-n-is-not).
+
 ## 3. Chunk execution
 
 Three switches control how action chunks are consumed:

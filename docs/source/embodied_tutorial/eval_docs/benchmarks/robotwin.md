@@ -129,6 +129,53 @@ unsolvable seeds. That pass can be cached and reused:
 Scan cost scales with the number of candidate seeds and the expert rollout length; use
 one shard per available slot to keep the scan short.
 
+The cache is per `task_config`: `demo_clean` and `demo_randomized` have different scenes,
+so they admit different seeds and record different `arm_tag`/`origin_z` values. The file
+name carries only the task (`<task>.pkl`), so scan a randomized run into its **own**
+directory — pointing it at the clean cache overwrites it.
+
+## FastWAM: batching is the lever, N is not
+
+FastWAM is inference-bound, not sim-bound: one `predict_action` takes 810 ms while the
+GPU idles between requests. Server batching removes that idle time. A single-GPU probe
+(`orchestrator/batch_probe.py`) measures 810 / 845 / 843 / 881 ms per call at batch
+1 / 2 / 4 / 8 — flat latency, so **7.35x per sample at batch 8**.
+
+Inside the eval the batcher cannot always fill: with 8 sims per service the measured
+`mean_batch` is 2.5–3.0 (`max_batch` 7–8), which is still ~3x the inference throughput of
+batch 1. `max_wait_ms` cannot raise it — `pending` is usually 0, so arrivals, not the
+wait window, are the limit.
+
+That makes N and the batch size compete for the same VRAM budget, and N stops paying:
+
+| | N=8, batch 8 | N=10, batch 4 |
+|---|---|---|
+| 10 tasks × 100 episodes, wall clock | **43 min** | 58 min |
+| episodes/min | **25.3** | 18.9 |
+| peak VRAM per card | 73 GB | 81 GB (at the limit) |
+| unit failures | 0/145 | 22 units OOM'd once, 1 repair round |
+| success rate | 84.1% | 85.8% (same within noise) |
+
+More sims only lengthen the queue: per-episode latency rose 1.2–2.2x while request
+throughput rose 6%. **Use N=8 for FastWAM**; the template encodes it together with
+`batching.max_batch_size: 8` and `run.unit_timeout_sec: 2400` (a hung unit would
+otherwise hold its slot for `chunk x timeouts.per_episode_sec` = 20 h).
+
+Full clean sweep (50 tasks × 100 episodes, seed 100000, offline expert check, 8×A800):
+
+| | Value |
+|---|---|
+| coverage | 5,000/5,000, 590/590 units, 0 retries, `validation.ok=true` |
+| success rate | **92.10%** vs **91.88%** in the paper (+0.22 pt) |
+| worker phase / end-to-end | **1.84 h / 1.93 h** |
+| throughput | 45.3 episodes/min (43.2 end-to-end) |
+| baseline (`demo_clean` only, 16 slots, same protocol) | 28.6 h → **15.5x** (14.8x end-to-end) |
+
+Per task the mean deviation is +0.22 pt; 49 of 50 tasks are within ±7 pt. The one real
+gap is `open_microwave` (35% vs 62%), reproduced across three independent runs — that
+task needs the official `deploy_policy` entry point to tell a protocol effect from a
+checkpoint weakness. The randomized column has not been run yet.
+
 ## Calibration results
 
 Reference environment: 8×A800-80GB, pi05, `adjust_bottle`, official 400-step limit, offline
@@ -160,8 +207,9 @@ official step limits, 8 GPUs):
 The second number excludes model loading and service startup (about 5 min for eight
 services); sim-worker process startup is included. The two runs use different seed sets
 (see [Result alignment](../parallel_eval.md#8-result-alignment)), so the failure counts
-are not directly comparable. Full-scale numbers (50 tasks × 50 episodes) will be added
-once measured.
+are not directly comparable. Full-scale numbers (50 tasks × 100 episodes) are in
+[FastWAM: batching is the lever](#fastwam-batching-is-the-lever-n-is-not) above and in
+the pi05 result table of the PR description.
 
 > **Reproducibility note.** This pipeline is not bit-reproducible on GPU: two identical
 > runs (same config, fixed `model.noise_seed`, `max_batch_size: 1`) still differ by 1–3
