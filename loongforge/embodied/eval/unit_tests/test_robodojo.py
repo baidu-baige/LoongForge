@@ -364,7 +364,7 @@ def test_example_configs_match_official_lingbot_va_settings():
 
 
 def test_bridge_wiring_is_known():
-    assert set(robodojo_policy._BRIDGE_WIRING) == {"lingbot_va_joint30", "pi05_joint14", "xvla_ee20", "fastwam_joint14", "gr00t_n17_joint14"}
+    assert set(robodojo_policy._BRIDGE_WIRING) == {"lingbot_va_joint30", "pi05_joint14", "xvla_ee20", "fastwam_joint14", "gr00t_n17_joint14", "pi05_sf_joint14"}
     assert set(robodojo_policy._EPISODE_END_CHECK) <= set(robodojo_policy._BRIDGE_WIRING)
     assert json.loads(json.dumps(LINGBOT_VA_JOINT_CHANNELS)) == LINGBOT_VA_JOINT_CHANNELS
 
@@ -811,3 +811,44 @@ def test_gr00t_official_vendored_eval_transform_always_letterboxes():
     assert "letter_box_transform" not in body.split("):", 1)[0]  # no switch in the signature
     eval_block = body[body.index("eval_transform = A.Compose("):]
     assert eval_block.index("LetterBoxPad()") < eval_block.index("SmallestMaxSize")
+
+
+# ── Spatial_Forcing (official XPolicyLab/policy/Spatial_Forcing, open_sf = openpi + SF) ──
+def test_spatial_forcing_official_config_is_absolute_pi05():
+    cfg_py = _ROBODOJO_ROOT / "XPolicyLab/policy/Spatial_Forcing/open_sf/src/openpi/external_config/pi05sf_jax_robodojo_v21_offcache.py"
+    if not cfg_py.is_file():
+        pytest.skip("set ROBODOJO_ROOT to a RoboDojo checkout for the Spatial_Forcing config check")
+    text = cfg_py.read_text()
+    assert "Pi0Config(pi05=True)" in text and "LeRobotAlohaDataConfig(" in text
+    assert "adapt_to_pi=False" in text and "use_delta_joint_actions=False" in text
+    deploy = yaml.safe_load((_ROBODOJO_ROOT / "XPolicyLab/policy/Spatial_Forcing/deploy.yml").read_text())
+    assert deploy["train_config_name"] == "pi05sf_jax_robodojo_v21_offcache" and deploy["action_type"] == "joint"
+    official = _ROBODOJO_ROOT / "XPolicyLab/policy/Spatial_Forcing/deploy.py"
+    assert official.read_text() == (_ROBODOJO_ROOT / "XPolicyLab/policy/Pi_05/deploy.py").read_text()
+
+
+def test_bridge_pi05_sf_payload_and_absolute_joint_action(monkeypatch):
+    import loongforge.embodied.eval.transport as transport
+
+    monkeypatch.setattr(transport, "PolicyClient", _FakePi05Client)
+    sf = RoboDojoPolicyModel(
+        {"task_name": "stack_bowls", "action_bridge": "pi05_sf_joint14", "first_chunk_len": 50, "chunk_len": 50, "lf_port": 1}
+    )
+    sf.reset()
+    out = sf.get_action(_obs(0))
+    call = sf.client.calls[0]
+    assert len(call["images"]) == 3 and np.asarray(call["images"][0]).shape == (224, 224, 3)
+    # zero raw action -> zero joints (absolute, no delta anchoring), unlike pi05_joint14
+    act = out["actions"][0]
+    assert act["left_arm_joint_state"] == pytest.approx([0.0] * 6)
+    assert act["right_ee_joint_state"] == pytest.approx([0.0])
+    assert sf.episode_end_check == "action"
+
+
+def test_example_pi05_sf_config_matches_official_adapter():
+    cfg = yaml.safe_load(
+        (_REPO_ROOT / "examples/embodied/pi05/eval/configs/robodojo/stack_bowls_spatial_forcing.yaml").read_text()
+    )
+    assert cfg["benchmark"]["action_bridge"] == "pi05_sf_joint14"
+    assert cfg["benchmark"]["first_chunk_len"] == cfg["benchmark"]["chunk_len"] == cfg["model"]["action_horizon"] == 50
+    assert cfg["server"]["chunk_execute_steps"] == 0 and cfg["server"]["eval_normalization_mode"] == "q99"
