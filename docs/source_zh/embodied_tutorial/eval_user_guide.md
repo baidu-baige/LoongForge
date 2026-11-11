@@ -411,10 +411,23 @@ pools:
 | `pools.gpu_sim.n_sims_per_server` | 每卡仿真数（N） |
 | `pools.gpu_sim.placement` | `co_locate`（仿真与推理服务同卡，推荐）或 `separate` |
 | `benchmark.episodes_per_chunk` | 一个评测单元连续跑多少集 |
-| `benchmark.plan_order` | 设为 `lpt`，长任务优先派发 |
+| `benchmark.plan_order` | `lpt_long`：长任务的**所有** chunk 先派发，其余再轮转（RoboTwin 推荐） |
+| `benchmark.long_task_steps` | 长任务判定阈值（官方 step_limit，如 `1200`） |
+| `benchmark.long_task_episodes_per_chunk` | 只对长任务使用的更细分片（如 `10`），把最后一个 unit 的尾段从 ~83 min 压到 ~33 min |
 | `benchmark.sim_cpu_threads` | 仅 RoboTwin；多仿真共卡时设为 1，避免线程超订 |
 
 单元数应接近 slot 数：`episodes_per_chunk ≈ max(1, floor(总集数 / (卡数 × N)))`，这样一波跑完、每单元只付一次进程启动。未显式设置时，planner 的默认值是 `ceil(E / (4 × slot 数))`（约每 slot 4 个单元），让后续波次可以回填空出的 slot；已知一波能跑完时请显式设为上式。单任务且总集数 ≤ slot 数时该值取 1，此时继续增大 N 不会提高并发。
+
+任务长度差异大时（RoboTwin 的 step_limit 从 400 到 1700），makespan 由**最长任务的最后一个 shard** 决定，而不是平均值：一个 1,500 步任务的 25 集 unit 要跑 ~83 min。`lpt` 只排任务顺序、之后仍会打散，长任务的后几个 shard 会被排到队列深处。用 `lpt_long` 把长任务的全部 shard 前置，并只给它们更细的 chunk：
+
+```yaml
+benchmark:
+  plan_order: lpt_long
+  long_task_steps: 1200
+  long_task_episodes_per_chunk: 10
+```
+
+50 任务 × 100 集实测：`lpt` + chunk 25 → **1.88 h（21.8×）**；`lpt_long`(1200) + 长任务 chunk 10 → **1.77 h（23.2×）**，成功率不变（85.9% vs 86.0%，同种子）。
 
 ### 8.2 加速开关
 

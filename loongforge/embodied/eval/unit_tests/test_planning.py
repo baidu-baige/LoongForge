@@ -381,6 +381,103 @@ def test_plan_robotwin_order_modes(tmp_path) -> None:
     with pytest.raises(ValueError):
         plan_robotwin(config, 4)
 
+def test_plan_robotwin_lpt_long_fronts_long_tasks_with_a_finer_chunk(tmp_path, capsys) -> None:
+    """lpt_long: every shard of a long task precedes all short work, and long
+    tasks use their own (finer) chunk so the last unit's tail stays short."""
+    limits = {
+        "long_1700": 1700,
+        "long_1500": 1500,
+        "long_1200a": 1200,
+        "long_1200b": 1200,
+        "long_1200c": 1200,
+        "short_a": 400,
+        "short_b": 400,
+        "short_c": 400,
+        "short_d": 400,
+        "short_e": 400,
+    }
+    step_limits = tmp_path / "task_config" / "_eval_step_limit.yml"
+    step_limits.parent.mkdir(parents=True)
+    step_limits.write_text("\n".join(f"{k}: {v}" for k, v in limits.items()) + "\n", encoding="utf-8")
+    config: dict = {
+        "benchmark": {
+            "name": "robotwin",
+            "tasks": list(limits),
+            "episodes_per_task": 100,
+            "episodes_per_chunk": 25,
+            "long_task_steps": 900,
+            "long_task_episodes_per_chunk": 10,
+            "plan_order": "lpt_long",
+        },
+        "env": {"robotwin_root": str(tmp_path)},
+    }
+    queue = [
+        (
+            s["overrides"]["benchmark"]["task_name"],
+            s["overrides"]["benchmark"]["start_seed"],
+            s["overrides"]["benchmark"]["test_num"],
+            s["overrides"]["benchmark"]["seed_stride"],
+        )
+        for s in plan_robotwin(config, 8)
+    ]
+
+    print("lpt_long queue:")
+    for index, (task, seed, count, stride) in enumerate(queue):
+        print(f"  [{index:2d}] {task:12s} seed={seed:3d} n={count:2d} stride={stride}")
+
+    long_names = {name for name, limit in limits.items() if limit >= 900}
+    first_short = next(i for i, (task, *_rest) in enumerate(queue) if task not in long_names)
+    assert all(task in long_names for task, *_rest in queue[:first_short])
+    assert all(task not in long_names for task, *_rest in queue[first_short:])
+
+    # Round-robin inside the head: shards 0-4 are chunk 0 of every long task,
+    # shards 5-9 are chunk 1, so a wave never stacks one heavy scene.
+    assert {task for task, *_rest in queue[:5]} == long_names
+    assert [seed for _task, seed, *_rest in queue[:5]] == [0] * 5
+    assert [seed for _task, seed, *_rest in queue[5:10]] == [10] * 5
+
+    # Long tasks: 10 shards x 10 episodes; short tasks keep 4 x 25.
+    for task in long_names:
+        own = [(seed, count, stride) for name, seed, count, stride in queue if name == task]
+        assert [count for _seed, count, _stride in own] == [10] * 10
+        assert [seed for seed, _count, _stride in own] == list(range(0, 100, 10))
+        assert {stride for _seed, _count, stride in own} == {100}
+    for task in set(limits) - long_names:
+        own = [(seed, count, stride) for name, seed, count, stride in queue if name == task]
+        assert [count for _seed, count, _stride in own] == [25] * 4
+        assert [seed for seed, _count, _stride in own] == [0, 25, 50, 75]
+        assert {stride for _seed, _count, stride in own} == {100}
+
+    # Coverage is unaffected: every episode index appears exactly once per task.
+    for task in limits:
+        seen = [i for name, seed, count, _stride in queue if name == task for i in range(seed, seed + count)]
+        assert sorted(seen) == list(range(100))
+
+    assert "lpt_long queue:" in capsys.readouterr().out
+
+
+def test_plan_robotwin_lpt_long_without_threshold_matches_interleave() -> None:
+    """The new knobs are opt-in: with no threshold, lpt_long is a plain interleave."""
+    base: dict = {
+        "benchmark": {
+            "name": "robotwin",
+            "tasks": ["b", "a"],
+            "episodes_per_task": 4,
+            "episodes_per_chunk": 1,
+        },
+        "env": {"robotwin_root": "/nonexistent"},
+    }
+
+    def plan(order: str):
+        config = {**base, "benchmark": {**base["benchmark"], "plan_order": order}}
+        return [
+            (s["overrides"]["benchmark"]["task_name"], s["overrides"]["benchmark"]["start_seed"])
+            for s in plan_robotwin(config, 8)
+        ]
+
+    assert plan("lpt_long") == plan("interleave")
+
+
 def test_plan_robotwin_scan_shards_interleave_candidates() -> None:
     """Sharded scan: k shards per task, residue classes start+i / stride=k."""
     from loongforge.embodied.eval.orchestrator import planning

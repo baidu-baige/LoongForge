@@ -28,7 +28,9 @@ Both paths use the same runners and the same output schema, so an existing
 | `pools.gpu_sim.n_sims_per_server` | 1 | Sim workers per GPU (`N`) |
 | `pools.gpu_sim.placement` | `co_locate` | `co_locate`: sims share the GPU with their inference service. `separate`: sims use `sim_gpus`, the service cards stay dedicated |
 | `benchmark.episodes_per_chunk` | computed: ~4 units per slot (`ceil(E / (4·S))`) | Episodes per eval unit (one worker process) |
-| `benchmark.plan_order` | `task` | `lpt` dispatches the longest units first; recommended for mixed task lengths |
+| `benchmark.plan_order` | `task` | `lpt` dispatches the longest units first; `lpt_long` keeps every shard of the long tasks ahead of all short work (see Section 4) |
+| `benchmark.long_task_steps` | unset | Step limit that marks a task as "long" for `lpt_long` (e.g. `1200`); `-1`/unset disables the split |
+| `benchmark.long_task_episodes_per_chunk` | unset | Finer chunk for the long tasks only (e.g. `10`), which shortens the last unit's tail |
 | `benchmark.sim_cpu_threads` | unset | (RoboTwin only) Caps `OMP/MKL/OpenBLAS` + `torch` threads per sim worker. `1` removes thread oversubscription when many sims share a card |
 
 `N` and `episodes_per_chunk` are the two knobs that matter most; see
@@ -69,6 +71,32 @@ corrections:
 
 In a single-task run with `E ≤ S` (e.g. 50 episodes on 64 slots), `c = 1` and `N`
 above `ceil(E/G)` changes nothing — the number of concurrent sims is capped by `E`.
+
+### Long-tail correction (`lpt_long`)
+
+With mixed task lengths the makespan is set by the last shard of the longest task, not by
+the average: a 1,700-step task takes ~200 s per episode, so one 25-episode unit is ~83 min.
+`lpt` sorts tasks but then interleaves, which puts the long tasks' later shards deep in the
+queue. `lpt_long` splits the queue into two round-robins — every shard of the long tasks
+first, then everything else — and can give only those tasks a finer chunk:
+
+```yaml
+benchmark:
+  plan_order: lpt_long
+  long_task_steps: 1200              # tasks at or above this official step limit
+  long_task_episodes_per_chunk: 10   # 25 -> 10 shortens the last unit from 83 to 33 min
+```
+
+Measured on 50 RoboTwin tasks × 100 episodes (N=10, 8×A800, same seeds, one run each):
+
+| plan_order | chunk (long) | wall clock | speedup |
+|---|---|---|---|
+| `lpt` (previous default) | 25 | 1.88 h | 21.8× |
+| `lpt_long`, `long_task_steps=1200` | 10 | **1.77 h** | **23.2×** |
+
+Raising `long_task_steps` (fewer tasks in the head) keeps more slots free for short tasks
+in the first wave and avoids stacking many heavy scenes on one card; keep
+`long_task_episodes_per_chunk ≥ episodes_per_task / 4` so repair rounds stay cheap.
 
 ## 5. Calibration (trial runs)
 
@@ -118,7 +146,7 @@ restarted, so a pipeline never reads a partial score as a success.
 | CUDA OOM when the wave starts | `N` too high for the per-sim memory of that benchmark | Lower `N`; failed units are retried automatically, but a systematic overflow needs a smaller `N` |
 | `validation.ok=false` after 3 repair rounds | Units that consistently fail | Inspect `failed_units`; check the per-unit log and the inference service |
 | Long gap before the first episode | Model load and first scene build | Expected; it is excluded from `elapsed_sec` but included in the wall clock |
-| Slots idle in the second half | Mixed task lengths | Use `plan_order: lpt`; raise `E` or lower `c` |
+| Slots idle in the second half | Mixed task lengths | Use `plan_order: lpt_long` with `long_task_steps` + `long_task_episodes_per_chunk` |
 
 ## 8. Result alignment
 

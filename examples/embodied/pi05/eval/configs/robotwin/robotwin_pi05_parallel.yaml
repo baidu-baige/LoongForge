@@ -22,7 +22,9 @@ benchmark:
   disable_expert_check: false
   action_bridge: pi05_aloha_14d
   use_official_step_limits: true
-  plan_order: lpt
+  plan_order: lpt_long
+  long_task_steps: 1200
+  long_task_episodes_per_chunk: 10
   sim_cpu_threads: 1
   return_action_chunk: true
   skip_intra_chunk_obs: true

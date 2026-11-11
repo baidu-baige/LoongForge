@@ -268,9 +268,19 @@ def plan_robotwin(config: Dict[str, Any], total_workers: int) -> List[Shard]:
                 ]
             )
     else:
+        # A few tasks dominate the makespan (1,200-1,700 step limits are 2-4x a
+        # 400-step task). Giving only those a finer chunk keeps the last unit's
+        # tail short instead of paying it on every task.
+        long_steps = int(benchmark.get("long_task_steps") or 0)
+        long_chunk = int(benchmark.get("long_task_episodes_per_chunk") or 0)
+        limits = _robotwin_step_limits(config)
         per_task = []
         for task in tasks:
-            chunk = chunk_override if chunk_override > 0 else chunk_size(episodes, total_workers)
+            chunk = chunk_override
+            if long_chunk > 0 and long_steps > 0 and limits.get(task, 0) >= long_steps:
+                chunk = long_chunk
+            if chunk <= 0:
+                chunk = chunk_size(episodes, total_workers)
             ranges = list(_ranges(start, episodes, chunk))
             # One unit = one sequential seed walk: an unstable scene advances to
             # the next seed (+1), exactly like the legacy single-process run.
@@ -306,20 +316,37 @@ def plan_robotwin(config: Dict[str, Any], total_workers: int) -> List[Shard]:
     # Dispatch is a FIFO queue, so the order below decides which tasks a wave
     # runs together. "task" (default) keeps the historical task-major order;
     # "interleave" mixes tasks in every wave; "lpt" starts the longest tasks
-    # first (then interleaves) to shrink the makespan.
+    # first (then interleaves) to shrink the makespan; "lpt_long" additionally
+    # keeps every shard of the long tasks ahead of all short work, which is what
+    # bounds the tail (see ``long_task_steps``).
     order = str(benchmark.get("plan_order") or "task").strip().lower()
     if order == "task":
         return [shard for items in per_task for shard in items]
     if order == "interleave":
         return _interleave(per_task)
-    if order == "lpt":
+    if order in ("lpt", "lpt_long"):
         limits = _robotwin_step_limits(config)
+        long_steps = int(benchmark.get("long_task_steps") or 0)
+
+        def _is_long(items: List[Shard]) -> bool:
+            name = items[0]["overrides"]["benchmark"]["task_name"]
+            return long_steps > 0 and limits.get(name, 0) >= long_steps
+
         # Longest task first, then round-robin so a wave still mixes tasks.
         per_task.sort(key=lambda items: -limits.get(items[0]["overrides"]["benchmark"]["task_name"], 0))
         # Each task's own shards run longest-first as well (same seed range, so
         # order only affects scheduling, not coverage).
-        return _interleave(per_task)
-    raise ValueError(f"benchmark.plan_order must be one of ['task', 'interleave', 'lpt'], got {order!r}")
+        if order == "lpt":
+            return _interleave(per_task)
+        # "lpt_long": two round-robins -- long tasks first, everyone else after.
+        # Round-robin (not task-major) inside each group so a wave never loads a
+        # single GPU with several shards of the same heavy scene.
+        head = _interleave([items for items in per_task if _is_long(items)])
+        tail = _interleave([items for items in per_task if not _is_long(items)])
+        return head + tail
+    raise ValueError(
+        f"benchmark.plan_order must be one of ['task', 'interleave', 'lpt', 'lpt_long'], got {order!r}"
+    )
 
 
 def plan_calvin(config: Dict[str, Any], total_workers: int) -> List[Shard]:

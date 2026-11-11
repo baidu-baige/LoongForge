@@ -89,6 +89,9 @@ Start from `configs/robotwin/robotwin_pi05_parallel.yaml`. The RoboTwin-specific
 |---|---|---|
 | `pools.gpu_sim.n_sims_per_server` | 8 | Fits the per-sim memory of the reference tasks |
 | `benchmark.episodes_per_chunk` | `floor(E/S)` | One wave, one process start per unit |
+| `benchmark.plan_order` | `lpt_long` | Front-loads the long tasks; with `long_task_steps: 1200` + `long_task_episodes_per_chunk: 10` the measured wall clock drops 1.88 → 1.77 h on the full 50×100 sweep |
+| `benchmark.long_task_steps` | 1200 | RoboTwin step limits run 400–1700; the ≥1200 tasks dominate the tail |
+| `benchmark.long_task_episodes_per_chunk` | 10 | One unit of a 1,500-step task is ~33 min instead of ~83 min |
 | `benchmark.return_action_chunk` | `true` | The client owns the action chunk |
 | `benchmark.skip_intra_chunk_obs` | `true` | No camera render inside a chunk — the largest single win |
 | `benchmark.sim_cpu_threads` | 1 | Avoids thread oversubscription with many sims per card |
