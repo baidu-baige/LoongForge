@@ -67,6 +67,13 @@ pools:
     n_sims_per_server: 8
     placement: co_locate
 
+# Fail-fast budget: N x per-sim + model must fit in one card.
+resources:
+  gpu_sim:
+    vram_total_mb: 81920
+    vram_per_sim_mb: 5400
+    vram_model_mb: 16600
+
 env:
   eval_root: /path/to/LoongForge/loongforge/embodied/eval
   loongforge_root: /path/to/LoongForge

@@ -95,6 +95,7 @@ Start from `configs/robotwin/robotwin_pi05_parallel.yaml`. The RoboTwin-specific
 | `benchmark.return_action_chunk` | `true` | The client owns the action chunk |
 | `benchmark.skip_intra_chunk_obs` | `true` | No camera render inside a chunk — the largest single win |
 | `benchmark.sim_cpu_threads` | 1 | Avoids thread oversubscription with many sims per card |
+| `resources.gpu_sim` | `vram_total_mb` / `vram_per_sim_mb` / `vram_model_mb` | Startup check: `N x per_sim + model <= total`, otherwise the run refuses to start. Fill it with measured peaks — a steady-state average will not catch a card that runs at 99% |
 
 `return_action_chunk` + `skip_intra_chunk_obs` make the policy open-loop inside a chunk
 (one observation per `chunk_execute_steps` actions). Keep them off if you need

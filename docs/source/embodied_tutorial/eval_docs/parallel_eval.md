@@ -29,6 +29,7 @@ Both paths use the same runners and the same output schema, so an existing
 | `pools.cpu_sim.n_sims_per_server` | 1 | Sim workers per GPU (`N`) — **CPU-sim families**: LIBERO, CALVIN |
 | `pools.gpu_sim.placement` | `co_locate` | GPU-sim only. `co_locate`: sims share the GPU with their inference service. `separate`: sims use `sim_gpus`, the service cards stay dedicated |
 | `coordinator.n_workers` | 1 | Fallback `N` when the family's pool section is absent |
+| `run.unit_timeout_sec` | `max_episodes × timeouts.per_episode_sec` | Wall-clock backstop for one unit. Set it explicitly whenever `per_episode_sec` is large (a sensor-model batch can need 7200 s), otherwise a unit that hangs in native code blocks its slot for tens of hours |
 | `benchmark.episodes_per_chunk` | computed: ~4 units per slot (`ceil(E / (4·S))`) | Episodes per eval unit (one worker process) |
 | `benchmark.plan_order` | `task` | `lpt` dispatches the longest units first; `lpt_long` keeps every shard of the long tasks ahead of all short work (see Section 4) |
 | `benchmark.long_task_steps` | unset | Step limit that marks a task as "long" for `lpt_long` (e.g. `1200`); `-1`/unset disables the split |
