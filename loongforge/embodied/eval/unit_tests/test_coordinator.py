@@ -425,6 +425,33 @@ def test_run_tears_down_servers_when_startup_fails(monkeypatch: Any, tmp_path: A
     assert server.terminated  # not leaked
 
 
+def test_port_preflight_reports_the_conflict() -> None:
+    """A taken port must fail fast with the port number, not "server not healthy"."""
+    import socket
+
+    from loongforge.embodied.eval.orchestrator import coordinator as coord
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+        listener.bind(("", 0))
+        listener.listen(1)
+        taken = listener.getsockname()[1]
+        with pytest.raises(SystemExit, match=str(taken)):
+            coord._assert_ports_free([taken])
+
+
+def test_port_preflight_accepts_a_released_port() -> None:
+    """SO_REUSEADDR semantics: a just-closed (TIME_WAIT) socket is not a conflict."""
+    import socket
+
+    from loongforge.embodied.eval.orchestrator import coordinator as coord
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        probe.bind(("", 0))
+        released = probe.getsockname()[1]
+    coord._assert_ports_free([released])  # must not raise
+
+
 def test_resolve_placement_uses_gpu_pool_for_robotwin() -> None:
     from loongforge.embodied.eval.orchestrator import coordinator as coord
 

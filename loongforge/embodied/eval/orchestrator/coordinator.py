@@ -26,6 +26,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import socket
 import subprocess
 import sys
 import tempfile
@@ -294,6 +295,32 @@ def _validate_gpu_resources(config: Dict[str, Any], n_per_server: int, is_gpu_si
             f"but resources.gpu_sim.vram_total_mb is {vram_total}"
         )
 
+
+
+def _assert_ports_free(ports: List[int]) -> None:
+    """Fail fast when a service or health port is already taken.
+
+    Binding is the only reliable test: a killed server can leave its socket
+    behind with no visible owner (the listener then shows up as ``*:PORT`` in
+    ``ss`` but no pid), and the run would otherwise spend the whole server
+    startup budget before reporting "Policy server exited before healthy: 1".
+    ``SO_REUSEADDR`` is kept so TIME_WAIT sockets do not count as conflicts.
+    """
+    conflicts: List[int] = []
+    for port in ports:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                # Bind every interface: the policy server listens on 0.0.0.0 even
+                # when server.host is 127.0.0.1.
+                sock.bind(("", int(port)))
+            except OSError:
+                conflicts.append(int(port))
+    if conflicts:
+        raise SystemExit(
+            f"these ports are already in use: {conflicts} (first requested {ports[0]}); "
+            "stop the process holding them or raise LOONFORGE_COORD_PORT_BASE"
+        )
 
 
 def _launch_unit(
@@ -602,6 +629,11 @@ def run(config: Dict[str, Any], config_path: str = "") -> Dict[str, Any]:
     ) and bool(config.get("pools"))
     port_base = int(os.environ.get("LOONGFORGE_COORD_PORT_BASE", str(DEFAULT_PORT_BASE)))
     servers = []
+    if not scan_mode:
+        _assert_ports_free(
+            [port_base + PORT_STRIDE * index + offset
+             for index in range(len(server_gpus)) for offset in (0, 1)]
+        )
     for index, gpu in ([] if scan_mode else enumerate(server_gpus)):
         port = port_base + PORT_STRIDE * index
         health_port = port + 1
