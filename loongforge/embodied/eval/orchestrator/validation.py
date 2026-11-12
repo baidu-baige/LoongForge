@@ -111,7 +111,15 @@ def validate(
     return {
         # Extra episodes are legitimate replacements for skipped unstable seeds
         # (e.g. RoboTwin), so they are reported but do not fail the run.
-        "ok": missing == 0 and not duplicates and unkeyed == 0,
+        # `missing` is a global sum, so a shard that produced nothing can be
+        # masked by another shard's replacement episodes (extra ids are allowed
+        # on purpose). Gate on the per-shard shortfall too.
+        "ok": (
+            missing == 0
+            and not duplicates
+            and unkeyed == 0
+            and not short_shards(expected_by_shard, shard_ids, records_by_unit)
+        ),
         "expected": expected,
         "actual": actual,
         "records": n_records,

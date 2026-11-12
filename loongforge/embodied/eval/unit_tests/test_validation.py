@@ -74,3 +74,18 @@ def test_infra_failures_are_separated_from_model_failures() -> None:
     assert report["successes"] == 1
     assert report["infra_failed"] == 1
     assert "success_rate=0.3333" in format_report(report)
+
+
+def test_an_empty_shard_is_not_masked_by_another_shard_over_producing() -> None:
+    """`missing` is global, so a dead shard must be caught per shard.
+
+    Replacement seeds produce ids outside the plan, so `actual` can reach
+    `expected` while one shard contributed nothing.
+    """
+    records_a = [_rec("a/1"), _rec("a/2"), _rec("a/rep1"), _rec("a/rep2")]
+    report = validate({"a": 2, "b": 2}, ["a", "b"], [records_a, []])
+    # The global numbers look perfect: four records for four planned episodes.
+    assert report["missing"] == 0
+    assert report["unexpected"] == 0
+    # But shard "b" produced nothing, so the run is not covered.
+    assert not report["ok"]
