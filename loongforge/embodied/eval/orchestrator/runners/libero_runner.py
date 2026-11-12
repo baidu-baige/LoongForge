@@ -191,6 +191,51 @@ def _env_step(env, action, timeout_sec: float):
         return env.step(action)
 
 
+def _image_observables(env) -> list:
+    """Camera observables of the underlying robosuite env."""
+    base = getattr(env, "env", env)
+    observables = getattr(base, "_observables", None) or {}
+    return [observable for name, observable in observables.items() if "image" in name]
+
+
+class _CheapImage:
+    """Stand-in camera sensor: correct shape/modality, no offscreen render."""
+
+    __modality__ = "image"
+
+    def __init__(self, shape) -> None:
+        self._shape = tuple(shape)
+
+    def __call__(self, obs_cache) -> np.ndarray:
+        return np.zeros(self._shape, dtype=np.uint8)
+
+
+def _set_camera_rendering(env, enabled: bool) -> None:
+    """Swap the camera sensors for a cheap stand-in (or restore them).
+
+    With a client-owned action chunk the observations produced inside the chunk
+    are never read: the next policy call replays the obs built at the request
+    step. Camera rendering dominates the LIBERO sim cost (measured: 191 ms/step
+    with images vs 22 ms/step without, single process).
+
+    The observable itself stays *enabled* and keeps sampling on its normal
+    schedule, so the sampling phase is unchanged; only the pixel-producing
+    sensor is replaced. Swapping back before a step therefore yields exactly the
+    frame the unmodified code would have produced at that step.
+    """
+    for observable in _image_observables(env):
+        real = getattr(observable, "_libero_real_sensor", None)
+        if enabled:
+            if real is not None:
+                # Assign directly: set_sensor() would re-validate the sensor by
+                # invoking it once, i.e. an extra offscreen render per restore.
+                observable._sensor = real
+                observable._libero_real_sensor = None
+        elif real is None:
+            observable._libero_real_sensor = observable._sensor
+            observable._sensor = _CheapImage(observable._data_shape)
+
+
 def _failure_record(
     *,
     args: argparse.Namespace,
@@ -300,13 +345,24 @@ def run_episode(
     e2e_latencies: List[Optional[float]] = []
     episode_start = time.time()
     env = None
+    chunk_steps = int(client.metadata.get("chunk_execute_steps") or 0)
     stepper = _common.EpisodePolicyStepper(
-        chunk_steps=int(client.metadata.get("chunk_execute_steps") or 0),
+        chunk_steps=chunk_steps,
         return_action_chunk=bool(getattr(args, "return_action_chunk", True)),
         # Closed-loop-within-chunk models (PayloadBuilder capability) must be
         # called every env step; others hand the whole chunk to the client.
         disable_action_cache=bool(getattr(payload_builder, "disable_action_cache", False)),
         payload_builder=payload_builder,
+    )
+    # Camera rendering can be skipped on the steps whose observation is never
+    # read (everything inside a client-owned chunk). Only the step that feeds
+    # the next policy call must render, so the policy input stays bit-identical.
+    skip_intra_obs = (
+        bool(getattr(args, "skip_intra_chunk_obs", False))
+        and chunk_steps > 1
+        and stepper.return_action_chunk
+        and not stepper.disable_action_cache
+        and not bool(getattr(args, "save_replay", False))
     )
 
     try:
@@ -338,6 +394,10 @@ def run_episode(
             payload_builder.reset(episode_id)
             action_decoder.reset()
             stepper.begin_episode()
+            if skip_intra_obs:
+                # The env is cached across episodes; a previous episode may have
+                # left the camera observables disabled.
+                _set_camera_rendering(env, True)
             env.reset()
             obs = env.set_init_state(initial_state)
             # set_init_state teleports the sim, but the robosuite OSC caches
@@ -369,13 +429,20 @@ def run_episode(
             max_steps = args.max_steps if args.max_steps > 0 else SUITE_MAX_STEPS[task_suite_name]
             done = False
             info: Dict[str, Any] = {}
+            obs_rendered = True
 
             for raw_step in range(max_steps + args.num_steps_wait):
                 if args.save_replay and raw_step >= args.num_steps_wait:
                     replay_frames.append(_extract_primary_frame(obs))
 
                 if raw_step < args.num_steps_wait:
+                    # Only the last dummy step's obs feeds the first policy
+                    # call; the earlier ones are overwritten unread.
+                    need_render = (raw_step == args.num_steps_wait - 1) or not skip_intra_obs
+                    if skip_intra_obs:
+                        _set_camera_rendering(env, need_render)
                     obs, reward, done, info = _env_step(env, LIBERO_DUMMY_ACTION, args.per_step_timeout_sec)
+                    obs_rendered = need_render
                     continue
 
                 # OSC absolute vs delta: see _resolve_libero_use_delta().
@@ -390,6 +457,13 @@ def run_episode(
                 controller = env.env.robots[0].controller
 
                 def _request(request_step: int) -> tuple[Dict[str, Any], float]:
+                    nonlocal obs, obs_rendered
+                    if skip_intra_obs and not obs_rendered:
+                        # Cadence changed (short chunk): render the current state
+                        # instead of handing the policy a placeholder frame.
+                        _set_camera_rendering(env, True)
+                        obs = env.env._get_observations(force_update=True)
+                        obs_rendered = True
                     canonical_obs = adapter.obs_to_canonical(
                         obs,
                         {
@@ -438,7 +512,14 @@ def run_episode(
                 # delta models (pi05) keep the OSC default use_delta=True.
                 flat_action = processed[0]
                 env_action = adapter.action_from_canonical({"actions": flat_action})
+                if skip_intra_obs:
+                    # Render only the step whose obs the next request will read
+                    # (requests fire every chunk_steps steps, at step 0, C, 2C...).
+                    need_render = (episode_step + 1) % chunk_steps == 0
+                    _set_camera_rendering(env, need_render)
                 obs, reward, done, info = _env_step(env, env_action, args.per_step_timeout_sec)
+                if skip_intra_obs:
+                    obs_rendered = need_render
                 steps += 1
 
                 if args.save_trace:
@@ -778,6 +859,16 @@ def build_argparser() -> argparse.ArgumentParser:
         help=(
             "True (default): the client owns the action chunk (T-14). "
             "False: legacy server-side chunk cache -- one request per env step."
+        ),
+    )
+    parser.add_argument(
+        "--skip-intra-chunk-obs",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Skip camera rendering on env steps whose observation is never read "
+            "(inside a client-owned chunk). The images consumed by the policy are "
+            "identical; it only removes wasted 256x256 offscreen renders."
         ),
     )
     parser.add_argument(

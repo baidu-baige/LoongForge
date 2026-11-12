@@ -179,6 +179,8 @@ CONFIG_MAPPING = {
     "benchmark.scene_snapshot_dir": "scene_snapshot_dir",
     # False -> legacy server-side chunk cache (one request per env step).
     "benchmark.return_action_chunk": "return_action_chunk",
+    # Skip camera renders inside a client-owned chunk (obs is never read there).
+    "benchmark.skip_intra_chunk_obs": "skip_intra_chunk_obs",
     "benchmark.max_steps": "max_steps",
     "benchmark.continuous_gripper": "continuous_gripper",
     # False -> proprio reads obs['robot0_eef_pos']/quat (official FastWAM

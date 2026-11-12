@@ -473,6 +473,8 @@ benchmark:
 
 `return_action_chunk` + `skip_intra_chunk_obs` 会让策略在块内开环（每 `chunk_execute_steps` 步才重新感知），因此逐集结果不会与逐步闭环完全一致，详见 8.5。
 
+单元以独立进程组启动；超过 `run.unit_timeout_sec` 或 coordinator 退出（含被 `SIGTERM` 停止）时整组被 kill，避免 sim 脱离 unit 继续占卡占核。
+
 ### 8.3 标定（试跑）
 
 ```bash
@@ -500,11 +502,11 @@ python -m loongforge.embodied.eval.orchestrator.calibration.calibrate \
 
 | 场景 | 基线 | 并行配置 | 加速 |
 |---|---|---|---|
-| LIBERO + FastWAM，2000 集 | 官方脚本 173.7 min（8 卡折合） | 35.5 min（worker 阶段）/ ~41 min（含加载） | **4.9× / ~4.3×** |
+| LIBERO + FastWAM，2000 集 | 官方脚本 173.7 min（8 卡折合） | 16.3 min 端到端（979 s；其中 worker 阶段 13.2 min）/ N=24 即 192 槽位，chunk 4，`skip_intra_chunk_obs` 开 | **10.6×**（worker 口径 13.2×） |
 | RoboTwin + pi05，`adjust_bottle` 50 集 | 1040 s（评测阶段 699 s） | 513 s（199 s） | 2.0× / 3.5× |
 | RoboTwin + pi05，`open_microwave` 50 集 | 4984 s（4701 s） | 756 s（453 s） | 6.6× / 10.4× |
 
-RoboTwin 的第二个数去掉了模型加载与服务启动（8 个服务约 5 min），仿真 worker 的进程启动仍计入。
+端到端 = coordinator 启动（含 8 个服务加载与健康检查）→ 最后一集落盘。固定开销约 190 s，在 LIBERO 这轮 16 min 里占约 19%，在 RoboTwin 约 1.8 h 的全量里只占约 6%：**小批量任务（集数少、总时长与启动同量级）的端到端倍数会被 IO 和进程启动明显压低，全量任务影响很小**。跨 benchmark 比较时统一用端到端口径，但不要据此认为小任务的加速能力更差。关闭 `skip_intra_chunk_obs`、`N=48` 时同一 2,000 集需 36.0 min（2,161 s，约 4.8×）；注意这次对照同时改了 `N`，两者的贡献尚未拆开。RoboTwin 的第二个数去掉了模型加载与服务启动（8 个服务约 5 min），仿真 worker 的进程启动仍计入。
 
 > **可复现性说明**：该链路上不是逐位可复现的——同一配置连续跑两次（固定 `model.noise_seed`、`max_batch_size: 1`），同一 seed 的步数仍会差 1–3 步。因此逐集回归不能作为等价性判据，只能比较聚合成功率（n≥50 时二项噪声约 ±7pt @1σ、±14pt @95%）。这也是 RoboTwin 的动作块开关默认关闭的原因：其逐集影响无法与噪声底分开。
 

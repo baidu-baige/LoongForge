@@ -173,7 +173,8 @@ failed task does not stop the others and makes the exit code non-zero.
 ## Calibration results
 
 Reference environment: 8×A800-80GB, one inference service per GPU, FastWAM epilogue
-(`chunk_execute_steps=10`), 512 concurrent clients at `N=64`:
+(`chunk_execute_steps=10`), 512 concurrent clients at `N=64`. These numbers come from
+`calibrate.py` (steady-state throughput on a fixed episode mix), not from a full run:
 
 | N (sims per service) | 16 | 24 | 48 | 80 |
 |---|---|---|---|---|
@@ -182,21 +183,35 @@ Reference environment: 8×A800-80GB, one inference service per GPU, FastWAM epil
 The curve plateaus around `N≈48` on this machine: beyond that, extra sims mostly add
 memory and CPU contention. Capacity is a property of the model, the benchmark and the
 machine — re-measure with `calibrate.py`, and note that the server-side batcher changes
-the request cadence and therefore the knee.
+the request cadence and therefore the knee. Steady-state capacity is not directly
+comparable with the wall-clock figures below, which also include ramp-up and drain.
 
 ## Measured speedup
 
 Full-suite comparison against the official evaluation script (FastWAM, 2000 episodes,
-8 GPUs, `per_task` + scene snapshots, `chunk_execute_steps=10`, `N=64`, batching on):
+8 GPUs, `per_task` + scene snapshots, `chunk_execute_steps=10`, `episodes_per_chunk=4`,
+`skip_intra_chunk_obs=true`, batching on, `N=24` → 192 slots):
 
 | Measurement | Wall | Speedup vs official |
 |---|---|---|
 | Official script (8-card equivalent) | 173.7 min | 1.0× |
-| Parallel evaluation, worker phase | 35.5 min | **4.9×** |
-| Parallel evaluation, including model loading | ~41 min | **~4.3×** |
+| Parallel evaluation, worker phase | 13.2 min (791 s) | 13.2× |
+| Parallel evaluation, end-to-end | **16.3 min** (979 s) | **10.6×** |
 
-Other configurations land lower (`episodes_per_chunk=1`: 43.6 min worker phase; `=4`:
-36.1 min), so `episodes_per_chunk` and the client-owned chunk path both matter. Numbers
-are for this checkpoint and protocol; the aggregate success rate is aligned within
-binomial noise (96.35% vs 96.65% reference).
+End-to-end is the number to quote: 979 s from coordinator start to the last record, of
+which 791 s are the worker phase and 187 s are loading the eight services and waiting for
+health. Fixed start-up cost matters in proportion to the run: the same ~190 s is 19% of a
+16 min run but ~6% of a 1.8 h RoboTwin run, so short runs are visibly depressed by I/O,
+model loading and process start-up while full-scale runs are barely affected. Compare
+configurations at the same scale, and prefer end-to-end when comparing across benchmarks.
+
+The render skip is the largest lever in that pair of runs, but note the comparison is not
+controlled: turning it off also changed `N` from 24 to 48, so the two effects are not
+separated here. Re-measure at fixed `N` before quoting the split.
+
+`episodes_per_chunk` matters too, but not monotonically — with the render skip on,
+`episodes_per_chunk=8` takes 14.6 min (877 s) versus 13.2 min at `4`; without the skip,
+`episodes_per_chunk=1` takes 43.6 min. Numbers are for this checkpoint and protocol; the
+aggregate success rate is aligned within binomial noise (96.80% vs 97.00% reference,
+1,936/2,000 vs 1,940/2,000).
 
