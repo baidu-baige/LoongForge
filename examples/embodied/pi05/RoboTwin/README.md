@@ -91,6 +91,12 @@ Follow the [RoboTwin-2.0 installation documentation](https://robotwin-platform.g
 
 ## 4. Evaluation
 
+The finetuned checkpoint is released at [LoongForge/Loongforge-pi05-RoboTwin](https://huggingface.co/LoongForge/Loongforge-pi05-RoboTwin):
+
+```bash
+hf download LoongForge/Loongforge-pi05-RoboTwin --local-dir /path/to/pi05_robotwin_finetuned
+```
+
 ### 4.1 Launch
 
 Edit [`examples/embodied/pi05/eval/configs/robotwin/robotwin_pi05.yaml`](../eval/configs/robotwin/robotwin_pi05.yaml) and fill in the `/path/to/...` placeholders:
@@ -99,8 +105,8 @@ Edit [`examples/embodied/pi05/eval/configs/robotwin/robotwin_pi05.yaml`](../eval
 - `benchmark.task_config`: `demo_clean`
 - `benchmark.episodes_per_task`: `100` (full benchmark) or `10` (quick check)
 - `server.python`: Python binary of the LoongForge environment
-- `server.ckpt_path`: path to the finetuned checkpoint directory
-- `server.dataset_statistics_path`: path to `pi05_robotwin2_dataset_stats.json`
+- `server.ckpt_path`: path to the finetuned checkpoint directory (your own `$OUTPUT_DIR/checkpoints/steps_<N>`, or the downloaded release checkpoint)
+- `server.dataset_statistics_path`: path to `pi05_robotwin2_dataset_stats.json` (or the `dataset_statistics.json` shipped with the release checkpoint)
 - `server.loongforge_root`: path to the LoongForge repository root
 - `server.tokenizer_path`: path to `paligemma-3b-pt-224`
 - `env.robotwin_root`: path to the RoboTwin-2.0 repository root

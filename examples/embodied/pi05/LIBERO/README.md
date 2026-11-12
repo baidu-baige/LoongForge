@@ -105,6 +105,12 @@ pip install tyro pyyaml msgpack numpy pillow
 
 ## 4. Evaluation
 
+The finetuned checkpoint is released at [LoongForge/Loongforge-pi05-LIBERO](https://huggingface.co/LoongForge/Loongforge-pi05-LIBERO):
+
+```bash
+hf download LoongForge/Loongforge-pi05-LIBERO --local-dir /path/to/pi05_libero_finetuned
+```
+
 ### 4.1 Launch
 
 Edit [`examples/embodied/pi05/eval/configs/libero/libero_pi05.yaml`](../eval/configs/libero/libero_pi05.yaml) and fill in the `/path/to/...` placeholders:
@@ -112,7 +118,7 @@ Edit [`examples/embodied/pi05/eval/configs/libero/libero_pi05.yaml`](../eval/con
 - `benchmark.suite`: `libero_spatial` | `libero_object` | `libero_goal` | `libero_10`
 - `benchmark.max_steps`: `280` for `libero_spatial`; `0` to use the suite default (`280` / `300` / `520`)
 - `server.python`: Python binary of the LoongForge environment
-- `server.ckpt_path`: path to the finetuned checkpoint directory (e.g., `$OUTPUT_DIR/checkpoints/steps_6000`)
+- `server.ckpt_path`: path to the finetuned checkpoint directory (e.g., `$OUTPUT_DIR/checkpoints/steps_6000`, or the downloaded release checkpoint)
 - `server.dataset_statistics_path`: path to `dataset_statistics.json` (or `$DATA_PATH/meta/stats.json`)
 - `server.loongforge_root`: path to the LoongForge repository root
 - `server.tokenizer_path`: path to `paligemma-3b-pt-224`

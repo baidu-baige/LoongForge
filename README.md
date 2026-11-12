@@ -145,6 +145,10 @@ Since optimal training strategies differ across model families and scales, Loong
     <td><img align="top" alt="First-person video of a human manipulation task" src="./docs/assets/images/demo/ego2robot-human.webp" width="100%"></td>
     <td><img align="top" alt="The same action retargeted onto multiple robot morphologies" src="./docs/assets/images/demo/ego2robot-robots.webp" width="100%"></td>
   </tr>
+  <tr>
+    <td><img align="top" alt="First-person video of a human manipulation task" src="./docs/assets/images/demo/ego2robot-human-2.webp" width="100%"></td>
+    <td><img align="top" alt="The same action retargeted onto multiple robot morphologies" src="./docs/assets/images/demo/ego2robot-robots-2.webp" width="100%"></td>
+  </tr>
 </table>
 
 ### Training
