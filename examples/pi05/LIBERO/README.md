@@ -32,7 +32,7 @@ Prepare the LIBERO LeRobot dataset (combining `libero_spatial`, `libero_object`,
 
 ## 2. Finetuning
 
-The launch script is [`sft_pi05_libero_ddp.sh`](../finetuning/sft_pi05_libero_ddp.sh). It finetunes on all 4 LIBERO suites jointly using 8 GPUs (DDP) for 6,000 steps (`per_device_batch_size=16`, `gradient_accumulation_steps=2`, global batch size 256, `action_horizon=10`, `state_dim=8`, `image_normalize_mode=siglip`, `normalization_mode=mean_std`).
+The launch script is [`run_pi05_libero_ddp_finetune.sh`](../finetuning/run_pi05_libero_ddp_finetune.sh). It finetunes on all 4 LIBERO suites jointly using 8 GPUs (DDP) for 6,000 steps (`per_device_batch_size=16`, `gradient_accumulation_steps=2`, global batch size 256, `action_horizon=10`, `state_dim=8`, `image_normalize_mode=siglip`, `normalization_mode=mean_std`).
 
 ```bash
 # Override default paths via environment variables:
@@ -41,14 +41,14 @@ export TOKENIZER_PATH=/path/to/paligemma-3b-pt-224
 export DATA_PATH=/path/to/libero_dataset
 export OUTPUT_DIR=/path/to/outputs/pi05_libero
 
-bash examples/pi05/finetuning/sft_pi05_libero_ddp.sh
+bash examples/pi05/finetuning/run_pi05_libero_ddp_finetune.sh
 ```
 
 Or override individual parameters inline:
 
 ```bash
 TRAIN_ITERS=6000 SAVE_INTERVAL=1000 \
-  bash examples/pi05/finetuning/sft_pi05_libero_ddp.sh
+  bash examples/pi05/finetuning/run_pi05_libero_ddp_finetune.sh
 ```
 
 Checkpoints are saved under `$OUTPUT_DIR/checkpoints/steps_<N>`. Copy the dataset's `meta/stats.json` into the checkpoint directory as `dataset_statistics.json` (or point `server.dataset_statistics_path` directly to `meta/stats.json` during evaluation).

@@ -141,10 +141,12 @@ Torch 模型也使用同一个模型目录。Torch YAML 目前只有 `model` 和
 MODEL_CONFIG_REGISTRY = {
     "torch": {
         EmbodiedModelFamilies.PI05: {
-            "my-torch-model": (
+            "my_torch_model": (
                 "my_torch_model/my_torch_model.yaml",
-                "loongforge.models.my_torch_model.ModelConfig",
-                "loongforge.data.my_torch_model.DataConfig",
+                "loongforge.models.embodied.my_torch_model.model_configuration_my_torch_model"
+                ".MyTorchModelConfig",
+                "loongforge.data.embodied.my_torch_model.transforms.data_configuration_my_torch_model"
+                ".MyTorchDataConfig",
             ),
         },
     },
@@ -152,9 +154,10 @@ MODEL_CONFIG_REGISTRY = {
 ```
 
 YAML 中的 `model_type` 必须与 Torch trainer 注册使用的 family 一致。
+Torch 条目的键使用下划线：查找时会先把 `-` 换成 `_` 再比较。
 注册表分组会在解析参数前选择 engine，默认 trainer 再按
-`(engine, model_type, training_phase)` 选择。`--trainer-type` 仍是 Torch
-可选的按名称覆盖。
+`(engine, model_type, training_phase)` 选择。`--trainer-type` 只能选择
+没有登记家族的 Torch trainer，目前只有 `TensorWiseTrainer`。
 
 ## 3. 支持自定义模型（以 Wan 为例）
 Wan 系列模型配置位于 `configs/models/wan/`，例如：

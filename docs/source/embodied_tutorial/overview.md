@@ -14,7 +14,7 @@ This chapter describes the directory layout and launch script convention under e
 | `configs/models/` | Default YAML configs per model, containing two top-level sections: `model:` and `data:` |
 | `loongforge/train.py` | Training entry point; parses config, builds the Trainer, and starts training |
 | `loongforge/training/torch_args.py` and `loongforge/training/embodied/args.py` | Definition files for common training arguments; generates the shell CLI |
-| `loongforge/training/torch_args.py` | Model config routing table; binds `--model-name` to a YAML, `ModelConfig`, and `DataConfig` |
+| `loongforge/models/catalog.py` | Model config routing table; binds `--model-name` to a YAML, `ModelConfig`, and `DataConfig` |
 | `loongforge/models/embodied/` | Model architecture and model registration |
 | `loongforge/data/embodied/` | Data processing components |
 
@@ -51,7 +51,7 @@ torchrun "${DISTRIBUTED_ARGS[@]}" \
 Example:
 
 ```bash
-bash examples/pi05/finetuning/sft_pi05_ddp.sh \
+bash examples/pi05/finetuning/run_pi05_ddp_finetune.sh \
     --train-iters 10000 \
     --per-device-batch-size 8 \
     model.action_horizon=64 \
@@ -144,7 +144,8 @@ Supported capabilities:
 
 | Feature | Argument | Default | Values / Type | Description |
 | --- | --- | --- | --- | --- |
-| Select model | `--model-name` | `None` | Model name registered in `torch_args.py` | Selects the model schema, default YAML, `ModelConfig`, and `DataConfig` |
+| Select model | `--model-name` | `None` | Model name registered in `catalog.py` | Selects the model schema, default YAML, `ModelConfig`, and `DataConfig` |
+| Select training phase | `--training-phase` | `sft` | `pretrain`, `sft` | Selects the trainer registered for the model family and this phase |
 | Specify YAML | `--config-file` | `None` | YAML file path | Overrides the default YAML bound to `--model-name` |
 | Specify tokenizer | `--tokenizer-path` | `None` | Local path or HF repo id | Sets the tokenizer path and syncs it to the `TOKENIZER_PATH` environment variable |
 
@@ -229,7 +230,7 @@ Notes on fused Adam implementations:
 `muon` runs Muon on 2-D weights and AdamW on everything else (biases, norms, 3-D tensors, and weights whose name contains `embed` or `lm_head`). It works with any DDP trainer, for example:
 
 ```bash
---trainer-type FinetuneTrainer \
+--training-phase sft \
 --distributed-strategy ddp \
 --optimizer muon
 ```
@@ -247,7 +248,7 @@ Use `--lr-group` to assign independent learning rates to different modules. A co
 Example:
 
 ```bash
-bash examples/pi05/finetuning/sft_pi05_ddp.sh \
+bash examples/pi05/finetuning/run_pi05_ddp_finetune.sh \
     --lr-base 1.0e-4 \
     --lr-group "model.backbone=1.0e-5,model.action_head=1.0e-4"
 ```
@@ -279,7 +280,7 @@ The checkpoint module offers:
 Resume example:
 
 ```bash
-bash examples/pi05/finetuning/sft_pi05_ddp.sh \
+bash examples/pi05/finetuning/run_pi05_ddp_finetune.sh \
     --output-dir /path/to/previous_run \
     --resume
 ```
@@ -317,7 +318,7 @@ The Trainer module orchestrates the training lifecycle, including distributed co
 
 ### 4.1 Trainer Selection
 
-The trainer is chosen by the model and the training phase: each family registers its trainer with `@register_model_trainer(..., engine="torch")` in its own trainer module, and `FinetuneTrainer` covers every family that has no model-specific trainer. `--trainer-type` overrides this choice by class name (for example `--trainer-type TensorWiseTrainer`); valid names are the classes registered for `engine="torch"` and the selected phase. For multiple data streams, unusual loss combinations, or non-standard step scheduling, register a custom Trainer class in the new module and add that module to the import list in `loongforge/training/trainer_builder.py`.
+The trainer is chosen by the model and `--training-phase` (default `sft`): each family registers its trainer with `@register_model_trainer(..., engine="torch")` in its own trainer module, and `FinetuneTrainer` covers every family that has no model-specific trainer. `--trainer-type` selects a trainer that was registered without a model family, currently only `TensorWiseTrainer`; a family's own trainer is chosen by the model and cannot be selected by name. For multiple data streams, unusual loss combinations, or non-standard step scheduling, register a custom Trainer class in the new module and add that module to the import list in `loongforge/training/trainer_builder.py`.
 
 ### 4.2 Distributed Strategy
 
@@ -338,7 +339,7 @@ Training precision supports `bfloat16` (default), `float16`, and `float32`.
 DDP example:
 
 ```bash
-bash examples/pi05/finetuning/sft_pi05_ddp.sh \
+bash examples/pi05/finetuning/run_pi05_ddp_finetune.sh \
     --distributed-strategy ddp \
     --dtype bfloat16
 ```
@@ -346,7 +347,7 @@ bash examples/pi05/finetuning/sft_pi05_ddp.sh \
 FSDP example:
 
 ```bash
-bash examples/pi05/finetuning/sft_pi05_fsdp.sh \
+bash examples/pi05/finetuning/run_pi05_fsdp_finetune.sh \
     --distributed-strategy fsdp \
     --dtype bfloat16
 ```
@@ -354,7 +355,7 @@ bash examples/pi05/finetuning/sft_pi05_fsdp.sh \
 DDP + ZeRO-1 example:
 
 ```bash
-bash examples/pi05/finetuning/sft_pi05_ddp.sh \
+bash examples/pi05/finetuning/run_pi05_ddp_finetune.sh \
     --distributed-strategy ddp \
     --zero-optimizer
 ```
@@ -388,7 +389,7 @@ The following arguments give fine-grained control over DDP communication behavio
 Example:
 
 ```bash
-bash examples/pi05/finetuning/sft_pi05_ddp.sh \
+bash examples/pi05/finetuning/run_pi05_ddp_finetune.sh \
     --distributed-strategy ddp \
     --no-ddp-find-unused-parameters \
     --ddp-static-graph
@@ -429,10 +430,10 @@ Delta-FP8 changes only FSDP parameter communication precision; model computation
 
 tensor_wise (`TensorWiseOptimizer`) is a distributed optimizer under DDP: it keeps a complete compute replica on every rank and splits no tensor. Each parameter is assigned whole to one owner rank: gradients are reduced to the owner, the owner updates its fp32 master and optimizer state, and the updated parameter is broadcast back. It takes over gradient communication, so it replaces the DDP wrapper and is an alternative to `--zero-optimizer`, not a layer on top of it. Compared with `ddp` + `--zero-optimizer`, it uses reduce instead of all-reduce, can publish parameters in bf16 or fp8, and overlaps both collectives with computation. Because an owner holds whole tensors, Muon's Newton-Schulz runs once on the owner without gathering the matrix, unlike element-wise ZeRO-1. "Tensor-wise" is the unit of assignment, as "layer-wise" is in Megatron's `LayerWiseDistributedOptimizer`; collectives still run on owner-aligned buckets.
 
-Currently `lingbot_vla_v2` uses tensor_wise. The trainer enables it, with no separate flag: selecting `LingbotVlaV2Trainer` builds `TensorWiseOptimizer`:
+Currently `lingbot_vla_v2` uses tensor_wise. The trainer enables it, with no separate flag: its family trainer `LingbotVlaV2Trainer` builds `TensorWiseOptimizer`:
 
 ```bash
---trainer-type LingbotVlaV2Trainer \
+--training-phase sft \
 --distributed-strategy ddp \
 --optimizer muon
 ```
@@ -450,7 +451,7 @@ The collective knobs are the `model.tensor_wise:` section of the model YAML, or 
 
 The `param_sync_fp8_*` and `param_sync_bf16_with_fp8` fields apply only to `fp8_e4m3_delta`.
 
-To bring another model onto tensor_wise, start with `--trainer-type TensorWiseTrainer` (`trainers/custom/tensor_wise_trainer.py`). It needs no model-specific code and has been run end to end on FastWAM and Pi0.5; check the constraints below before using it on other models. It keeps every parameter in `--dtype` and runs the `--optimizer` optimizer on fp32 masters, so its loss differs from a `--dtype` DDP run, which updates the low-precision parameters in place. A model that needs its own precision classes, Muon on 3-D tensors (for example MoE expert stacks) or compile subclasses it the way `LingbotVlaV2Trainer` does and returns a `ParameterClassPolicy` as its parameter policy; subclassing `TensorWiseTrainer` is enough to get its option checks. Either way, a `tensor_wise: TensorWiseConfig` field in the model config carries the knobs above; without it the defaults apply.
+To bring another model onto tensor_wise, start with `--trainer-type TensorWiseTrainer` (`training/embodied/custom/tensor_wise_trainer.py`). It needs no model-specific code and has been run end to end on FastWAM and Pi0.5; check the constraints below before using it on other models. It keeps every parameter in `--dtype` and runs the `--optimizer` optimizer on fp32 masters, so its loss differs from a `--dtype` DDP run, which updates the low-precision parameters in place. A model that needs its own precision classes, Muon on 3-D tensors (for example MoE expert stacks) or compile subclasses it the way `LingbotVlaV2Trainer` does and returns a `ParameterClassPolicy` as its parameter policy; subclassing `TensorWiseTrainer` is enough to get its option checks. Either way, a `tensor_wise: TensorWiseConfig` field in the model config carries the knobs above; without it the defaults apply.
 
 Constraints:
 

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ============================================================================
-# sft_lingbot_vla_v2.sh - lingbot_vla_v2 training launch script (Embodied),
+# run_lingbot_vla_v2_finetune.sh - lingbot_vla_v2 training launch script (Embodied),
 # DDP with the tensor_wise distributed optimizer
 #
 # tensor_wise optimizer: compute parameters are fully replicated, optimizer
@@ -17,17 +17,17 @@
 # gradient_checkpointing) come from configs/models/lingbot_vla_v2/lingbot_vla_v2.yaml.
 #
 # Usage:
-#   bash sft_lingbot_vla_v2.sh                                  # GBS80 best config, 20 iters
-#   bash sft_lingbot_vla_v2.sh > run.log 2>&1                   # capture output (caller's choice)
-#   MICRO_BS=16 bash sft_lingbot_vla_v2.sh                      # GBS128, GA1
-#   MICRO_BS=8 GRAD_ACCUM=2 bash sft_lingbot_vla_v2.sh          # GBS128, GA2
-#   bash sft_lingbot_vla_v2.sh --train-iters 50000              # override a training flag
-#   bash sft_lingbot_vla_v2.sh model.gradient_checkpointing=true # override a YAML field
-#   SAVE_TRAINING_STATE=true bash sft_lingbot_vla_v2.sh --save-format dcp
+#   bash run_lingbot_vla_v2_finetune.sh                                  # GBS80 best config, 20 iters
+#   bash run_lingbot_vla_v2_finetune.sh > run.log 2>&1                   # capture output (caller's choice)
+#   MICRO_BS=16 bash run_lingbot_vla_v2_finetune.sh                      # GBS128, GA1
+#   MICRO_BS=8 GRAD_ACCUM=2 bash run_lingbot_vla_v2_finetune.sh          # GBS128, GA2
+#   bash run_lingbot_vla_v2_finetune.sh --train-iters 50000              # override a training flag
+#   bash run_lingbot_vla_v2_finetune.sh model.gradient_checkpointing=true # override a YAML field
+#   SAVE_TRAINING_STATE=true bash run_lingbot_vla_v2_finetune.sh --save-format dcp
 #
 # The pinned upstream ``lingbotvla`` package and utils3d are installed on demand:
-#   INSTALL_UPSTREAM=1 bash sft_lingbot_vla_v2.sh   # pip install the pins
-#   SKIP_UPSTREAM_CHECK=1 bash sft_lingbot_vla_v2.sh # already on PYTHONPATH
+#   INSTALL_UPSTREAM=1 bash run_lingbot_vla_v2_finetune.sh   # pip install the pins
+#   SKIP_UPSTREAM_CHECK=1 bash run_lingbot_vla_v2_finetune.sh # already on PYTHONPATH
 #
 # Note: the gradient-ready order is measured inside the run -- the first step
 # buckets by reverse parameter-registration order and a later step rebuilds the
@@ -142,7 +142,7 @@ DISTRIBUTED_ARGS=(
 # Collective precision and overlap live in the model YAML's ``tensor_wise:``
 # section (grad_reduce_dtype, param_sync_precision, grad_overlap, param_overlap,
 # comm_bucket_mb, grad_inflight_mb). Override per run on the command line:
-#   bash sft_lingbot_vla_v2.sh model.tensor_wise.grad_reduce_dtype=fp32
+#   bash run_lingbot_vla_v2_finetune.sh model.tensor_wise.grad_reduce_dtype=fp32
 # The precision settings exempt the parameters the model policy marks
 # precision-critical (MoE router/gate weights, 1-D norms/biases): expert selection
 # is decided by fp32 gate logits, so a rounded router weight flips top-k rather
@@ -174,7 +174,7 @@ fi
 MICRO_BS=${MICRO_BS:-10}
 GRAD_ACCUM=${GRAD_ACCUM:-1}
 TRAINING_ARGS=(
-    --trainer-type LingbotVlaV2Trainer
+    --training-phase sft
     --train-iters ${TRAIN_ITERS:-20}
     --per-device-batch-size $MICRO_BS
     --gradient-accumulation-steps $GRAD_ACCUM

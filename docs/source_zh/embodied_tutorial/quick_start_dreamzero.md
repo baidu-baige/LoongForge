@@ -145,29 +145,23 @@ export DATA_PATH=$DROID_DATA_ROOT
 export WANDB_MODE=disabled
 
 # 5B Full（FSDP + Delta-FP8），默认 200000 步
-bash examples/dreamzero/finetuning/sft_dreamzero_wan22_5b_full_fsdp.sh
-
+bash examples/dreamzero/finetuning/run_dreamzero_wan22_5b_full_fsdp_finetune.sh
 # 5B LoRA
 TRAIN_ITERS=10000 SAVE_INTERVAL=1000 \
-    bash examples/dreamzero/finetuning/sft_dreamzero_wan22_5b_lora_fsdp.sh
-
+    bash examples/dreamzero/finetuning/run_dreamzero_wan22_5b_lora_fsdp_finetune.sh
 # 14B Full
-bash examples/dreamzero/finetuning/sft_dreamzero_wan21_14b_full_fsdp.sh
-
+bash examples/dreamzero/finetuning/run_dreamzero_wan21_14b_full_fsdp_finetune.sh
 # 14B LoRA，DROID
 TRAIN_ITERS=10000 SAVE_INTERVAL=1000 \
-    bash examples/dreamzero/finetuning/sft_dreamzero_wan21_14b_lora_fsdp.sh
-
+    bash examples/dreamzero/finetuning/run_dreamzero_wan21_14b_lora_fsdp_finetune.sh
 # LIBERO 5B Full
 MODEL_NAME=dreamzero_libero_wan22_5b DATA_PATH="$LIBERO_DATA_ROOT" \
-    bash examples/dreamzero/finetuning/sft_dreamzero_wan22_5b_full_fsdp.sh
-
+    bash examples/dreamzero/finetuning/run_dreamzero_wan22_5b_full_fsdp_finetune.sh
 # AgiBot / YAM 14B LoRA（从 DreamZero-AgiBot 初始化）
 MODEL_NAME=dreamzero_agibot_wan21_14b DATA_PATH=/path/to/agibot_lerobot \
-    bash examples/dreamzero/finetuning/sft_dreamzero_wan21_14b_lora_fsdp.sh
-
+    bash examples/dreamzero/finetuning/run_dreamzero_wan21_14b_lora_fsdp_finetune.sh
 MODEL_NAME=dreamzero_yam_wan21_14b DATA_PATH=/path/to/yam_lerobot \
-    bash examples/dreamzero/finetuning/sft_dreamzero_wan21_14b_lora_fsdp.sh
+    bash examples/dreamzero/finetuning/run_dreamzero_wan21_14b_lora_fsdp_finetune.sh
 ```
 
 DROID 场景无需设置 `MODEL_NAME`，训练脚本会自动选择对应配置；仅切换到 LIBERO、AgiBot 或 YAM 时需要按示例覆盖。
@@ -188,7 +182,7 @@ DROID 场景无需设置 `MODEL_NAME`，训练脚本会自动选择对应配置�
 ```bash
 TRAIN_ITERS=20000 SAVE_INTERVAL=1000 \
 OUTPUT_DIR=/workspace/outputs/dreamzero/droid_wan22_5b_lora \
-    bash examples/dreamzero/finetuning/sft_dreamzero_wan22_5b_lora_fsdp.sh \
+    bash examples/dreamzero/finetuning/run_dreamzero_wan22_5b_lora_fsdp_finetune.sh \
     --resume
 ```
 
@@ -204,7 +198,7 @@ GPUS_PER_NODE=8 SAMPLE_TRANSFORM_SEED=0 VALIDATION_REQUIRE_FULL_COVERAGE=1 \
 
 # 使用 cache 训练（须与生成时 SAMPLE_TRANSFORM_SEED、分辨率、语言 chunk 配置一致）
 CACHE_DIR=$DREAMZERO_CACHE_ROOT/dreamzero_full_wan22_5b SAMPLE_TRANSFORM_SEED=0 \
-    bash examples/dreamzero/finetuning/sft_dreamzero_wan22_5b_full_fsdp.sh
+    bash examples/dreamzero/finetuning/run_dreamzero_wan22_5b_full_fsdp_finetune.sh
 ```
 
 训练脚本会在启动阶段严格校验 cache。manifest、`_SUCCESS` 或 transform 配置不匹配时，训练会在执行首步前终止。14B 可选缓存 prompt_embs：生成 cache 时追加 `--include-prompt-embs`，并在 14B 全参训练脚本中设置 `CACHE_PROMPT_EMBS=true`。这样每步不再运行冻结的 Text Encoder，但每个样本多占约 4 MiB，cache 体积约变为 3 倍。
@@ -216,13 +210,13 @@ DROID 5B / 14B 配置已启用经过验证的默认性能优化。5B Full FSDP r
 
 ```bash
 # Wan2.2 5B
-bash examples/dreamzero/finetuning/sft_dreamzero_wan22_5b_full_fsdp.sh \
+bash examples/dreamzero/finetuning/run_dreamzero_wan22_5b_full_fsdp_finetune.sh \
     --no-fsdp-delta-fp8-allgather \
     model.flash_attention_dense=false model.compile_causal_attention_block=false \
     model.batch_vae_encode=false 'model.prompt_emb_cache=""'
 
 # Wan2.1 14B
-bash examples/dreamzero/finetuning/sft_dreamzero_wan21_14b_full_fsdp.sh \
+bash examples/dreamzero/finetuning/run_dreamzero_wan21_14b_full_fsdp_finetune.sh \
     model.compile_causal_attention_block=false \
     model.skip_single_state_attention=false model.compile_causal_cross_attention=false \
     model.compile_cross_attention_emulate_precision_casts=false model.compile_block_norm_modulate=false \

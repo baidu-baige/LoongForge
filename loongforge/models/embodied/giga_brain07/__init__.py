@@ -9,7 +9,7 @@ Layer-A reshell: this package __init__ exposes the xvla/pi05-style names
 surface, mirroring how ``model/xvla`` and ``model/pi05`` present their
 config/model. The names are resolved **lazily** (PEP 562 ``__getattr__``) so
 that merely importing a submodule (e.g. the slim config consumed by
-``train/config_map.py``) does NOT trigger the heavy vendored model import --
+``models/catalog.py``) does NOT trigger the heavy vendored model import --
 keeping the training import chain and numerics byte-identical.
 
 The real implementation is untouched and lives in the vendored package

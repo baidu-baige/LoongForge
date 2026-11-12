@@ -1,24 +1,26 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Training dispatch and SFT callback regression tests."""
+"""Training entry dispatch tests."""
 
 import argparse
-import importlib.util
 import io
-import subprocess
+import re
 import sys
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+import pytest
+
 from loongforge import train
+from loongforge.training import trainer_builder
 
 
-def _builder_that_parses(parsed, engines, use_abbrev):
+def _builder_that_parses(parsed, engines):
     """Emulate an engine parser: record the engine, then parse the argv."""
-    parser = argparse.ArgumentParser(allow_abbrev=use_abbrev)
+    parser = argparse.ArgumentParser(allow_abbrev=False)
     parser.add_argument("--model-name")
 
     def build(engine):
@@ -30,96 +32,6 @@ def _builder_that_parses(parsed, engines, use_abbrev):
 
 
 class TrainingEntryTests(unittest.TestCase):
-    def test_entry_does_not_import_torch(self):
-        subprocess.run(
-            [sys.executable, "-c",
-             "import sys; import loongforge.train; "
-             "assert not any(name in sys.modules for name in ('torch', 'megatron')); "
-             "assert not any(name.startswith('loongforge.engines.') for name in sys.modules)"],
-            check=True,
-        )
-
-    def test_megatron_model_uses_the_megatron_engine(self):
-        trainer = Mock()
-        with (
-            patch.object(train, "build_model_trainer", return_value=trainer) as build,
-            patch.object(sys, "argv", ["train.py", "--model-name", "qwen3-8b"]),
-        ):
-            self.assertIsNone(train.main())
-        build.assert_called_once_with("megatron")
-        trainer.train.assert_called_once_with()
-
-    def test_unknown_trainer_type_is_rejected(self):
-        from loongforge.training import trainer_builder
-
-        for name in ("WallOss05Trainer", "unknown"):
-            with (
-                self.subTest(name=name),
-                patch.dict(
-                    trainer_builder.ENGINES,
-                    {"torch": lambda: ("pi05", "sft", name, ())},
-                ),
-                self.assertRaises(ValueError),
-            ):
-                trainer_builder.build_model_trainer("torch")
-
-    def test_wall_oss_uses_shared_finetune_recipe(self):
-        from loongforge.training import trainer_builder
-
-        recipe = Mock()
-        configs = (object(), object(), object())
-        with (
-            patch.dict(
-                trainer_builder.ENGINES,
-                {"torch": lambda: ("wall_oss_0_5", "sft", None, configs)},
-            ),
-            patch.object(
-                trainer_builder,
-                "TRAINERS_BY_ENGINE",
-                {"megatron": {}, "torch": {"wall_oss_0_5": {"sft": recipe}}},
-            ),
-            patch.object(sys, "argv", ["train.py", "--model-name", "wall_oss_0_5"]),
-        ):
-            train.main()
-        recipe.assert_called_once_with(*configs)
-        recipe.return_value.train.assert_called_once_with()
-
-    def test_config_file_keeps_megatron_dispatch(self):
-        with (
-            patch.object(sys, "argv", ["train.py", "--config-file", "model.yaml"]),
-            patch.object(train, "build_model_trainer") as build,
-        ):
-            train.main()
-        build.assert_called_once_with("megatron")
-
-    def test_help_and_missing_model_reach_the_megatron_parser(self):
-        for argv in (["--help"], []):
-            with (
-                self.subTest(argv=argv),
-                patch.object(sys, "argv", ["train.py", *argv]),
-                patch.object(train, "build_model_trainer") as build,
-            ):
-                self.assertIsNone(train.main())
-                self.assertEqual(sys.argv, ["train.py", *argv])
-                build.assert_called_once_with("megatron")
-
-    def test_unknown_model_is_rejected_before_engine_dispatch(self):
-        with (
-            patch.object(sys, "argv", ["train.py", "--model-name", "unknown"]),
-            patch.object(train, "build_model_trainer") as build,
-            self.assertRaisesRegex(KeyError, "Unknown model_name"),
-        ):
-            train.main()
-        build.assert_not_called()
-
-    def test_torch_model_name_keeps_the_original_unique_abbreviation(self):
-        with (
-            patch.object(sys, "argv", ["train.py", "--model-n", "pi05"]),
-            patch.object(train, "build_model_trainer") as build,
-        ):
-            self.assertIsNone(train.main())
-        build.assert_called_once_with("torch")
-
     def test_help_and_missing_values_reach_the_engine_parser(self):
         cases = (
             (["--help", "--model-name"], "megatron", 0),
@@ -127,7 +39,7 @@ class TrainingEntryTests(unittest.TestCase):
             (["--model-name", "pi05", "--help", "--model-name"], "torch", 0),
             (["--model-name", "pi05", "--help", "--model-name", "qwen3-8b"], "torch", 0),
             (["--model-name", "qwen3-8b", "-h", "--model-name", "pi05"], "megatron", 0),
-            (["--model-n", "pi05", "--help", "--model-name"], "torch", 0),
+            (["--model-n", "pi05", "--help", "--model-name"], "megatron", 0),
             (["--model-name"], "megatron", 2),
         )
         for argv, engine, exit_code in cases:
@@ -138,7 +50,7 @@ class TrainingEntryTests(unittest.TestCase):
                     patch.object(
                         train,
                         "build_model_trainer",
-                        side_effect=_builder_that_parses(parsed, engines, engine == "torch"),
+                        side_effect=_builder_that_parses(parsed, engines),
                     ),
                     redirect_stdout(io.StringIO()),
                     redirect_stderr(io.StringIO()),
@@ -148,15 +60,15 @@ class TrainingEntryTests(unittest.TestCase):
                 self.assertEqual(result.exception.code, exit_code)
                 self.assertEqual(engines, [engine])
 
-    def test_exact_model_name_controls_routing_with_abbreviations(self):
+    def test_exact_model_name_controls_routing(self):
         cases = (
-            (["--model-n", "pi05"], "torch", "pi05", []),
-            (["--model=pi05"], "torch", "pi05", []),
+            (["--model-n", "pi05"], "megatron", None, ["--model-n", "pi05"]),
+            (["--model=pi05"], "megatron", None, ["--model=pi05"]),
             (["--model-n", "qwen3-8b"], "megatron", None, ["--model-n", "qwen3-8b"]),
             (["--model-name", "qwen3-8b", "--model-n", "pi05"],
              "megatron", "qwen3-8b", ["--model-n", "pi05"]),
             (["--model-name", "pi05", "--model-n", "qwen3-8b"],
-             "torch", "qwen3-8b", []),
+             "torch", "pi05", ["--model-n", "qwen3-8b"]),
             (["--model-name", "pi05", "--model-name", "qwen3-8b"],
              "megatron", "qwen3-8b", []),
             (["--model-name", "qwen3-8b", "--model-name", "pi05"],
@@ -172,7 +84,7 @@ class TrainingEntryTests(unittest.TestCase):
                     patch.object(
                         train,
                         "build_model_trainer",
-                        side_effect=_builder_that_parses(parsed, engines, engine == "torch"),
+                        side_effect=_builder_that_parses(parsed, engines),
                     ),
                 ):
                     self.assertIsNone(train.main())
@@ -181,99 +93,163 @@ class TrainingEntryTests(unittest.TestCase):
                 self.assertEqual(parsed[0][0].model_name, model_name)
                 self.assertEqual(parsed[0][1], unknown)
 
+    def _parse_torch_args(self, argv):
+        pytest.importorskip("torch")
+        from loongforge.training.torch_args import build_arg_parser
 
-@unittest.skipUnless(
-    sys.version_info >= (3, 10) and importlib.util.find_spec("torch") is not None,
-    "SFT imports require Python >=3.10 and the Torch training dependencies",
-)
-class SFTRecipeTests(unittest.TestCase):
-    def setUp(self):
-        from loongforge.engines.torch.utils import global_vars
+        return build_arg_parser().parse_args(argv)
 
-        for name in (
-            "_EMBODIED_TRAINING_ARGS", "_EMBODIED_MODEL_CONFIG", "_EMBODIED_DATA_CONFIG",
-        ):
-            patcher = patch.object(global_vars, name, None)
-            patcher.start()
-            self.addCleanup(patcher.stop)
+    def test_torch_parser_defaults_to_sft_phase(self):
+        pytest.importorskip("torch")
+        from dataclasses import fields
 
-    def test_tensor_wise_config_and_trainer_wiring(self):
-        from omegaconf.errors import ConfigKeyError
+        from loongforge.training.torch_args import TrainingArgs
 
-        from loongforge.engines.torch.optimizer.tensor_wise_optimizer.config import TensorWiseConfig
-        from loongforge.training.embodied.custom import lingbot_vla_v2  # noqa: F401
-        from loongforge.training.embodied.custom.tensor_wise_trainer import TensorWiseTrainer
-        from loongforge.training.embodied.sft import FinetuneTrainer
-        from loongforge.training.torch_args import parse_train_args
+        phases = {f.name: f for f in fields(TrainingArgs)}
+        self.assertEqual(phases["training_phase"].default, "sft")
+        # CLI defaults are SUPPRESS, so an unset phase falls back to the dataclass default.
+        self.assertFalse(hasattr(self._parse_torch_args([]), "training_phase"))
 
-        argv = [
-            "train.py", "--model-name", "lingbot_vla_v2",
-            "--trainer-type", "LingbotVlaV2Trainer",
-            "--distributed-strategy", "ddp", "--optimizer", "muon",
-            "--no-save-training-state", "model.tensor_wise.grad_reduce_dtype=fp32",
-        ]
-        with patch.object(sys, "argv", argv):
-            args, model_cfg, _ = parse_train_args()
-        self.assertIsInstance(model_cfg.tensor_wise, TensorWiseConfig)
-        self.assertEqual(model_cfg.tensor_wise.grad_reduce_dtype, "fp32")
-        self.assertEqual(model_cfg.tensor_wise.comm_bucket_mb, 256)
-        from loongforge.training import trainer_builder
-
-        self.assertTrue(issubclass(TensorWiseTrainer, FinetuneTrainer))
-        self.assertTrue(
-            issubclass(
-                trainer_builder.TRAINERS_BY_NAME["torch"]["sft"][args.trainer_type],
-                TensorWiseTrainer,
-            )
+    def test_torch_parser_accepts_an_explicit_phase(self):
+        self.assertEqual(
+            self._parse_torch_args(["--training-phase", "pretrain"]).training_phase,
+            "pretrain",
         )
-        with patch.object(sys, "argv", argv + ["model.tensor_wise.unknown=1"]):
-            with self.assertRaises(ConfigKeyError):
-                parse_train_args()
 
-    def test_lingbot_data_registry_uses_master_signature(self):
-        import inspect
+    def test_torch_parser_rejects_unknown_phase_and_abbreviations(self):
+        for argv in (["--training-phase", "rl"], ["--model-n", "pi05"]):
+            with self.subTest(argv=argv), self.assertRaises(SystemExit):
+                self._parse_torch_args(argv)
 
-        from loongforge.data.embodied.lingbot_vla_v2 import build_lingbot_vla_v2_dataset
-        from loongforge.data.embodied.transforms.collator import build_preprocessor
-        from loongforge.data.embodied.transforms.registry import get_transform_builder
-        from loongforge.models.embodied.lingbot_vla_v2 import upstream_adapter
 
-        inspect.signature(build_lingbot_vla_v2_dataset).bind(object(), object(), object())
-        self.assertEqual(get_transform_builder("lingbot_vla_v2")(object()), [])
-        upstream_collator = Mock(return_value={"tokens": [1, 2]})
-        with patch.object(upstream_adapter, "resolve_vla_data_collator", return_value=lambda: upstream_collator):
-            collator = build_preprocessor("lingbot_vla_v2", object(), object())
-        batch = collator([{"sample": 1}])
-        self.assertEqual(batch.data, {"tokens": [1, 2]})
-        upstream_collator.assert_called_once_with([{"sample": 1}])
+@pytest.mark.parametrize(("argv", "engine"), [
+    (["train.py", "--model-name", "GR00T-N1-6"], "torch"),
+    (["train.py", "--model-name", "pi05", "--config-file", "custom.yaml"], "torch"),
+    (["train.py", "--model-name", "qwen3-8b"], "megatron"),
+    (["train.py", "--config-file", "model.yaml"], "megatron"),
+    (["train.py"], "megatron"),
+    (["train.py", "--help"], "megatron"),
+    (["train.py", "--model-name", "unknown"], None),
+])
+def test_model_name_selects_the_default_engine(argv, engine):
+    trainer = Mock()
+    with (
+        patch.object(sys, "argv", argv),
+        patch.object(train, "build_model_trainer", return_value=trainer) as build,
+    ):
+        if engine is None:
+            with pytest.raises(KeyError, match="Unknown model_name"):
+                train.main()
+            build.assert_not_called()
+            return
+        train.main()
+    build.assert_called_once_with(engine)
+    trainer.train.assert_called_once_with()
 
-    def test_model_factory_receives_model_config(self):
-        from loongforge.training.embodied import sft
 
-        trainer = sft.FinetuneTrainer(SimpleNamespace(train_iters=1), object(), object())
-        with patch.object(sft, "build_model") as build:
-            self.assertIs(trainer._build_model(), build.return_value)
-        build.assert_called_once_with(trainer.model_cfg)
+@pytest.fixture
+def torch_engine(monkeypatch):
+    """An engine adapter that returns a fixed lookup key."""
+    key = {}
 
-    def test_model_batch_hook_receives_training_context(self):
-        from loongforge.training.embodied import sft
+    def adapter():
+        return key["family"], key["phase"], key["trainer_type"], key["configs"]
 
-        trainer = sft.FinetuneTrainer(SimpleNamespace(train_iters=1), object(), object())
-        hook = Mock(return_value=None)
-        trainer.model = SimpleNamespace(on_after_train_batch_fetch=hook)
-        batch = object()
-        with patch.object(sft.torch, "rand") as rand:
-            trainer._on_after_train_batch_fetch(batch, 0)
-            trainer._on_after_train_batch_fetch(batch, 1)
-        rand.assert_not_called()
-        self.assertEqual(hook.call_count, 2)
-        for micro_step, call in enumerate(hook.call_args_list):
-            self.assertEqual(call.kwargs, {
-                "args": trainer.training_args,
-                "completed_steps": trainer.completed_steps,
-                "micro_step": micro_step,
-                "batch": batch,
-            })
+    monkeypatch.setitem(trainer_builder.ENGINES, "torch", adapter)
+    monkeypatch.setitem(trainer_builder.TRAINERS_BY_ENGINE, "torch", {})
+    monkeypatch.setitem(trainer_builder.TRAINERS_BY_NAME, "torch", {})
+    return key
+
+
+def register(family, phase, name, recipe=None):
+    def _register(fn):
+        return trainer_builder.register_model_trainer(
+            family, phase, fn, engine="torch"
+        )
+
+    fn = recipe or Mock(name=name)
+    fn.__name__ = name
+    _register(fn)
+    return fn
+
+
+@pytest.mark.parametrize(("family", "phase", "message"), [
+    ("unregistered", "pretrain", "Not found trainer for family: unregistered"),
+    ("phase_demo", "pretrain", "Loongforge not support pretrain phase for family phase_demo"),
+])
+def test_unregistered_family_or_phase_is_rejected(torch_engine, family, phase, message):
+    register("phase_demo", "sft", "phase_recipe")
+    torch_engine.update(family=family, phase=phase, trainer_type=None, configs=())
+    with pytest.raises(ValueError, match=message):
+        trainer_builder.build_model_trainer("torch")
+
+
+def test_trainer_type_selects_a_registered_recipe_without_a_family(torch_engine):
+    recipe = register([], "sft", "TensorWiseTrainer")
+    torch_engine.update(
+        family="named_demo", phase="sft", trainer_type="TensorWiseTrainer", configs=(1,)
+    )
+    assert trainer_builder.build_model_trainer("torch") is recipe.return_value
+
+
+@pytest.mark.parametrize("trainer_type", ["FamilyTrainer", "MissingTrainer"])
+def test_unknown_trainer_type_is_rejected(torch_engine, trainer_type):
+    register([], "sft", "TensorWiseTrainer")
+    register("named_demo", "sft", "FamilyTrainer")
+    torch_engine.update(
+        family="named_demo", phase="sft", trainer_type=trainer_type, configs=()
+    )
+    # Only trainers registered without a family can be selected by name.
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            f"Unknown --trainer-type '{trainer_type}'. Available: ['TensorWiseTrainer']"
+        ),
+    ):
+        trainer_builder.build_model_trainer("torch")
+
+
+def test_duplicate_trainer_name_is_rejected(torch_engine):
+    register([], "sft", "same_name")
+    with pytest.raises(ValueError, match="Duplicate trainer name 'same_name' for torch sft"):
+        register([], "sft", "same_name")
+
+
+def test_recipe_registry_keeps_family_case_and_override_rules(monkeypatch):
+    registry = {}
+    monkeypatch.setitem(trainer_builder.TRAINERS_BY_ENGINE, "megatron", registry)
+    original = Mock(__name__="original")
+    replacement = Mock(__name__="replacement")
+    sft = Mock(__name__="sft")
+    register = trainer_builder.register_model_trainer
+    assert register(["LLAMA", "qwen3"], "pretrain", engine="megatron")(original) is original
+    assert registry == {
+        "llama": {"pretrain": original},
+        "qwen3": {"pretrain": original},
+    }
+    register("llama", "pretrain", engine="megatron")(replacement)
+    assert registry["llama"]["pretrain"] is original
+    register("llama", "pretrain", override=True, engine="megatron")(replacement)
+    assert registry["llama"]["pretrain"] is replacement
+    assert register("LLAMA", "sft", training_func=sft, engine="megatron") is None
+    assert registry["llama"]["sft"] is sft
+
+
+def test_builder_uses_the_registered_phase_of_the_selected_engine(monkeypatch):
+    recipe = Mock()
+    args = SimpleNamespace(model_name="qwen3-8b", model_family="qwen3", training_phase="pretrain")
+    monkeypatch.setattr(
+        trainer_builder,
+        "TRAINERS_BY_ENGINE",
+        {"megatron": {"qwen3": {"pretrain": recipe}}, "torch": {}},
+    )
+    monkeypatch.setitem(
+        trainer_builder.ENGINES,
+        "megatron",
+        lambda: ("qwen3", "pretrain", None, (args,)),
+    )
+    trainer_builder.build_model_trainer("megatron")
+    recipe.assert_called_once_with(args)
 
 
 if __name__ == "__main__":

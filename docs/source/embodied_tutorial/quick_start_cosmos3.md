@@ -51,7 +51,7 @@ Remaining settings like target resolution, action chunk length, CFG dropout are 
 
 ## 2. Launch Training
 
-Launch script: `examples/cosmos3/finetuning/sft_cosmos3_nano_droid_fsdp.sh`. Defaults to single-node 8-GPU FSDP2 + bf16, trains for 500 steps, per-device batch=2.
+Launch script: `examples/cosmos3/finetuning/run_cosmos3_nano_droid_fsdp_finetune.sh`. Defaults to single-node 8-GPU FSDP2 + bf16, trains for 500 steps, per-device batch=2.
 
 ### 2.1 Environment Variables
 
@@ -73,7 +73,7 @@ export OUTPUT_DIR=/workspace/outputs/cosmos3_nano_droid
 Single-node 8-GPU FSDP2 SFT:
 
 ```bash
-bash examples/cosmos3/finetuning/sft_cosmos3_nano_droid_fsdp.sh
+bash examples/cosmos3/finetuning/run_cosmos3_nano_droid_fsdp_finetune.sh
 ```
 
 ### 2.3 Key Arguments
@@ -83,7 +83,8 @@ Arguments in the script are grouped by purpose as follows:
 **Model and Distributed:**
 
 ```bash
---model-name cosmos3_nano            # Mapped to the Cosmos3-Nano DROID recipe via torch_args
+--model-name cosmos3_nano            # Mapped to the Cosmos3-Nano DROID recipe via catalog
+--training-phase sft                 # Supervised fine-tuning
 --distributed-strategy fsdp          # Distributed strategy: FSDP2 full shard
 --dtype bfloat16                     # Training precision: bf16
 --fsdp-reduce-dtype bf16             # Reduce-scatter gradients in bf16
@@ -104,7 +105,6 @@ Arguments in the script are grouped by purpose as follows:
 **Training and Optimizer:**
 
 ```bash
---trainer-type FinetuneTrainer
 --train-iters 500                    # Total training steps
 --per-device-batch-size 2            # Per-device batch
 --gradient-accumulation-steps 1
@@ -144,7 +144,7 @@ Data switches are set in the launch script, or appended on the command line:
 
 ```bash
 # Run the augmentation tail on the model device instead of the dataloader worker
-bash examples/cosmos3/finetuning/sft_cosmos3_nano_droid_fsdp.sh data.colorjitter_on_gpu=true
+bash examples/cosmos3/finetuning/run_cosmos3_nano_droid_fsdp_finetune.sh data.colorjitter_on_gpu=true
 ```
 
 - `data.colorjitter_on_gpu` (default `false`) — when on, the worker only decodes video and ColorJitter plus everything after it runs on the GPU.

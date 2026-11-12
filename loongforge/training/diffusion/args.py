@@ -117,7 +117,7 @@ def add_diffusion_args(parser: argparse.ArgumentParser) -> argparse.ArgumentPars
 
 
 def _validata_extra_custom_args(args):
-    """Validate multimodal arguments"""
+    """Validate diffusion arguments"""
     if args.model_family not in catalog.DiffusionModelFamilies.names():
         return
 

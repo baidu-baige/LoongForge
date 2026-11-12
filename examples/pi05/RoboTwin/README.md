@@ -42,7 +42,7 @@ python examples/pi05/build_pidelta_stats.py \
 
 ## 2. Finetuning
 
-The launch script is [`sft_pi05_robotwin_ddp.sh`](../finetuning/sft_pi05_robotwin_ddp.sh). It finetunes on all 50 RoboTwin-2.0 tasks jointly using 8 GPUs (DDP) for 200,000 steps (`per_device_batch_size=8`, `gradient_accumulation_steps=2`, global batch size 128, `action_horizon=30`, `action_dim=14`, `state_dim=14`, `num_images=3`, `normalization_mode=q99`, `use_aloha_pi_delta_actions=true`).
+The launch script is [`run_pi05_robotwin_ddp_finetune.sh`](../finetuning/run_pi05_robotwin_ddp_finetune.sh). It finetunes on all 50 RoboTwin-2.0 tasks jointly using 8 GPUs (DDP) for 200,000 steps (`per_device_batch_size=8`, `gradient_accumulation_steps=2`, global batch size 128, `action_horizon=30`, `action_dim=14`, `state_dim=14`, `num_images=3`, `normalization_mode=q99`, `use_aloha_pi_delta_actions=true`).
 
 ```bash
 # Override default paths via environment variables:
@@ -51,13 +51,13 @@ export TOKENIZER_PATH=/path/to/paligemma-3b-pt-224
 export DATA_PATH=/path/to/robotwin_unified_pidelta
 export OUTPUT_DIR=/path/to/outputs/pi05_robotwin
 
-bash examples/pi05/finetuning/sft_pi05_robotwin_ddp.sh
+bash examples/pi05/finetuning/run_pi05_robotwin_ddp_finetune.sh
 ```
 
 To resume from the latest saved checkpoint in `$OUTPUT_DIR`:
 
 ```bash
-bash examples/pi05/finetuning/sft_pi05_robotwin_ddp.sh --resume
+bash examples/pi05/finetuning/run_pi05_robotwin_ddp_finetune.sh --resume
 ```
 
 Checkpoints are saved under `$OUTPUT_DIR/checkpoints/steps_<N>`. For evaluation, copy `examples/pi05/eval/assets/pi05_robotwin2_dataset_stats.json` into the checkpoint directory as `dataset_statistics.json` (or point `server.dataset_statistics_path` to that file).

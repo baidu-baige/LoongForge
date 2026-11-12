@@ -5,7 +5,8 @@
 
 This module defines command-line arguments for LoongForge training pipeline,
 including model configuration, tokenizer settings, SFT data processing,
-video processing, multimodal training, and parallel execution.
+and parallel execution. Family-specific arguments come from
+``training/<family>/args.py``; this module also validates the merged arguments.
 """
 
 import argparse
@@ -47,7 +48,7 @@ from loongforge.training.vlm.args import (
 
 
 # =============================================================================
-# Tensor Logging Arguments (llm-inspector)
+# Tokenizer Arguments
 # =============================================================================
 
 
@@ -662,7 +663,7 @@ def _add_log_tensor_args(parser):
             --save-tensor-dir "./tensor_logs"
 
     Note: If llm-inspector is not installed, these arguments will be ignored
-    silently. The feature is controlled by HAS_INSPECTOR flag in training_utils.py.
+    silently. The feature is controlled by HAS_INSPECTOR flag in engines/megatron/runner.py.
     """
     group = parser.add_argument_group(
         title="Tensor Logging (llm-inspector)",
@@ -863,7 +864,6 @@ def _validate_extra_model_args(args, config):
         _target = config.get('_target_') if hasattr(config, 'get') else getattr(config, '_target_', None)
         if _target:
             try:
-                import importlib
                 import dataclasses as _dc
                 _mod_path, _cls_name = _target.rsplit('.', 1)
                 _mod = importlib.import_module(_mod_path)

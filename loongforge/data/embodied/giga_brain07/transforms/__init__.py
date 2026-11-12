@@ -8,7 +8,7 @@ Layer-A reshell: exposes the xvla/pi05-style transform-package surface
 ``data/datasets/xvla/transforms`` and ``data/datasets/pi05/transforms``.
 
 ``GigaBrain07DataConfig`` is a lightweight, dependency-free dataclass and is
-re-exported eagerly (this is what ``train/config_map.py`` consumes).
+re-exported eagerly (this is what ``models/catalog.py`` consumes).
 ``GigaBrain07Transform`` is the real transform implementation that lives in this
 package (``giga_brain07_transform``); ``build_giga_brain07_dataset`` is the
 route-B dataset builder on the shared LeRobot reader. Both are resolved
@@ -42,7 +42,7 @@ def _preload_torchcodec_decoder_before_decord() -> None:
 
 _preload_torchcodec_decoder_before_decord()
 
-# Eager (unchanged): slim dataclass consumed by train/config_map.py.
+# Eager (unchanged): slim dataclass consumed by models/catalog.py.
 from loongforge.data.embodied.giga_brain07.transforms.data_configuration_giga_brain07 import (
     GigaBrain07DataConfig,
 )

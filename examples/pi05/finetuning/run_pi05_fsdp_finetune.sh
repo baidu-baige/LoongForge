@@ -3,17 +3,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ═══════════════════════════════════════════════════════════════
-# sft_pi05_robotwin_ddp.sh - pi05 RoboTwin-2.0 VLA SFT Launch Script (DDP)
+# run_pi05_fsdp_finetune.sh - pi05 VLA SFT Launch Script (FSDP)
 #
-# Note:
-#   DATA_PATH must point to the pi-space dataset view (built via
-#   examples/pi05/build_pidelta_stats.py) whose meta/stats.json holds
-#   pi-space action and observation.state statistics.
+# Mirrors run_pi05_ddp_zero1_finetune.sh, but uses the embodied FSDP strategy.
 #
 # Usage:
-#   bash sft_pi05_robotwin_ddp.sh
-#   TRAIN_ITERS=100000 bash sft_pi05_robotwin_ddp.sh
-#   bash sft_pi05_robotwin_ddp.sh --resume
+#   bash run_pi05_fsdp_finetune.sh
+#   TRAIN_ITERS=50 bash run_pi05_fsdp_finetune.sh                          # override via env
+#   bash run_pi05_fsdp_finetune.sh --train-iters 50000                     # override a training param (flag form)
+#   bash run_pi05_fsdp_finetune.sh model.state_dim=8 data.image_size=448   # override YAML model:/data: fields (dotlist form)
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -24,6 +22,7 @@ export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"$(cd "$SCRIPT_DIR/../../.." && pwd)"}
 export LOCAL_VLA_ARTIFACTS_ROOT=${LOCAL_VLA_ARTIFACTS_ROOT:-"/ssd2/loongforge_embodied_ci/vla_artifacts"}
 
 # ── Distributed ───────────────────────────────────────────────
+# Cluster schedulers commonly export WORLD_SIZE (node count) and RANK (node rank).
 GPUS_PER_NODE=${GPUS_PER_NODE:-8}
 MASTER_ADDR=${MASTER_ADDR:-"localhost"}
 MASTER_PORT=${MASTER_PORT:-"29500"}
@@ -38,35 +37,20 @@ DISTRIBUTED_ARGS=(
     --master_port "$MASTER_PORT"
 )
 
-export NO_ALBUMENTATIONS_UPDATE=1
+export CUDA_DEVICE_MAX_CONNECTIONS=${CUDA_DEVICE_MAX_CONNECTIONS:-8}
+export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
 
 # ── Paths ─────────────────────────────────────────────────────
 TOKENIZER_PATH=${TOKENIZER_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/pi05/tokenizers/paligemma-3b-pt-224"}
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/pi05/models/pi05_base"}
-DATA_PATH=${DATA_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/pi05/datasets/robotwin_unified_pidelta"}
-OUTPUT_DIR=${OUTPUT_DIR:-"$LOONGFORGE_PATH/outputs/pi05_robotwin"}
+DATA_PATH=${DATA_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/pi05/datasets/libero"}
+OUTPUT_DIR=${OUTPUT_DIR:-"$LOONGFORGE_PATH/outputs/pi05_fsdp"}
 TENSORBOARD_DIR=${TENSORBOARD_DIR:-"$OUTPUT_DIR/tensorboard"}
 
-# ── Model & Data config ───────────────────────────────────────
+# ── Model config ──────────────────────────────────────────────
 MODEL_NAME=${MODEL_NAME:-"pi05"}
-ACTION_HORIZON=${ACTION_HORIZON:-30}
-ACTION_DIM=${ACTION_DIM:-14}
-STATE_DIM=${STATE_DIM:-14}
-NUM_IMAGES=${NUM_IMAGES:-3}
-NORMALIZATION_MODE=${NORMALIZATION_MODE:-"q99"}
-USE_ALOHA_PI_DELTA=${USE_ALOHA_PI_DELTA:-"true"}
-
 MODEL_CONFIG_ARGS=(
     --model-name "$MODEL_NAME"
-)
-
-DOTLIST_OVERRIDES=(
-    "model.action_horizon=${ACTION_HORIZON}"
-    "model.action_dim=${ACTION_DIM}"
-    "model.state_dim=${STATE_DIM}"
-    "data.num_images=${NUM_IMAGES}"
-    "data.normalization_mode=${NORMALIZATION_MODE}"
-    "data.use_aloha_pi_delta_actions=${USE_ALOHA_PI_DELTA}"
 )
 
 # ── Data params ───────────────────────────────────────────────
@@ -75,35 +59,32 @@ DATA_ARGS=(
     --dataset-format lerobot_datasets
     --dataset-path "$DATA_PATH"
     --tokenizer-path "$TOKENIZER_PATH"
-    --robot-type aloha_bimanual
+    --robot-type libero_franka
     --batch-drop-last
     --num-workers "$NUM_WORKERS"
 )
 
-# ── Training params ───────────────────────────────────────────
-TRAIN_ITERS=${TRAIN_ITERS:-200000}
-PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-8}
-GRADIENT_ACCUMULATION_STEPS=${GRADIENT_ACCUMULATION_STEPS:-2}
-LR_BASE=${LR_BASE:-5e-5}
-LR_WARMUP_ITERS=${LR_WARMUP_ITERS:-2000}
-LR_DECAY_ITERS=${LR_DECAY_ITERS:-200000}
-MIN_LR=${MIN_LR:-5e-6}
-SAVE_INTERVAL=${SAVE_INTERVAL:-10000}
-SEED=${SEED:-1000}
+# ── Training params (aligned with examples/pi05/finetuning/sft_pi05.sh) ──
+# Old Megatron config: micro-batch-size=16, global-batch-size=128, 8 GPUs
+# => gradient-accumulation-steps = 128 / (16 * 8) = 1
+TRAIN_ITERS=${TRAIN_ITERS:-20}
+PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-16}
+GRADIENT_ACCUMULATION_STEPS=${GRADIENT_ACCUMULATION_STEPS:-1}
+SAVE_INTERVAL=${SAVE_INTERVAL:-0}
+SEED=${SEED:-1234}
 
 TRAINING_ARGS=(
-    --trainer-type FinetuneTrainer
+    --training-phase sft
     --train-iters "$TRAIN_ITERS"
     --per-device-batch-size "$PER_DEVICE_BATCH_SIZE"
     --gradient-accumulation-steps "$GRADIENT_ACCUMULATION_STEPS"
     --seed "$SEED"
     --output-dir "$OUTPUT_DIR"
     # Learning rate
-    --lr-base "$LR_BASE"
-    --lr-decay-style cosine_with_min_lr
-    --lr-warmup-iters "$LR_WARMUP_ITERS"
-    --lr-decay-iters "$LR_DECAY_ITERS"
-    --min-lr "$MIN_LR"
+    --lr-base 2.5e-8
+    --min-lr 0
+    --lr-decay-style cosine
+    --lr-warmup-iters 0
     # Optimizer
     --optimizer AdamW
     --clip-grad 1.0
@@ -114,29 +95,38 @@ TRAINING_ARGS=(
     # Checkpoint
     --save-interval "$SAVE_INTERVAL"
     --pretrained-checkpoint "$CHECKPOINT_PATH"
-    --activation-checkpoint-module-patterns "model.paligemma_with_expert.paligemma.model.vision_tower.vision_model.encoder.layers.*"
+)
+
+FSDP_NO_WRAP_MODULES=(
+    PaliGemmaWithExpertModel
+    PaliGemmaForConditionalGenerationWithPiGemma
+    PaliGemmaModelWithPiGemma
+    PiGemmaForCausalLM
+    PiGemmaModel
+    _PiGemmaDecoderLayerBase
+    GemmaAttention
 )
 
 DISTRIBUTED_TRAINING_ARGS=(
-    --distributed-strategy ddp
-    --ddp-find-unused-parameters
-    --ddp-static-graph
-    --ddp-gradient-as-bucket-view
-    --no-dynamo-optimize-ddp
+    --distributed-strategy fsdp
     --dtype bfloat16
+    --fsdp-no-wrap-modules "$(
+        IFS=,
+        echo "${FSDP_NO_WRAP_MODULES[*]}"
+    )"
 )
 
 # ── Logging params ────────────────────────────────────────────
 LOGGING_ARGS=(
-    --log-interval 10
+    --log-interval 1
     --tensorboard-dir "$TENSORBOARD_DIR"
 )
 
 # ── Launch ────────────────────────────────────────────────────
 echo "════════════════════════════════════════════════════════════"
-echo "  LoongForge pi05 RoboTwin-2.0 Training (DDP)"
+echo "  LoongForge pi05 Training (FSDP)"
 echo "  GPUs:       $GPUS_PER_NODE x $NNODES node(s)"
-echo "  Model:      $MODEL_NAME (horizon=$ACTION_HORIZON, action_dim=$ACTION_DIM, state_dim=$STATE_DIM)"
+echo "  Model:      $MODEL_NAME"
 echo "  Checkpoint: $CHECKPOINT_PATH"
 echo "  Data:       $DATA_PATH"
 echo "  Output:     $OUTPUT_DIR"
@@ -150,5 +140,5 @@ PYTHONPATH=$LOONGFORGE_PATH:${PYTHONPATH:-} \
     "${TRAINING_ARGS[@]}" \
     "${DISTRIBUTED_TRAINING_ARGS[@]}" \
     "${LOGGING_ARGS[@]}" \
-    "$@" \
-    "${DOTLIST_OVERRIDES[@]}"
+    "model.compile_model=False" \
+    "$@"

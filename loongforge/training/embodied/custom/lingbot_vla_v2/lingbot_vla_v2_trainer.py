@@ -4,7 +4,7 @@
 """LingBot VLA v2 trainer, on the tensor_wise distributed optimizer.
 
 ``LingbotVlaV2Trainer`` subclasses ``TensorWiseTrainer``
-(``trainers/custom/tensor_wise_trainer.py``) and adds what is specific to
+(``training/embodied/custom/tensor_wise_trainer.py``) and adds what is specific to
 LingBot: the parameter policy, the Muon LR scaling and MoE load-balance hook,
 the model-side batch and compile helpers, and the teacher look-ahead (the
 teachers run a step early, and the queue of started batches and the dataloader

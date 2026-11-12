@@ -92,10 +92,9 @@ class EmbodiedModelFamilies(_BaseFamilies):
 
 @dataclass(frozen=True)
 class ModelSpec:
-    """Resolved engine, family, and configuration for one public model name."""
+    """Resolved engine and configuration for one public model name."""
 
     engine: str
-    model_family: str
     yaml_file: str
     model_config_type: str | None = None
     data_config_type: str | None = None
@@ -105,7 +104,6 @@ class ModelSpec:
 class ModelSchema:
     """Resolved typed Torch configuration classes for one model name."""
 
-    yaml_file: str
     model_config_cls: Type
     data_config_cls: Type
 
@@ -406,40 +404,22 @@ MODEL_CONFIG_REGISTRY = {
 }
 
 
-def _iter_model_configs():
+def _iter_model_specs():
     for engine, families in MODEL_CONFIG_REGISTRY.items():
-        for model_family, models in families.items():
+        for models in families.values():
             for model_name, config in models.items():
-                if engine == "torch":
-                    yaml_file, model_config_type, data_config_type = config
-                else:
-                    yaml_file = config
-                    model_config_type = data_config_type = None
-                yield (
-                    engine,
-                    model_family,
-                    model_name,
-                    yaml_file,
-                    model_config_type,
-                    data_config_type,
-                )
+                configs = config if engine == "torch" else (config,)
+                yield model_name, ModelSpec(engine, *configs)
 
 
 def get_model_spec(model_name: str) -> ModelSpec:
-    """Resolve a public model name to its engine, family, and config."""
+    """Resolve a public model name to its engine and config."""
     name = model_name.lower()
-    for (
-        engine,
-        model_family,
-        registered_name,
-        yaml_file,
-        model_config_type,
-        data_config_type,
-    ) in _iter_model_configs():
-        lookup_name = name.replace("-", "_") if engine == "torch" else name
+    for registered_name, spec in _iter_model_specs():
+        lookup_name = name.replace("-", "_") if spec.engine == "torch" else name
         if registered_name == lookup_name:
-            return ModelSpec(engine, model_family, yaml_file, model_config_type, data_config_type)
-    available = sorted(model_name for _, _, model_name, *_ in _iter_model_configs())
+            return spec
+    available = sorted(registered_name for registered_name, _ in _iter_model_specs())
     raise KeyError(
         f"Unknown model_name {model_name!r}. Register it in "
         f"{__name__}.MODEL_CONFIG_REGISTRY. Available: {available}"
@@ -478,7 +458,6 @@ def get_model_schema(model_name: str) -> ModelSchema:
     if spec.engine != "torch":
         raise ValueError(f"Model {model_name!r} does not use Torch config types")
     return ModelSchema(
-        spec.yaml_file,
         _load_type(spec.model_config_type),
         _load_type(spec.data_config_type),
     )

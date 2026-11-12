@@ -3,15 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ═══════════════════════════════════════════════════════════════
-# sft_pi05_fsdp.sh - pi05 VLA SFT Launch Script (FSDP)
-#
-# Mirrors run_pi05_ddp_zero1_finetune.sh, but uses the embodied FSDP strategy.
+# run_pi05_ddp_finetune.sh - pi05 VLA SFT Launch Script (DDP)
 #
 # Usage:
-#   bash sft_pi05_fsdp.sh
-#   TRAIN_ITERS=50 bash sft_pi05_fsdp.sh                          # override via env
-#   bash sft_pi05_fsdp.sh --train-iters 50000                     # override a training param (flag form)
-#   bash sft_pi05_fsdp.sh model.state_dim=8 data.image_size=448   # override YAML model:/data: fields (dotlist form)
+#   bash run_pi05_ddp_finetune.sh
+#   TRAIN_ITERS=50 bash run_pi05_ddp_finetune.sh                          # override via env
+#   bash run_pi05_ddp_finetune.sh --train-iters 50                        # override a training param (flag form)
+#   bash run_pi05_ddp_finetune.sh model.state_dim=8 data.image_size=448   # override YAML model:/data: fields (dotlist form)
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -37,14 +35,13 @@ DISTRIBUTED_ARGS=(
     --master_port "$MASTER_PORT"
 )
 
-export CUDA_DEVICE_MAX_CONNECTIONS=${CUDA_DEVICE_MAX_CONNECTIONS:-8}
-export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
+export NO_ALBUMENTATIONS_UPDATE=1
 
 # ── Paths ─────────────────────────────────────────────────────
 TOKENIZER_PATH=${TOKENIZER_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/pi05/tokenizers/paligemma-3b-pt-224"}
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/pi05/models/pi05_base"}
 DATA_PATH=${DATA_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/pi05/datasets/libero"}
-OUTPUT_DIR=${OUTPUT_DIR:-"$LOONGFORGE_PATH/outputs/pi05_fsdp"}
+OUTPUT_DIR=${OUTPUT_DIR:-"$LOONGFORGE_PATH/outputs/pi05_ddp"}
 TENSORBOARD_DIR=${TENSORBOARD_DIR:-"$OUTPUT_DIR/tensorboard"}
 
 # ── Model config ──────────────────────────────────────────────
@@ -64,27 +61,25 @@ DATA_ARGS=(
     --num-workers "$NUM_WORKERS"
 )
 
-# ── Training params (aligned with examples/pi05/finetuning/sft_pi05.sh) ──
-# Old Megatron config: micro-batch-size=16, global-batch-size=128, 8 GPUs
-# => gradient-accumulation-steps = 128 / (16 * 8) = 1
+# ── Training params ───────────────────────────────────────────
 TRAIN_ITERS=${TRAIN_ITERS:-20}
-PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-16}
+PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-12}
 GRADIENT_ACCUMULATION_STEPS=${GRADIENT_ACCUMULATION_STEPS:-1}
 SAVE_INTERVAL=${SAVE_INTERVAL:-0}
-SEED=${SEED:-1234}
+SEED=${SEED:-42}
 
 TRAINING_ARGS=(
-    --trainer-type FinetuneTrainer
+    --training-phase sft
     --train-iters "$TRAIN_ITERS"
     --per-device-batch-size "$PER_DEVICE_BATCH_SIZE"
     --gradient-accumulation-steps "$GRADIENT_ACCUMULATION_STEPS"
     --seed "$SEED"
     --output-dir "$OUTPUT_DIR"
     # Learning rate
-    --lr-base 2.5e-8
-    --min-lr 0
-    --lr-decay-style cosine
-    --lr-warmup-iters 0
+    --lr-base 2.5e-5
+    --lr-decay-style cosine_with_min_lr
+    --lr-warmup-iters 10
+    --min-lr 1.0e-6
     # Optimizer
     --optimizer AdamW
     --clip-grad 1.0
@@ -95,25 +90,16 @@ TRAINING_ARGS=(
     # Checkpoint
     --save-interval "$SAVE_INTERVAL"
     --pretrained-checkpoint "$CHECKPOINT_PATH"
-)
-
-FSDP_NO_WRAP_MODULES=(
-    PaliGemmaWithExpertModel
-    PaliGemmaForConditionalGenerationWithPiGemma
-    PaliGemmaModelWithPiGemma
-    PiGemmaForCausalLM
-    PiGemmaModel
-    _PiGemmaDecoderLayerBase
-    GemmaAttention
+    --activation-checkpoint-module-patterns "model.paligemma_with_expert.paligemma.model.vision_tower.vision_model.encoder.layers.*"
 )
 
 DISTRIBUTED_TRAINING_ARGS=(
-    --distributed-strategy fsdp
+    --distributed-strategy ddp
+    --ddp-find-unused-parameters
+    --ddp-static-graph
+    --ddp-gradient-as-bucket-view
+    --no-dynamo-optimize-ddp
     --dtype bfloat16
-    --fsdp-no-wrap-modules "$(
-        IFS=,
-        echo "${FSDP_NO_WRAP_MODULES[*]}"
-    )"
 )
 
 # ── Logging params ────────────────────────────────────────────
@@ -124,7 +110,7 @@ LOGGING_ARGS=(
 
 # ── Launch ────────────────────────────────────────────────────
 echo "════════════════════════════════════════════════════════════"
-echo "  LoongForge pi05 Training (FSDP)"
+echo "  LoongForge pi05 Training (DDP)"
 echo "  GPUs:       $GPUS_PER_NODE x $NNODES node(s)"
 echo "  Model:      $MODEL_NAME"
 echo "  Checkpoint: $CHECKPOINT_PATH"
@@ -140,5 +126,4 @@ PYTHONPATH=$LOONGFORGE_PATH:${PYTHONPATH:-} \
     "${TRAINING_ARGS[@]}" \
     "${DISTRIBUTED_TRAINING_ARGS[@]}" \
     "${LOGGING_ARGS[@]}" \
-    "model.compile_model=False" \
     "$@"

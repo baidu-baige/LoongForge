@@ -8,7 +8,7 @@ from typing import Union, List, Callable
 
 # Trainers selected by engine, model family, and training phase.
 TRAINERS_BY_ENGINE = {"megatron": {}, "torch": {}}
-# Explicit trainer-name overrides, currently supported by Torch.
+# Torch trainers registered without a family; only ``--trainer-type`` selects them.
 TRAINERS_BY_NAME = {"torch": {}}
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -28,10 +28,12 @@ def register_model_trainer(
     Args:
         model_family: the YAML ``model_type`` family. Megatron recipes and Torch
                       trainers both use it; an empty list registers a Torch trainer
-                      for ``--trainer-type`` only. (Case-insensitive)
-        training_phase: need to be consistent with the --training-phase definition in training.megatron_args
-        training_func: training function. Torch trainer names must be unique within
-                       a phase because ``--trainer-type`` selects them.
+                      without a family, selected only by ``--trainer-type``.
+                      (Case-insensitive)
+        training_phase: one of ``pretrain`` or ``sft``, as accepted by both engines' ``--training-phase``.
+        training_func: training function. A Torch trainer registered without a family
+                       must be unique by name within a phase because ``--trainer-type``
+                       selects it.
         override: Whether to overwrite existing training functions for the same model/phase.
                   Default: False (no overwrite).
         engine: key of ``ENGINES``.
@@ -43,7 +45,7 @@ def register_model_trainer(
         if not isinstance(families, list):
             families = [families]
 
-        if engine == "torch":
+        if engine == "torch" and not families:
             named = TRAINERS_BY_NAME[engine].setdefault(phase, {})
             existing = named.setdefault(func.__name__, func)
             if existing is not func:
@@ -93,7 +95,6 @@ def _megatron():
 
 def _torch():
     """Parse Torch arguments, then load the built-in trainers."""
-    from loongforge.data.constants import TrainingPhase
     from loongforge.training.torch_args import parse_train_args
 
     training_args, model_cfg, data_cfg = parse_train_args()
@@ -111,7 +112,7 @@ def _torch():
 
     return (
         model_cfg.model_type,
-        TrainingPhase.SFT,
+        training_args.training_phase,
         training_args.trainer_type,
         (training_args, model_cfg, data_cfg),
     )

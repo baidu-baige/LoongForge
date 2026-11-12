@@ -51,7 +51,7 @@ X-VLA 采用与参考实现对齐的原生 HDF5 数据管道，**无需额外离
 - `language_instruction_key`：语言指令字段名。
 
 ## 2. 启动训练
-先统一设置路径（参考 `examples/xvla/finetuning/sft_xvla_ddp.sh`）：
+先统一设置路径（参考 `examples/xvla/finetuning/run_xvla_ddp_finetune.sh`）：
 
 ```bash
 cd /workspace/LoongForge
@@ -66,7 +66,7 @@ export OUTPUT_DIR=/workspace/outputs/xvla_ddp
 单机 8 卡 DDP 微调：
 
 ```bash
-bash examples/xvla/finetuning/sft_xvla_ddp.sh
+bash examples/xvla/finetuning/run_xvla_ddp_finetune.sh
 ```
 默认已开启了优化，参数在 `configs/models/xvla/xvla.yaml`：
 
@@ -80,7 +80,8 @@ torch_compile_mode: default
 **模型与分布式：**
 
 ```bash
---model-name xvla                    # 通过 torch_args 映射到 XVLA 配置
+--model-name xvla                    # 通过 catalog 映射到 XVLA 配置
+--training-phase sft                 # 监督微调
 --distributed-strategy ddp           # DDP 分布式策略
 --dtype bfloat16                     # 训练精度
 # GPUS_PER_NODE=8                    # 单机 GPU 数（脚本变量）
@@ -97,7 +98,6 @@ torch_compile_mode: default
 **训练：**
 
 ```bash
---trainer-type FinetuneTrainer
 --train-iters 40
 --gradient-accumulation-steps 1
 --lr-base 1e-4                       # 基础学习率

@@ -3,13 +3,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ═══════════════════════════════════════════════════════════════
-# sft_gr00t_n1_7_ddp.sh - GR00T-N1.7 Training Launch Script (DDP)
+# run_pi05_ddp_zero1_finetune.sh - pi05 VLA SFT Launch Script (DDP + ZeRO1)
+#
+# Mirrors the config from examples/pi05/finetuning/sft_pi05.sh
+# but uses the embodied training framework (loongforge/train.py).
 #
 # Usage:
-#   bash sft_gr00t_n1_7_ddp.sh
-#   TRAIN_ITERS=50 bash sft_gr00t_n1_7_ddp.sh            # override via env
-#   bash sft_gr00t_n1_7_ddp.sh --train-iters 500         # override a training param (flag form)
-#   bash sft_gr00t_n1_7_ddp.sh model.action_horizon=32   # override YAML model:/data: fields (dotlist form)
+#   bash run_pi05_ddp_zero1_finetune.sh
+#   TRAIN_ITERS=50 bash run_pi05_ddp_zero1_finetune.sh                          # override via env
+#   bash run_pi05_ddp_zero1_finetune.sh --train-iters 50000                     # override a training param (flag form)
+#   bash run_pi05_ddp_zero1_finetune.sh model.state_dim=8 data.image_size=448   # override YAML model:/data: fields (dotlist form)
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -18,27 +21,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # ── Environment ───────────────────────────────────────────────
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"$(cd "$SCRIPT_DIR/../../.." && pwd)"}
 export LOCAL_VLA_ARTIFACTS_ROOT=${LOCAL_VLA_ARTIFACTS_ROOT:-"/ssd2/loongforge_embodied_ci/vla_artifacts"}
-
-GR00T_N1_7_OPS_SRC=${GR00T_N1_7_OPS_SRC:-"${LOONGFORGE_PATH}/ops/cuda_source/gr00t_n1_7_op"}
-
-build_groot_n1_7_ops() {
-    if python -c "import gr00t_n1_7_op" > /dev/null 2>&1; then
-        echo "GR00T-N1.7 CUDA operators already installed: gr00t_n1_7_op"
-        return
-    fi
-
-    if [[ ! -f "${GR00T_N1_7_OPS_SRC}/setup.py" ]]; then
-        echo "gr00t_n1_7_op is not installed and its sources were not found at ${GR00T_N1_7_OPS_SRC}." >&2
-        echo "Set GR00T_N1_7_OPS_SRC to the gr00t_n1_7_op directory and rerun." >&2
-        exit 1
-    fi
-
-    echo "Installing GR00T-N1.7 CUDA operators from ${GR00T_N1_7_OPS_SRC}"
-    NVCC_THREADS=${NVCC_THREADS:-${MAX_JOBS:-8}} \
-        pip install --no-build-isolation -e "${GR00T_N1_7_OPS_SRC}"
-}
-
-build_groot_n1_7_ops
 
 # ── Distributed ───────────────────────────────────────────────
 # Cluster schedulers commonly export WORLD_SIZE (node count) and RANK (node rank).
@@ -56,119 +38,81 @@ DISTRIBUTED_ARGS=(
     --master_port "$MASTER_PORT"
 )
 
-export CUBLAS_WORKSPACE_CONFIG="${CUBLAS_WORKSPACE_CONFIG:-:4096:8}"
-export FLASH_ATTENTION_DETERMINISTIC="${FLASH_ATTENTION_DETERMINISTIC:-1}"
-export NCCL_ALGO="${NCCL_ALGO:-Ring}"
-export NVTE_ALLOW_NONDETERMINISTIC_ALGO="${NVTE_ALLOW_NONDETERMINISTIC_ALGO:-0}"
-export CUDA_DEVICE_MAX_CONNECTIONS="${CUDA_DEVICE_MAX_CONNECTIONS:-8}"
-export NO_ALBUMENTATIONS_UPDATE="${NO_ALBUMENTATIONS_UPDATE:-1}"
-
-export COSMOS_LOCAL_PATH="${COSMOS_LOCAL_PATH:-$LOCAL_VLA_ARTIFACTS_ROOT/gr00t_n1_7/models/Cosmos-Reason2-2B}"
-export TOKENIZER_PATH="${TOKENIZER_PATH:-$COSMOS_LOCAL_PATH}"
+export CUDA_DEVICE_MAX_CONNECTIONS=${CUDA_DEVICE_MAX_CONNECTIONS:-1}
+export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
 
 # ── Paths ─────────────────────────────────────────────────────
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/gr00t_n1_7/models/GR00T-N1.7-3B"}
-DATA_PATH=${DATA_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/gr00t_n1_7/datasets/cube_to_bowl_5"}
-OUTPUT_DIR=${OUTPUT_DIR:-"$LOONGFORGE_PATH/outputs/gr00t_n1_7"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/pi05/tokenizers/paligemma-3b-pt-224"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/pi05/models/pi05_base"}
+DATA_PATH=${DATA_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/pi05/datasets/libero"}
+OUTPUT_DIR=${OUTPUT_DIR:-"$LOONGFORGE_PATH/outputs/pi05_ddp_zero1"}
 TENSORBOARD_DIR=${TENSORBOARD_DIR:-"$OUTPUT_DIR/tensorboard"}
 
 # ── Model config ──────────────────────────────────────────────
-MODEL_NAME=${MODEL_NAME:-"gr00t_n1_7"}
+MODEL_NAME=${MODEL_NAME:-"pi05"}
 MODEL_CONFIG_ARGS=(
     --model-name "$MODEL_NAME"
 )
 
 # ── Data params ───────────────────────────────────────────────
-NUM_WORKERS=${NUM_WORKERS:-4}
+NUM_WORKERS=${NUM_WORKERS:-16}
 DATA_ARGS=(
     --dataset-format lerobot_datasets
-    --dataset-strategy gr00t_n1_7
     --dataset-path "$DATA_PATH"
-    --lerobotdataset-version v2.1
-    --video-backend torchcodec
+    --tokenizer-path "$TOKENIZER_PATH"
+    --robot-type libero_franka
+    --batch-drop-last
     --num-workers "$NUM_WORKERS"
-    --dataloader-prefetch-factor 8
-    --dataloader-multiprocessing-context fork
-    --distributed-sampler-mode block
 )
 
-# ── Training params ───────────────────────────────────────────
+# ── Training params (aligned with examples/pi05/finetuning/sft_pi05.sh) ──
+# Old Megatron config: micro-batch-size=16, global-batch-size=128, 8 GPUs
+# => gradient-accumulation-steps = 128 / (16 * 8) = 1
 TRAIN_ITERS=${TRAIN_ITERS:-20}
-PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-104}
+PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-16}
 GRADIENT_ACCUMULATION_STEPS=${GRADIENT_ACCUMULATION_STEPS:-1}
 SAVE_INTERVAL=${SAVE_INTERVAL:-0}
-SEED=${SEED:-42}
+SEED=${SEED:-1234}
 
 TRAINING_ARGS=(
-    --trainer-type GrootN1d7Trainer
-    --save-processor-config
+    --training-phase sft
     --train-iters "$TRAIN_ITERS"
     --per-device-batch-size "$PER_DEVICE_BATCH_SIZE"
     --gradient-accumulation-steps "$GRADIENT_ACCUMULATION_STEPS"
     --seed "$SEED"
     --output-dir "$OUTPUT_DIR"
     # Learning rate
-    --lr-base 1.0e-4
-    --lr-decay-style cosine_with_min_lr
-    --lr-warmup-iters 5
-    --min-lr 0.0
-    #--optimizer AdamW
-    --optimizer TEFusedAdamW
+    --lr-base 2.5e-8
+    --min-lr 0
+    --lr-decay-style cosine
+    --lr-warmup-iters 0
+    # Optimizer
+    --optimizer AdamW
     --clip-grad 1.0
-    --weight-decay 1.0e-5
-    --weight-decay-grouping bias_norm
+    --weight-decay 0.01
     --adam-beta1 0.9
-    --adam-beta2 0.999
+    --adam-beta2 0.95
     --adam-eps 1e-8
     # Checkpoint
     --save-interval "$SAVE_INTERVAL"
     --pretrained-checkpoint "$CHECKPOINT_PATH"
-    --deterministic-mode
-    --cuda-graph-impl local
-    --cuda-graph-scope full_iteration
-    --cuda-graph-warmup-steps 3
-    --cuda-graph-pad-length 0
-    --cuda-graph-ddp-sync-in-graph
-    --no-check-for-nan-in-loss-and-grad
 )
 
 DISTRIBUTED_TRAINING_ARGS=(
     --distributed-strategy ddp
+    --zero-optimizer
     --dtype bfloat16
-    --ddp-bucket-cap-mb 100
-    --no-ddp-find-unused-parameters
-    --ddp-static-graph
-    # --dataloader-seed-workers
-)
-
-# ── FP8
-FP8_ARGS=(
-    # --fp8
-    # --fp8-backend te
-    # --fp8-te-recipe blockwise
-    # --fp8-min-dim 2048
-)
-
-# ── FP8 DDP comm hook
-# fp8 AllToAll + fp8 AllGather, with error feedback enabled at both quantization points;
-# sensitive 1-D params (norm/bias) + embedding go through exact allreduce, the rest are fp8.
-FP8_COMM_HOOK_ARGS=(
-    # --ddp-comm-hook fp8_a2a_allgather_hook
-    # --ddp-comm-hook-fp8-error-feedback both
-    # --ddp-comm-hook-fp8-exempt ""
 )
 
 # ── Logging params ────────────────────────────────────────────
 LOGGING_ARGS=(
     --log-interval 1
-    --loss-log-rank -1
-    --wandb-mode disabled
     --tensorboard-dir "$TENSORBOARD_DIR"
 )
 
 # ── Launch ────────────────────────────────────────────────────
 echo "════════════════════════════════════════════════════════════"
-echo "  LoongForge GR00T-N1.7 Training (DDP)"
+echo "  LoongForge pi05 Training (DDP + ZeRO1)"
 echo "  GPUs:       $GPUS_PER_NODE x $NNODES node(s)"
 echo "  Model:      $MODEL_NAME"
 echo "  Checkpoint: $CHECKPOINT_PATH"
@@ -184,6 +128,4 @@ PYTHONPATH=$LOONGFORGE_PATH:${PYTHONPATH:-} \
     "${TRAINING_ARGS[@]}" \
     "${DISTRIBUTED_TRAINING_ARGS[@]}" \
     "${LOGGING_ARGS[@]}" \
-    "${FP8_ARGS[@]}" \
-    "${FP8_COMM_HOOK_ARGS[@]}" \
     "$@"

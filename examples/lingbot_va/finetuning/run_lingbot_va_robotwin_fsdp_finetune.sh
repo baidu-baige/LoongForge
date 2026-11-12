@@ -3,15 +3,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ═══════════════════════════════════════════════════════════════
-# sft_lingbot_va_libero_fsdp.sh - LingBot-VA LIBERO-Long post-training
+# run_lingbot_va_robotwin_fsdp_finetune.sh - LingBot-VA RobotWin post-training
 # with baseline-aligned data semantics.
 #
 # Set all data and checkpoint paths to existing local files; this script runs offline.
 #
 # Usage:
-#   bash sft_lingbot_va_libero_fsdp.sh
-#   TRAIN_ITERS=50 bash sft_lingbot_va_libero_fsdp.sh   # override via env
-#   bash sft_lingbot_va_libero_fsdp.sh --train-iters 50 # override a training param (flag form)
+#   bash run_lingbot_va_robotwin_fsdp_finetune.sh
+#   TRAIN_ITERS=50 bash run_lingbot_va_robotwin_fsdp_finetune.sh   # override via env
+#   bash run_lingbot_va_robotwin_fsdp_finetune.sh --train-iters 50 # override a training param (flag form)
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -39,9 +39,9 @@ DISTRIBUTED_ARGS=(
 
 # ── Paths ─────────────────────────────────────────────────────
 CHECKPOINT_PATH=${CHECKPOINT_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/lingbot_va/models/lingbot-va-base"}
-DATA_PATH=${DATA_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/lingbot_va/datasets/libero-long-lerobot"}
+DATA_PATH=${DATA_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/lingbot_va/datasets/robotwin-clean-and-aug-lerobot"}
 EMPTY_EMB_PATH=${EMPTY_EMB_PATH:-"$DATA_PATH/empty_emb.pt"}
-OUTPUT_DIR=${OUTPUT_DIR:-"$LOONGFORGE_PATH/outputs/lingbot_va_libero"}
+OUTPUT_DIR=${OUTPUT_DIR:-"$LOONGFORGE_PATH/outputs/lingbot_va_robotwin"}
 
 export NCCL_DEBUG=${NCCL_DEBUG:-WARN}
 export HF_DATASETS_OFFLINE=1
@@ -59,7 +59,7 @@ export LINGBOT_VA_FIXED_MICROBATCH_RNG=${LINGBOT_VA_FIXED_MICROBATCH_RNG:-0}  # 
 export LINGBOT_SAMPLE_ORDER_EXPORT_DIR=${LINGBOT_SAMPLE_ORDER_EXPORT_DIR:-}
 
 # ── Model config ──────────────────────────────────────────────
-MODEL_NAME=${MODEL_NAME:-"lingbot_va_libero"}
+MODEL_NAME=${MODEL_NAME:-"lingbot_va_robotwin"}
 MODEL_CONFIG_ARGS=(
     --model-name "$MODEL_NAME"
 )
@@ -76,14 +76,14 @@ DATA_ARGS=(
 )
 
 # ── Training params ───────────────────────────────────────────
-TRAIN_ITERS=${TRAIN_ITERS:-5000}
+TRAIN_ITERS=${TRAIN_ITERS:-50000}
 PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-1}
-GRADIENT_ACCUMULATION_STEPS=${GRADIENT_ACCUMULATION_STEPS:-10}  # 8 GPUs x 1 x 10 = global batch 80
+GRADIENT_ACCUMULATION_STEPS=${GRADIENT_ACCUMULATION_STEPS:-8}  # 8 GPUs x 1 x 8 = global batch 64
 SAVE_INTERVAL=${SAVE_INTERVAL:-0}
 SEED=${SEED:-42}
 
 TRAINING_ARGS=(
-    --trainer-type LingBotFinetuneTrainer
+    --training-phase sft
     --train-iters "$TRAIN_ITERS"
     --per-device-batch-size "$PER_DEVICE_BATCH_SIZE"
     --gradient-accumulation-steps "$GRADIENT_ACCUMULATION_STEPS"
@@ -145,7 +145,7 @@ MODEL_DATA_OVERRIDES=(
 
 # ── Launch ────────────────────────────────────────────────────
 echo "════════════════════════════════════════════════════════════"
-echo "  LoongForge LingBot-VA LIBERO-Long Post-Training (FSDP)"
+echo "  LoongForge LingBot-VA RobotWin Post-Training (FSDP)"
 echo "  GPUs:       $GPUS_PER_NODE x $NNODES node(s)"
 echo "  Model:      $MODEL_NAME"
 echo "  Checkpoint: $CHECKPOINT_PATH"

@@ -87,7 +87,8 @@ The main arguments in the script are grouped as follows.
 **Model and Distributed:**
 
 ```bash
---model-name giga_brain07            # Mapped to GigaBrain-0.7 config via config_map
+--model-name giga_brain07            # Mapped to GigaBrain-0.7 config via catalog
+--training-phase sft                 # Supervised fine-tuning
 --distributed-strategy fsdp          # FSDP2 distributed strategy
 --dtype float32                      # Training precision (GB0_DTYPE)
 --activation-checkpoint-module-patterns "$GB0_AC_PATTERNS"  # Modules with activation checkpointing
@@ -107,7 +108,6 @@ data.fast_tokenizer_path=$GB0_FAST_TOKENIZER  # FAST action tokenizer directory
 **Training:**
 
 ```bash
---trainer-type FinetuneTrainer
 --train-iters 100
 --per-device-batch-size 80
 --gradient-accumulation-steps 1

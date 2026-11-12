@@ -92,7 +92,7 @@
 - **[2026/10]** 🦾 开源 **[ego2robot](./tools/ego2robot/)** —— 实现第一人称人类操作视频到双臂机器人训练数据的转换管线，输出 **LeRobot v3.0** 格式，覆盖 **16 种机械臂本体**。
 - **[2026/09]** ✨ 新增 **[GLM-5.3-flash](./examples/glm5_next/)** 训练支持。
 - **[2026/09]** ✨ 新增 **[Kimi-K3](./examples/kimi_k3/)** 的 LLM 与 VLM BF16 训练支持。
-- **[2026/09]** ⚡ 新增经过优化的 **[DreamZero Wan2.2-5B FSDP recipe](./examples/dreamzero/finetuning/sft_dreamzero_wan22_5b_full_fsdp.sh)**，集成 cache-aware 数据加载、attention block 编译、冻结模块处理与 FSDP2 Delta-FP8 Param AllGather。
+- **[2026/09]** ⚡ 新增经过优化的 **[DreamZero Wan2.2-5B FSDP recipe](./examples/dreamzero/finetuning/run_dreamzero_wan22_5b_full_fsdp_finetune.sh)**，集成 cache-aware 数据加载、attention block 编译、冻结模块处理与 FSDP2 Delta-FP8 Param AllGather。
 - **[2026/08]** 🤖 新增 **[Wall-OSS-0.5](./examples/wall_oss_0_5/)** VLA 训练支持，并通过自定义融合算子提升训练吞吐。
 - **[2026/08]** 📄 发布 **[TAOT 论文](https://arxiv.org/abs/2608.03676)** —— 通过拓扑感知的动态专家副本放置，优化 **MoE** 训练中的专家并行（**EP**）负载不均衡，相较业界方案开销最大可降低 **74%**，案例实测 **1.43× 加速**。[[blog](https://baidu-baige.github.io/LoongForge/blog/2026-08-taot-topology-aware-expert-placement.html)]
 - **[2026/08]** ✨ 新增 **GLM-5.2** 训练支持，并提供 **[GLM-5.2 + MoonViT](./configs/models/glm5.2_vit/)** 自定义组合[示例](./examples/glm5.2_vit/)，可用于为 GLM 扩展多模态能力。
@@ -279,7 +279,7 @@ export TOKENIZER_PATH=/workspace/data/paligemma-3b-pt-224
 export DATA_PATH=/workspace/data/libero_10
 export OUTPUT_DIR=/workspace/data/outputs/pi05
 
-bash examples/pi05/finetuning/sft_pi05_ddp.sh
+bash examples/pi05/finetuning/run_pi05_ddp_finetune.sh
 ```
 
 日志与 TensorBoard 数据保存在 `OUTPUT_DIR` 下。FSDP / ZeRO-1 启动方式与 LIBERO 评测见 [Pi0.5 教程](https://loongforge.readthedocs.io/zh-cn/latest/embodied_tutorial/quick_start_pi05.html)。

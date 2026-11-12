@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """Tensor-wise distributed optimizer, driven by a tensor_wise trainer
-(``--trainer-type LingbotVlaV2Trainer``) on ``--distributed-strategy ddp``.
+(for example ``LingbotVlaV2Trainer``) on ``--distributed-strategy ddp``.
 
 Compute replicas stay complete on every rank and no tensor is split: each
 parameter is assigned whole to one owner, gradients are reduced to that owner,

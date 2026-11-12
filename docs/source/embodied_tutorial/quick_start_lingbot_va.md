@@ -34,7 +34,7 @@ This project follows the same offline preprocessing scheme as the official LingB
 
 ### 2.1 Launch Training
 
-Training scripts: `examples/lingbot_va/finetuning/sft_lingbot_va_robotwin_fsdp.sh` and `examples/lingbot_va/finetuning/sft_lingbot_va_libero_fsdp.sh`. Their defaults are the recipe behind the results in this guide (initialize from `lingbot-va-base`, FP32 gradient reduction); only the paths need to be set:
+Training scripts: `examples/lingbot_va/finetuning/run_lingbot_va_robotwin_fsdp_finetune.sh` and `examples/lingbot_va/finetuning/run_lingbot_va_libero_fsdp_finetune.sh`. Their defaults are the recipe behind the results in this guide (initialize from `lingbot-va-base`, FP32 gradient reduction); only the paths need to be set:
 
 ```bash
 cd /path/to/LoongForge
@@ -44,17 +44,15 @@ CHECKPOINT_PATH=/path/to/lingbot-va-base \
 DATA_PATH=/path/to/robotwin-clean-and-aug-lerobot \
 OUTPUT_DIR=/path/to/outputs/lingbot_va_robotwin \
 SAVE_INTERVAL=2000 \
-bash examples/lingbot_va/finetuning/sft_lingbot_va_robotwin_fsdp.sh
-
+bash examples/lingbot_va/finetuning/run_lingbot_va_robotwin_fsdp_finetune.sh
 # LIBERO-Long: 5000 steps, 8 GPUs x GA 10 = global batch 80
 CHECKPOINT_PATH=/path/to/lingbot-va-base \
 DATA_PATH=/path/to/libero-long-lerobot \
 OUTPUT_DIR=/path/to/outputs/lingbot_va_libero \
 SAVE_INTERVAL=1000 \
-bash examples/lingbot_va/finetuning/sft_lingbot_va_libero_fsdp.sh
-
+bash examples/lingbot_va/finetuning/run_lingbot_va_libero_fsdp_finetune.sh
 # Smoke test: run only 20 steps to validate the training pipeline
-TRAIN_ITERS=20 bash examples/lingbot_va/finetuning/sft_lingbot_va_robotwin_fsdp.sh
+TRAIN_ITERS=20 bash examples/lingbot_va/finetuning/run_lingbot_va_robotwin_fsdp_finetune.sh
 ```
 
 Checkpoints are saved in DCP format under `$OUTPUT_DIR/checkpoints/steps_<N>`; to resume after an interruption, rerun with the same `OUTPUT_DIR` and append `--resume`. The trailing `"$@"` of the scripts is passed through to `train.py` verbatim, so any training argument can be overridden.

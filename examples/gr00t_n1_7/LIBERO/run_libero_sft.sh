@@ -146,7 +146,7 @@ for suite in "${SUITES[@]}"; do
     )
 
     TRAINING_ARGS=(
-        --trainer-type GrootN1d7Trainer
+        --training-phase sft
         --save-processor-config
         --train-iters "$TRAIN_ITERS"
         --per-device-batch-size "$PER_DEVICE_BATCH_SIZE"

@@ -12,7 +12,7 @@
 #     bash examples/wall_oss_0_5/finetuning/compute_norm_stats.sh
 #   export NORM_STATS_PATH=/workspace/datasets/libero_norm_stats.json
 #Usage:
-#   bash examples/wall_oss_0_5/finetuning/sft_wall_oss_0_5_dmuon_fsdp8.sh
+#   bash examples/wall_oss_0_5/finetuning/run_wall_oss_dmuon_fsdp8.sh
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -87,7 +87,7 @@ DATA_ARGS=(
 )
 
 TRAINING_ARGS=(
-    --trainer-type FinetuneTrainer
+    --training-phase sft
     --train-iters "${TRAIN_ITERS:-40}"
     --per-device-batch-size "${PER_DEVICE_BATCH:-32}"
     --gradient-accumulation-steps 1

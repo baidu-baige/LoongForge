@@ -14,7 +14,7 @@
 | `configs/models/` | 模型默认 YAML 配置目录，包含 `model:` / `data:` 两个顶层配置段 |
 | `loongforge/train.py` | 训练入口，负责解析配置、构建 Trainer 并启动训练 |
 | `loongforge/training/torch_args.py` 与 `loongforge/training/embodied/args.py` | 通用训练参数定义文件，负责生成 shell CLI |
-| `loongforge/training/torch_args.py` | 模型配置路由表，将 `--model-name` 绑定到 YAML、`ModelConfig` 与 `DataConfig` |
+| `loongforge/models/catalog.py` | 模型配置路由表，将 `--model-name` 绑定到 YAML、`ModelConfig` 与 `DataConfig` |
 | `loongforge/models/embodied/` | 模型组网、模型注册 |
 | `loongforge/data/embodied/` | 数据处理相关功能 |
 
@@ -51,7 +51,7 @@ torchrun "${DISTRIBUTED_ARGS[@]}" \
 示例：
 
 ```bash
-bash examples/pi05/finetuning/sft_pi05_ddp.sh \
+bash examples/pi05/finetuning/run_pi05_ddp_finetune.sh \
     --train-iters 10000 \
     --per-device-batch-size 8 \
     model.action_horizon=64 \
@@ -143,7 +143,8 @@ model.forward(batch)
 
 | 功能 | 配置项 | 默认值 | 取值 / 类型 | 说明 |
 | --- | --- | --- | --- | --- |
-| 选择模型 | `--model-name` | `None` | `torch_args.py` 中注册的模型名 | 选择模型 schema、默认 YAML、`ModelConfig` 与 `DataConfig` |
+| 选择模型 | `--model-name` | `None` | `catalog.py` 中注册的模型名 | 选择模型 schema、默认 YAML、`ModelConfig` 与 `DataConfig` |
+| 选择训练阶段 | `--training-phase` | `sft` | `pretrain`、`sft` | 选择该模型家族在当前阶段登记的 trainer |
 | 指定 YAML | `--config-file` | `None` | YAML 文件路径 | 覆盖 `--model-name` 对应的默认 YAML |
 | 指定 tokenizer | `--tokenizer-path` | `None` | 本地路径或 HF repo id | 设置 tokenizer 路径，并同步到 `TOKENIZER_PATH` 环境变量 |
 
@@ -228,7 +229,7 @@ Fused Adam 加速实现说明：
 `muon` 对 2-D 权重用 Muon，其余参数（bias、norm、3-D tensor，以及名字含 `embed` 或 `lm_head` 的权重）用 AdamW。任何 DDP trainer 都能用，例如：
 
 ```bash
---trainer-type FinetuneTrainer \
+--training-phase sft \
 --distributed-strategy ddp \
 --optimizer muon
 ```
@@ -246,7 +247,7 @@ Fused Adam 加速实现说明：
 示例：
 
 ```bash
-bash examples/pi05/finetuning/sft_pi05_ddp.sh \
+bash examples/pi05/finetuning/run_pi05_ddp_finetune.sh \
     --lr-base 1.0e-4 \
     --lr-group "model.backbone=1.0e-5,model.action_head=1.0e-4"
 ```
@@ -278,7 +279,7 @@ Checkpoint 模块提供以下能力：
 续训示例：
 
 ```bash
-bash examples/pi05/finetuning/sft_pi05_ddp.sh \
+bash examples/pi05/finetuning/run_pi05_ddp_finetune.sh \
     --output-dir /path/to/previous_run \
     --resume
 ```
@@ -316,7 +317,7 @@ Trainer 模块负责训练生命周期编排，包括分布式上下文初始化
 
 ### 4.1 Trainer 选择
 
-训练器由模型和训练阶段决定：每个家族在自己的 trainer 模块里用 `@register_model_trainer(..., engine="torch")` 登记，没有专属 trainer 的家族使用 `FinetuneTrainer`。`--trainer-type` 按类名覆盖这个选择（例如 `--trainer-type TensorWiseTrainer`），可选值为该阶段下以 `engine="torch"` 登记过的类。若涉及多数据流、特殊 loss 组合或非标准 step 调度，在新模块里登记自定义 Trainer 类，并把该模块加入 `loongforge/training/trainer_builder.py` 的导入列表。
+训练器由模型和 `--training-phase`（默认 `sft`）决定：每个家族在自己的 trainer 模块里用 `@register_model_trainer(..., engine="torch")` 登记，没有专属 trainer 的家族使用 `FinetuneTrainer`。`--trainer-type` 用于选择没有登记家族的 trainer，目前只有 `TensorWiseTrainer`；家族自己的 trainer 由模型决定，不能按名字选。若涉及多数据流、特殊 loss 组合或非标准 step 调度，在新模块里登记自定义 Trainer 类，并把该模块加入 `loongforge/training/trainer_builder.py` 的导入列表。
 
 ### 4.2 分布式策略
 
@@ -337,7 +338,7 @@ Trainer 模块负责训练生命周期编排，包括分布式上下文初始化
 DDP 示例：
 
 ```bash
-bash examples/pi05/finetuning/sft_pi05_ddp.sh \
+bash examples/pi05/finetuning/run_pi05_ddp_finetune.sh \
     --distributed-strategy ddp \
     --dtype bfloat16
 ```
@@ -345,7 +346,7 @@ bash examples/pi05/finetuning/sft_pi05_ddp.sh \
 FSDP 示例：
 
 ```bash
-bash examples/pi05/finetuning/sft_pi05_fsdp.sh \
+bash examples/pi05/finetuning/run_pi05_fsdp_finetune.sh \
     --distributed-strategy fsdp \
     --dtype bfloat16
 ```
@@ -353,7 +354,7 @@ bash examples/pi05/finetuning/sft_pi05_fsdp.sh \
 DDP + ZeRO-1 示例：
 
 ```bash
-bash examples/pi05/finetuning/sft_pi05_ddp.sh \
+bash examples/pi05/finetuning/run_pi05_ddp_finetune.sh \
     --distributed-strategy ddp \
     --zero-optimizer
 ```
@@ -387,7 +388,7 @@ bash examples/pi05/finetuning/sft_pi05_ddp.sh \
 示例：
 
 ```bash
-bash examples/pi05/finetuning/sft_pi05_ddp.sh \
+bash examples/pi05/finetuning/run_pi05_ddp_finetune.sh \
     --distributed-strategy ddp \
     --no-ddp-find-unused-parameters \
     --ddp-static-graph
@@ -428,10 +429,10 @@ Delta-FP8 只改变 FSDP 参数通信精度，模型计算仍使用 FSDP 混合�
 
 tensor_wise（`TensorWiseOptimizer`）是 DDP 下的一种分布式优化器：每个 rank 上保留完整的计算副本，不切分任何 tensor。每个参数整体指定一个 owner rank：梯度 reduce 到 owner，owner 更新自己的 fp32 master 和优化器状态，再把更新后的参数 broadcast 回各 rank。它接管梯度通信，因此替代 DDP wrapper，与 `--zero-optimizer` 是二选一的关系。相比 `ddp` + `--zero-optimizer`，它用 reduce 代替 all-reduce，参数发布可用 bf16 或 fp8，并且两段通信都与计算重叠。owner 持有整个 tensor，因此 Muon 的 Newton-Schulz 在 owner 上算一次即可，不像按元素切分的 ZeRO-1 那样需要先 gather 矩阵。"Tensor-wise" 指分配单位，与 Megatron `LayerWiseDistributedOptimizer` 中的 "layer-wise" 同义；通信仍按 owner 对齐的 bucket 进行。
 
-目前 `lingbot_vla_v2` 使用 tensor_wise。它由 trainer 启用，不需要额外开关：选择 `LingbotVlaV2Trainer` 即构建 `TensorWiseOptimizer`：
+目前 `lingbot_vla_v2` 使用 tensor_wise。它由 trainer 启用，不需要额外开关：`lingbot_vla_v2` 的家族 trainer `LingbotVlaV2Trainer` 会构建 `TensorWiseOptimizer`：
 
 ```bash
---trainer-type LingbotVlaV2Trainer \
+--training-phase sft \
 --distributed-strategy ddp \
 --optimizer muon
 ```
@@ -449,7 +450,7 @@ tensor_wise（`TensorWiseOptimizer`）是 DDP 下的一种分布式优化器：�
 
 `param_sync_fp8_*` 与 `param_sync_bf16_with_fp8` 只在 `fp8_e4m3_delta` 下生效。
 
-要让其他模型使用 tensor_wise，先用 `--trainer-type TensorWiseTrainer`（`trainers/custom/tensor_wise_trainer.py`）。它不需要模型专属代码，已在 FastWAM 和 Pi0.5 上端到端跑通；用于其他模型前，请先核对下方约束。参数保持 `--dtype`，`--optimizer` 指定的优化器在 fp32 master 上运行，因此 loss 与 `--dtype` 下的 DDP 不一致（后者直接更新低精度参数）。需要自定义精度分类、对 3-D tensor（如 MoE 专家堆叠）用 Muon 或 compile 的模型，参照 `LingbotVlaV2Trainer` 继承它并返回 `ParameterClassPolicy` 作为参数策略；继承 `TensorWiseTrainer` 即可获得它的参数校验。两种方式下，模型 config 里的 `tensor_wise: TensorWiseConfig` 字段都承载上述参数；没有该字段时使用默认值。
+要让其他模型使用 tensor_wise，先用 `--trainer-type TensorWiseTrainer`（`training/embodied/custom/tensor_wise_trainer.py`）。它不需要模型专属代码，已在 FastWAM 和 Pi0.5 上端到端跑通；用于其他模型前，请先核对下方约束。参数保持 `--dtype`，`--optimizer` 指定的优化器在 fp32 master 上运行，因此 loss 与 `--dtype` 下的 DDP 不一致（后者直接更新低精度参数）。需要自定义精度分类、对 3-D tensor（如 MoE 专家堆叠）用 Muon 或 compile 的模型，参照 `LingbotVlaV2Trainer` 继承它并返回 `ParameterClassPolicy` 作为参数策略；继承 `TensorWiseTrainer` 即可获得它的参数校验。两种方式下，模型 config 里的 `tensor_wise: TensorWiseConfig` 字段都承载上述参数；没有该字段时使用默认值。
 
 约束：
 

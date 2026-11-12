@@ -143,10 +143,12 @@ defaults, and validation. A Torch entry uses the tuple
 MODEL_CONFIG_REGISTRY = {
     "torch": {
         EmbodiedModelFamilies.PI05: {
-            "my-torch-model": (
+            "my_torch_model": (
                 "my_torch_model/my_torch_model.yaml",
-                "loongforge.models.my_torch_model.ModelConfig",
-                "loongforge.data.my_torch_model.DataConfig",
+                "loongforge.models.embodied.my_torch_model.model_configuration_my_torch_model"
+                ".MyTorchModelConfig",
+                "loongforge.data.embodied.my_torch_model.transforms.data_configuration_my_torch_model"
+                ".MyTorchDataConfig",
             ),
         },
     },
@@ -154,9 +156,11 @@ MODEL_CONFIG_REGISTRY = {
 ```
 
 The YAML `model_type` must match the family used by the Torch trainer
-registration. The registry group selects the engine before parsing; the
+registration. Torch keys use underscores: the lookup converts `-` to `_` before
+comparing. The registry group selects the engine before parsing; the
 default trainer is then selected by `(engine, model_type, training_phase)`.
-`--trainer-type` remains an optional Torch name override.
+`--trainer-type` selects only a Torch trainer registered without a model family,
+currently `TensorWiseTrainer`.
 
 ## 3. Supporting Custom Models (Using Wan as Example)
 Wan series model configurations are located in `configs/models/wan/`, for example:

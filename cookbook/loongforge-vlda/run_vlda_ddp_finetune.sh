@@ -57,7 +57,7 @@ fi
 
 ARGS=(
     --model-name "$MODEL_NAME"
-    --trainer-type VLDAFinetuneTrainer
+    --training-phase sft
     --dataset-format lerobot_datasets
     --dataset-strategy vlda
     --dataset-path "$DATA_PATH"

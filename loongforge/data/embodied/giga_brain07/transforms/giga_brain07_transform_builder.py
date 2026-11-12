@@ -8,7 +8,7 @@ Registers ``@register_transform_builder("giga_brain07")`` so the shared
 mirroring xvla's ``build_xvla_transforms``. This module is intentionally light:
 it imports only the registry at module load and defers the heavy
 ``GigaBrain07Transform`` import to builder call time, so importing the
-giga_brain07 transforms package (e.g. when ``train/config_map.py`` pulls the slim
+giga_brain07 transforms package (e.g. when ``models/catalog.py`` pulls the slim
 ``GigaBrain07DataConfig``) does not drag in the transform's model-side building
 blocks.
 """

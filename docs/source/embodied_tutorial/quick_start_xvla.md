@@ -51,7 +51,7 @@ Field descriptions:
 - `language_instruction_key`: language instruction field name.
 
 ## 2. Launch Training
-First set up the paths uniformly (refer to `examples/xvla/finetuning/sft_xvla_ddp.sh`):
+First set up the paths uniformly (refer to `examples/xvla/finetuning/run_xvla_ddp_finetune.sh`):
 
 ```bash
 cd /workspace/LoongForge
@@ -66,7 +66,7 @@ export OUTPUT_DIR=/workspace/outputs/xvla_ddp
 Single-node 8-GPU DDP fine-tuning:
 
 ```bash
-bash examples/xvla/finetuning/sft_xvla_ddp.sh
+bash examples/xvla/finetuning/run_xvla_ddp_finetune.sh
 ```
 Optimizations are enabled by default, in `configs/models/xvla/xvla.yaml`:
 
@@ -80,7 +80,8 @@ The main arguments in the script are grouped as follows.
 **Model and Distributed:**
 
 ```bash
---model-name xvla                    # Mapped to XVLA config via torch_args
+--model-name xvla                    # Mapped to XVLA config via catalog
+--training-phase sft                 # Supervised fine-tuning
 --distributed-strategy ddp           # DDP distributed strategy
 --dtype bfloat16                     # Training precision
 # GPUS_PER_NODE=8                    # Number of GPUs per node (script variable)
@@ -97,7 +98,6 @@ The main arguments in the script are grouped as follows.
 **Training:**
 
 ```bash
---trainer-type FinetuneTrainer
 --train-iters 40
 --gradient-accumulation-steps 1
 --lr-base 1e-4                       # Base learning rate

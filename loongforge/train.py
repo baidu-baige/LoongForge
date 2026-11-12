@@ -22,10 +22,6 @@ def main():
     # Let the selected engine report missing values.
     parser.add_argument("--model-name", nargs="?")
     args, _ = parser.parse_known_args(argv)
-    if args.model_name is None:
-        # Only Torch accepts model-name abbreviations.
-        parser.allow_abbrev = True
-        args, _ = parser.parse_known_args(argv)
 
     # Let the selected engine keep ownership of full argument validation and help.
     if args.model_name is None:

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ═══════════════════════════════════════════════════════════════
-# sft_fastwam_ddp_zero1.sh - FastWAM SFT Launch Script (DDP + ZeRO-1)
+# run_fastwam_sft_ddp_zero1_finetune.sh - FastWAM SFT Launch Script (DDP + ZeRO-1)
 #
 # Everything is driven by environment variables; the script forwards "$@" to
 # train.py. Config knobs that are not CLI flags must go through the dotlist
@@ -24,7 +24,7 @@
 #   ZERO_MASTER_PARAM_DTYPE=fp32 SAVE_FORMAT=dcp ASYNC_SAVE=1 \
 #   EXTRA_MODEL_OVERRIDES="model.mot_compile_blocks=none" \
 #   EXTRA_DATA_OVERRIDES="data.norm_stats_path=/path/to/dataset_stats.json" \
-#   bash sft_fastwam_ddp_zero1.sh --lr-base 1e-4 --lr-warmup-iters 1000 --min-lr 1e-6
+#   bash run_fastwam_sft_ddp_zero1_finetune.sh --lr-base 1e-4 --lr-warmup-iters 1000 --min-lr 1e-6
 # The "faithful" variant (acceleration switches off) additionally sets
 #   EXTRA_MODEL_OVERRIDES="model.mot_compile_blocks=none model.disable_train_autocast=false model.drop_all_true_cross_attn_mask=false"
 #   EXTRA_DATA_OVERRIDES="data.image_normalize_mode=identity data.image_resize_strategy=resize_only data.normalization_mode=min_max"
@@ -105,7 +105,7 @@ SAVE_FORMAT=${SAVE_FORMAT:-}
 ASYNC_SAVE=${ASYNC_SAVE:-0}
 
 TRAINING_ARGS=(
-    --trainer-type FinetuneTrainer
+    --training-phase sft
     --train-iters "$TRAIN_ITERS"
     --per-device-batch-size "$PER_DEVICE_BATCH_SIZE"
     --gradient-accumulation-steps "$GRADIENT_ACCUMULATION_STEPS"

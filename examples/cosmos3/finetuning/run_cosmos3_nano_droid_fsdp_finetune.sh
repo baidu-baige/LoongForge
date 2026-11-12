@@ -3,16 +3,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ═══════════════════════════════════════════════════════════════
-# sft_pi05_ddp_zero1.sh - pi05 VLA SFT Launch Script (DDP + ZeRO1)
+# run_cosmos3_nano_droid_fsdp_finetune.sh - Cosmos3-Nano DROID Action-Policy SFT (FSDP2)
 #
-# Mirrors the config from examples/pi05/finetuning/sft_pi05.sh
-# but uses the embodied training framework (loongforge/train.py).
+# DROID joint_pos 8D + use_state action policy SFT, mirroring cosmos's
+# launch_sft_action_policy_droid.sh recipe.
 #
 # Usage:
-#   bash sft_pi05_ddp_zero1.sh
-#   TRAIN_ITERS=50 bash sft_pi05_ddp_zero1.sh                          # override via env
-#   bash sft_pi05_ddp_zero1.sh --train-iters 50000                     # override a training param (flag form)
-#   bash sft_pi05_ddp_zero1.sh model.state_dim=8 data.image_size=448   # override YAML model:/data: fields (dotlist form)
+#   bash run_cosmos3_nano_droid_fsdp_finetune.sh
+#   TRAIN_ITERS=50 bash run_cosmos3_nano_droid_fsdp_finetune.sh    # override via env
+#   bash run_cosmos3_nano_droid_fsdp_finetune.sh --train-iters 50  # override a training param (flag form)
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -26,7 +25,7 @@ export LOCAL_VLA_ARTIFACTS_ROOT=${LOCAL_VLA_ARTIFACTS_ROOT:-"/ssd2/loongforge_em
 # Cluster schedulers commonly export WORLD_SIZE (node count) and RANK (node rank).
 GPUS_PER_NODE=${GPUS_PER_NODE:-8}
 MASTER_ADDR=${MASTER_ADDR:-"localhost"}
-MASTER_PORT=${MASTER_PORT:-"29500"}
+MASTER_PORT=${MASTER_PORT:-"29510"}
 NNODES=${NNODES:-${WORLD_SIZE:-1}}
 NODE_RANK=${NODE_RANK:-${RANK:-0}}
 
@@ -38,60 +37,62 @@ DISTRIBUTED_ARGS=(
     --master_port "$MASTER_PORT"
 )
 
-export CUDA_DEVICE_MAX_CONNECTIONS=${CUDA_DEVICE_MAX_CONNECTIONS:-1}
 export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
 
 # ── Paths ─────────────────────────────────────────────────────
-TOKENIZER_PATH=${TOKENIZER_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/pi05/tokenizers/paligemma-3b-pt-224"}
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/pi05/models/pi05_base"}
-DATA_PATH=${DATA_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/pi05/datasets/libero"}
-OUTPUT_DIR=${OUTPUT_DIR:-"$LOONGFORGE_PATH/outputs/pi05_ddp_zero1"}
-TENSORBOARD_DIR=${TENSORBOARD_DIR:-"$OUTPUT_DIR/tensorboard"}
+TOKENIZER_PATH=${TOKENIZER_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/cosmos3/tokenizers/Qwen3-VL-8B-Instruct"}
+VAE_PATH=${VAE_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/cosmos3/models/Wan2.2_VAE/Wan2.2_VAE.pth"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/cosmos3/models/Cosmos3-Nano"}
+DATA_PATH=${DATA_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/cosmos3/datasets/Cosmos3-DROID-subset"}
+OUTPUT_DIR=${OUTPUT_DIR:-"$LOONGFORGE_PATH/outputs/cosmos3_nano"}
 
 # ── Model config ──────────────────────────────────────────────
-MODEL_NAME=${MODEL_NAME:-"pi05"}
+MODEL_NAME=${MODEL_NAME:-"cosmos3_nano"}
 MODEL_CONFIG_ARGS=(
     --model-name "$MODEL_NAME"
 )
 
 # ── Data params ───────────────────────────────────────────────
-NUM_WORKERS=${NUM_WORKERS:-16}
+NUM_WORKERS=${NUM_WORKERS:-8}
 DATA_ARGS=(
     --dataset-format lerobot_datasets
+    --dataset-strategy cosmos3_droid
     --dataset-path "$DATA_PATH"
     --tokenizer-path "$TOKENIZER_PATH"
-    --robot-type libero_franka
-    --batch-drop-last
     --num-workers "$NUM_WORKERS"
+    #--no-sampler-shuffle
 )
 
-# ── Training params (aligned with examples/pi05/finetuning/sft_pi05.sh) ──
-# Old Megatron config: micro-batch-size=16, global-batch-size=128, 8 GPUs
-# => gradient-accumulation-steps = 128 / (16 * 8) = 1
-TRAIN_ITERS=${TRAIN_ITERS:-20}
-PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-16}
+# ── Training params ───────────────────────────────────────────
+TRAIN_ITERS=${TRAIN_ITERS:-50}
+PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-4}
 GRADIENT_ACCUMULATION_STEPS=${GRADIENT_ACCUMULATION_STEPS:-1}
 SAVE_INTERVAL=${SAVE_INTERVAL:-0}
-SEED=${SEED:-1234}
+SEED=${SEED:-42}
+export PYTHONHASHSEED=$SEED
+export COSMOS3_TV_TRANSFORMS=v2
 
 TRAINING_ARGS=(
-    --trainer-type FinetuneTrainer
+    --init-on-meta
+    --training-phase sft
     --train-iters "$TRAIN_ITERS"
     --per-device-batch-size "$PER_DEVICE_BATCH_SIZE"
     --gradient-accumulation-steps "$GRADIENT_ACCUMULATION_STEPS"
     --seed "$SEED"
+    --set-seed-by-rank
+    #--deterministic-mode
+    --disable-tf32
     --output-dir "$OUTPUT_DIR"
     # Learning rate
-    --lr-base 2.5e-8
-    --min-lr 0
-    --lr-decay-style cosine
+    --lr-group net.action2llm=1e-3,net.llm2action=1e-3,net.action_modality_embed=1e-3,net=2e-4
+    --lr-decay-style lambda_linear
     --lr-warmup-iters 0
     # Optimizer
-    --optimizer AdamW
+    --optimizer TorchFusedAdamW
     --clip-grad 1.0
-    --weight-decay 0.01
+    --weight-decay 0.05
     --adam-beta1 0.9
-    --adam-beta2 0.95
+    --adam-beta2 0.99
     --adam-eps 1e-8
     # Checkpoint
     --save-interval "$SAVE_INTERVAL"
@@ -99,20 +100,25 @@ TRAINING_ARGS=(
 )
 
 DISTRIBUTED_TRAINING_ARGS=(
-    --distributed-strategy ddp
-    --zero-optimizer
+    --distributed-strategy fsdp
     --dtype bfloat16
+    --fsdp-reduce-dtype bf16
+    --fsdp-wrap-modules MoTDecoderLayer
+    --fsdp-ignored-param-names embed_tokens lm_head \
+            mlp.gate_proj mlp.up_proj mlp.down_proj \
+            q_proj.weight k_proj.weight v_proj.weight
 )
 
 # ── Logging params ────────────────────────────────────────────
 LOGGING_ARGS=(
     --log-interval 1
-    --tensorboard-dir "$TENSORBOARD_DIR"
+    --wandb-project cosmos3-nano
+    --wandb-mode disabled
 )
 
 # ── Launch ────────────────────────────────────────────────────
 echo "════════════════════════════════════════════════════════════"
-echo "  LoongForge pi05 Training (DDP + ZeRO1)"
+echo "  Cosmos3-Nano DROID Action-Policy SFT (FSDP2)"
 echo "  GPUs:       $GPUS_PER_NODE x $NNODES node(s)"
 echo "  Model:      $MODEL_NAME"
 echo "  Checkpoint: $CHECKPOINT_PATH"
@@ -126,6 +132,11 @@ PYTHONPATH=$LOONGFORGE_PATH:${PYTHONPATH:-} \
     "${MODEL_CONFIG_ARGS[@]}" \
     "${DATA_ARGS[@]}" \
     "${TRAINING_ARGS[@]}" \
+    "model.qwen3_vl_path=$TOKENIZER_PATH" \
+    "model.vae_path=$VAE_PATH" \
+    "model.compile_model=true" \
+    "data.use_image_augmentation=true" \
+    "data.colorjitter_on_gpu=true" \
     "${DISTRIBUTED_TRAINING_ARGS[@]}" \
     "${LOGGING_ARGS[@]}" \
     "$@"

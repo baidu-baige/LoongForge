@@ -46,6 +46,7 @@ from loongforge.training.cli_utils import (
     parse_optional_int_list,
     parse_positive_int,
 )
+from loongforge.data.constants import TrainingPhase
 from loongforge.training.embodied.args import _EmbodiedDataArgs, _EmbodiedRoutingArgs
 from loongforge.models.catalog import get_model_schema, get_config_path
 from loongforge.engines.torch.utils.global_vars import (
@@ -168,15 +169,23 @@ def parse_dtype_from_str(dtype_name: str) -> torch.dtype:
 
 @dataclass(frozen=True)
 class _ModelRoutingArgs:
-    """Model routing: which YAML / trainer / tokenizer to select."""
+    """Model routing: which YAML, training phase, and tokenizer to select."""
 
-    # ── Model routing (which YAML / trainer / tokenizer) ──
+    # ── Model routing (which YAML / phase / tokenizer) ──
     model_name: Optional[str] = field(
         default=None,
         metadata={
             "help": "Model identifier (e.g. 'pi05', 'gr00t_n1_6'). Selects the "
                     "ModelConfig/DataConfig classes and default YAML via "
                     "MODEL_CONFIG_REGISTRY. Required."
+        },
+    )
+    training_phase: str = field(
+        default=TrainingPhase.SFT,
+        metadata={
+            "choices": [TrainingPhase.PRETRAIN, TrainingPhase.SFT],
+            "help": "Training phase. Selects the trainer registered for the "
+                    "model family and this phase.",
         },
     )
     config_file: Optional[str] = field(
@@ -2047,6 +2056,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="LoongForge Embodied Training",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        allow_abbrev=False,
     )
     add_args_from_dataclass(parser, TrainingArgs)
     parser.add_argument(

@@ -16,8 +16,8 @@ class _EmbodiedRoutingArgs:
     trainer_type: Optional[str] = field(
         default=None,
         metadata={
-            "help": "Optional. Overrides the trainer registered for the model and "
-                    "phase, e.g. TensorWiseTrainer."
+            "help": "Optional. Selects a trainer registered without a model family, "
+                    "e.g. TensorWiseTrainer, instead of the model's default trainer."
         },
     )
 

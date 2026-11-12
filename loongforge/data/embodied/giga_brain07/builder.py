@@ -15,7 +15,7 @@ than a parallel reader:
                          (giga's transform consumes it for stats / fps /
                          robot_type), via the shared reader's ``meta_name`` param.
 
-Registered as the ``"giga_brain07"`` strategy in ``dataset_builder`` and
+Registered as the ``"giga_brain07"`` strategy in ``registry`` and
 re-exported from the package root (``giga_brain07``) so the custom trainer and
 the shared dispatcher both resolve ``build_giga_brain07_dataset`` the same way
 ``lingbot_vla_v2`` exposes ``build_lingbot_vla_v2_dataset``.

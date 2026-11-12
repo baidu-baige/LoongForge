@@ -34,7 +34,7 @@
 
 ### 2.1 启动训练
 
-训练脚本：`examples/lingbot_va/finetuning/sft_lingbot_va_robotwin_fsdp.sh`、`examples/lingbot_va/finetuning/sft_lingbot_va_libero_fsdp.sh`。两个脚本的默认值就是本文结果所用的配方（从 `lingbot-va-base` 起训、FP32 梯度 reduce），只需传入路径：
+训练脚本：`examples/lingbot_va/finetuning/run_lingbot_va_robotwin_fsdp_finetune.sh`、`examples/lingbot_va/finetuning/run_lingbot_va_libero_fsdp_finetune.sh`。两个脚本的默认值就是本文结果所用的配方（从 `lingbot-va-base` 起训、FP32 梯度 reduce），只需传入路径：
 
 ```bash
 cd /path/to/LoongForge
@@ -44,17 +44,15 @@ CHECKPOINT_PATH=/path/to/lingbot-va-base \
 DATA_PATH=/path/to/robotwin-clean-and-aug-lerobot \
 OUTPUT_DIR=/path/to/outputs/lingbot_va_robotwin \
 SAVE_INTERVAL=2000 \
-bash examples/lingbot_va/finetuning/sft_lingbot_va_robotwin_fsdp.sh
-
+bash examples/lingbot_va/finetuning/run_lingbot_va_robotwin_fsdp_finetune.sh
 # LIBERO-Long：5000 步，8 卡 x GA 10 = global batch 80
 CHECKPOINT_PATH=/path/to/lingbot-va-base \
 DATA_PATH=/path/to/libero-long-lerobot \
 OUTPUT_DIR=/path/to/outputs/lingbot_va_libero \
 SAVE_INTERVAL=1000 \
-bash examples/lingbot_va/finetuning/sft_lingbot_va_libero_fsdp.sh
-
+bash examples/lingbot_va/finetuning/run_lingbot_va_libero_fsdp_finetune.sh
 # 冒烟测试：只跑 20 步验证训练链路
-TRAIN_ITERS=20 bash examples/lingbot_va/finetuning/sft_lingbot_va_robotwin_fsdp.sh
+TRAIN_ITERS=20 bash examples/lingbot_va/finetuning/run_lingbot_va_robotwin_fsdp_finetune.sh
 ```
 
 checkpoint 以 DCP 格式保存在 `$OUTPUT_DIR/checkpoints/steps_<N>`；中断后用同一个 `OUTPUT_DIR` 追加 `--resume` 即可续训。脚本末尾的 `"$@"` 会原样透传给 `train.py`，可用于覆盖任意训练参数。

@@ -27,11 +27,11 @@ def validate_tensor_wise_args(training_args, trainer: str) -> None:
     # Compute replicas are complete on every rank, i.e. data parallel; the
     # optimizer replaces the DDP wrapper rather than an FSDP sharding.
     if training_args.distributed_strategy != "ddp":
-        raise ValueError(f"--trainer-type {trainer} requires --distributed-strategy=ddp.")
+        raise ValueError(f"{trainer} requires --distributed-strategy=ddp.")
     # Both shard the optimizer state; they are alternatives, not layers.
     if training_args.zero_optimizer:
         raise ValueError(
-            f"--trainer-type {trainer} shards the optimizer state with "
+            f"{trainer} shards the optimizer state with "
             "TensorWiseOptimizer and is incompatible with --zero-optimizer."
         )
     set_ddp_only = [
@@ -40,18 +40,18 @@ def validate_tensor_wise_args(training_args, trainer: str) -> None:
     ]
     if set_ddp_only:
         raise ValueError(
-            f"--trainer-type {trainer} replaces the DDP wrapper; remove: "
+            f"{trainer} replaces the DDP wrapper; remove: "
             + ", ".join("--" + name.replace("_", "-") for name in set_ddp_only)
         )
     if training_args.fp8:
         raise ValueError(
-            f"--fp8 is not supported with --trainer-type {trainer}: tensor_wise "
+            f"--fp8 is not supported with {trainer}: tensor_wise "
             "replaces wrap_model, which is where FP8 conversion happens."
         )
     # The parameter plan copies the masters while the trainer wraps the model,
     # and meta tensors are only materialized after that.
     if training_args.init_on_meta:
-        raise ValueError(f"--init-on-meta is not supported with --trainer-type {trainer}.")
+        raise ValueError(f"--init-on-meta is not supported with {trainer}.")
     # The rank-local masters only survive in the dcp layout. The trainer refuses
     # this at save time; failing here avoids finding out hours in.
     if (
@@ -60,7 +60,7 @@ def validate_tensor_wise_args(training_args, trainer: str) -> None:
         and (training_args.use_lora or training_args.save_format != "dcp")
     ):
         raise ValueError(
-            f"--trainer-type {trainer} training-state checkpoints require "
+            f"{trainer} training-state checkpoints require "
             "--save-format=dcp and no --use-lora; pass "
             "--no-save-training-state to export weights only."
         )

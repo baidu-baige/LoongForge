@@ -3,13 +3,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # ═══════════════════════════════════════════════════════════════
-# sft_fastwam_ddp.sh - FastWAM SFT Launch Script (DDP)
+# run_lingbot_va_libero_fsdp_finetune.sh - LingBot-VA LIBERO-Long post-training
+# with baseline-aligned data semantics.
+#
+# Set all data and checkpoint paths to existing local files; this script runs offline.
 #
 # Usage:
-#   bash sft_fastwam_ddp.sh
-#   TRAIN_ITERS=50 bash sft_fastwam_ddp.sh                          # override via env
-#   bash sft_fastwam_ddp.sh --train-iters 50                        # override a training param (flag form)
-#   bash sft_fastwam_ddp.sh model.action_dit_pretrained_path=/path   # override YAML model:/data: fields (dotlist form)
+#   bash run_lingbot_va_libero_fsdp_finetune.sh
+#   TRAIN_ITERS=50 bash run_lingbot_va_libero_fsdp_finetune.sh   # override via env
+#   bash run_lingbot_va_libero_fsdp_finetune.sh --train-iters 50 # override a training param (flag form)
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -17,14 +19,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ── Environment ───────────────────────────────────────────────
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"$(cd "$SCRIPT_DIR/../../.." && pwd)"}
-export LOCAL_VLA_ARTIFACTS_ROOT=${LOCAL_VLA_ARTIFACTS_ROOT:-"/ssd2/loongforge_embodied_ci/vla_artifacts"}
-export DIFFSYNTH_MODEL_BASE_PATH=${DIFFSYNTH_MODEL_BASE_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/fastwam/models/"}
+export LOCAL_VLA_ARTIFACTS_ROOT=${LOCAL_VLA_ARTIFACTS_ROOT:-"/path/to/vla_artifacts"}
 
 # ── Distributed ───────────────────────────────────────────────
 # Cluster schedulers commonly export WORLD_SIZE (node count) and RANK (node rank).
 GPUS_PER_NODE=${GPUS_PER_NODE:-8}
 MASTER_ADDR=${MASTER_ADDR:-"localhost"}
-MASTER_PORT=${MASTER_PORT:-"29519"}
+MASTER_PORT=${MASTER_PORT:-"29500"}
 NNODES=${NNODES:-${WORLD_SIZE:-1}}
 NODE_RANK=${NODE_RANK:-${RANK:-0}}
 
@@ -36,20 +37,29 @@ DISTRIBUTED_ARGS=(
     --master_port "$MASTER_PORT"
 )
 
-export CUBLAS_WORKSPACE_CONFIG=${CUBLAS_WORKSPACE_CONFIG:-:4096:8}
-export CUDA_DEVICE_MAX_CONNECTIONS=${CUDA_DEVICE_MAX_CONNECTIONS:-1}
-
 # ── Paths ─────────────────────────────────────────────────────
-TOKENIZER_PATH=${TOKENIZER_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/fastwam/models/Wan2.2-TI2V-5B"}
-DATASET_PATH=${DATASET_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/fastwam/datasets/LIBERO-fastwam/libero_10_no_noops_lerobot"}
-OUTPUT_DIR=${OUTPUT_DIR:-"$LOONGFORGE_PATH/outputs/fastwam_sft_ddp"}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/lingbot_va/models/lingbot-va-base"}
+DATA_PATH=${DATA_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/lingbot_va/datasets/libero-long-lerobot"}
+EMPTY_EMB_PATH=${EMPTY_EMB_PATH:-"$DATA_PATH/empty_emb.pt"}
+OUTPUT_DIR=${OUTPUT_DIR:-"$LOONGFORGE_PATH/outputs/lingbot_va_libero"}
 
-PRETRAINED_CHECKPOINT=${PRETRAINED_CHECKPOINT:-}
-ACTION_DIT_PRETRAINED_PATH=${ACTION_DIT_PRETRAINED_PATH:-"$LOCAL_VLA_ARTIFACTS_ROOT/fastwam/models/ActionDiT_linear_interp_Wan22_alphascale_1024hdim.pt"}
-TEXT_EMBEDDING_CACHE_DIR=${TEXT_EMBEDDING_CACHE_DIR:-"$LOCAL_VLA_ARTIFACTS_ROOT/fastwam/datasets/text_embeds"}
+export NCCL_DEBUG=${NCCL_DEBUG:-WARN}
+export HF_DATASETS_OFFLINE=1
+export HF_HUB_OFFLINE=1
+export TRANSFORMERS_OFFLINE=1
+export WANDB_MODE=${WANDB_MODE:-disabled}
+export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
+
+# User-selectable LingBot features.
+export LINGBOT_BALANCED_SAMPLER=${LINGBOT_BALANCED_SAMPLER:-1}           # Balance variable-shape samples across ranks.
+export LINGBOT_FSDP_RESHARD=${LINGBOT_FSDP_RESHARD:-0}                   # 1 restores the framework-default FSDP reshard.
+export LINGBOT_FSDP_BF16_REDUCE=${LINGBOT_FSDP_BF16_REDUCE:-0}           # 1 reduces gradients in BF16 instead of FP32.
+export LINGBOT_VA_FIXED_MICROBATCH_RNG=${LINGBOT_VA_FIXED_MICROBATCH_RNG:-0}  # 1 shares timesteps/noise across microbatches.
+# Export the per-rank sample loading order for reproducibility checks.
+export LINGBOT_SAMPLE_ORDER_EXPORT_DIR=${LINGBOT_SAMPLE_ORDER_EXPORT_DIR:-}
 
 # ── Model config ──────────────────────────────────────────────
-MODEL_NAME=${MODEL_NAME:-"fastwam"}
+MODEL_NAME=${MODEL_NAME:-"lingbot_va_libero"}
 MODEL_CONFIG_ARGS=(
     --model-name "$MODEL_NAME"
 )
@@ -58,82 +68,88 @@ MODEL_CONFIG_ARGS=(
 NUM_WORKERS=${NUM_WORKERS:-16}
 DATA_ARGS=(
     --dataset-format lerobot_datasets
-    --dataset-strategy fastwam
-    --dataset-path "$DATASET_PATH"
-    --tokenizer-path "$TOKENIZER_PATH"
-    --robot-type libero_franka
+    --dataset-strategy lingbot_va
+    --no-batch-drop-last
+    --dataloader-seed-workers
+    --dataloader-multiprocessing-context fork
     --num-workers "$NUM_WORKERS"
-    --lerobotdataset-version v2.1
-    --video-backend pyav
 )
 
 # ── Training params ───────────────────────────────────────────
-TRAIN_ITERS=${TRAIN_ITERS:-20}
+TRAIN_ITERS=${TRAIN_ITERS:-5000}
 PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-1}
-GRADIENT_ACCUMULATION_STEPS=${GRADIENT_ACCUMULATION_STEPS:-1}
-SAVE_INTERVAL=${SAVE_INTERVAL:-2000}
-SEED=${SEED:-3047}
+GRADIENT_ACCUMULATION_STEPS=${GRADIENT_ACCUMULATION_STEPS:-10}  # 8 GPUs x 1 x 10 = global batch 80
+SAVE_INTERVAL=${SAVE_INTERVAL:-0}
+SEED=${SEED:-42}
 
 TRAINING_ARGS=(
-    --trainer-type FinetuneTrainer
+    --training-phase sft
     --train-iters "$TRAIN_ITERS"
     --per-device-batch-size "$PER_DEVICE_BATCH_SIZE"
     --gradient-accumulation-steps "$GRADIENT_ACCUMULATION_STEPS"
     --seed "$SEED"
+    # Per-rank seeds so each rank draws its own timesteps/noise (see LINGBOT_VA_FIXED_MICROBATCH_RNG).
+    --set-seed-by-rank
     --output-dir "$OUTPUT_DIR"
     # Learning rate
-    --lr-base 1.0e-8
-    --lr-decay-style cosine_warmup_with_min_lr
-    --lr-warmup-iters 0
-    --min-lr 1.0e-9
+    --lr-base 1e-5
+    --min-lr 0.0
+    --lr-warmup-iters 10
+    --lr-decay-style constant_with_warmup
     # Optimizer
     --optimizer TorchFusedAdamW
-    --cudnn-benchmark
-    --clip-grad 1.0
-    --weight-decay 0.01
     --adam-beta1 0.9
     --adam-beta2 0.95
+    --weight-decay 0.1
+    --clip-grad 2.0
+    # Memory
+    --manual-gc
+    --manual-gc-interval 50
     # Checkpoint
     --save-interval "$SAVE_INTERVAL"
+    --save-format dcp
+    --no-async-save
+    --pretrained-checkpoint "$CHECKPOINT_PATH"
 )
 
-if [[ -n "$PRETRAINED_CHECKPOINT" ]]; then
-    TRAINING_ARGS+=(--pretrained-checkpoint "$PRETRAINED_CHECKPOINT")
-fi
-
 DISTRIBUTED_TRAINING_ARGS=(
-    --distributed-strategy ddp
-    --no-ddp-find-unused-parameters
-    --ddp-static-graph
-    --ddp-gradient-as-bucket-view
-    --no-ddp-broadcast-buffers
-    --ddp-bucket-cap-mb 200
+    --distributed-strategy fsdp
     --dtype bfloat16
-    --no-check-for-nan-in-loss-and-grad
+    --fsdp-wrap-modules WanTransformerBlock
+    --fsdp-min-param-num 1000000000000000
+    --fsdp-reshard-default none
+    --fsdp-reduce-dtype fp32
+    --fsdp-unshard-param-dtype bfloat16
+    # Keep FSDP unit inputs in their incoming dtype; the model casts what it needs itself.
+    --no-fsdp-cast-forward-inputs
 )
 
 # ── Logging params ────────────────────────────────────────────
 LOGGING_ARGS=(
-    --log-interval 10
-    --wandb-project loongforge-vla
-    --wandb-mode disabled
+    --log-interval 1
+    --detail-log-interval 20
+    # "=" form: the flag takes a list and would otherwise swallow the dotlist overrides.
+    --loss-log-rank=-1
 )
 
 # ── Model/data dotlist overrides ──────────────────────────────
-MODEL_DATA_OVERRIDES=()
-if [[ -n "$ACTION_DIT_PRETRAINED_PATH" ]]; then
-    MODEL_DATA_OVERRIDES+=("model.action_dit_pretrained_path=$ACTION_DIT_PRETRAINED_PATH")
-fi
-if [[ -n "$TEXT_EMBEDDING_CACHE_DIR" ]]; then
-    MODEL_DATA_OVERRIDES+=("data.text_embedding_cache_dir=$TEXT_EMBEDDING_CACHE_DIR")
-fi
+MODEL_DATA_OVERRIDES=(
+    "data.dataset_path=$DATA_PATH"
+    "data.empty_emb_path=$EMPTY_EMB_PATH"
+    model.num_layers=30
+    model.recompute_granularity=full
+    model.recompute_method=block
+    model.recompute_num_layers=30
+    model.lingbot_va_use_flex_attention=true
+)
 
 # ── Launch ────────────────────────────────────────────────────
 echo "════════════════════════════════════════════════════════════"
-echo "  LoongForge FastWAM SFT (DDP)"
+echo "  LoongForge LingBot-VA LIBERO-Long Post-Training (FSDP)"
 echo "  GPUs:       $GPUS_PER_NODE x $NNODES node(s)"
 echo "  Model:      $MODEL_NAME"
-echo "  Data:       $DATASET_PATH"
+echo "  Checkpoint: $CHECKPOINT_PATH"
+echo "  Data:       $DATA_PATH"
 echo "  Output:     $OUTPUT_DIR"
 echo "════════════════════════════════════════════════════════════"
 
@@ -145,5 +161,5 @@ PYTHONPATH=$LOONGFORGE_PATH:${PYTHONPATH:-} \
     "${TRAINING_ARGS[@]}" \
     "${DISTRIBUTED_TRAINING_ARGS[@]}" \
     "${LOGGING_ARGS[@]}" \
-    "${MODEL_DATA_OVERRIDES[@]+"${MODEL_DATA_OVERRIDES[@]}"}" \
+    "${MODEL_DATA_OVERRIDES[@]}" \
     "$@"

@@ -93,7 +93,7 @@ echo "════════════════════════�
 PYTHONPATH="$PYTHONPATH" torchrun "${DISTRIBUTED_ARGS[@]}" \
     "$LOONGFORGE_PATH/loongforge/train.py" \
     --model-name giga_brain07 \
-    --trainer-type FinetuneTrainer \
+    --training-phase sft \
     --dataset-format lerobot_datasets \
     --dataset-strategy giga_brain07 \
     --train-iters "$GB0_MAX_STEPS" \

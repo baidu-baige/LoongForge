@@ -87,7 +87,8 @@ GB0_AC_PATTERNS=...                  # 重计算的模块，默认覆盖 26 个 
 **模型与分布式：**
 
 ```bash
---model-name giga_brain07            # 通过 config_map 映射到 GigaBrain-0.7 配置
+--model-name giga_brain07            # 通过 catalog 映射到 GigaBrain-0.7 配置
+--training-phase sft                 # 监督微调
 --distributed-strategy fsdp          # FSDP2 分布式策略
 --dtype float32                      # 训练精度（GB0_DTYPE）
 --activation-checkpoint-module-patterns "$GB0_AC_PATTERNS"  # 激活重计算的模块
@@ -107,7 +108,6 @@ data.fast_tokenizer_path=$GB0_FAST_TOKENIZER  # FAST 动作 tokenizer 目录
 **训练：**
 
 ```bash
---trainer-type FinetuneTrainer
 --train-iters 100
 --per-device-batch-size 80
 --gradient-accumulation-steps 1

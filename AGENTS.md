@@ -72,10 +72,9 @@ Loong-Megatron is the `third_party/Loong-Megatron` submodule. Docker builds use
 `docker/Dockerfile` with `COMPILE_ENV=ampere|hopper|blackwell`; XPU builds use
 `docker/Dockerfile.xpu`.
 
-Use existing example scripts as launch references. Megatron examples normally
-set both source roots in `PYTHONPATH` and invoke `loongforge/train.py` with
-`--model-name` and `--training-phase`. Torch examples use the same entry point
-and may add `--trainer-type`.
+Use existing example scripts as launch references. Both engines invoke
+`loongforge/train.py` with `--model-name` and `--training-phase`; Megatron
+examples also set both source roots in `PYTHONPATH`.
 
 Run focused checks first:
 
@@ -125,7 +124,7 @@ The main ownership boundaries are:
 - `models/foundation/`, `models/encoder/`, `models/omni_models/`, and `models/diffusion/` contain Megatron model implementations.
 - `models/embodied/` contains Torch embodied models and typed configs.
 - `data/llm/`, `data/vlm/`, `data/embodied/`, and `data/chat_templates/` own their respective data paths.
-- `training/trainer_builder.py` registers and queries both engines through `TRAINERS_BY_ENGINE`; `TRAINERS_BY_NAME["torch"]` serves the optional `--trainer-type` override.
+- `training/trainer_builder.py` registers and queries both engines through `TRAINERS_BY_ENGINE`; `TRAINERS_BY_NAME["torch"]` holds only the trainers registered without a family, which `--trainer-type` selects.
 - `engines/megatron/` and `engines/torch/` own runtime execution and checkpoint behavior.
 
 Configuration and dispatch follow this contract:
@@ -140,9 +139,9 @@ CLI + YAML
 ```
 
 All model names resolve through `models/catalog.py:get_model_spec()` and the
-single `MODEL_CONFIG_REGISTRY`. The lookup returns the engine, catalog family,
-and configuration binding before the selected engine parser runs. The parser
-then produces the runtime model family and training phase, and
+single `MODEL_CONFIG_REGISTRY`. The lookup returns the engine and configuration
+binding before the selected engine parser runs. The parser then produces the
+runtime model family and training phase, and
 `training/trainer_builder.py` resolves the trainer from
 `(engine, model_family, training_phase)`. Keep the catalog group, YAML
 `model_type`, and trainer registration consistent when adding a model.
