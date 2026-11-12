@@ -117,8 +117,10 @@ Start from `configs/libero/libero_pi05_parallel.yaml`. LIBERO-specific notes:
 - `benchmark.return_action_chunk` defaults to `true` on this branch: the client owns the
   action chunk, which needs one request per chunk instead of one per environment step.
   It was validated against the legacy server-cache path over 80 episodes (no success
-  flips, 79/80 identical step counts, ~9.8× fewer requests). Pass
-  `--no-return-action-chunk` (or set it to `false`) to restore the per-step path.
+  flips, 79/80 identical step counts, ~9.8× fewer requests). Set
+  `benchmark.return_action_chunk: false` in the YAML to restore the per-step path: the
+  `--no-return-action-chunk` flag only exists on the single-process runner, and the
+  parallel entry point accepts `--config` only.
 - `benchmark.env_seed_mode: per_task` binds a scene to "seed + reset count in this
   process", so a task must stay in one worker. Episode-level sharding under `per_task`
   requires scene snapshots (`benchmark.scene_snapshot_dir`); otherwise keep the default

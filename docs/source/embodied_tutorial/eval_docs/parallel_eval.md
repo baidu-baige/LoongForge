@@ -74,7 +74,7 @@ Three switches control how action chunks are consumed:
 | Switch | Default | Meaning |
 |---|---|---|
 | `benchmark.return_action_chunk` | `false` (LIBERO: `true`) | `false`: the inference service caches the chunk and returns one action per env step. `true`: the client receives the whole chunk and executes it locally |
-| `benchmark.chunk_execute_steps` | 0 (all) | How many actions of a returned chunk are executed before re-planning |
+| `server.chunk_execute_steps` | 0 (all) | How many actions of a returned chunk are executed before re-planning. RoboTwin also accepts the `benchmark.` alias; for LIBERO/CALVIN only the `server.` key is read |
 | `benchmark.skip_intra_chunk_obs` | `false` | Inside a client-owned chunk, stop rendering the cameras: RoboTwin builds a proprio-only observation, LIBERO swaps the camera sensors for a zero-filled stand-in of the same shape. Camera rendering is the dominant sim cost, so this is what makes long episodes much cheaper |
 
 With `skip_intra_chunk_obs` the evaluation becomes open-loop inside a chunk: the policy

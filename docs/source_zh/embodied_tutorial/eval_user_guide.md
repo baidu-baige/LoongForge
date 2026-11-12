@@ -468,7 +468,7 @@ benchmark:
 | 开关 | 默认 | 说明 |
 |---|---|---|
 | `benchmark.return_action_chunk` | `false`（LIBERO 为 `true`） | 客户端持有动作块，请求数从每步一次降到每块一次 |
-| `benchmark.chunk_execute_steps` | 0（全部） | 一块执行多少步后重新规划 |
+| `server.chunk_execute_steps` | 0（全部） | 一块执行多少步后重新规划。RoboTwin 也认 `benchmark.` 别名；LIBERO/CALVIN 只读 `server.` |
 | `benchmark.skip_intra_chunk_obs` | `false` | 仅 RoboTwin；块内不渲染相机，是长任务加速的主要来源 |
 
 `return_action_chunk` + `skip_intra_chunk_obs` 会让策略在块内开环（每 `chunk_execute_steps` 步才重新感知），因此逐集结果不会与逐步闭环完全一致，详见 8.5。
