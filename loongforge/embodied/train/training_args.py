@@ -618,9 +618,12 @@ class _OptimizerArgs:
         default="AdamW",
         metadata={
             "help": "Optimizer name. Supported: AdamW, TorchFusedAdamW, "
-                    "TEFusedAdamW, ApexFusedAdamW, Adam, SGD, Dmuon, "
+                    "TEFusedAdamW, ApexFusedAdamW, COATAdamW, "
+                    "Adam, SGD, Dmuon, "
                     "muon. TEFusedAdamW requires TransformerEngine; "
-                    "ApexFusedAdamW requires Apex. Dmuon is the third-party "
+                    "ApexFusedAdamW requires Apex. COATAdamW stores both Adam "
+                    "moments in FP8 (E4M3) and needs Triton + DDP without "
+                    "--zero-optimizer. Dmuon is the third-party "
                     "package's FSDP2 Muon (--distributed-strategy fsdp). muon "
                     "is LoongForge's Muon for --distributed-strategy ddp: "
                     "2-D weights except embeddings and the output head "
