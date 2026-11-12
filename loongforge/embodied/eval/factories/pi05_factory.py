@@ -98,6 +98,10 @@ class PI05ModelFactory:
             "dataset_statistics_path": server_args.dataset_statistics_path,
             "tokenizer_path": model._tokenizer_path,
             "chunk_execute_steps": chunk_execute_steps if chunk_execute_steps > 0 else None,
+            # Server-side batching contract: per-row noise comes from a fixed
+            # seed, so batch and sequential rows stay comparable.
+            "supports_batching": True,
+            "noise_seed": None if model_cfg.noise_seed is None else int(model_cfg.noise_seed),
         }
         return PredictActionModelSpec(model=model, metadata=metadata)
 

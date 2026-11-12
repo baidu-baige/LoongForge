@@ -23,7 +23,7 @@ import logging
 import os
 import math
 from pathlib import Path
-from typing import Any, Dict, Union
+from typing import Any, Dict, Optional, Sequence, Union
 
 import numpy as np
 import torch
@@ -71,10 +71,12 @@ class _MinMaxStats:
 
     def normalize(self, x: np.ndarray) -> np.ndarray:
         """x -> [-1, 1] via (x - min) / (max - min) * 2 - 1."""
-        x = np.asarray(x, dtype=np.float32).reshape(1, -1)
-        if x.shape[1] != self.vmin.size:
+        x = np.asarray(x, dtype=np.float32)
+        if x.ndim == 1:
+            x = x[None, :]
+        if x.ndim != 2 or x.shape[1] != self.vmin.size:
             raise ValueError(
-                f"min/max normalize: input dim {x.shape[1]} != stats dim {self.vmin.size}"
+                f"min/max normalize: input shape {x.shape} != stats dim {self.vmin.size}"
             )
         span = self.vmax - self.vmin
         span = np.where(span == 0.0, 1.0, span)
@@ -104,10 +106,12 @@ class _ZScoreStats:
 
     def normalize(self, x: np.ndarray) -> np.ndarray:
         """x -> (x - mean) / (std + 1e-8)."""
-        x = np.asarray(x, dtype=np.float32).reshape(1, -1)
-        if x.shape[1] != self.mean.size:
+        x = np.asarray(x, dtype=np.float32)
+        if x.ndim == 1:
+            x = x[None, :]
+        if x.ndim != 2 or x.shape[1] != self.mean.size:
             raise ValueError(
-                f"z-score normalize: input dim {x.shape[1]} != stats dim {self.mean.size}"
+                f"z-score normalize: input shape {x.shape} != stats dim {self.mean.size}"
             )
         return ((x - self.mean) / (self.std + self.std_reg)).astype(np.float32)
 
@@ -305,6 +309,7 @@ class FastWAMPolicy(nn.Module):
         dataset_stats: Any = None,
         episode_id: str = "default",
         episode_step: int = 0,
+        seeds: Optional[Sequence[int]] = None,
         **_: Any,
     ) -> np.ndarray:
         """Predict a denormalized action chunk for the eval protocol.
@@ -346,56 +351,70 @@ class FastWAMPolicy(nn.Module):
         if not isinstance(images[0], (list, tuple)):
             images = [list(images)]
         batch = len(images)
-        if batch != 1:
-            raise ValueError(f"FastWAM predict_action supports batch=1, got {batch}")
         if self.training or not self.core.eval:
             # §2.2 of docs/推理正确性验证方法.md: assert eval mode so dropout /
             # checkpointing branches cannot silently diverge from rollout.
             self.eval()
 
-        views = images[0]
-        if self._eval_camera_layout == "horizontal2":
-            if len(views) != 2:
-                raise ValueError(
-                    f"horizontal2 layout expects [agent, wrist], got {len(views)} views"
-                )
-            size = self._eval_input_size
-            agent = _center_crop_resize(np.asarray(views[0]), size, size)
-            wrist = _center_crop_resize(np.asarray(views[1]), size, size)
-            rgb = np.concatenate([agent, wrist], axis=1)
-        else:  # robotwin_t
-            if len(views) != 3:
-                raise ValueError(
-                    f"robotwin_t layout expects [head, left, right], got {len(views)} views"
-                )
-            rgb = _build_robotwin_t_image(
-                [np.asarray(v) for v in views]
-            )
+        rgbs = []
+        for views in images:
+            if self._eval_camera_layout == "horizontal2":
+                if len(views) != 2:
+                    raise ValueError(
+                        f"horizontal2 layout expects [agent, wrist], got {len(views)} views"
+                    )
+                size = self._eval_input_size
+                agent = _center_crop_resize(np.asarray(views[0]), size, size)
+                wrist = _center_crop_resize(np.asarray(views[1]), size, size)
+                rgbs.append(np.concatenate([agent, wrist], axis=1))
+            else:  # robotwin_t
+                if len(views) != 3:
+                    raise ValueError(
+                        f"robotwin_t layout expects [head, left, right], got {len(views)} views"
+                    )
+                rgbs.append(_build_robotwin_t_image([np.asarray(v) for v in views]))
         input_image = (
-            torch.from_numpy(rgb).permute(2, 0, 1).unsqueeze(0).to(
+            torch.from_numpy(np.stack(rgbs, axis=0)).permute(0, 3, 1, 2).to(
                 device=self.core.device, dtype=self.core.torch_dtype
             )
             / 255.0
             * 2.0
             - 1.0
         )
-        state_np = np.asarray(state, dtype=np.float32).reshape(1, -1)
+        state_np = np.asarray(state, dtype=np.float32)
+        if state_np.ndim == 1:
+            state_np = state_np[None, :]
+        if state_np.shape[0] == 1 and batch > 1:
+            state_np = np.repeat(state_np, batch, axis=0)
+        if state_np.shape[0] != batch:
+            raise ValueError(
+                f"`state` batch {state_np.shape[0]} must match images batch {batch}"
+            )
         state_norm = torch.from_numpy(self._eval_state_stats.normalize(state_np)).to(
             device=self.core.device, dtype=self.core.torch_dtype
         )
+        instructions_list = list(instructions)
+        if len(instructions_list) != batch:
+            raise ValueError(
+                f"`instructions` has {len(instructions_list)} entries but images batch is {batch}"
+            )
 
-        call_seed = None
+        call_seed: Optional[Union[int, Sequence[int]]] = None
         action_noise = None
-        if self._eval_noise_seed is not None:
+        if seeds is not None:
+            if len(seeds) != batch:
+                raise ValueError(f"per-row seeds {len(seeds)} must match images batch {batch}")
+            call_seed = [int(seed) for seed in seeds]
+        elif self._eval_noise_seed is not None:
             # Fixed seed for every call (official eval semantics): each replan
             # starts from the same initial action noise, so paired closed-loop
             # arms stay noise-aligned step by step.
             call_seed = int(self._eval_noise_seed)
-            if self._eval_action_infer_mode == "first_frame":
+            if self._eval_action_infer_mode == "first_frame" and batch == 1:
                 # Build the noise here (same construction as FastWAM.infer_action:
                 # cpu generator, float32) so it can be dumped to disk and injected
                 # into both arms — bit-identical regardless of torch version.
-                g = torch.Generator(device="cpu").manual_seed(call_seed)
+                g = torch.Generator(device="cpu").manual_seed(int(call_seed))
                 action_noise = torch.randn(
                     (1, EVAL_ACTION_HORIZON, self._eval_action_dim),
                     generator=g,
@@ -421,7 +440,7 @@ class FastWAMPolicy(nn.Module):
             # fastwam_optional_idm.py.
             out = FastWAM.infer_action(
                 self.core,
-                prompt=instructions[0],
+                prompt=instructions_list,
                 input_image=input_image,
                 action_horizon=EVAL_ACTION_HORIZON,
                 proprio=state_norm,
@@ -431,7 +450,7 @@ class FastWAMPolicy(nn.Module):
             )
         else:
             out = self.core.infer_action(
-                prompt=instructions[0],
+                prompt=instructions_list,
                 input_image=input_image,
                 action_horizon=EVAL_ACTION_HORIZON,
                 num_video_frames=self._eval_num_video_frames,
@@ -440,11 +459,13 @@ class FastWAMPolicy(nn.Module):
                 sigma_shift=self._eval_sigma_shift,
                 seed=call_seed,
             )
-        chunk = np.asarray(out["action"], dtype=np.float32).reshape(-1, self._eval_action_dim)
+        chunk = np.asarray(out["action"], dtype=np.float32)
+        if chunk.ndim == 2:
+            chunk = chunk[None, :, :]
         denorm = self._eval_action_stats.unnormalize(chunk)
 
         trace_dir = os.environ.get("FASTWAM_TRACE_DIR")
-        if trace_dir and instructions[0] != "warmup":  # skip server-startup dummy call
+        if trace_dir and batch == 1 and instructions_list[0] != "warmup":  # skip server-startup dummy call
             d = Path(trace_dir)
             d.mkdir(parents=True, exist_ok=True)
             call_idx = len(list(d.glob("call_*.npz")))
@@ -455,7 +476,7 @@ class FastWAMPolicy(nn.Module):
                 raw_chunk=chunk.astype(np.float32),
                 denorm_chunk=denorm.astype(np.float32),
             )
-        return denorm[None, :, :]  # [batch=1, horizon, action_dim]
+        return denorm  # [batch, horizon, action_dim]
 
     @staticmethod
     def default_fp8_targets() -> Dict[str, Any]:

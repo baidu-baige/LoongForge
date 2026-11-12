@@ -1,0 +1,82 @@
+# pi0.5 LIBERO parallel-evaluation template (one inference service per GPU,
+# N sim workers per GPU, global queue).
+# Fill /path/to/... below and run with examples/embodied/pi05/eval/run_libero_eval_parallel.sh.
+#
+# Measured on 8xA800 with FastWAM (2000 episodes, chunk_execute_steps=10):
+# 4.9x worker-phase speedup over the official script (~4.3x including model
+# loading). Numbers depend on model, suite and machine; re-calibrate with
+#   python -m loongforge.embodied.eval.orchestrator.calibration.calibrate \
+#       --config <this file> --n 16,24,48 --gpus 0,1,2,3,4,5,6,7 --out /tmp/calib
+
+benchmark:
+  name: libero
+  suite: libero_spatial  # libero_spatial | libero_object | libero_goal | libero_10
+  episodes_per_task: 10
+  episodes_per_chunk: 1  # floor(E / slots): 10 tasks x 10 eps over 8x16 slots
+  max_steps: 280         # 280 for libero_spatial; 0 uses suite default (280 / 300 / 520)
+  num_steps_wait: 10
+  continuous_gripper: true
+  prefer_controller_ee: false
+  plan_order: lpt
+
+model:
+  backend: loongforge
+  model_type: pi05
+  name: loongforge-pi05-libero
+  action_dim: 7
+  state_dim: 8
+  action_horizon: 10
+  max_action_dim: 32
+  max_state_dim: 32
+  compile_model: false
+  eval_image_normalize_mode: siglip
+  eval_normalization_mode: mean_std
+  state_encoding: libero_ee8
+
+server:
+  host: 127.0.0.1
+  port: 61100
+  health_port: 61101
+  python: /path/to/loongforge/bin/python
+  log: /path/to/LoongForge/outputs/eval/libero_pi05_parallel/policy_server.log
+  start_timeout_sec: 900
+  ckpt_path: /path/to/pi05_libero_ckpt
+  dataset_statistics_path: /path/to/pi05_libero_ckpt/dataset_statistics.json
+  loongforge_root: /path/to/LoongForge
+  tokenizer_path: /path/to/paligemma-3b-pt-224
+  use_bf16: false
+  chunk_execute_steps: 10
+  # Server-side batching used by the reference runs. Set enabled: false (or drop
+  # this block) if you need per-request latency isolation instead of throughput.
+  batching:
+    max_batch_size: 8
+    max_wait_ms: 5
+
+# LIBERO is a CPU-sim family: use pools.cpu_sim (gpu_sim is ignored).
+servers:
+  - gpus: [0, 1, 2, 3, 4, 5, 6, 7]
+
+pools:
+  cpu_sim:
+    # reference machine plateaued around N~48
+    n_sims_per_server: 16
+
+env:
+  eval_root: /path/to/LoongForge/loongforge/embodied/eval
+  libero_config_path: /path/to/libero_config/config.yaml
+  mujoco_gl: egl
+  pyopengl_platform: egl
+  ld_library_path: /path/to/nvidia_lib
+
+run:
+  output_dir: /path/to/LoongForge/outputs/eval/libero_pi05_parallel
+  seed: 7
+  save_trace: false
+  save_replay: false
+  timestamped_output: false
+  worker_local_files: true
+
+timeouts:
+  policy_call_ms: 600000
+  per_step_sec: 600
+  per_episode_sec: 900

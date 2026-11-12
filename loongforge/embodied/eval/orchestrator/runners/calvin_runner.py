@@ -264,6 +264,17 @@ def run_sequence(
     inference_latencies: List[Optional[float]] = []
     e2e_latencies: List[Optional[float]] = []
     sequence_start = time.time()
+    stepper = _common.EpisodePolicyStepper(
+        chunk_steps=int(client.metadata.get("chunk_execute_steps") or 0),
+        return_action_chunk=bool(getattr(args, "return_action_chunk", False)),
+        # A closed-loop-within-chunk model must see every frame; the
+        # PayloadBuilder capability can only turn the cache off, never back on.
+        disable_action_cache=bool(
+            getattr(args, "disable_action_cache", False)
+            or getattr(payload_builder, "disable_action_cache", False)
+        ),
+        payload_builder=payload_builder,
+    )
 
     try:
         with alarm_timeout(args.per_sequence_timeout_sec, SequenceTimeoutError):
@@ -281,55 +292,58 @@ def run_sequence(
                 client.reset(subtask_episode_id)
                 payload_builder.reset(subtask_episode_id)
                 action_decoder.reset()
+                stepper.begin_episode()
                 subtask_success = False
 
                 for step in range(args.max_steps_per_subtask):
                     if args.save_replay:
                         replay_frames.append(copy.deepcopy(obs["rgb_obs"]["rgb_static"]))
-                    canonical_obs = adapter.obs_to_canonical(
-                        obs,
-                        {
-                            "instruction": lang_annotation,
+
+                    def _request(_request_step: int) -> tuple[Dict[str, Any], float]:
+                        canonical_obs = adapter.obs_to_canonical(
+                            obs,
+                            {
+                                "instruction": lang_annotation,
+                                "episode_id": subtask_episode_id,
+                                "episode_step": step,
+                            },
+                        )
+                        ctx = {
+                            "benchmark_name": "calvin",
                             "episode_id": subtask_episode_id,
                             "episode_step": step,
-                        },
-                    )
-                    ctx = {
-                        "benchmark_name": "calvin",
-                        "episode_id": subtask_episode_id,
-                        "episode_step": step,
-                        "instruction": lang_annotation,
-                    }
-                    # CALVIN passes a few inference-time tuning knobs
-                    # (do_sample / use_ddim / num_ddim_steps) plus optional
-                    # ``unnorm_key`` as extra control fields — model
-                    # predict_action signatures drop unknown kwargs with a
-                    # WARNING log via ``_filter_supported_kwargs``.
-                    extra_control = dict(INFERENCE_CONFIG)
-                    if args.unnorm_key is not None:
-                        extra_control["unnorm_key"] = args.unnorm_key
-                    request_start = time.perf_counter()
-                    with alarm_timeout(args.policy_call_timeout_ms / 1000.0, TimeoutError):
-                        response = client.predict_action(
-                            **build_rpc_payload(
-                                payload_builder,
-                                canonical_obs,
-                                ctx,
-                                extra_control=extra_control,
+                            "instruction": lang_annotation,
+                        }
+                        # CALVIN passes a few inference-time tuning knobs
+                        # (do_sample / use_ddim / num_ddim_steps) plus optional
+                        # ``unnorm_key`` as extra control fields — model
+                        # predict_action signatures drop unknown kwargs with a
+                        # WARNING log via ``_filter_supported_kwargs``.
+                        extra_control = dict(INFERENCE_CONFIG)
+                        if args.unnorm_key is not None:
+                            extra_control["unnorm_key"] = args.unnorm_key
+                        request_start = time.perf_counter()
+                        with alarm_timeout(args.policy_call_timeout_ms / 1000.0, TimeoutError):
+                            response = client.predict_action(
+                                **build_rpc_payload(
+                                    payload_builder,
+                                    canonical_obs,
+                                    ctx,
+                                    disable_action_cache=stepper.disable_action_cache,
+                                    return_action_chunk=stepper.return_action_chunk,
+                                    extra_control=extra_control,
+                                )
                             )
-                        )
-                    e2e_latency_ms = (time.perf_counter() - request_start) * 1000.0
-                    e2e_latencies.append(e2e_latency_ms)
-                    if not response.get("ok", False):
-                        raise RuntimeError(f"Policy error: {response}")
+                        e2e_latency_ms = (time.perf_counter() - request_start) * 1000.0
+                        if not response.get("ok", False):
+                            raise RuntimeError(f"Policy error: {response}")
+                        return response["data"], e2e_latency_ms
 
-                    data = response["data"]
-                    payload_builder.update_from_response(data)
-                    inference_latency_ms = data.get("inference_latency_ms")
-                    inference_latencies.append(inference_latency_ms)
-                    raw_chunk = np.asarray(data["actions"], dtype=np.float32)
-                    if raw_chunk.ndim == 1:
-                        raw_chunk = raw_chunk.reshape(1, -1)
+                    decision = stepper.next_action(_request)
+                    if decision.issued_request:
+                        e2e_latencies.append(decision.e2e_latency_ms)
+                        inference_latencies.append(decision.inference_latency_ms)
+                    raw_chunk = decision.action
                     if action_decoder_key:
                         # Absolute-pose models (X-VLA ee6d): decode to
                         # pos(3)+quat(4)+grip(1) and step the env with the
@@ -362,14 +376,14 @@ def run_sequence(
                                 "subtask": subtask,
                                 "instruction": lang_annotation,
                                 "step": step,
-                                "request_id": data.get("request_id"),
+                                "request_id": decision.request_id,
                                 "raw_action": flat_action.tolist(),
                                 "env_action": [np.asarray(part).tolist() for part in env_action]
                                 if isinstance(env_action, tuple)
                                 else np.asarray(env_action).tolist(),
-                                "inference_latency_ms": inference_latency_ms,
-                                "e2e_latency_ms": e2e_latency_ms,
-                                "chunk_cache_hit": inference_latency_ms is None,
+                                "inference_latency_ms": decision.inference_latency_ms,
+                                "e2e_latency_ms": decision.e2e_latency_ms,
+                                "chunk_cache_hit": not decision.issued_request,
                                 "success": bool(subtask_success),
                             }
                         )
@@ -593,6 +607,12 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--resume", action="store_true", default=False)
     parser.add_argument("--restart", action="store_true")
     parser.add_argument("--policy-call-timeout-ms", type=float, default=5000.0)
+    parser.add_argument(
+        "--return-action-chunk",
+        action="store_true",
+        help="Let the client own the action chunk (T-14 path); default keeps the legacy per-step server cache",
+    )
+    parser.add_argument("--disable-action-cache", action="store_true")
     parser.add_argument("--per-step-timeout-sec", type=float, default=30.0)
     parser.add_argument("--per-sequence-timeout-sec", type=float, default=2400.0)
     parser.add_argument("--continuous-gripper", action="store_true", default=False)

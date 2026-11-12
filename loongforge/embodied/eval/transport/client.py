@@ -36,32 +36,49 @@ class PolicyClient:
 
         start_time = time.time()
         while True:
-            if time.time() - start_time > timeout:
+            remaining = timeout - (time.time() - start_time)
+            if remaining <= 0:
                 raise TimeoutError(f"Failed to connect to server within {timeout} seconds")
             try:
                 conn = websockets.sync.client.connect(
                     self._uri,
                     compression=None,
                     max_size=None,
-                    open_timeout=30,
+                    open_timeout=min(30.0, remaining),
                 )
-                metadata = msgpack_numpy.unpackb(conn.recv())
-                if metadata.get("protocol_version") != PROTOCOL_VERSION:
-                    raise RuntimeError(
-                        f"protocol_version mismatch: {metadata.get('protocol_version')} != {PROTOCOL_VERSION}"
-                    )
-                return conn, metadata
-            except ConnectionRefusedError:
-                time.sleep(1)
+            except (ConnectionRefusedError, TimeoutError, OSError):
+                # A server that is still loading (or briefly saturated by other
+                # clients) refuses or stalls the upgrade; retry within the budget.
+                time.sleep(min(1.0, max(0.0, remaining)))
+                continue
+            try:
+                # A stopped-but-listening server still accepts the TCP connect, so
+                # this read must be bounded too -- otherwise a hung server blocks the
+                # watchdog forever waiting for metadata that will never arrive.
+                metadata = msgpack_numpy.unpackb(conn.recv(timeout=remaining))
+            except TimeoutError:
+                conn.close()
+                time.sleep(min(1.0, max(0.0, remaining)))
+                continue
+            if metadata.get("protocol_version") != PROTOCOL_VERSION:
+                conn.close()
+                raise RuntimeError(
+                    f"protocol_version mismatch: {metadata.get('protocol_version')} != {PROTOCOL_VERSION}"
+                )
+            return conn, metadata
 
     def close(self) -> None:
         """Run close."""
         self._ws.close()
 
     def request(
-        self, message_type: str, payload: Optional[Dict[str, Any]] = None, request_id: str = "default"
+        self,
+        message_type: str,
+        payload: Optional[Dict[str, Any]] = None,
+        request_id: str = "default",
+        timeout: Optional[float] = None,
     ) -> Dict[str, Any]:
-        """Run request."""
+        """Send a request and read the reply. ``timeout`` bounds the wait for the reply."""
         message = {
             "type": message_type,
             "request_id": request_id,
@@ -69,14 +86,14 @@ class PolicyClient:
             "payload": payload or {},
         }
         self._ws.send(self._packer.pack(message))
-        response = self._ws.recv()
+        response = self._ws.recv() if timeout is None else self._ws.recv(timeout=timeout)
         if isinstance(response, str):
             raise RuntimeError(response)
         return msgpack_numpy.unpackb(response)
 
-    def ping(self) -> Dict[str, Any]:
-        """Run ping."""
-        return self.request("ping")
+    def ping(self, timeout: Optional[float] = None) -> Dict[str, Any]:
+        """Round-trip a ``ping``. ``timeout`` bounds the wait for the pong."""
+        return self.request("ping", timeout=timeout)
 
     def reset(self, episode_id: str) -> Dict[str, Any]:
         """Run reset."""

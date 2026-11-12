@@ -19,6 +19,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 import numpy as np
+from websockets.exceptions import ConnectionClosed
 
 from loongforge.embodied.eval.adapters.libero import (
     LIBERO_DUMMY_ACTION, LIBERO_ENV_RESOLUTION, SUITE_MAX_STEPS, LiberoAdapter,
@@ -37,6 +38,7 @@ from loongforge.embodied.eval.action_decoders import ActionDecoder
 from loongforge.embodied.eval.orchestrator.config import (
     build_rpc_payload,
 )
+from loongforge.embodied.eval.orchestrator import scene_snapshots
 from loongforge.embodied.eval.orchestrator.runners import _common
 from loongforge.embodied.eval.orchestrator.runners._common import StepTimeoutError, alarm_timeout, avg as _avg
 from loongforge.embodied.eval.orchestrator.runners.libero_gr00t_runner import (
@@ -96,6 +98,27 @@ def _extract_primary_frame(obs: Dict[str, Any]) -> np.ndarray:
 # LoongForge re-creates and re-seeds the env every episode and therefore renders a
 # different observation for the same recorded initial state.
 _ENV_CACHE: Dict[str, Any] = {"key": None, "env": None}
+
+# per_task + episode-level sharding: RNG states captured before each reset.
+_SCENE_SNAPSHOT_CACHE: Dict[tuple, Any] = {}
+
+
+def _scene_snapshot_states(directory: str, suite: str, task_id: int, seed: int):
+    """Load (and cache) the snapshot list for one task."""
+    key = (str(directory), str(suite), int(task_id), int(seed))
+    states = _SCENE_SNAPSHOT_CACHE.get(key)
+    if states is None:
+        path = scene_snapshots.snapshot_path(directory, suite, task_id, seed)
+        if not path.is_file():
+            raise FileNotFoundError(
+                f"scene snapshot {path} is missing. Generate it with "
+                f"`python -m loongforge.embodied.eval.orchestrator.scene_snapshots "
+                f"--suite {suite} --task {task_id} --seed {seed} --episodes <E> --out {directory}` "
+                f"— the --seed must match this run's `run.seed` (per_task seeds once per task)."
+            )
+        states = scene_snapshots.load_snapshots(path)
+        _SCENE_SNAPSHOT_CACHE[key] = states
+    return states
 
 
 def _get_cached_env(task, resolution: int, seed: int):
@@ -168,6 +191,51 @@ def _env_step(env, action, timeout_sec: float):
         return env.step(action)
 
 
+def _image_observables(env) -> list:
+    """Camera observables of the underlying robosuite env."""
+    base = getattr(env, "env", env)
+    observables = getattr(base, "_observables", None) or {}
+    return [observable for name, observable in observables.items() if "image" in name]
+
+
+class _CheapImage:
+    """Stand-in camera sensor: correct shape/modality, no offscreen render."""
+
+    __modality__ = "image"
+
+    def __init__(self, shape) -> None:
+        self._shape = tuple(shape)
+
+    def __call__(self, obs_cache) -> np.ndarray:
+        return np.zeros(self._shape, dtype=np.uint8)
+
+
+def _set_camera_rendering(env, enabled: bool) -> None:
+    """Swap the camera sensors for a cheap stand-in (or restore them).
+
+    With a client-owned action chunk the observations produced inside the chunk
+    are never read: the next policy call replays the obs built at the request
+    step. Camera rendering dominates the LIBERO sim cost (measured: 191 ms/step
+    with images vs 22 ms/step without, single process).
+
+    The observable itself stays *enabled* and keeps sampling on its normal
+    schedule, so the sampling phase is unchanged; only the pixel-producing
+    sensor is replaced. Swapping back before a step therefore yields exactly the
+    frame the unmodified code would have produced at that step.
+    """
+    for observable in _image_observables(env):
+        real = getattr(observable, "_libero_real_sensor", None)
+        if enabled:
+            if real is not None:
+                # Assign directly: set_sensor() would re-validate the sensor by
+                # invoking it once, i.e. an extra offscreen render per restore.
+                observable._sensor = real
+                observable._libero_real_sensor = None
+        elif real is None:
+            observable._libero_real_sensor = observable._sensor
+            observable._sensor = _CheapImage(observable._data_shape)
+
+
 def _failure_record(
     *,
     args: argparse.Namespace,
@@ -232,7 +300,11 @@ def _classify_exception(exc: Exception) -> str:
         return "env_timeout"
     if isinstance(exc, TimeoutError):
         return "policy_timeout"
-    if isinstance(exc, (ConnectionError, OSError)):
+    if isinstance(exc, (ConnectionError, OSError, ConnectionClosed)):
+        # A dropped websocket (``ConnectionClosedError``) is a *connection* failure, not a
+        # model failure: classify it so the retry loop rebuilds the client instead of
+        # hammering a dead socket (that is what turned a keepalive blip into 16 straight
+        # failures in the static 8-card run).
         return "server_unreachable"
     return "episode_error"
 
@@ -273,6 +345,25 @@ def run_episode(
     e2e_latencies: List[Optional[float]] = []
     episode_start = time.time()
     env = None
+    chunk_steps = int(client.metadata.get("chunk_execute_steps") or 0)
+    stepper = _common.EpisodePolicyStepper(
+        chunk_steps=chunk_steps,
+        return_action_chunk=bool(getattr(args, "return_action_chunk", True)),
+        # Closed-loop-within-chunk models (PayloadBuilder capability) must be
+        # called every env step; others hand the whole chunk to the client.
+        disable_action_cache=bool(getattr(payload_builder, "disable_action_cache", False)),
+        payload_builder=payload_builder,
+    )
+    # Camera rendering can be skipped on the steps whose observation is never
+    # read (everything inside a client-owned chunk). Only the step that feeds
+    # the next policy call must render, so the policy input stays bit-identical.
+    skip_intra_obs = (
+        bool(getattr(args, "skip_intra_chunk_obs", False))
+        and chunk_steps > 1
+        and stepper.return_action_chunk
+        and not stepper.disable_action_cache
+        and not bool(getattr(args, "save_replay", False))
+    )
 
     try:
         with alarm_timeout(args.per_episode_timeout_sec, EpisodeTimeoutError):
@@ -280,10 +371,33 @@ def run_episode(
                 env = _get_cached_env(task, _render_resolution(args), episode_seed)
             else:
                 env, task_description = _get_libero_env(task, _render_resolution(args), episode_seed)
+            # With a snapshot directory, each episode restores the RNG state the
+            # single-process serial run would have had before its own reset. This is
+            # what makes episode-level sharding safe under per_task seeding.
+            snapshot_dir = str(getattr(args, "scene_snapshot_dir", "") or "")
+            scene_snapshot_used = None
+            if env_seed_mode == "per_task" and snapshot_dir:
+                np_states, py_states = _scene_snapshot_states(
+                    snapshot_dir, task_suite_name, task_id, episode_seed
+                )
+                if episode_idx >= len(np_states):
+                    raise RuntimeError(
+                        f"scene snapshot for {task_suite_name}/task={task_id} has "
+                        f"{len(np_states)} states but episode_idx={episode_idx} was requested"
+                    )
+                scene_snapshots.apply_snapshot(np_states[episode_idx], py_states[episode_idx])
+                scene_snapshot_used = str(
+                    scene_snapshots.snapshot_path(snapshot_dir, task_suite_name, task_id, episode_seed)
+                )
             reset_start = time.time()
             client.reset(episode_id)
             payload_builder.reset(episode_id)
             action_decoder.reset()
+            stepper.begin_episode()
+            if skip_intra_obs:
+                # The env is cached across episodes; a previous episode may have
+                # left the camera observables disabled.
+                _set_camera_rendering(env, True)
             env.reset()
             obs = env.set_init_state(initial_state)
             # set_init_state teleports the sim, but the robosuite OSC caches
@@ -315,13 +429,20 @@ def run_episode(
             max_steps = args.max_steps if args.max_steps > 0 else SUITE_MAX_STEPS[task_suite_name]
             done = False
             info: Dict[str, Any] = {}
+            obs_rendered = True
 
             for raw_step in range(max_steps + args.num_steps_wait):
                 if args.save_replay and raw_step >= args.num_steps_wait:
                     replay_frames.append(_extract_primary_frame(obs))
 
                 if raw_step < args.num_steps_wait:
+                    # Only the last dummy step's obs feeds the first policy
+                    # call; the earlier ones are overwritten unread.
+                    need_render = (raw_step == args.num_steps_wait - 1) or not skip_intra_obs
+                    if skip_intra_obs:
+                        _set_camera_rendering(env, need_render)
                     obs, reward, done, info = _env_step(env, LIBERO_DUMMY_ACTION, args.per_step_timeout_sec)
+                    obs_rendered = need_render
                     continue
 
                 # OSC absolute vs delta: see _resolve_libero_use_delta().
@@ -334,50 +455,54 @@ def run_episode(
 
                 episode_step = raw_step - args.num_steps_wait
                 controller = env.env.robots[0].controller
-                canonical_obs = adapter.obs_to_canonical(
-                    obs,
-                    {
-                        "instruction": task_description,
+
+                def _request(request_step: int) -> tuple[Dict[str, Any], float]:
+                    nonlocal obs, obs_rendered
+                    if skip_intra_obs and not obs_rendered:
+                        # Cadence changed (short chunk): render the current state
+                        # instead of handing the policy a placeholder frame.
+                        _set_camera_rendering(env, True)
+                        obs = env.env._get_observations(force_update=True)
+                        obs_rendered = True
+                    canonical_obs = adapter.obs_to_canonical(
+                        obs,
+                        {
+                            "instruction": task_description,
+                            "episode_id": episode_id,
+                            "episode_step": request_step,
+                            "ee_pos": np.asarray(controller.ee_pos, dtype=np.float32),
+                            "ee_ori_mat": np.asarray(controller.ee_ori_mat, dtype=np.float32),
+                        },
+                    )
+                    ctx = {
+                        "benchmark_name": "libero",
                         "episode_id": episode_id,
-                        "episode_step": episode_step,
+                        "episode_step": request_step,
+                        "instruction": task_description,
                         "ee_pos": np.asarray(controller.ee_pos, dtype=np.float32),
                         "ee_ori_mat": np.asarray(controller.ee_ori_mat, dtype=np.float32),
-                    },
-                )
-                ctx = {
-                    "benchmark_name": "libero",
-                    "episode_id": episode_id,
-                    "episode_step": episode_step,
-                    "instruction": task_description,
-                    "ee_pos": np.asarray(controller.ee_pos, dtype=np.float32),
-                    "ee_ori_mat": np.asarray(controller.ee_ori_mat, dtype=np.float32),
-                }
-                request_start = time.perf_counter()
-                with alarm_timeout(args.policy_call_timeout_ms / 1000.0, TimeoutError):
-                    response = client.predict_action(
-                        **_build_rpc_payload(
-                            payload_builder,
-                            canonical_obs,
-                            ctx,
-                            # Closed-loop-within-chunk models (PayloadBuilder capability)
-                            # must be called every env step; others keep the chunk cache.
-                            disable_action_cache=bool(
-                                getattr(payload_builder, "disable_action_cache", False)
-                            ),
+                    }
+                    request_start = time.perf_counter()
+                    with alarm_timeout(args.policy_call_timeout_ms / 1000.0, TimeoutError):
+                        response = client.predict_action(
+                            **_build_rpc_payload(
+                                payload_builder,
+                                canonical_obs,
+                                ctx,
+                                disable_action_cache=stepper.disable_action_cache,
+                                return_action_chunk=stepper.return_action_chunk,
+                            )
                         )
-                    )
-                e2e_latency_ms = (time.perf_counter() - request_start) * 1000.0
-                e2e_latencies.append(e2e_latency_ms)
-                if not response.get("ok", False):
-                    raise RuntimeError(f"Policy error: {response}")
+                    e2e_latency_ms = (time.perf_counter() - request_start) * 1000.0
+                    if not response.get("ok", False):
+                        raise RuntimeError(f"Policy error: {response}")
+                    return response["data"], e2e_latency_ms
 
-                data = response["data"]
-                payload_builder.update_from_response(data)
-                inference_latency_ms = data.get("inference_latency_ms")
-                inference_latencies.append(inference_latency_ms)
-                raw_chunk = np.asarray(data["actions"], dtype=np.float32)
-                if raw_chunk.ndim == 1:
-                    raw_chunk = raw_chunk.reshape(1, -1)
+                decision = stepper.next_action(_request)
+                if decision.issued_request:
+                    e2e_latencies.append(decision.e2e_latency_ms)
+                    inference_latencies.append(decision.inference_latency_ms)
+                raw_chunk = decision.action
                 # Log raw grip values before decode for debugging
                 if action_decoder_key and raw_chunk.shape[-1] >= 10:
                     raw_grip = float(raw_chunk[0, 9])
@@ -387,19 +512,28 @@ def run_episode(
                 # delta models (pi05) keep the OSC default use_delta=True.
                 flat_action = processed[0]
                 env_action = adapter.action_from_canonical({"actions": flat_action})
+                if skip_intra_obs:
+                    # Render only the step whose obs the next request will read
+                    # (requests fire every chunk_steps steps, at step 0, C, 2C...).
+                    need_render = (episode_step + 1) % chunk_steps == 0
+                    _set_camera_rendering(env, need_render)
                 obs, reward, done, info = _env_step(env, env_action, args.per_step_timeout_sec)
+                if skip_intra_obs:
+                    obs_rendered = need_render
                 steps += 1
 
                 if args.save_trace:
                     trace.append(
                         {
                             "step": episode_step,
-                            "request_id": data.get("request_id"),
+                            "env_step": episode_step,
+                            "request_step": decision.request_step,
+                            "request_id": decision.request_id,
                             "raw_action": flat_action.tolist(),
                             "env_action": env_action,
-                            "inference_latency_ms": inference_latency_ms,
-                            "e2e_latency_ms": e2e_latency_ms,
-                            "chunk_cache_hit": inference_latency_ms is None,
+                            "inference_latency_ms": decision.inference_latency_ms,
+                            "e2e_latency_ms": decision.e2e_latency_ms,
+                            "chunk_cache_hit": not decision.issued_request,
                             "done": bool(done),
                             "success": bool(info.get("success", False)),
                         }
@@ -464,6 +598,8 @@ def run_episode(
         "runtime": "sim",
         "success": int(success),
         "steps": steps,
+        "env_steps": steps,
+        "inference_requests": stepper.requests,
         "safety_cost": None,
         "episode_time_sec": time.time() - episode_start,
         "reset_time_sec": reset_time_sec,
@@ -477,6 +613,7 @@ def run_episode(
         "failure_reason": failure_reason,
         "replay_path": replay_path,
         "trace_path": trace_path,
+        "scene_snapshot": scene_snapshot_used,
         "server_metadata": client.metadata,
         "repro": {
             **repro_metadata.repro_fields(("libero",)),
@@ -571,7 +708,7 @@ def run_batch(args: argparse.Namespace) -> Dict[str, Any]:
     server_manager = getattr(args, "server_manager", None)
     if server_manager is not None:
         server_manager.ensure_running()
-    client = PolicyClient(host=args.host, port=args.port)
+    client = PolicyClient(host=args.host, port=args.port, timeout=args.server_connect_timeout_sec)
     new_records: List[Dict[str, Any]] = []
     start_time = time.time()
 
@@ -579,9 +716,10 @@ def run_batch(args: argparse.Namespace) -> Dict[str, Any]:
         for task_id in selected_task_ids:
             task = task_suite.get_task(task_id)
             initial_states = task_suite.get_task_init_states(task_id)
-            n_episodes = min(args.episodes_per_task, len(initial_states))
+            start = max(0, int(getattr(args, "episode_offset", 0) or 0))
+            n_episodes = min(args.episodes_per_task, len(initial_states) - start)
             expected_counts[task_id] = n_episodes
-            for episode_idx in range(n_episodes):
+            for episode_idx in range(start, start + n_episodes):
                 key = ("libero", args.task_suite_name, task_id, episode_idx)
                 if key in completed:
                     continue
@@ -615,7 +753,9 @@ def run_batch(args: argparse.Namespace) -> Dict[str, Any]:
                         if record.get("failure_reason") == "server_unreachable" and server_manager is not None:
                             client.close()
                             server_manager.ensure_running()
-                            client = PolicyClient(host=args.host, port=args.port)
+                            client = PolicyClient(
+                                host=args.host, port=args.port, timeout=args.server_connect_timeout_sec
+                            )
                         time.sleep(min(2**attempt, 8))
                 append_jsonl(results_path, record)
                 new_records.append(record)
@@ -692,6 +832,7 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--max-tasks", type=int, default=1, help="<=0 means all tasks in suite")
     parser.add_argument("--episodes-per-task", type=int, default=1)
     parser.add_argument("--libero-protocol", choices=["legacy", "gr00t_official"], default="legacy")
+    parser.add_argument("--episode-offset", type=int, default=0, help="first episode index within each task")
     parser.add_argument("--num-steps-wait", type=int, default=10)
     parser.add_argument("--max-steps", type=int, default=-1, help="<=0 means suite default")
     parser.add_argument(
@@ -709,6 +850,34 @@ def build_argparser() -> argparse.ArgumentParser:
             "(`seed + task_id*1000 + episode_idx`). "
             "per_task: one env per task seeded with --seed and reused across trials "
             "(official FastWAM eval semantics; see docs §4.8)."
+        ),
+    )
+    parser.add_argument(
+        "--return-action-chunk",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "True (default): the client owns the action chunk (T-14). "
+            "False: legacy server-side chunk cache -- one request per env step."
+        ),
+    )
+    parser.add_argument(
+        "--skip-intra-chunk-obs",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Skip camera rendering on env steps whose observation is never read "
+            "(inside a client-owned chunk). The images consumed by the policy are "
+            "identical; it only removes wasted 256x256 offscreen renders."
+        ),
+    )
+    parser.add_argument(
+        "--scene-snapshot-dir",
+        default="",
+        help=(
+            "With --env-seed-mode per_task, restore each episode's pre-reset RNG state "
+            "from <dir>/<suite>__task<id>__seed<seed>.pkl, making episode-level sharding "
+            "scene-identical to a single-process serial run (T-17)."
         ),
     )
     parser.add_argument(
@@ -745,6 +914,7 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--resume", action="store_true", default=False)
     parser.add_argument("--restart", action="store_true")
     parser.add_argument("--policy-call-timeout-ms", type=float, default=5000.0)
+    parser.add_argument("--server-connect-timeout-sec", type=float, default=60.0)
     parser.add_argument("--per-step-timeout-sec", type=float, default=30.0)
     parser.add_argument("--per-episode-timeout-sec", type=float, default=600.0)
     parser.add_argument("--max-retries", type=int, default=0)

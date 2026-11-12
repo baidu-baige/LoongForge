@@ -1,0 +1,95 @@
+# pi0.5 RoboTwin-2.0 parallel-evaluation template (one inference service per
+# GPU, N sim workers per GPU, global queue).
+# Fill /path/to/... below and run with examples/embodied/pi05/eval/run_robotwin_eval_parallel.sh.
+#
+# The chunk switches below turn on client-owned chunks plus camera-free steps
+# inside a chunk. That is where most of the speedup comes from, but the policy
+# then re-observes only once per chunk_execute_steps actions, so per-episode
+# results are not bit-identical to a per-step closed-loop run. Set
+# return_action_chunk / skip_intra_chunk_obs to false to keep the legacy path.
+#
+# Optional expert-cache path (skips the per-episode expert rollout):
+#   1) scan once with benchmark.offline_expert_check_scan: /path/to/seeds
+#   2) set benchmark.offline_expert_check: /path/to/seeds here
+
+benchmark:
+  name: robotwin
+  task_name: adjust_bottle
+  task_config: demo_clean
+  start_seed: 100000
+  episodes_per_task: 50
+  episodes_per_chunk: 1   # floor(50 / (8 x 8)) = 1; raise it for long multi-task runs
+  disable_expert_check: false
+  action_bridge: pi05_aloha_14d
+  use_official_step_limits: true
+  plan_order: lpt_long
+  long_task_steps: 1200
+  long_task_episodes_per_chunk: 10
+  sim_cpu_threads: 1
+  return_action_chunk: true
+  skip_intra_chunk_obs: true
+  chunk_execute_steps: 30
+  # offline_expert_check: /path/to/seeds
+
+model:
+  backend: loongforge
+  model_type: pi05
+  name: loongforge-pi05-robotwin
+  action_dim: 14
+  state_dim: 14
+  action_horizon: 30
+  max_action_dim: 32
+  max_state_dim: 32
+  compile_model: false
+  action_mode: abs
+  eval_image_normalize_mode: siglip
+  eval_normalization_mode: q99
+
+server:
+  host: 127.0.0.1
+  port: 12500
+  health_port: 12501
+  python: /path/to/loongforge/bin/python
+  log: /path/to/LoongForge/outputs/eval/robotwin_pi05_parallel/policy_server.log
+  start_timeout_sec: 1800
+  random_init: false
+  ckpt_path: /path/to/pi05_robotwin_ckpt
+  dataset_statistics_path: /path/to/pi05_robotwin_ckpt/dataset_statistics.json
+  tokenizer_path: /path/to/paligemma-3b-pt-224
+  loongforge_root: /path/to/LoongForge
+
+# One inference service per GPU; N sim workers share the card with it.
+servers:
+  - gpus: [0, 1, 2, 3, 4, 5, 6, 7]
+
+pools:
+  gpu_sim:
+    n_sims_per_server: 8
+    placement: co_locate
+
+# Fail-fast budget: N x per-sim + model must fit in one card.
+resources:
+  gpu_sim:
+    vram_total_mb: 81920
+    vram_per_sim_mb: 5400
+    vram_model_mb: 16600
+
+env:
+  eval_root: /path/to/LoongForge/loongforge/embodied/eval
+  loongforge_root: /path/to/LoongForge
+  robotwin_root: /path/to/RoboTwin
+  robotwin_python: /path/to/robotwin/bin/python
+
+run:
+  seed: 0
+  ckpt_setting: pi05_robotwin2
+  worker_local_files: true
+  disable_eval_video_log: true
+  keep_config: true
+  timestamped_output: false
+  output_dir: /path/to/LoongForge/outputs/eval/robotwin_pi05_parallel
+
+timeouts:
+  policy_call_ms: 600000
+  per_step_sec: 600
+  per_episode_sec: 7200
