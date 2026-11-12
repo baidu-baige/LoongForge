@@ -85,6 +85,21 @@ def test_point_config_cpu_sim_sets_workers(tmp_path) -> None:
     assert "pools" not in cfg or "gpu_sim" not in (cfg.get("pools") or {})
 
 
+def test_point_config_cpu_sim_overrides_a_template_pool(tmp_path) -> None:
+    """A template carrying pools.cpu_sim would otherwise pin every sweep point."""
+    config = {
+        "benchmark": {"name": "libero"},
+        "servers": [{"gpus": [0, 1]}],
+        "pools": {"cpu_sim": {"n_sims_per_server": 16}},
+        "coordinator": {"watchdog_interval_sec": 10},
+    }
+    cfg, _ = _point_config(config, 24, 0, tmp_path, gpu_sim=False, gpus=[0, 1])
+    assert cfg["pools"]["cpu_sim"]["n_sims_per_server"] == 24
+    # The rest of the coordinator block must survive the merge.
+    assert cfg["coordinator"]["watchdog_interval_sec"] == 10
+    assert cfg["coordinator"]["n_workers"] == 24
+
+
 def test_is_gpu_sim_detects_sapien_families() -> None:
     assert is_gpu_sim({"benchmark": {"name": "robotwin"}})
     assert is_gpu_sim({"benchmark": {"name": "simplerenv"}})

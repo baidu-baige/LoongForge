@@ -161,7 +161,12 @@ def _point_config(
             # Calibration needs one distinct seed per worker slot.
             benchmark["episodes_per_task"] = needed
     else:
-        cfg["coordinator"] = {"n_workers": int(n)}
+        # The coordinator resolves N with the pool first: a template carrying
+        # `pools.cpu_sim.n_sims_per_server` would otherwise pin every sweep
+        # point to that value and make `--n` a no-op. Merge instead of
+        # replacing `coordinator` so the user's other tuning survives.
+        cfg.setdefault("pools", {}).setdefault("cpu_sim", {})["n_sims_per_server"] = int(n)
+        cfg.setdefault("coordinator", {})["n_workers"] = int(n)
 
     cfg_path = root / f"N{n}.json"
     cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
