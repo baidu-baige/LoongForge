@@ -28,6 +28,8 @@ feed ``Cosmos3._forward_raw_video_with_action``:
 
 from __future__ import annotations
 
+import json
+import math
 from typing import Any, Dict, List, Optional, Tuple
 
 import torch
@@ -170,6 +172,83 @@ def _append_with_period_separator(caption: str, addition: str) -> str:
     return caption + sep + addition
 
 
+def _aspect_ratio_key(width: int, height: int) -> str:
+    """Canonical ``"W,H"`` aspect string (cosmos ``ActionPromptJsonFormatter._get_aspect_ratio``)."""
+    for sizes in VIDEO_RES_SIZE_INFO.values():
+        for key, (cand_w, cand_h) in sizes.items():
+            if width == cand_w and height == cand_h:
+                return key
+    divisor = math.gcd(width, height)
+    return f"{width // divisor},{height // divisor}"
+
+
+def _drop_empty_fields(value):
+    """Recursively drop ``None`` / empty str / list / dict values."""
+    if isinstance(value, dict):
+        cleaned = {k: _drop_empty_fields(v) for k, v in value.items()}
+        return {k: v for k, v in cleaned.items() if v not in (None, "", [], {})}
+    if isinstance(value, list):
+        cleaned = [_drop_empty_fields(v) for v in value]
+        return [v for v in cleaned if v not in (None, "", [], {})]
+    return value
+
+
+def _format_action_prompt_json(
+    caption: str,
+    *,
+    viewpoint: str,
+    description: Optional[str],
+    fps: float,
+    num_frames: int,
+    height: int,
+    width: int,
+    idle_frames: Optional[int],
+    total_frames: Optional[int],
+    mode: str,
+) -> str:
+    """JSON action prompt, port of cosmos ``ActionPromptJsonFormatter``.
+
+    Field order: ``cinematography``, ``actions``, ``duration``, ``fps``,
+    ``resolution``, ``aspect_ratio``; serialized with ``json.dumps`` as cosmos's
+    tokenizer augmentor does. Empty captions are returned unchanged.
+    """
+    if not isinstance(caption, str) or caption == "":
+        return caption
+    if fps <= 0:
+        raise ValueError(f"fps must be positive, got {fps}")
+    duration_seconds = int(num_frames) / fps
+    minutes, seconds = divmod(round(duration_seconds), 60)
+
+    description_text = caption.strip()
+    if not description_text.endswith((".", "!", "?")):
+        description_text = f"{description_text}."
+    idle_frame = None
+    if mode != "inverse_dynamics" and idle_frames is not None:
+        idle_frame = f"{idle_frames} out of {total_frames}." if total_frames is not None else f"{idle_frames}."
+
+    framing = _VIEWPOINT_TEMPLATES.get(str(viewpoint))
+    if framing is None:
+        framing = str(description).rstrip() if description else None
+    elif description:
+        framing = framing + (" " if framing.endswith(".") else ". ") + str(description).rstrip()
+
+    prompt = {
+        "cinematography": {"framing": framing},
+        "actions": [
+            {
+                "time": f"0:00-{minutes}:{seconds:02d}",
+                "description": description_text,
+                "idle_frame": idle_frame,
+            }
+        ],
+        "duration": f"{int(duration_seconds)}s",
+        "fps": float(fps),
+        "resolution": {"H": int(height), "W": int(width)},
+        "aspect_ratio": _aspect_ratio_key(int(width), int(height)),
+    }
+    return json.dumps(_drop_empty_fields(prompt))
+
+
 def _build_sequence_plan_policy(
     video_length: int,
     action_length: int,
@@ -238,6 +317,7 @@ def build_cosmos3_transforms(ctx: TransformBuilderContext):
         cfg_dropout_rate=cfg_dropout_rate,
         target_h=data_cfg.target_h,
         target_w=data_cfg.target_w,
+        format_prompt_as_json=data_cfg.format_prompt_as_json,
     )]
 
 
@@ -258,6 +338,8 @@ class Cosmos3ActionTransform(BaseTransform):
         cfg_dropout_rate: Probability of replacing the caption with the empty
             string (classifier-free guidance). Set to 0.0 for deterministic
             parity tests.
+        format_prompt_as_json: Build the cosmos JSON action prompt instead of the
+            plain-text caption chain.
     """
 
     def __init__(
@@ -272,6 +354,7 @@ class Cosmos3ActionTransform(BaseTransform):
         # Backwards-compat aliases used by older configs/tests:
         target_h: Optional[int] = None,
         target_w: Optional[int] = None,
+        format_prompt_as_json: bool = False,
     ) -> None:
         super().__init__(apply_to=["video", "action", "ai_caption"], training=True)
         self.max_text_tokens = max_text_tokens
@@ -285,6 +368,7 @@ class Cosmos3ActionTransform(BaseTransform):
         self.action_chunk_length = int(action_chunk_length)
         self.temporal_compression = int(temporal_compression)
         self.cfg_dropout_rate = float(cfg_dropout_rate)
+        self.format_prompt_as_json = bool(format_prompt_as_json)
 
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=True)
 
@@ -329,6 +413,21 @@ class Cosmos3ActionTransform(BaseTransform):
         # cfg_dropout_rate is forced to 0.0 under deterministic mode at build time.
         if self.training and self.cfg_dropout_rate > 0.0 and torch.rand(1).item() < self.cfg_dropout_rate:
             full_caption = ""
+        elif self.format_prompt_as_json:
+            # JSON action prompt (cosmos ActionPromptJsonFormatter + json.dumps).
+            fps_val = float(fps.item() if torch.is_tensor(fps) else fps)
+            full_caption = _format_action_prompt_json(
+                caption,
+                viewpoint=str(viewpoint),
+                description=description,
+                fps=fps_val,
+                num_frames=target_t,
+                height=int(image_size[0]),
+                width=int(image_size[1]),
+                idle_frames=int(idle_frames.item() if torch.is_tensor(idle_frames) else idle_frames),
+                total_frames=int(action.shape[0]),
+                mode=str(mode),
+            )
         else:
             full_caption = caption
             # 3a. Viewpoint

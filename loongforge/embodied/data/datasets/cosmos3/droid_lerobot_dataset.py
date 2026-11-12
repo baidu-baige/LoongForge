@@ -282,6 +282,8 @@ class DROIDLeRobotDataset(Dataset):
         use_image_augmentation: bool = False,
         colorjitter_on_gpu: bool = False,
         deterministic: bool = False,
+        split_val_ratio: float = 0.0,
+        split_seed: int = 42,
     ) -> None:
         super().__init__()
         if viewpoint != "concat_view":
@@ -370,7 +372,42 @@ class DROIDLeRobotDataset(Dataset):
         self._ep_starts = ep_starts.astype(np.int64)
         # ``chunk_length + 1`` observation frames are required per sample (the
         # leading frame supplies the initial state when ``use_state=True``).
-        self._valid_cum = np.cumsum(np.maximum(0, ep_counts - self._chunk_length)).astype(np.int64)
+        ep_valid = np.maximum(0, ep_counts - self._chunk_length).astype(np.int64)
+
+        # Train/val episode split (cosmos-framework ``split_episode_ids``): the first
+        # ``round(N * split_val_ratio)`` episodes of ``randperm(N, seed)`` are held out.
+        # Held-out episodes keep their flat-index slot with zero windows, so
+        # ``__getitem__`` addressing is unchanged. ``_train_episode_order`` keeps the
+        # permuted order, which defines cosmos's per-episode shuffle blocks.
+        num_episodes = len(self._episodes)
+        perm = torch.randperm(num_episodes, generator=torch.Generator().manual_seed(int(split_seed))).tolist()
+        num_val = int(round(num_episodes * float(split_val_ratio)))
+        train_episode_ids = np.asarray(perm[num_val:], dtype=np.int64)
+        positions = np.searchsorted(self._ep_vals, train_episode_ids)
+        found = (positions < len(self._ep_vals)) & (
+            self._ep_vals[np.minimum(positions, len(self._ep_vals) - 1)] == train_episode_ids
+        )
+        self._train_episode_order = positions[found]
+        if num_val > 0:
+            keep = np.zeros(len(self._ep_vals), dtype=bool)
+            keep[self._train_episode_order] = True
+            ep_valid = np.where(keep, ep_valid, 0)
+        self._ep_valid = ep_valid
+        self._valid_cum = np.cumsum(ep_valid).astype(np.int64)
+
+    def get_shuffle_blocks(self) -> List[tuple]:
+        """Per-episode flat-index blocks ``(start, length)`` in cosmos's block order.
+
+        Mirrors cosmos-framework ``BaseActionLeRobotDataset.get_shuffle_blocks``:
+        one block per train episode with at least one window, ordered like the
+        permuted train episode ids. Used by the cosmos3 episode-stream sampler.
+        """
+        starts = self._valid_cum - self._ep_valid
+        return [
+            (int(starts[p]), int(self._ep_valid[p]))
+            for p in self._train_episode_order
+            if self._ep_valid[p] > 0
+        ]
 
     @property
     def fps(self) -> float:
@@ -470,11 +507,12 @@ class DROIDLeRobotDataset(Dataset):
         """Build [chunk+1, 8] joint_pos action with prepended initial state.
 
         The window is ``chunk + 1`` frames: ``rows[0]`` is the initial observed
-        state (prepended when ``use_state=True``) and ``rows[1:]`` are the
-        ``chunk`` commanded actions. The gripper channel is flipped (1 - g) to
-        match the cosmos convention. No normalization is applied.
+        state (prepended when ``use_state=True``) and ``rows[:chunk]`` are the
+        ``chunk`` commanded actions, i.e. action timestamps ``0..chunk-1``.
+        The gripper channel is flipped (1 - g) to match the cosmos convention.
+        No normalization is applied.
         """
-        action_rows = observation_rows[1:]
+        action_rows = observation_rows[: self._chunk_length]
         joints = np.asarray([r[_JOINT_ACTION_FEATURE] for r in action_rows], dtype=np.float32)  # [chunk, 7]
         gripper = np.asarray(
             [r[_ACTION_GRIPPER_FEATURE] for r in action_rows], dtype=np.float32
@@ -574,7 +612,7 @@ def build_droid_dataset(model_cfg, data_cfg, training_args) -> DROIDLeRobotDatas
     a CLI override via ``args.action_chunk_length``) and falls back to 32, the
     canonical DROID action-policy length.
     """
-    return DROIDLeRobotDataset(
+    dataset = DROIDLeRobotDataset(
         root=training_args.dataset_path,
         fps=data_cfg.action_fps,
         chunk_length=data_cfg.action_chunk_length,
@@ -582,4 +620,14 @@ def build_droid_dataset(model_cfg, data_cfg, training_args) -> DROIDLeRobotDatas
         use_image_augmentation=data_cfg.use_image_augmentation,
         colorjitter_on_gpu=data_cfg.colorjitter_on_gpu,
         deterministic=training_args.deterministic_mode,
+        split_val_ratio=data_cfg.split_val_ratio,
+        split_seed=data_cfg.split_seed,
     )
+    # Read by the cosmos3 sampler builder (``samplers.py``).
+    dataset.episode_stream_cfg = {
+        "enabled": bool(data_cfg.episode_stream),
+        "seed": int(data_cfg.episode_shuffle_seed),
+        "shards_per_rank": int(data_cfg.episode_stream_shards_per_rank),
+        "worker_batch": int(data_cfg.episode_stream_worker_batch),
+    }
+    return dataset

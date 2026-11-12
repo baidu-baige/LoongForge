@@ -40,6 +40,7 @@ Attention Modes:
 """
 
 import math
+import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Tuple
@@ -81,6 +82,12 @@ MAX_CAUSAL_LEN_IMAGE_BATCH = 0
 MAX_FULL_LEN_IMAGE_BATCH = 0
 MAX_CAUSAL_LEN_VIDEO_BATCH = 0
 MAX_FULL_LEN_VIDEO_BATCH = 0
+
+# Trailing pad segment, mirroring cosmos-framework ``sequence_pack_from_packed_sequence``:
+# when every sample has both a causal and a full split, each stream gets ``cp_world_size`` extra
+# zero rows (before rounding), described as one extra trailing segment on the tower offsets and on
+# ``sample_offsets`` so padding attends only to padding. COSMOS3_PAD_SEGMENT=0 disables it.
+PAD_SEGMENT_ENABLED = os.environ.get("COSMOS3_PAD_SEGMENT", "1").strip().lower() not in ("0", "false", "no", "off")
 
 
 # ============================================================================
@@ -1800,6 +1807,25 @@ def _pad_to_N(N, x: torch.Tensor) -> torch.Tensor:
     return padded
 
 
+def _append_pad_segment(offsets: torch.Tensor, padded_len: int) -> torch.Tensor:
+    """Return ``offsets`` with ``padded_len`` appended, adding a final segment for the padding.
+
+    Mirrors cosmos ``runtime._append_pad_segment``: ``offsets`` ends at the real token count, so the
+    appended entry describes exactly the zero-filled rows.
+    """
+    return torch.cat((offsets, offsets.new_full((1,), padded_len)))
+
+
+def has_pad_segment(pack: Mapping) -> bool:
+    """Whether the pack carries a trailing pad segment (cosmos ``runtime.has_pad_segment``)."""
+    return bool(pack.get("_has_pad_segment", False))
+
+
+def drop_pad_segment(pack: Mapping, offsets: torch.Tensor) -> torch.Tensor:
+    """``offsets`` without the trailing pad segment, i.e. real samples only (cosmos ``runtime.drop_pad_segment``)."""
+    return offsets[:-1] if has_pad_segment(pack) else offsets
+
+
 def _round_up_to_N(n: int, cp_world_size: int = 1, pad_for_cuda_graphs: bool = False) -> int:
     """Round up n to alignment boundary."""
     if pad_for_cuda_graphs:
@@ -1976,8 +2002,26 @@ def factored_from_joint_sequence(
     causal_seq = packed_sequence[meta["_causal_indices"]]  # [N_causal_tokens,D]
     full_only_seq = packed_sequence[meta["_full_indices"]]  # [N_full_tokens,D]
 
-    need_causal = _round_up_to_N(int(causal_seq.shape[0]), cp_world_size, pad_for_cuda_graphs)
-    need_full = _round_up_to_N(int(full_only_seq.shape[0]), cp_world_size, pad_for_cuda_graphs)
+    # Pad segment: only when both streams have the same, non-zero segment count,
+    # i.e. every sample contributes both a causal and a full split.
+    pad_segment_supported = (
+        PAD_SEGMENT_ENABLED
+        and meta["_causal_seq_offsets"].shape[0] == meta["_full_only_seq_offsets"].shape[0]
+        and meta["_causal_seq_offsets"].shape[0] > 1
+    )
+
+    len_causal = int(causal_seq.shape[0])
+    len_full = int(full_only_seq.shape[0])
+    if pad_segment_supported:
+        # At least one padded row per stream (per CP rank), re-rounded afterwards.
+        need_causal = len_causal + cp_world_size
+        need_full = len_full + cp_world_size
+    else:
+        need_causal = len_causal
+        need_full = len_full
+
+    need_causal = _round_up_to_N(need_causal, cp_world_size, pad_for_cuda_graphs)
+    need_full = _round_up_to_N(need_full, cp_world_size, pad_for_cuda_graphs)
 
     causal_seq, full_only_seq = _round_up_for_cuda_graphs_or_cp(
         causal_seq,
@@ -1988,12 +2032,44 @@ def factored_from_joint_sequence(
         pad_for_cuda_graphs,
     )
 
+    padded_causal_len = int(causal_seq.shape[0])
+    padded_full_len = int(full_only_seq.shape[0])
+    pad_causal = padded_causal_len - len_causal
+    pad_full = padded_full_len - len_full
+
+    # Describe the padding as one extra trailing segment per stream (and on ``sample_offsets`` for
+    # the gen->all pass), so varlen attention covers the padded rows and they attend only to padding.
+    pad_segment_fields: dict[str, Any] = {}
+    if pad_segment_supported and (pad_causal > 0 or pad_full > 0):
+        assert pad_causal > 0 and pad_full > 0, (
+            "Padding must land on both streams so the pad segment is non-empty on every side, "
+            f"got pad_causal={pad_causal}, pad_full={pad_full}."
+        )
+        assert meta["sample_offsets"].shape[0] == meta["_full_only_seq_offsets"].shape[0], (
+            "The pad segment needs one full split per sample: got "
+            f"{meta['sample_offsets'].shape[0] - 1} samples and "
+            f"{meta['_full_only_seq_offsets'].shape[0] - 1} full splits."
+        )
+        pad_segment_fields["_causal_seq_offsets"] = _append_pad_segment(meta["_causal_seq_offsets"], padded_causal_len)
+        pad_segment_fields["max_causal_len"] = max(meta["max_causal_len"], pad_causal)
+        pad_segment_fields["_full_only_seq_offsets"] = _append_pad_segment(
+            meta["_full_only_seq_offsets"], padded_full_len
+        )
+        pad_segment_fields["max_full_len"] = max(meta["max_full_len"], pad_full)
+        pad_segment_fields["sample_offsets"] = _append_pad_segment(
+            meta["sample_offsets"], padded_causal_len + padded_full_len
+        )
+        pad_segment_fields["max_sample_len"] = max(meta["max_sample_len"], pad_causal + pad_full)
+        pad_segment_fields["_has_pad_segment"] = True
+
     pack: FactoredSequencePack = {
         **meta,
         "max_num_tokens": sum(sample_lens),
         "causal_seq": causal_seq,
         "full_only_seq": full_only_seq,
         "is_sharded": False,
+        # Last: the pad-segment entries shadow the ``meta`` offsets / max lens of the same name.
+        **pad_segment_fields,
     }
     return pack
 
@@ -2618,6 +2694,32 @@ def get_all_seq(pack: SequencePack) -> torch.Tensor:
                 out[pack["_full_indices"]] = pack["full_only_seq"][: pack["_full_indices"].shape[0]]
         return out
     raise KeyError("Cannot derive all_seq from provided pack")
+
+
+def get_all_seq_padded(pack: SequencePack) -> Tuple[torch.Tensor, torch.Tensor, int]:
+    """
+    Get all tokens as one interleaved stream padded to the length ``sample_offsets`` describes,
+    together with ``sample_offsets`` / ``max_sample_len`` (cosmos ``runtime.get_all_seq``).
+
+    On a pack with a pad segment the stream is ``padded_causal + padded_full`` rows long: real tokens
+    scatter into their packed positions and the trailing rows stay zero, covered by the pad segment
+    of ``sample_offsets``. Without a pad segment this is :func:`get_all_seq` (real tokens only).
+    """
+    if not has_pad_segment(pack):
+        return get_all_seq(pack), pack["sample_offsets"], pack["max_sample_len"]
+
+    _ensure_core_metadata(pack)
+    assert "causal_seq" in pack and "full_only_seq" in pack, "pad segment requires a factored pack"
+    if pack["is_sharded"]:
+        assert False, "get_all_seq_padded is not supported in context parallel sharded mode"
+    out = pack["causal_seq"].new_zeros(
+        pack["causal_seq"].shape[0] + pack["full_only_seq"].shape[0], *pack["causal_seq"].shape[1:]
+    )  # [padded_causal+padded_full,D]
+    if pack["causal_seq"].shape[0] > 0:
+        out[pack["_causal_indices"]] = pack["causal_seq"][: pack["_causal_indices"].shape[0]]
+    if pack["full_only_seq"].shape[0] > 0:
+        out[pack["_full_indices"]] = pack["full_only_seq"][: pack["_full_indices"].shape[0]]
+    return out, pack["sample_offsets"], pack["max_sample_len"]
 
 
 def get_causal_seq(pack: SequencePack) -> Tuple[torch.Tensor, torch.Tensor]:

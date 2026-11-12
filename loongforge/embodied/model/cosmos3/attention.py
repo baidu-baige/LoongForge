@@ -7,6 +7,8 @@
 
 """Attention dispatch and sequence packing utilities for joint attention."""
 
+import os
+
 import torch
 from torch import Tensor
 from torch.nn.attention.flex_attention import BlockMask, create_block_mask, flex_attention as _flex_attention
@@ -19,10 +21,12 @@ from .sequence_packing import (
     create_sparse_mask,
     factored_from_joint_sequence,
     from_joint,
+    drop_pad_segment,
     from_mode_splits,
     generate_natten_metadata,
     generate_temporal_causal_natten_metadata,
     get_all_seq,
+    get_all_seq_padded,
     get_causal_seq,
     get_full_only_seq,
     joint_from_joint_sequence,
@@ -139,7 +143,11 @@ def two_way_attention(
     causal_v, _ = get_causal_seq(packed_value_states)
     full_q, full_q_offsets = get_full_only_seq(packed_query_states)
 
-    sample_offsets = packed_query_states["sample_offsets"]
+    # Tower offsets carry the pad segment folded in when the pack has one; the
+    # gen->all pass keys against the padded interleaved stream with the matching padded
+    # ``sample_offsets`` so the padded GEN queries attend only to the padded keys.
+    sample_k, sample_offsets, max_sample_len = get_all_seq_padded(packed_key_states)
+    sample_v, _, _ = get_all_seq_padded(packed_value_states)
 
     use_dont_care_mask = causal_q_offsets is causal_k_offsets
 
@@ -162,12 +170,12 @@ def two_way_attention(
 
     full_res = attention(
         full_q.unsqueeze(0),  # [1,N_full,heads,head_dim]
-        get_all_seq(packed_key_states).unsqueeze(0),  # [1,N_all,heads,head_dim]
-        get_all_seq(packed_value_states).unsqueeze(0),  # [1,N_all,heads,head_dim]
+        sample_k.unsqueeze(0),  # [1,N_all,heads,head_dim]
+        sample_v.unsqueeze(0),  # [1,N_all,heads,head_dim]
         cumulative_seqlen_Q=full_q_offsets,
         cumulative_seqlen_KV=sample_offsets,
         max_seqlen_Q=packed_query_states["max_full_len"],
-        max_seqlen_KV=packed_query_states["max_sample_len"],
+        max_seqlen_KV=max_sample_len,
         deterministic=torch.are_deterministic_algorithms_enabled()
     )  # [1,N_full,heads,head_dim]
 
@@ -213,7 +221,8 @@ def three_way_attention(
         # regardless of attention weights. Softmax mass is still allocated to these positions (not
         # redistributed), so this differs from hard key masking, but the output contribution is 0.
         full_v = full_v.clone()
-        starts = full_q_offsets[:-1].long()  # [B]
+        # Real-sample starts only: the pad segment must not be treated as a sample.
+        starts = drop_pad_segment(packed_query_states, full_q_offsets)[:-1].long()  # [B]
         null_positions = (
             starts.unsqueeze(1) + torch.arange(attention_meta.num_action_tokens_per_supertoken, device=starts.device)
         ).reshape(-1)
@@ -573,6 +582,18 @@ def flash2_attention(
 
     scale = scale if scale is not None else query.shape[-1] ** -0.5
 
+    if is_varlen and _VARLEN_BACKEND == "natten":
+        return _natten_varlen_attention(
+            query, key, value,
+            is_causal=is_causal,
+            scale=scale,
+            cumulative_seqlen_Q=cumulative_seqlen_Q,
+            cumulative_seqlen_KV=cumulative_seqlen_KV,
+            max_seqlen_Q=max_seqlen_Q,
+            max_seqlen_KV=max_seqlen_KV,
+            return_lse=return_lse,
+        )
+
     if is_varlen:
         assert query.shape[0] == key.shape[0] == value.shape[0] == 1
         q = query.squeeze(0)  # [total_tokens,H,D]
@@ -642,6 +663,48 @@ def is_torch_compiling() -> bool:
         return torch.compiler.is_compiling()
     except Exception:
         return False
+
+
+# Varlen attention backend. cosmos-framework has no flash2 varlen ("banned due to
+# instability") and runs varlen calls on NATTEN when no flash3/cuDNN varlen is
+# available (e.g. A800). COSMOS3_VARLEN_ATTN=natten routes LoongForge's varlen calls
+# the same way; the default keeps flash_attn_varlen_func.
+_VARLEN_BACKEND = os.environ.get("COSMOS3_VARLEN_ATTN", "flash2").strip().lower()
+_NATTEN_CONFIGURED = False
+
+
+def _natten_varlen_attention(
+    query, key, value, *, is_causal, scale, cumulative_seqlen_Q, cumulative_seqlen_KV,
+    max_seqlen_Q, max_seqlen_KV, return_lse,
+):
+    """Varlen attention via NATTEN, mirroring cosmos ``natten.functions.natten_attention``
+    (``cutlass-fmha`` on sm80, ``backward_use_pt_reduction=True``, unrestricted memory
+    preference, KV parallelism in fused NA)."""
+    global _NATTEN_CONFIGURED
+    from natten.functional import attention as natten_attention
+
+    if not _NATTEN_CONFIGURED:
+        from natten.context import set_memory_usage_preference, use_kv_parallelism_in_fused_na
+
+        set_memory_usage_preference("unrestricted")
+        use_kv_parallelism_in_fused_na(True)
+        _NATTEN_CONFIGURED = True
+
+    backend = "cutlass-fmha" if torch.cuda.get_device_capability(query.device)[0] < 9 else None
+    return natten_attention(
+        query=query,
+        key=key,
+        value=value,
+        is_causal=is_causal,
+        scale=scale,
+        cumulative_seqlen_Q=cumulative_seqlen_Q,
+        cumulative_seqlen_KV=cumulative_seqlen_KV,
+        max_seqlen_Q=max_seqlen_Q,
+        max_seqlen_KV=max_seqlen_KV,
+        return_lse=return_lse,
+        backend=backend,
+        backward_use_pt_reduction=True,
+    )
 
 
 # Use the local attention function

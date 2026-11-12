@@ -49,9 +49,19 @@ DROID data requires no extra offline preprocessing. Frame stitching, image augme
 
 Remaining settings like target resolution, action chunk length, CFG dropout are already set in the data section of `configs/models/embodied/cosmos3/nano.yaml` (defaults: `target_h/target_w=480`, `action_chunk_length=32`, `action_fps=15.0`), and generally don't need overriding.
 
+Data behaviour that matches the official cosmos-framework (all enabled by default, no extra arguments needed):
+
+- Action targets are frames t..t+31, and the initial state is frame t;
+- Training order is an episode-shuffled stream that reads each episode sequentially (`episode_stream=true`), and 3% of episodes, chosen by `randperm(N, seed=42)`, are held out from training (`split_val_ratio=0.03`).
+
+The action prompt format is controlled by `data.format_prompt_as_json`:
+
+- Default `false` (plain text): matches the official policy server's default when the checkpoint carries no training config; evaluating the open weights `nvidia/Cosmos3-Nano-Policy-DROID` with the official Quickstart uses plain text;
+- `true`: the JSON prompt (with `idle_frame`) used by the official DROID training recipe. Checkpoints trained this way need `--format-prompt-as-json` when served by the official policy server.
+
 ## 2. Launch Training
 
-Launch script: `examples/embodied/cosmos3/run_cosmos3_nano_droid_fsdp_finetune.sh`. Defaults to single-node 8-GPU FSDP2 + bf16, trains for 500 steps, per-device batch=2.
+Launch script: `examples/embodied/cosmos3/run_cosmos3_nano_droid_fsdp_finetune.sh`. Defaults to single-node 8-GPU FSDP2, bf16 compute + fp32 master weights, trains for 50 steps, per-device batch=2.
 
 ### 2.1 Environment Variables
 
@@ -88,6 +98,8 @@ Arguments in the script are grouped by purpose as follows:
 --dtype bfloat16                     # Training precision: bf16
 --fsdp-reduce-dtype bf16             # Reduce-scatter gradients in bf16
 --fsdp-wrap-modules MoTDecoderLayer  # Wrap one FSDP group per MoT decoder layer
+--fsdp-original-param-dtype fp32     # Store parameters in fp32 (fp32 master); all-gathered to bf16 for compute
+--no-fsdp-cast-forward-inputs        # Do not cast inputs to bf16 at the FSDP entry; keeps action targets in fp32
 --init-on-meta                       # Reduce peak init memory via meta device
 ```
 
@@ -98,14 +110,14 @@ Arguments in the script are grouped by purpose as follows:
 --dataset-strategy cosmos3_droid     # Official DROID data-processing strategy (frame stitching, image augmentation, etc.)
 --dataset-path $DATA_PATH            # DROID data directory
 --tokenizer-path $TOKENIZER_PATH     # Qwen3-VL tokenizer / processor directory
---num-workers 4                      # DataLoader worker count
+--num-workers 8                      # DataLoader worker count
 ```
 
 **Training and Optimizer:**
 
 ```bash
 --trainer-type FinetuneTrainer
---train-iters 500                    # Total training steps
+--train-iters 50                     # Total training steps
 --per-device-batch-size 2            # Per-device batch
 --gradient-accumulation-steps 1
 --disable-tf32                       # Disable TF32 to match numerical precision of the reference implementation
@@ -123,14 +135,17 @@ Cosmos3-Nano's action head (`action2llm` / `llm2action` / `action_modality_embed
 --lr-group net.action2llm=1e-3,net.llm2action=1e-3,net.action_modality_embed=1e-3,net=2e-4
                                      # Action heads at 1e-3, other net params at 2e-4
 --lr-decay-style lambda_linear       # Learning-rate decay: linear
+--lambda-cycle-length 100000         # Linear cycle length, matching the official cycle_lengths=[100000]
 --lr-warmup-iters 0
---optimizer TorchFusedAdamW          # Optimizer: fused AdamW
+--optimizer CapturableFusedAdamW
 --clip-grad 1.0
 --weight-decay 0.05
 --adam-beta1 0.9
 --adam-beta2 0.99
 --adam-eps 1e-8
 ```
+
+`TorchFusedAdamW` can also be used when bit-for-bit agreement with the official run is not required; the two differ only in last-bit rounding.
 
 To adjust for actual training scale, the common approach is to:
 
@@ -153,20 +168,30 @@ bash examples/embodied/cosmos3/run_cosmos3_nano_droid_fsdp_finetune.sh data.colo
 
 ### 2.5 Correctness Verification
 
-With identical data, weights and training configuration, the loss was compared step by step against the official cosmos-framework `launch_sft_action_policy_droid` recipe: over 26 steps the loss is **bit-identical (max |Δ| = 0)**.
+With identical data, weights and training configuration, the loss was compared step by step in deterministic mode against the official cosmos-framework `action_policy_droid_nano` configuration (8 GPUs, per-device batch=2, grad accum=1): over 100 steps the max error of the rank-averaged loss is total 2.9e-6, vision 5.0e-8, action 3.6e-7 (plain-text prompt; 1.7e-6 / 4.8e-8 / 3.7e-7 with the JSON prompt), within the printing precision of the logs.
 
 ![cosmos3-nano loss alignment](../../assets/images/precision/cosmos3.png)
 
-To reproduce the comparison, keep the following arguments consistent with the reference:
+To reproduce the comparison, in addition to the fp32 master, `--no-fsdp-cast-forward-inputs`, `CapturableFusedAdamW` and `--lambda-cycle-length 100000` from section 2.3, LoongForge also needs:
 
 ```bash
+export CUBLAS_WORKSPACE_CONFIG=:4096:8
+# Use NATTEN for varlen attention, the backend the official framework actually uses on sm80 GPUs
+export COSMOS3_VARLEN_ATTN=${COSMOS3_VARLEN_ATTN:-natten}
+
 --seed 42                            # same seed
 --set-seed-by-rank                   # per-rank seed offset, matching the reference behaviour
 --dtype bfloat16                     # bf16 training precision
 --fsdp-reduce-dtype bf16             # gradient reduce-scatter precision
 --fsdp-wrap-modules MoTDecoderLayer  # FSDP grouping granularity
 --disable-tf32                       # TF32 off
---deterministic-mode                 # deterministic kernels; also export CUBLAS_WORKSPACE_CONFIG=:4096:8
+--deterministic-mode                 # deterministic kernels
+model.compile_model=false            # the official --deterministic disables model compilation
+data.use_image_augmentation=false    # the two frameworks consume augmentation RNG differently; off for the comparison
+data.colorjitter_on_gpu=false
 ```
+
+- `COSMOS3_VARLEN_ATTN` defaults to `flash2`. To match the official loss it must be set to `natten`, with NATTEN installed (e.g. `pip install --no-deps --target <dir>`, then add `<dir>` to `PYTHONPATH`, leaving the existing environment untouched).
+- The official side must match: `--deterministic`, `PYTHONHASHSEED=42`, cfg dropout set to 0, image augmentation off, `checkpoint.keys_to_skip_loading=[net_ema.]` (action heads also loaded from the checkpoint), `trainer.callbacks.compile_tokenizer.enabled=False`
 
 `GPUS_PER_NODE`, `--per-device-batch-size` and `--gradient-accumulation-steps` determine the global batch and sampler sharding — do not change them midway through an alignment experiment.
