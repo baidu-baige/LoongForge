@@ -912,4 +912,4 @@ def test_example_gr00t_n16_config_matches_n17_adapter():
     assert cfg["benchmark"]["action_bridge"] == "gr00t_n16_joint14"
     assert cfg["benchmark"]["first_chunk_len"] == cfg["benchmark"]["chunk_len"] == 16
     assert cfg["server"]["embodiment_tag"] == "robodojo_arx_x5" and cfg["server"]["chunk_execute_steps"] == 0
-    assert "action_horizon" not in cfg["model"]
+    assert "action_horizon" not in cfg["model"] and cfg["model"]["action_dim"] == 14

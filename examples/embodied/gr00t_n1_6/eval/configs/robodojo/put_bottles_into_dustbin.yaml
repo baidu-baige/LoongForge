@@ -32,6 +32,9 @@ model:
   model_name: /path/to/eagle3-processor-groot-n1d6
   vlm_tokenizer_path: /path/to/eagle3-processor-groot-n1d6
   state_encoding: robodojo_joint14
+  # Decoded joints per step (left 6 + gripper, right 6 + gripper); the server trims each step
+  # to this width (default 7 is the LIBERO / SimplerEnv layout).
+  action_dim: 14
   use_flash_attention: true
 
 server:
