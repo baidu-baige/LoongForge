@@ -26,6 +26,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import signal
 import socket
 import subprocess
 import sys
@@ -33,7 +34,7 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 from loongforge.embodied.eval.orchestrator.config import apply_config
@@ -348,6 +349,10 @@ def _launch_unit(
         [sys.executable, "-m", "loongforge.embodied.eval.orchestrator.run", "--config", str(cfg_path)],
         stdout=log,
         stderr=subprocess.STDOUT,
+        # Own session/process group: the unit wrapper spawns the benchmark
+        # subprocess, so killing only the wrapper (what a plain ``proc.kill()``
+        # does) leaves the sim running for ever. ``_kill_tree`` signals the group.
+        start_new_session=True,
     )
 
 
@@ -386,24 +391,65 @@ def _await_slot(
             for proc, (_, index) in list(pool.items()):
                 if now - started_at[index] > timeout_sec:
                     print(f"[coordinator] unit {index} exceeded {timeout_sec:.0f}s; killing it", flush=True)
-                    proc.kill()
-                    try:
-                        proc.wait(timeout=30)
-                    except subprocess.TimeoutExpired:
-                        pass
+                    _kill_tree(proc)
                     return proc, True
         time.sleep(1)
 
 
-def _terminate(proc: subprocess.Popen, timeout: float = 30) -> None:
-    """Terminate a process, escalating to SIGKILL if it does not exit."""
+def _kill_tree(proc: subprocess.Popen, timeout: float = 30) -> None:
+    """Kill a unit and everything it spawned.
+
+    A unit is ``orchestrator.run`` wrapping the benchmark subprocess, so killing
+    the wrapper alone leaves the sim (a grandchild) alive -- observed as sims
+    still burning a core 11 h after the run had exited. Units are launched with
+    ``start_new_session=True``, which makes the whole tree one process group we
+    can signal at once.
+    """
     if proc.poll() is not None:
         return
-    proc.terminate()
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, OSError):
+        proc.kill()
     try:
         proc.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
-        proc.kill()
+        pass
+
+
+def _terminate(proc: subprocess.Popen, timeout: float = 30) -> None:
+    """Terminate a process group, escalating to SIGKILL if it does not exit."""
+    if proc.poll() is not None:
+        return
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+    except (ProcessLookupError, PermissionError, OSError):
+        proc.terminate()
+    try:
+        proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        _kill_tree(proc)
+
+
+def _install_sigterm_cleanup() -> Optional[Callable]:
+    """Make SIGTERM raise SystemExit so ``run``'s ``finally`` teardown executes.
+
+    The default disposition kills the process outright, skipping ``finally`` --
+    which is how a ``kill`` of the coordinator once left eight policy servers
+    and a live sim behind. Returns the previous handler so the caller can
+    restore it, or ``None`` when the handler could not be installed (not the
+    main thread).
+    """
+    if threading.current_thread() is not threading.main_thread():
+        return None
+
+    def _handler(signum, frame):  # noqa: ANN001 - signal handler signature
+        raise SystemExit(128 + signum)
+
+    try:
+        return signal.signal(signal.SIGTERM, _handler)
+    except (ValueError, OSError):
+        return None
 
 
 class _ServerWatchdog(threading.Thread):
@@ -554,6 +600,7 @@ def _run_batch(
     tmp: Path,
     timeout_sec: float = 0.0,
     pin_gpu: bool = False,
+    on_launch: Optional[Callable[[subprocess.Popen], None]] = None,
 ) -> Tuple[Dict[int, int], List[int]]:
     """Run ``indices`` (into ``shards``) through a bounded pool fed by a global queue.
 
@@ -580,6 +627,8 @@ def _run_batch(
                 )
             else:
                 proc = _launch_unit(config, shards[index], index, url, output_dir, tmp)
+            if on_launch is not None:
+                on_launch(proc)
             pool[proc] = (slot, index)
         finished, timed_out = _await_slot(pool, started_at, timeout_sec)
         slot, index = pool.pop(finished)
@@ -675,7 +724,9 @@ def run(config: Dict[str, Any], config_path: str = "") -> Dict[str, Any]:
         probe_interval_sec=float(coordinator_cfg.get("watchdog_probe_interval_sec") or WATCHDOG_PROBE_INTERVAL_SEC),
     )
     watchdog_started = False
+    unit_procs: List[subprocess.Popen] = []
     started = time.time()
+    previous_sigterm = _install_sigterm_cleanup()
     try:
         for proc, args in servers:
             wait_healthz(f"http://{args.host}:{args.health_port}/healthz", args.server_start_timeout_sec, proc)
@@ -688,7 +739,7 @@ def run(config: Dict[str, Any], config_path: str = "") -> Dict[str, Any]:
             tmp = Path(tmpdir)
             _, failed_units = _run_batch(
                 config, all_shards, list(range(len(all_shards))), slots, output_dir, tmp, unit_timeout,
-                pin_gpu=is_gpu_sim,
+                pin_gpu=is_gpu_sim, on_launch=unit_procs.append,
             )
             # Coverage gate: re-run the shards that came up short rather than aborting.
             # A re-run lands in a fresh worker dir, so the overlap is deduped by
@@ -704,11 +755,16 @@ def run(config: Dict[str, Any], config_path: str = "") -> Dict[str, Any]:
                 all_shards.extend(shards_by_id[shard_id] for shard_id in short)
                 _, extra_failed = _run_batch(
                     config, all_shards, list(range(first, len(all_shards))), slots, output_dir, tmp,
-                    unit_timeout, pin_gpu=is_gpu_sim,
+                    unit_timeout, pin_gpu=is_gpu_sim, on_launch=unit_procs.append,
                 )
                 failed_units.extend(extra_failed)
                 repair_rounds += 1
     finally:
+        # Whatever the exit path (exception, SIGTERM, incomplete repair), no unit
+        # tree may outlive the coordinator: an orphaned sim keeps a GPU and a core
+        # busy with nobody reading its output.
+        for proc in unit_procs:
+            _kill_tree(proc)
         watchdog.stop()
         try:
             # Only join if it was actually started: joining a never-started thread raises,
@@ -718,6 +774,8 @@ def run(config: Dict[str, Any], config_path: str = "") -> Dict[str, Any]:
         finally:
             for proc, _ in servers:
                 _terminate(proc)
+            if previous_sigterm is not None:
+                signal.signal(signal.SIGTERM, previous_sigterm)
 
     launched_ids = [shard["id"] for shard in all_shards]
     validation = validate(expected_by_shard, launched_ids, read_records_by_unit(output_dir, len(all_shards)))

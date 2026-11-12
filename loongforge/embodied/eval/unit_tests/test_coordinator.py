@@ -452,6 +452,56 @@ def test_port_preflight_accepts_a_released_port() -> None:
     coord._assert_ports_free([released])  # must not raise
 
 
+def test_kill_tree_reaps_the_grandchild(tmp_path) -> None:
+    """A unit wrapper spawns the benchmark; killing the wrapper alone leaks it."""
+    import os
+    import subprocess
+    import sys
+    import time
+
+    from loongforge.embodied.eval.orchestrator import coordinator as coord
+
+    if not os.path.isdir("/proc"):
+        pytest.skip("needs /proc to observe the child tree")
+
+    script = (
+        "import subprocess, sys, time\n"
+        "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(300)'])\n"
+        "open(sys.argv[1], 'w').write(str(child.pid))\n"
+        "time.sleep(300)\n"
+    )
+    pidfile = tmp_path / "child.pid"
+    proc = subprocess.Popen([sys.executable, "-c", script, str(pidfile)], start_new_session=True)
+    try:
+        for _ in range(200):
+            if pidfile.exists() and pidfile.read_text().strip():
+                break
+            time.sleep(0.05)
+        grandchild = int(pidfile.read_text())
+
+        def alive(pid: int) -> bool:
+            """A zombie is dead: the container's reaper may never collect it."""
+            try:
+                state = open(f"/proc/{pid}/stat").read().split(") ", 1)[1][0]
+            except (OSError, IndexError):
+                return False
+            return state != "Z"
+
+        assert alive(grandchild)
+
+        coord._kill_tree(proc)
+
+        for _ in range(40):
+            if not alive(grandchild):
+                break
+            time.sleep(0.05)
+        assert not alive(grandchild)
+        assert proc.poll() is not None
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+
+
 def test_resolve_placement_uses_gpu_pool_for_robotwin() -> None:
     from loongforge.embodied.eval.orchestrator import coordinator as coord
 
@@ -640,3 +690,25 @@ def test_shard_config_makes_ckpt_setting_unique_per_worker() -> None:
     plain = coord._shard_config(base, shard, "ws://h:1", "/tmp/out")
     assert unique["run"]["ckpt_setting"] == "pi05_robotwin2_w3"
     assert plain["run"]["ckpt_setting"] == "pi05_robotwin2"
+
+
+def test_sigterm_handler_turns_into_system_exit() -> None:
+    """SIGTERM must raise SystemExit, otherwise ``run``'s ``finally`` never runs.
+
+    The default disposition kills the process outright: killing the coordinator
+    once left eight policy servers and a live sim behind.
+    """
+    import signal
+
+    from loongforge.embodied.eval.orchestrator import coordinator as coord
+
+    previous = coord._install_sigterm_cleanup()
+    try:
+        handler = signal.getsignal(signal.SIGTERM)
+        assert callable(handler)
+        with pytest.raises(SystemExit) as excinfo:
+            handler(signal.SIGTERM, None)
+        assert excinfo.value.code == 128 + signal.SIGTERM
+    finally:
+        if previous is not None:
+            signal.signal(signal.SIGTERM, previous)
