@@ -418,6 +418,11 @@ MODEL_CONFIG_REGISTRY = {
         "config_name": "minimax_m2_7",
     },
 
+    # ernie5.5
+    "ernie-5.5-flash-base": {
+        "config_path": "configs/models/ernie5_5",
+        "config_name": "ernie5_5_flash_base",
+    },
     # ernie4.5-vl
     "ernie4.5-28b-a3b-base": {
         "config_path": "configs/models/ernie4.5vl",

@@ -1,0 +1,8 @@
+{"messages":[{"role":"system","content":"You are a concise assistant."},{"role":"user","content":"What is 2 plus 2?"},{"role":"assistant","content":"2 plus 2 equals 4."}]}
+{"messages":[{"role":"user","content":"Name one primary color."},{"role":"assistant","content":"Blue is a primary color."}]}
+{"messages":[{"role":"user","content":"What is the capital of France?"},{"role":"assistant","content":"Paris is the capital of France."}]}
+{"messages":[{"role":"user","content":"How many days are in a week?"},{"role":"assistant","content":"There are seven days in a week."}]}
+{"messages":[{"role":"user","content":"What is water made of?"},{"role":"assistant","content":"Water is made of hydrogen and oxygen."}]}
+{"messages":[{"role":"user","content":"Name a mammal that can fly."},{"role":"assistant","content":"A bat is a mammal that can fly."}]}
+{"messages":[{"role":"user","content":"What color is grass usually?"},{"role":"assistant","content":"Grass is usually green."}]}
+{"messages":[{"role":"user","content":"What is three times three?"},{"role":"assistant","content":"Three times three equals nine."}]}

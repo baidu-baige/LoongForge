@@ -50,7 +50,6 @@ from megatron.core.utils import divide, get_pg_size, nvtx_range_pop, nvtx_range_
 
 import deep_gemm
 import flashinfer
-import lightning_indexer_bwd
 import transformer_engine_torch as tex
 
 
@@ -1486,6 +1485,8 @@ class CSAIndexerKernelFunction(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_score, grad_topk):
         """FP8 fused indexer backward using lightning_indexer_bwd."""
+        import lightning_indexer_bwd
+
         q_fp8, k_fp8, q_scale, k_scale, weight_scaled, topk_indices, ks, ke = ctx.saved_tensors
 
         # Padding slots are forward constants: zero their upstream grad (often NaN).
