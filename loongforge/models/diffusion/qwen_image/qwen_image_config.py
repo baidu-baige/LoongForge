@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from loongforge.models.common import BaseModelStditConfig
 from loongforge.models.factory import register_model_config
-from loongforge.utils.constants import CustomModelFamilies
+from loongforge.models.catalog import DiffusionModelFamilies
 
 
 @dataclass
@@ -65,7 +65,7 @@ class QwenImageConfig(BaseModelStditConfig):
 
 
 @register_model_config(
-    model_family=CustomModelFamilies.QWEN_IMAGE,
+    model_family=DiffusionModelFamilies.QWEN_IMAGE,
     model_arch="qwen-image-edit-2511",
 )
 def qwen_image_edit_2511_config():

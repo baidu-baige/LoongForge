@@ -30,7 +30,7 @@ from typing import Optional
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.transformer.transformer_config import TransformerConfig
 
-from loongforge.utils import get_model_config
+from loongforge.engines.megatron import get_model_config
 
 from loongforge.models.encoder.base_vision_models.base_vision_model import (
     BaseVisionModel,

@@ -11,9 +11,9 @@ import torch.distributed.checkpoint as dcp
 import torch.nn as nn
 from safetensors.torch import load_file
 
-import loongforge.embodied.distributed.checkpoint as ck
-from loongforge.embodied.distributed import DistributedContext
-from loongforge.embodied.distributed.checkpoint import (
+import loongforge.engines.torch.distributed.checkpoint as ck
+from loongforge.engines.torch.distributed import DistributedContext
+from loongforge.engines.torch.distributed.checkpoint import (
     build_alias_map,
     canonical_state_dict,
 )

@@ -14,7 +14,7 @@ sys.path.insert(0, project_root)
 sys.path.insert(0, os.path.join(project_root, 'tools'))
 
 from mcore_bridge.config.parallel_config import ParallelConfig
-from loongforge.utils.config_map import get_config_from_model_name
+from loongforge.models.catalog import get_config_from_model_name
 
 
 class Parser:
@@ -144,7 +144,7 @@ class Parser:
         # ============================================================================
 
         # INT4 dequantization for Bridge online HF loading (also defined as training
-        # CLI args in loongforge/train/arguments.py::_add_extra_bridge_args).
+        # CLI args in loongforge/training/megatron_args.py::_add_extra_bridge_args).
         param_dict['hf_dequantize_int4'] = getattr(args, 'hf_dequantize_int4', False)
         param_dict['hf_dequantize_mxfp4'] = getattr(args, 'hf_dequantize_mxfp4', False)
         param_dict['hf_dequantize_dtype'] = getattr(args, 'hf_dequantize_dtype', 'bfloat16')
@@ -251,7 +251,7 @@ if __name__ == "__main__":
         '--training-phase', 'pretrain',
     ]
 
-    from loongforge.train.parser import parse_train_args
+    from loongforge.engines.megatron.parser import parse_train_args
 
     args = parse_train_args()
     parser = Parser(args)

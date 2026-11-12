@@ -34,7 +34,7 @@ This project follows the same offline preprocessing scheme as the official LingB
 
 ### 2.1 Launch Training
 
-Training scripts: `examples/embodied/lingbot_va/run_lingbot_va_robotwin_fsdp_finetune.sh` and `examples/embodied/lingbot_va/run_lingbot_va_libero_fsdp_finetune.sh`. Their defaults are the recipe behind the results in this guide (initialize from `lingbot-va-base`, FP32 gradient reduction); only the paths need to be set:
+Training scripts: `examples/lingbot_va/finetuning/sft_lingbot_va_robotwin_fsdp.sh` and `examples/lingbot_va/finetuning/sft_lingbot_va_libero_fsdp.sh`. Their defaults are the recipe behind the results in this guide (initialize from `lingbot-va-base`, FP32 gradient reduction); only the paths need to be set:
 
 ```bash
 cd /path/to/LoongForge
@@ -44,17 +44,17 @@ CHECKPOINT_PATH=/path/to/lingbot-va-base \
 DATA_PATH=/path/to/robotwin-clean-and-aug-lerobot \
 OUTPUT_DIR=/path/to/outputs/lingbot_va_robotwin \
 SAVE_INTERVAL=2000 \
-bash examples/embodied/lingbot_va/run_lingbot_va_robotwin_fsdp_finetune.sh
+bash examples/lingbot_va/finetuning/sft_lingbot_va_robotwin_fsdp.sh
 
 # LIBERO-Long: 5000 steps, 8 GPUs x GA 10 = global batch 80
 CHECKPOINT_PATH=/path/to/lingbot-va-base \
 DATA_PATH=/path/to/libero-long-lerobot \
 OUTPUT_DIR=/path/to/outputs/lingbot_va_libero \
 SAVE_INTERVAL=1000 \
-bash examples/embodied/lingbot_va/run_lingbot_va_libero_fsdp_finetune.sh
+bash examples/lingbot_va/finetuning/sft_lingbot_va_libero_fsdp.sh
 
 # Smoke test: run only 20 steps to validate the training pipeline
-TRAIN_ITERS=20 bash examples/embodied/lingbot_va/run_lingbot_va_robotwin_fsdp_finetune.sh
+TRAIN_ITERS=20 bash examples/lingbot_va/finetuning/sft_lingbot_va_robotwin_fsdp.sh
 ```
 
 Checkpoints are saved in DCP format under `$OUTPUT_DIR/checkpoints/steps_<N>`; to resume after an interruption, rerun with the same `OUTPUT_DIR` and append `--resume`. The trailing `"$@"` of the scripts is passed through to `train.py` verbatim, so any training argument can be overridden.
@@ -156,14 +156,14 @@ Training produces DCP shards, while the policy server expects one checkpoint roo
 cd /path/to/LoongForge
 
 # RoboTwin: vae / text_encoder / tokenizer come from the official RoboTwin post-trained weights
-python examples/embodied/lingbot_va/export_eval_checkpoint.py \
+python examples/lingbot_va/export_eval_checkpoint.py \
     --ckpt  /path/to/outputs/lingbot_va_robotwin/checkpoints/steps_50000 \
     --base  /path/to/lingbot-va-base \
     --codec /path/to/lingbot-va-posttrain-robotwin \
     --out   /path/to/eval_ckpt/lingbot_va_robotwin_steps_50000
 
 # LIBERO-Long: vae / text_encoder / tokenizer come from the official LIBERO-Long post-trained weights
-python examples/embodied/lingbot_va/export_eval_checkpoint.py \
+python examples/lingbot_va/export_eval_checkpoint.py \
     --ckpt  /path/to/outputs/lingbot_va_libero/checkpoints/steps_5000 \
     --base  /path/to/lingbot-va-base \
     --codec /path/to/lingbot-va-posttrain-libero-long \
@@ -187,17 +187,17 @@ cd /path/to/LoongForge
 REPO_ROOT=$PWD \
 BENCHMARK_PYTHON=/path/to/robotwin/bin/python \
 CUDA_VISIBLE_DEVICES=0 \
-bash examples/embodied/lingbot_va/eval/run_robotwin_eval.sh
+bash examples/lingbot_va/eval/run_robotwin_eval.sh
 
 # LIBERO-Long: defaults to configs/libero/libero_10_full.yaml, 10 tasks x 50 episodes
 REPO_ROOT=$PWD \
 BENCHMARK_PYTHON=/path/to/libero/bin/python \
 CUDA_VISIBLE_DEVICES=0 \
-bash examples/embodied/lingbot_va/eval/run_libero_eval.sh
+bash examples/lingbot_va/eval/run_libero_eval.sh
 
 # Smoke test: a single episode
-CONFIG=examples/embodied/lingbot_va/eval/configs/robotwin/adjust_bottle.yaml bash examples/embodied/lingbot_va/eval/run_robotwin_eval.sh
-CONFIG=examples/embodied/lingbot_va/eval/configs/libero/libero_10.yaml bash examples/embodied/lingbot_va/eval/run_libero_eval.sh
+CONFIG=examples/lingbot_va/eval/configs/robotwin/adjust_bottle.yaml bash examples/lingbot_va/eval/run_robotwin_eval.sh
+CONFIG=examples/lingbot_va/eval/configs/libero/libero_10.yaml bash examples/lingbot_va/eval/run_libero_eval.sh
 ```
 
 For RoboTwin Hard, change `benchmark.task_config` from `demo_clean` to `demo_randomized`. Each task writes its results under `run.output_dir/<task_name>/` (`results.jsonl`, `summary.csv`, `suite_summary.csv`). A full evaluation takes a long time; split the tasks into several YAMLs to run them on multiple GPUs in parallel.

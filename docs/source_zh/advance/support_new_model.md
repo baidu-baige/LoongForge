@@ -22,16 +22,19 @@ num_attention_heads: 64
 ```
 
 ### 1.2 注册模型名称
-在 loongforge/utils/config_map.py 的 MODEL_CONFIG_REGISTRY 中注册，之后即可直接通过名称引用模型（如 `llama3-70b`）。
+在 `loongforge/models/catalog.py` 的统一 `MODEL_CONFIG_REGISTRY` 的 Megatron
+分组中，按模型家族注册，之后即可直接通过名称引用模型（如
+`llama3-70b`）。
 
 ```python
 MODEL_CONFIG_REGISTRY = {
-    # ... 已有模型
-    "llama3-70b": {
-            "config_path": "configs/models/llama3",
-            "config_name": "llama3_70b",
+    "megatron": {
+        LanguageModelFamilies.LLAMA: {
+            # ... 已有模型
+            "llama3-70b": "llama3/llama3_70b.yaml",
         },
-    }
+    },
+}
 ```
 
 ## 2. 支持 VLM 模型
@@ -39,7 +42,7 @@ VLM 可以看作 **ViT + 投影层 + LLM**。添加新 VLM 模型时，LLM 部�
 
     1. **准备组件配置**：定义 LLM 基座、视觉编码器和投影层配置。
     2. **创建组合配置**：编写 VLM 的顶层 YAML 配置文件。
-    3. **注册模型名称**：在 config_map.py 中注册新模型。
+    3. **注册模型名称**：在 catalog.py 中注册新模型。
 
 ### 2.1 视觉编码器（ViT）配置
 定义 Vision Transformer 参数。
@@ -112,21 +115,46 @@ model:
 ```
 
 ### 2.4 模型注册
-你需要在 loongforge/utils/config_map.py 中注册。打开 loongforge/utils/config_map.py 并向 MODEL_CONFIG_REGISTRY 字典中添加条目：
+在 `loongforge/models/catalog.py` 的 Megatron 分组中，按对应模型家族添加条目：
 
 ```python
 MODEL_CONFIG_REGISTRY = {
-    # ... 已有模型
-
-    # === 添加你的新模型 ===
-    "my-custom-vlm-8b": {
-        "config_path": "configs/models/<vlm_family>",       # 组合配置文件所在目录
-        "config_name": "my_new_vlm",                        # 组合配置文件名（不含 .yaml）
+    "megatron": {
+        VisionLanguageModelFamilies.VLM: {
+            # === 添加你的新模型 ===
+            "my-custom-vlm-8b": "<vlm_family>/my_new_vlm.yaml",
+        },
     },
 }
 ```
 
 注册成功后，即可直接通过名称引用模型（如 `my-custom-vlm-8b`）。
+
+### 2.5 添加 Torch 模型
+
+Torch 模型也使用同一个模型目录。Torch YAML 目前只有 `model` 和 `data`
+字段，没有 Megatron YAML 使用的 `_target_`；解析器需要这两个类型化配置类
+来提供字段类型、默认值和校验。Torch 条目使用三元组
+`(yaml_file, model_config_type, data_config_type)`：
+
+```python
+MODEL_CONFIG_REGISTRY = {
+    "torch": {
+        EmbodiedModelFamilies.PI05: {
+            "my-torch-model": (
+                "my_torch_model/my_torch_model.yaml",
+                "loongforge.models.my_torch_model.ModelConfig",
+                "loongforge.data.my_torch_model.DataConfig",
+            ),
+        },
+    },
+}
+```
+
+YAML 中的 `model_type` 必须与 Torch trainer 注册使用的 family 一致。
+注册表分组会在解析参数前选择 engine，默认 trainer 再按
+`(engine, model_type, training_phase)` 选择。`--trainer-type` 仍是 Torch
+可选的按名称覆盖。
 
 ## 3. 支持自定义模型（以 Wan 为例）
 Wan 系列模型配置位于 `configs/models/wan/`，例如：
@@ -143,10 +171,11 @@ configs/models/wan/<your_wan_variant>.yaml
 ### 3.2 注册模型名称
 ```python
 MODEL_CONFIG_REGISTRY = {
-    # ... 已有模型
-    "my-wan-variant": {
-        "config_path": "configs/models/wan",
-        "config_name": "<your_wan_variant>",
+    "megatron": {
+        DiffusionModelFamilies.WAN2_2_I2V: {
+            # ... 已有模型
+            "my-wan-variant": "wan/<your_wan_variant>.yaml",
+        },
     },
 }
 ```

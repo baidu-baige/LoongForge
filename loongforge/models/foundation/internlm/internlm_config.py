@@ -5,7 +5,7 @@
 
 from dataclasses import dataclass
 
-from loongforge.utils.constants import LanguageModelFamilies
+from loongforge.models.catalog import LanguageModelFamilies
 from loongforge.models.common.base_model_config import BaseModelConfig
 
 

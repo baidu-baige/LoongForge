@@ -1,30 +1,39 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Training entry for the Megatron-based core stack (LLM / VLM / Diffusion).
+"""Training entry that picks the engine for a model and runs its registered recipe."""
 
-This is NOT a unified entry for the whole framework. Embodied / VLA models run on a
-separate torch-native (DDP/FSDP) subsystem with its own entry at
-``loongforge/embodied/train.py`` — see ``loongforge/embodied/README.md``.
-"""
+import argparse
+import sys
 
-import logging
-logging.basicConfig(level=logging.WARNING)
-from loongforge.train import parse_train_args
-from loongforge.train import build_model_trainer
+from loongforge.models.catalog import get_model_spec
+from loongforge.training.trainer_builder import build_model_trainer
 
 
 def main():
-    """train cmd"""
+    """Pick the engine for ``--model-name`` and run the registered recipe."""
+    argv = sys.argv[1:]
+    for index, arg in enumerate(argv):
+        if arg in ("-h", "--help", "--"):
+            argv = argv[:index]
+            break
 
-    # parse args and config
-    args = parse_train_args()
+    parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    # Let the selected engine report missing values.
+    parser.add_argument("--model-name", nargs="?")
+    args, _ = parser.parse_known_args(argv)
+    if args.model_name is None:
+        # Only Torch accepts model-name abbreviations.
+        parser.allow_abbrev = True
+        args, _ = parser.parse_known_args(argv)
 
-    # get model trainer
-    trainer = build_model_trainer(args)
+    # Let the selected engine keep ownership of full argument validation and help.
+    if args.model_name is None:
+        engine = "megatron"
+    else:
+        engine = get_model_spec(args.model_name).engine
 
-    # start training
-    trainer.train()
+    build_model_trainer(engine).train()
 
 
 if __name__ == "__main__":

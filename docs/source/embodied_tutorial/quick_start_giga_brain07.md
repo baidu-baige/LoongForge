@@ -26,7 +26,7 @@ export GB0_NORM_STATS=/workspace/data/agibot-world/AgiBotWorldLerobot/agibot_a2d
 ## 1. Data Configuration
 GigaBrain-0.7 reuses LoongForge's shared LeRobot v3 reader via `--dataset-strategy giga_brain07`, with **no extra offline preprocessing required**. GigaBrain-0.7's per-sample transform (multi-view image resizing, state/action normalization, language and FAST action tokenization) and batch collator are performed online during training.
 
-Data defaults live in the `data` section of `configs/models/embodied/giga_brain07.yaml`:
+Data defaults live in the `data` section of `configs/models/giga_brain07/giga_brain07.yaml`:
 
 ```yaml
 data:
@@ -54,7 +54,7 @@ Field descriptions:
 - `use_quantiles`: normalize with the quantiles in `norm_stats.json`.
 
 ## 2. Launch Training
-First set up the paths uniformly (refer to `examples/embodied/giga_brain07/run_giga_brain07_torchrun.sh`):
+First set up the paths uniformly (refer to `examples/giga_brain07/run_giga_brain07_torchrun.sh`):
 
 ```bash
 cd /workspace/LoongForge
@@ -71,7 +71,7 @@ export OUTPUT_DIR=/workspace/outputs/giga_brain07_fsdp
 Single-node 8-GPU FSDP2 fine-tuning:
 
 ```bash
-bash examples/embodied/giga_brain07/run_giga_brain07_torchrun.sh
+bash examples/giga_brain07/run_giga_brain07_torchrun.sh
 ```
 The script enables the following optimizations by default; they can be disabled or adjusted via environment variables:
 

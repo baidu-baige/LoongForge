@@ -9,7 +9,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from loongforge.embodied.model.dreamzero.precomputed_cache.artifact import (
+from loongforge.models.embodied.dreamzero.precomputed_cache.artifact import (
     TENSOR_SHARDS_FORMAT,
     DreamZeroPrecomputedFeatureArtifact,
     artifact_file_path,

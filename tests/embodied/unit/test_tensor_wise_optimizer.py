@@ -23,17 +23,17 @@ import torch.distributed as dist
 import torch.multiprocessing as mp
 from torch import nn
 
-from loongforge.embodied.distributed import checkpoint
-from loongforge.embodied.optimizer.tensor_wise_optimizer import validation
-from loongforge.embodied.optimizer.tensor_wise_optimizer.precision_policy import (
+from loongforge.engines.torch.distributed import checkpoint
+from loongforge.engines.torch.optimizer.tensor_wise_optimizer import validation
+from loongforge.engines.torch.optimizer.tensor_wise_optimizer.precision_policy import (
     DefaultParameterPolicy,
     ParameterClassPolicy,
 )
-from loongforge.embodied.optimizer.tensor_wise_optimizer.tensor_wise_optimizer import (
+from loongforge.engines.torch.optimizer.tensor_wise_optimizer.tensor_wise_optimizer import (
     CollectiveConfig,
     TensorWiseOptimizer,
 )
-from loongforge.embodied.optimizer.muon_builder import (
+from loongforge.engines.torch.optimizer.muon_builder import (
     build_muon_optimizer,
 )
 
@@ -435,7 +435,7 @@ def test_default_policy_routes_to_muon_only_when_opted_in():
 
 
 def _muon_trainer():
-    from loongforge.embodied.train.trainers.custom.tensor_wise_trainer import (
+    from loongforge.training.embodied.custom.tensor_wise_trainer import (
         TensorWiseTrainer,
     )
 
@@ -509,7 +509,7 @@ def test_plain_ddp_muon_loss_matches_torch_muon_bitwise():
     ``torch.optim.AdamW`` on the rest, built by hand from the same rule; every
     step's loss must be bitwise equal.
     """
-    from loongforge.embodied.optimizer.optimizer import build_optimizer
+    from loongforge.engines.torch.optimizer.optimizer import build_optimizer
 
     ours_model = _plain_muon_model()
     ours = build_optimizer(ours_model, _plain_muon_args())
@@ -547,7 +547,7 @@ def test_plain_ddp_muon_loss_matches_torch_muon_bitwise():
 
 
 def test_plain_ddp_muon_routes_and_updates_every_parameter():
-    from loongforge.embodied.optimizer.optimizer import build_optimizer
+    from loongforge.engines.torch.optimizer.optimizer import build_optimizer
 
     model = _plain_muon_model()
     optimizer = build_optimizer(model, _plain_muon_args())
@@ -565,8 +565,8 @@ def test_plain_ddp_muon_routes_and_updates_every_parameter():
 
 
 def test_plain_ddp_muon_works_with_the_lr_scheduler():
-    from loongforge.embodied.optimizer.lr_scheduler import build_scheduler
-    from loongforge.embodied.optimizer.optimizer import build_optimizer
+    from loongforge.engines.torch.optimizer.lr_scheduler import build_scheduler
+    from loongforge.engines.torch.optimizer.optimizer import build_optimizer
 
     model = _plain_muon_model()
     optimizer = build_optimizer(model, _plain_muon_args())
@@ -583,7 +583,7 @@ def test_plain_ddp_muon_works_with_the_lr_scheduler():
 
 
 def test_plain_ddp_muon_leaves_conv1d_on_adamw():
-    from loongforge.embodied.optimizer.optimizer import build_optimizer
+    from loongforge.engines.torch.optimizer.optimizer import build_optimizer
 
     # A Conv1d weight is 3-D but not an expert stack, so it must not reach Muon.
     model = nn.Sequential(nn.Linear(8, 8), nn.Conv1d(8, 8, kernel_size=3, groups=8))
@@ -623,7 +623,7 @@ def _dcp_load_state_dict(model, optimizer, state):
     ids=["plain", "dcp"],
 )
 def test_plain_ddp_muon_state_round_trip_is_bitwise(save, load):
-    from loongforge.embodied.optimizer.optimizer import build_optimizer
+    from loongforge.engines.torch.optimizer.optimizer import build_optimizer
 
     model = _plain_muon_model()
     optimizer = build_optimizer(model, _plain_muon_args())
@@ -740,12 +740,10 @@ def _training_args(**overrides):
         dict(),
         dict(optimizer="muon"),
         dict(save_interval=10, save_training_state=True),
-        # Other trainers are not checked here.
-        dict(trainer_type="FinetuneTrainer", distributed_strategy="fsdp", fp8=True),
     ],
 )
 def test_validation_accepts_supported_combinations(overrides):
-    validation.validate_tensor_wise_args(_training_args(**overrides))
+    validation.validate_tensor_wise_args(_training_args(**overrides), "TensorWiseTrainer")
 
 
 @pytest.mark.parametrize(
@@ -763,12 +761,19 @@ def test_validation_accepts_supported_combinations(overrides):
 )
 def test_validation_rejects_unsupported_combinations(overrides, match):
     with pytest.raises(ValueError, match=re.escape(match)):
-        validation.validate_tensor_wise_args(_training_args(**overrides))
+        validation.validate_tensor_wise_args(_training_args(**overrides), "TensorWiseTrainer")
+
+
+def test_tensor_wise_trainer_checks_its_options():
+    from loongforge.training.embodied.custom.tensor_wise_trainer import TensorWiseTrainer
+
+    with pytest.raises(ValueError, match="requires --distributed-strategy=ddp"):
+        TensorWiseTrainer(_training_args(distributed_strategy="fsdp"), None, None)
 
 
 @pytest.mark.parametrize("trainer_type", ["FinetuneTrainer", "LingbotVlaV2Trainer"])
 def test_muon_validation_accepts_ddp(trainer_type):
-    from loongforge.embodied.train.validators import validate_muon_args
+    from loongforge.training.torch_args import validate_muon_args
 
     validate_muon_args(_training_args(trainer_type=trainer_type, optimizer="muon"))
     validate_muon_args(_training_args(trainer_type=trainer_type, distributed_strategy="fsdp"))
@@ -784,7 +789,7 @@ def test_muon_validation_accepts_ddp(trainer_type):
     ],
 )
 def test_muon_validation_rejects_unsupported_combinations(trainer_type, overrides, match):
-    from loongforge.embodied.train.validators import validate_muon_args
+    from loongforge.training.torch_args import validate_muon_args
 
     args = _training_args(trainer_type=trainer_type, optimizer="muon", **overrides)
     with pytest.raises(ValueError, match=re.escape(match)):
@@ -796,7 +801,7 @@ def test_muon_validation_rejects_unsupported_combinations(trainer_type, override
 
 @pytest.mark.parametrize("numel", [1, 127, 128, 129, 1000])
 def test_block_rows_pad_to_whole_scale_blocks(numel):
-    from loongforge.embodied.optimizer.tensor_wise_optimizer import parameter_sync as sync
+    from loongforge.engines.torch.optimizer.tensor_wise_optimizer import parameter_sync as sync
 
     rows = sync._as_block_rows(torch.arange(numel, dtype=torch.float32) + 1)
     assert rows.shape == (sync._fp8_scale_count(numel), sync.FP8_BLOCK)
@@ -807,7 +812,7 @@ def test_block_rows_pad_to_whole_scale_blocks(numel):
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="FP8 codec needs CUDA")
 @pytest.mark.parametrize("numel", [1, 129, 1000, 1 << 20])
 def test_fp8_codec_round_trip_keeps_wire_sizes(numel):
-    from loongforge.embodied.optimizer.tensor_wise_optimizer import parameter_sync as sync
+    from loongforge.engines.torch.optimizer.tensor_wise_optimizer import parameter_sync as sync
 
     if not sync._fp8_is_available():
         pytest.skip("TransformerEngine blockwise quantizer unavailable")

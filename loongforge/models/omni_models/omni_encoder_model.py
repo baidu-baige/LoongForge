@@ -23,9 +23,9 @@ from megatron.core.models.common.embeddings.language_model_embedding import (
     LanguageModelEmbedding,
 )
 from transformers.models.auto.modeling_auto import AutoModel
-from loongforge.train.initialize import change_parallel_state
+from loongforge.engines.megatron.initialize import change_parallel_state
 from loongforge.data.dp_balance.vit_balance import dp_balance_vit_encoder
-from loongforge.utils import get_args
+from loongforge.engines.megatron import get_args
 
 
 class _DummyEncoderPassthrough(torch.autograd.Function):

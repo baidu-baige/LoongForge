@@ -26,7 +26,7 @@ export GB0_NORM_STATS=/workspace/data/agibot-world/AgiBotWorldLerobot/agibot_a2d
 ## 1. 数据配置
 GigaBrain-0.7 通过 `--dataset-strategy giga_brain07` 复用 LoongForge 共享的 LeRobot v3 reader，**无需额外离线预处理**。训练时在线执行 GigaBrain-0.7 的 per-sample transform（多视角图像 resize、state/action 归一化、语言与 FAST 动作 tokenize）与 batch collator。
 
-数据相关默认值在 `configs/models/embodied/giga_brain07.yaml` 的 `data` 段：
+数据相关默认值在 `configs/models/giga_brain07/giga_brain07.yaml` 的 `data` 段：
 
 ```yaml
 data:
@@ -54,7 +54,7 @@ data:
 - `use_quantiles`：使用 `norm_stats.json` 中的分位数做归一化。
 
 ## 2. 启动训练
-先统一设置路径（参考 `examples/embodied/giga_brain07/run_giga_brain07_torchrun.sh`）：
+先统一设置路径（参考 `examples/giga_brain07/run_giga_brain07_torchrun.sh`）：
 
 ```bash
 cd /workspace/LoongForge
@@ -71,7 +71,7 @@ export OUTPUT_DIR=/workspace/outputs/giga_brain07_fsdp
 单机 8 卡 FSDP2 微调：
 
 ```bash
-bash examples/embodied/giga_brain07/run_giga_brain07_torchrun.sh
+bash examples/giga_brain07/run_giga_brain07_torchrun.sh
 ```
 脚本默认已开启以下优化，可通过环境变量关闭或调整：
 

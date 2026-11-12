@@ -17,7 +17,7 @@ from unittest.mock import patch
 import pytest
 import torch
 
-from loongforge.data.multimodal.base.task_encoder import (
+from loongforge.data.vlm.encoder.base.task_encoder import (
     BaseTaskEncoder,
     BaseTaskSample,
     BaseTaskSamplePacked,
@@ -183,7 +183,7 @@ def test_pack_energon_subflavor_branch(needs_subflavor):
     sample = make_sample("s1", [1, 2], [1, 2], [True, True])
 
     with patch(
-        "loongforge.data.multimodal.base.task_encoder._ENERGON_NEEDS_SUBFLAVOR",
+        "loongforge.data.vlm.encoder.base.task_encoder._ENERGON_NEEDS_SUBFLAVOR",
         needs_subflavor,
     ):
         packed = encoder.pack_selected_samples([sample])

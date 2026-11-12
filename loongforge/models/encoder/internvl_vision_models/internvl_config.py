@@ -6,8 +6,8 @@
 import torch
 from dataclasses import dataclass
 from ...common.base_model_config import BaseModelConfig
-from loongforge.utils import get_tokenizer
-from loongforge.data.multimodal.internvl.internvl_constants import IMG_CONTEXT_TOKEN
+from loongforge.engines.megatron import get_tokenizer
+from loongforge.data.vlm.internvl.internvl_constants import IMG_CONTEXT_TOKEN
 
 
 @dataclass

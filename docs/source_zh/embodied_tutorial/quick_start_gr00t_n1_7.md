@@ -68,19 +68,19 @@ my_dataset/
 
 ```bash
 # 1. 覆盖 modality.json（四个 suite 都需要）
-cp examples/embodied/gr00t_n1_7/LIBERO/dataset/modality.json \
+cp examples/gr00t_n1_7/LIBERO/dataset/modality.json \
    /path/to/IPEC-COMMUNITY/{suite}/meta/modality.json
 
 # 2. 为四个 suite 生成 meta/stats.json（含 q01/q99 的归一化统计量），
 #    脚本会原地覆盖各数据集的 meta/stats.json
-python examples/embodied/gr00t_n1_7/gen_stats.py \
+python examples/gr00t_n1_7/gen_stats.py \
    /path/to/IPEC-COMMUNITY/libero_spatial_no_noops_1.0.0_lerobot \
    /path/to/IPEC-COMMUNITY/libero_object_no_noops_1.0.0_lerobot \
    /path/to/IPEC-COMMUNITY/libero_goal_no_noops_1.0.0_lerobot \
    /path/to/IPEC-COMMUNITY/libero_10_no_noops_1.0.0_lerobot
 
 # 3. 仅 Goal suite：替换一个损坏的视频
-cp examples/embodied/gr00t_n1_7/LIBERO/dataset/Goal/patches/episode_000082.mp4 \
+cp examples/gr00t_n1_7/LIBERO/dataset/Goal/patches/episode_000082.mp4 \
    /path/to/IPEC-COMMUNITY/libero_goal_no_noops_1.0.0_lerobot/videos/chunk-000/observation.images.wrist_image/
 ```
 
@@ -90,7 +90,7 @@ cp examples/embodied/gr00t_n1_7/LIBERO/dataset/Goal/patches/episode_000082.mp4 \
 
 ### 2.1 启动训练
 
-训练脚本：`examples/embodied/gr00t_n1_7/LIBERO/run_libero_sft.sh`
+训练脚本：`examples/gr00t_n1_7/LIBERO/run_libero_sft.sh`
 
 在脚本中设置 LoongForge、预训练权重和数据集路径（也可以通过环境变量传入），然后启动训练：
 
@@ -99,7 +99,7 @@ cp examples/embodied/gr00t_n1_7/LIBERO/dataset/Goal/patches/episode_000082.mp4 \
 > - 如果 CUDA Graph 重放失败，训练会自动回退到 eager 模式并正常进行。
 
 ```bash
-cd examples/embodied/gr00t_n1_7/LIBERO
+cd examples/gr00t_n1_7/LIBERO
 
 # 微调单个 suite，例如 Spatial
 LOONGFORGE_PATH=/path/to/LoongForge \
@@ -136,7 +136,7 @@ TRAIN_ITERS=20 SAVE_INTERVAL=20 bash run_libero_sft.sh goal
 | `SAVE_INTERVAL` | 1000 | checkpoint 保存间隔（步） |
 | `LR_WARMUP_ITERS` | `TRAIN_ITERS / 20` | 学习率 warmup 步数（5%），之后按 cosine 衰减到 0，峰值学习率 1e-4 |
 
-**模型与数据配置**：模型和数据相关参数在 `configs/models/embodied/gr00t_n1_7.yaml` 中配置，常用字段如下：
+**模型与数据配置**：模型和数据相关参数在 `configs/models/gr00t_n1_7/gr00t_n1_7.yaml` 中配置，常用字段如下：
 
 | 字段 | 默认值 | 说明 |
 |---|:---:|---|
@@ -247,10 +247,10 @@ pip install websockets
 
 ### 4.1 启动评测
 
-`examples/embodied/gr00t_n1_7/eval/run_libero_eval.sh` 会依次评测四个 suite，每个 suite 200 个 episode（10 个任务 × 20 个 episode）。脚本会自动启动和关闭 policy server，无需手动部署：
+`examples/gr00t_n1_7/eval/run_libero_eval.sh` 会依次评测四个 suite，每个 suite 200 个 episode（10 个任务 × 20 个 episode）。脚本会自动启动和关闭 policy server，无需手动部署：
 
 ```bash
-cd examples/embodied/gr00t_n1_7/eval
+cd examples/gr00t_n1_7/eval
 
 COSMOS_PATH=/path/to/Cosmos-Reason2-2B \
 CKPT_PATH=/path/to/outputs/gr00t_n1_7_libero/libero_{suite}/checkpoints/steps_20000 \

@@ -34,7 +34,7 @@
 
 ### 2.1 启动训练
 
-训练脚本：`examples/embodied/lingbot_va/run_lingbot_va_robotwin_fsdp_finetune.sh`、`examples/embodied/lingbot_va/run_lingbot_va_libero_fsdp_finetune.sh`。两个脚本的默认值就是本文结果所用的配方（从 `lingbot-va-base` 起训、FP32 梯度 reduce），只需传入路径：
+训练脚本：`examples/lingbot_va/finetuning/sft_lingbot_va_robotwin_fsdp.sh`、`examples/lingbot_va/finetuning/sft_lingbot_va_libero_fsdp.sh`。两个脚本的默认值就是本文结果所用的配方（从 `lingbot-va-base` 起训、FP32 梯度 reduce），只需传入路径：
 
 ```bash
 cd /path/to/LoongForge
@@ -44,17 +44,17 @@ CHECKPOINT_PATH=/path/to/lingbot-va-base \
 DATA_PATH=/path/to/robotwin-clean-and-aug-lerobot \
 OUTPUT_DIR=/path/to/outputs/lingbot_va_robotwin \
 SAVE_INTERVAL=2000 \
-bash examples/embodied/lingbot_va/run_lingbot_va_robotwin_fsdp_finetune.sh
+bash examples/lingbot_va/finetuning/sft_lingbot_va_robotwin_fsdp.sh
 
 # LIBERO-Long：5000 步，8 卡 x GA 10 = global batch 80
 CHECKPOINT_PATH=/path/to/lingbot-va-base \
 DATA_PATH=/path/to/libero-long-lerobot \
 OUTPUT_DIR=/path/to/outputs/lingbot_va_libero \
 SAVE_INTERVAL=1000 \
-bash examples/embodied/lingbot_va/run_lingbot_va_libero_fsdp_finetune.sh
+bash examples/lingbot_va/finetuning/sft_lingbot_va_libero_fsdp.sh
 
 # 冒烟测试：只跑 20 步验证训练链路
-TRAIN_ITERS=20 bash examples/embodied/lingbot_va/run_lingbot_va_robotwin_fsdp_finetune.sh
+TRAIN_ITERS=20 bash examples/lingbot_va/finetuning/sft_lingbot_va_robotwin_fsdp.sh
 ```
 
 checkpoint 以 DCP 格式保存在 `$OUTPUT_DIR/checkpoints/steps_<N>`；中断后用同一个 `OUTPUT_DIR` 追加 `--resume` 即可续训。脚本末尾的 `"$@"` 会原样透传给 `train.py`，可用于覆盖任意训练参数。
@@ -156,14 +156,14 @@ checkpoint 以 DCP 格式保存在 `$OUTPUT_DIR/checkpoints/steps_<N>`；中断�
 cd /path/to/LoongForge
 
 # RoboTwin：vae / text_encoder / tokenizer 取自官方 RoboTwin 后训练权重
-python examples/embodied/lingbot_va/export_eval_checkpoint.py \
+python examples/lingbot_va/export_eval_checkpoint.py \
     --ckpt  /path/to/outputs/lingbot_va_robotwin/checkpoints/steps_50000 \
     --base  /path/to/lingbot-va-base \
     --codec /path/to/lingbot-va-posttrain-robotwin \
     --out   /path/to/eval_ckpt/lingbot_va_robotwin_steps_50000
 
 # LIBERO-Long：vae / text_encoder / tokenizer 取自官方 LIBERO-Long 后训练权重
-python examples/embodied/lingbot_va/export_eval_checkpoint.py \
+python examples/lingbot_va/export_eval_checkpoint.py \
     --ckpt  /path/to/outputs/lingbot_va_libero/checkpoints/steps_5000 \
     --base  /path/to/lingbot-va-base \
     --codec /path/to/lingbot-va-posttrain-libero-long \
@@ -187,17 +187,17 @@ cd /path/to/LoongForge
 REPO_ROOT=$PWD \
 BENCHMARK_PYTHON=/path/to/robotwin/bin/python \
 CUDA_VISIBLE_DEVICES=0 \
-bash examples/embodied/lingbot_va/eval/run_robotwin_eval.sh
+bash examples/lingbot_va/eval/run_robotwin_eval.sh
 
 # LIBERO-Long：默认 configs/libero/libero_10_full.yaml，10 个 task × 50 个 episode
 REPO_ROOT=$PWD \
 BENCHMARK_PYTHON=/path/to/libero/bin/python \
 CUDA_VISIBLE_DEVICES=0 \
-bash examples/embodied/lingbot_va/eval/run_libero_eval.sh
+bash examples/lingbot_va/eval/run_libero_eval.sh
 
 # 冒烟测试：只评测 1 个 episode
-CONFIG=examples/embodied/lingbot_va/eval/configs/robotwin/adjust_bottle.yaml bash examples/embodied/lingbot_va/eval/run_robotwin_eval.sh
-CONFIG=examples/embodied/lingbot_va/eval/configs/libero/libero_10.yaml bash examples/embodied/lingbot_va/eval/run_libero_eval.sh
+CONFIG=examples/lingbot_va/eval/configs/robotwin/adjust_bottle.yaml bash examples/lingbot_va/eval/run_robotwin_eval.sh
+CONFIG=examples/lingbot_va/eval/configs/libero/libero_10.yaml bash examples/lingbot_va/eval/run_libero_eval.sh
 ```
 
 RoboTwin 的 Hard 难度只需把 `benchmark.task_config` 从 `demo_clean` 改为 `demo_randomized`。每个 task 的结果写在 `run.output_dir/<task_name>/` 下（`results.jsonl`、`summary.csv`、`suite_summary.csv`）。完整评测耗时较长，可按 task 拆成多个 YAML 分到多张 GPU 并行运行。

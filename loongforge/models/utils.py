@@ -8,13 +8,13 @@ import torch
 from megatron.core.transformer import MLATransformerConfig, TransformerConfig
 from megatron.core.activations import squared_relu
 import torch.nn.functional as F
-from loongforge.utils import constants
+from loongforge.models import catalog as constants
 from copy import deepcopy
 from omegaconf import OmegaConf
 from hydra.utils import instantiate
 from loongforge.models.common.vlm_model_config import VLMModelConfig
 from collections.abc import Iterable
-from loongforge.utils.global_vars import get_args_dict
+from loongforge.engines.megatron.utils.global_vars import get_args_dict
 
 
 def import_module(module_path: Tuple[str], config: TransformerConfig, **kwargs):
@@ -112,8 +112,8 @@ def build_model_config(args, config):
 
     if (hasattr(config, "model_type") and config.model_type in
             (set(constants.LanguageModelFamilies.names()) |
-            set(constants.CustomModelFamilies.names()) |
-            set(constants.VisionLanguageActionModelFamilies.names()))):
+            set(constants.DiffusionModelFamilies.names()) |
+            set(constants.EmbodiedModelFamilies.names()))):
         model_type = config.model_type
         model_config = config
     else:
@@ -123,7 +123,7 @@ def build_model_config(args, config):
         model_config = config.model
 
     # assert hasattr(config.model, "model_type"), "model_type is required in model config"
-    vision_custom_names = {*constants.VisionLanguageModelFamilies.names(), *constants.CustomModelFamilies.names()}
+    vision_custom_names = {*constants.VisionLanguageModelFamilies.names(), *constants.DiffusionModelFamilies.names()}
     if model_type in vision_custom_names:
         # get the global args dict which contains all model component args
         global_args_dict = get_args_dict()
@@ -145,7 +145,7 @@ def build_model_config(args, config):
                 model_cfgs[name] = config_values
         model_cfgs = VLMModelConfig(**model_cfgs)
     elif model_type in (set(constants.LanguageModelFamilies.names())
-                        | set(constants.CustomModelFamilies.names())):
+                        | set(constants.DiffusionModelFamilies.names())):
         if "_target_" not in model_config:
             raise ValueError(
                 "Model config missing '_target_' field.\n"
@@ -155,22 +155,23 @@ def build_model_config(args, config):
         merged = convert_megatron_transformer_config_args(merged)
         merged.update(OmegaConf.to_container(model_config, resolve=True))
         model_cfgs = instantiate(model_config, **merged)
-    elif model_type in constants.VisionLanguageActionModelFamilies.names():
-        # Vision-language-action models are self-contained (no Megatron config merge yet)
+    elif model_type in constants.EmbodiedModelFamilies.names():
+        # Embodied models are self-contained (no Megatron config merge yet).
         if "_target_" not in model_config:
-            raise ValueError("Model config missing '_target_' field for vla type.\n")
+            raise ValueError("Model config missing '_target_' field for embodied type.\n")
 
         # Remove dispatcher-only metadata like model_type before instantiation.
-        vla_config = deepcopy(model_config)
-        if isinstance(vla_config, dict) and "model_type" in vla_config:
-            vla_config = deepcopy(vla_config)
-            vla_config.pop("model_type", None)
-        elif "model_type" in getattr(vla_config, "keys", lambda: [])():
+        embodied_config = deepcopy(model_config)
+        if isinstance(embodied_config, dict) and "model_type" in embodied_config:
+            embodied_config.pop("model_type", None)
+        elif "model_type" in getattr(embodied_config, "keys", lambda: [])():
             # DictConfig / OmegaConf path
-            vla_config = OmegaConf.create(OmegaConf.to_container(vla_config, resolve=True))
-            vla_config.pop("model_type", None)
-        vla_config.random_fallback_cpu = args.random_fallback_cpu
-        model_cfgs = instantiate(vla_config)
+            embodied_config = OmegaConf.create(
+                OmegaConf.to_container(embodied_config, resolve=True)
+            )
+            embodied_config.pop("model_type", None)
+        embodied_config.random_fallback_cpu = args.random_fallback_cpu
+        model_cfgs = instantiate(embodied_config)
     else:
         raise ValueError(f"Unsupported model type: {model_type}")
     return model_cfgs

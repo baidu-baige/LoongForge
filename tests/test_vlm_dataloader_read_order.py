@@ -55,7 +55,7 @@ def _load_functions(relative_path, names, namespace=None):
 )
 def test_energon_read_order_kwargs(args, expected):
     namespace = _load_functions(
-        "loongforge/data/multimodal/dataloader_provider.py",
+        "loongforge/data/vlm/dataloader_provider.py",
         {"_energon_read_order_kwargs"},
     )
     assert namespace["_energon_read_order_kwargs"](args) == expected
@@ -100,7 +100,7 @@ def test_get_train_dataset_forwards_read_order_kwargs(data_path, expected_path):
         "print_rank_0": Mock(),
     }
     namespace = _load_functions(
-        "loongforge/data/multimodal/dataloader_provider.py",
+        "loongforge/data/vlm/dataloader_provider.py",
         {
             "_energon_read_order_kwargs",
             "_validate_energon_data_paths",
@@ -127,14 +127,15 @@ def test_multimodal_argument_defaults_and_overrides():
             return ["llama"]
 
     namespace = _load_functions(
-        "loongforge/train/arguments.py",
-        {"_add_extra_multimodal_args"},
+        "loongforge/training/vlm/args.py",
+        {"add_vlm_args"},
         {
+            "argparse": argparse,
             "get_support_model_archs": lambda values: values,
             "constants": SimpleNamespace(LanguageModelFamilies=LanguageModelFamilies),
         },
     )
-    parser = namespace["_add_extra_multimodal_args"](argparse.ArgumentParser())
+    parser = namespace["add_vlm_args"](argparse.ArgumentParser())
 
     defaults = parser.parse_args([])
     assert defaults.data_shuffle_buffer_size == 0

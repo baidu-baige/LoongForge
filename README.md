@@ -87,23 +87,23 @@ Since optimal training strategies differ across model families and scales, Loong
 
 ## 🔥 Latest News
 
-- **[2026/10]** 🤖 Added VLA training support for **[LingBot-VLA-v2](./examples/embodied/lingbot_vla_v2/)**, built on the new tensor_wise distributed optimizer with Muon. `--optimizer muon` also runs under plain DDP for any model.
+- **[2026/10]** 🤖 Added VLA training support for **[LingBot-VLA-v2](./examples/lingbot_vla_v2/)**, built on the new tensor_wise distributed optimizer with Muon. `--optimizer muon` also runs under plain DDP for any model.
 - **[2026/10]** 🤖 Introducing **[LoongForge-VLDA](./cookbook/loongforge-vlda/)**, a Vision-Language-Delta-Action model trained with LoongForge: **98.5%** on LIBERO, **84.5%** zero-shot on LIBERO-Plus, and **+17–18 points** over π0.5 on real robots. [[project page](https://baidu-baige.github.io/LoongForge/projects/vlda.html)] [[paper](https://arxiv.org/abs/2610.25874)]
 - **[2026/10]** 🦾 Open-sourced **[ego2robot](./tools/ego2robot/)** — a pipeline that converts first-person videos of human manipulation into dual-arm robot training data, outputting **LeRobot v3.0** format across **16 robot morphologies**.
 - **[2026/09]** ✨ Added training support for **[GLM-5.3-flash](./examples/glm5_next/)**.
 - **[2026/09]** ✨ Added **[Kimi-K3](./examples/kimi_k3/)** BF16 training support for both LLMs and VLMs.
-- **[2026/09]** ⚡ Added an optimized **[DreamZero Wan2.2-5B FSDP recipe](./examples/embodied/dreamzero/run_dreamzero_wan22_5b_full_fsdp_finetune.sh)** with cache-aware data loading, compiled attention blocks, frozen-module handling, and FSDP2 Delta-FP8 Param AllGather.
-- **[2026/08]** 🤖 Added VLA training support for **[Wall-OSS-0.5](./examples/embodied/wall_oss_0_5/)**, with custom fused operators for higher training throughput.
+- **[2026/09]** ⚡ Added an optimized **[DreamZero Wan2.2-5B FSDP recipe](./examples/dreamzero/finetuning/sft_dreamzero_wan22_5b_full_fsdp.sh)** with cache-aware data loading, compiled attention blocks, frozen-module handling, and FSDP2 Delta-FP8 Param AllGather.
+- **[2026/08]** 🤖 Added VLA training support for **[Wall-OSS-0.5](./examples/wall_oss_0_5/)**, with custom fused operators for higher training throughput.
 - **[2026/08]** 📄 Released the **[TAOT paper](https://arxiv.org/abs/2608.03676)** — topology-aware dynamic expert replica placement that tackles expert-parallel (**EP**) load imbalance in **MoE** training, cutting overhead by up to **74%** over industry solutions, with **1.43× speedup** measured on a real training case. [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-08-taot-topology-aware-expert-placement.html)]
 - **[2026/08]** ✨ Added training support for **GLM-5.2**, along with a **[GLM-5.2 + MoonViT](./configs/models/glm5.2_vit/)** custom-composition [example](./examples/glm5.2_vit/) for extending GLM with multimodal capabilities.
 - **[2026/08]** ✨ Added training support for **MiniCPM-V-4.6** and **Qwen3.8-27B**.
-- **[2026/08]** 🧪 Introduced a unified [**evaluation module**](./loongforge/embodied/eval/) for the embodied stack, currently covering **Pi0.5 / xVLA / GR00T**, with more models on the way.
+- **[2026/08]** 🧪 Introduced a unified [**evaluation module**](./loongforge/evaluation/embodied/) for the embodied stack, currently covering **Pi0.5 / xVLA / GR00T**, with more models on the way.
 
 <details>
 <summary><b>📅 More</b></summary>
 
 - **[2026/07]** 🐳 Unified the **prebuilt Docker images** — all model families (LLM / VLM / Embodied / Diffusion) now share a single image.
-- **[2026/07]** 🤖 Released **[LoongForge-Embodied](./loongforge/embodied)**, a torch-native DDP/FSDP training subsystem for embodied models (Pi0.5, GR00T-N1.6/N1.7, xVLA, LingBot-VA, FastWAM, DreamZero, and Cosmos3), with up to **4.38× speedup**.
+- **[2026/07]** 🤖 Released **[LoongForge-Embodied](./docs/source/embodied_tutorial/quick_start_index.md)**, a torch-native DDP/FSDP training subsystem for embodied models (Pi0.5, GR00T-N1.6/N1.7, xVLA, LingBot-VA, FastWAM, DreamZero, and Cosmos3), with up to **4.38× speedup**.
 - **[2026/07]** ✨ Added training support for **DeepSeek-V4-Flash / DeepSeek-V4-Pro**.
 - **[2026/07]** ✨ Added training support for **Qwen-Image-Edit-2511**.
 - **[2026/06]** 🤖 Expanded VLA coverage with **GR00T N1.6**; **2.3× speedup** on GR00T training. [[blog](https://baidu-baige.github.io/LoongForge/blog/2026-06-loongforge-groot-n16-acceleration.html)]
@@ -133,7 +133,7 @@ Since optimal training strategies differ across model families and scales, Loong
 ### Data
 
 * **Unified Data Loading** — A unified data-loading interface supporting mainstream formats like LeRobot (v2.0 / v2.1 / v3.0); each model's data pipeline matches its original open-source implementation.
-* **Feature Cache Precomputation (optional)** — Precompute frozen-encoder outputs for DreamZero (VAE latents, text embeddings) and FastWAM (text embeddings) ahead of training, read directly during training to avoid re-encoding every step. [[DreamZero](./tools/dreamzero_data_preprocess)] [[FastWAM](./examples/embodied/fastwam/precompute_text_embeds.sh)]
+* **Feature Cache Precomputation (optional)** — Precompute frozen-encoder outputs for DreamZero (VAE latents, text embeddings) and FastWAM (text embeddings) ahead of training, read directly during training to avoid re-encoding every step. [[DreamZero](./tools/dreamzero_data_preprocess)] [[FastWAM](./examples/fastwam/finetuning/precompute_text_embeds.sh)]
 * **Ego2Robot** — Converts first-person videos of human manipulation into **LeRobot v3.0** training data across **16 robot morphologies**, each adapted to its own joint layout and gripper. [[README](./tools/ego2robot/README.md)]
 
 <table width="100%">
@@ -156,7 +156,7 @@ Since optimal training strategies differ across model families and scales, Loong
 
 ### Evaluation
 
-* **Unified Evaluation** — Closed-loop evaluation of trained policies in the **LIBERO / CALVIN / SimplerEnv / RoboTwin / ManiSkill** simulators; coverage is expanding continuously. [[README](./loongforge/embodied/eval)]
+* **Unified Evaluation** — Closed-loop evaluation of trained policies in the **LIBERO / CALVIN / SimplerEnv / RoboTwin / ManiSkill** simulators; coverage is expanding continuously. [[README](./loongforge/evaluation/embodied)]
 
 * **Evaluation Results** — Success rates on par with the corresponding open-source baselines, measured per model across **LIBERO / RoboTwin / SimplerEnv**:
 
@@ -279,7 +279,7 @@ export TOKENIZER_PATH=/workspace/data/paligemma-3b-pt-224
 export DATA_PATH=/workspace/data/libero_10
 export OUTPUT_DIR=/workspace/data/outputs/pi05
 
-bash examples/embodied/pi05/run_pi05_ddp_finetune.sh
+bash examples/pi05/finetuning/sft_pi05_ddp.sh
 ```
 
 Logs and TensorBoard data are saved under `OUTPUT_DIR`. For FSDP / ZeRO-1 launch options and LIBERO evaluation, see the [Pi0.5 tutorial](https://loongforge.readthedocs.io/en/latest/embodied_tutorial/quick_start_pi05.html).
@@ -303,18 +303,18 @@ Click any model for its training examples; see [`configs/models/`](./configs/mod
 <tr>
 <td valign="top">
 <ul>
-<li><a href="examples/embodied/pi05/">Pi0.5</a></li>
-<li><a href="examples/embodied/gr00t_n1_6/">GR00T-N1.6</a></li>
-<li><a href="examples/embodied/gr00t_n1_7/">GR00T-N1.7</a></li>
-<li><a href="examples/embodied/xvla/">xVLA</a></li>
-<li><a href="examples/embodied/wall_oss_0_5/">Wall-OSS-0.5</a></li>
-<li><a href="examples/embodied/fastwam/">FastWAM</a></li>
-<li><a href="examples/embodied/lingbot_va/">LingBot-VA</a></li>
-<li><a href="examples/embodied/lingbot_vla_v2/">LingBot-VLA-v2</a></li>
-<li><a href="examples/embodied/cosmos3/">Cosmos3</a></li>
-<li><a href="examples/embodied/dreamzero/">DreamZero</a></li>
+<li><a href="examples/pi05/">Pi0.5</a></li>
+<li><a href="examples/gr00t_n1_6/">GR00T-N1.6</a></li>
+<li><a href="examples/gr00t_n1_7/">GR00T-N1.7</a></li>
+<li><a href="examples/xvla/">xVLA</a></li>
+<li><a href="examples/wall_oss_0_5/">Wall-OSS-0.5</a></li>
+<li><a href="examples/fastwam/">FastWAM</a></li>
+<li><a href="examples/lingbot_va/">LingBot-VA</a></li>
+<li><a href="examples/lingbot_vla_v2/">LingBot-VLA-v2</a></li>
+<li><a href="examples/cosmos3/">Cosmos3</a></li>
+<li><a href="examples/dreamzero/">DreamZero</a></li>
 <li><a href="cookbook/loongforge-vlda/">LoongForge-VLDA</a></li>
-<li><a href="examples/embodied/giga_brain07/">GigaBrain0.7</a></li>
+<li><a href="examples/giga_brain07/">GigaBrain0.7</a></li>
 </ul>
 </td>
 <td valign="top">
@@ -368,7 +368,7 @@ Click any model for its training examples; see [`configs/models/`](./configs/mod
 </table>
 
 > [!TIP]
-> For VLMs, also see the [custom composition example](./examples/custom/), which assembles a new model from a ViT and an LLM purely through configuration.
+> For VLMs, also see the [custom composition example](./examples/qwen_vit_llama3/), which assembles a new model from a ViT and an LLM purely through configuration.
 
 <a id="powered-by-loongforge"></a>
 ## 🌟 Awesome Projects Built with LoongForge
@@ -408,20 +408,24 @@ https://github.com/user-attachments/assets/8563afca-f79a-4a45-bb4f-36e06c0ccbcb
 ```
 LoongForge/
 ├── loongforge/                   # Core training framework
-│   ├── train/                    # Training entry points and trainers
-│   │   ├── pretrain/             #   Pretraining
-│   │   ├── sft/                  #   Supervised fine-tuning
-│   │   └── diffusion/            #   Diffusion training
+│   ├── train.py                  # Unified training dispatcher
+│   ├── training/                 # Training arguments and per-family recipes
+│   ├── engines/                  # Training runtimes selected by train.py
+│   │   ├── megatron/             #   LLM/VLM/Diffusion runtime
+│   │   │   └── tokenizer/        #   Megatron tokenizer implementation
+│   │   └── torch/                #   Embodied Torch-native runtime
 │   ├── models/                   # Unified model abstractions
+│   │   ├── catalog.py            # Model names, engines, default YAMLs
 │   │   ├── foundation/           #   LLM backbones
 │   │   ├── encoder/              #   Vision encoders
 │   │   ├── omni_models/          #   Multimodal composition (encoder + projector + decoder)
 │   │   ├── diffusion/            #   Diffusion models
-│   │   └── common/               #   Shared base configs, layers and utilities
-│   ├── embodied/                 # Embodied (VLA + world-action) training: models, data, trainers, distributed, eval
-│   ├── data/                     # Data loading and processing pipelines
-│   ├── tokenizer/                # Tokenizers
-│   └── utils/                    # Config registry, constants and shared helpers
+│   │   ├── common/               #   Shared base configs, layers and utilities
+│   │   └── embodied/             #   Embodied model implementations
+│   ├── data/                     # Data pipelines and chat templates
+│   │   ├── llm/ vlm/ embodied/ diffusion/
+│   │   └── chat_templates/       #   Chat templates
+│   └── evaluation/embodied/      # Embodied evaluation
 ├── third_party/                  # Third-party dependencies and patches
 │   ├── Loong-Megatron/            # Patched Megatron-LM (git submodule)
 │   └── patches/                  # TransformerEngine patches

@@ -76,12 +76,12 @@ pip install accelerate Pillow pandas tqdm
 #### Run Preprocessing
 
 ```bash
-cd examples/qwen_image
+cd examples/qwen_image/pretrain
 
 QWEN_IMAGE_MODEL_ROOT=/path/to/Qwen-Image-Edit-2511 \
 DATASET_BASE_PATH=/path/to/my_dataset \
 DATASET_METADATA_PATH=/path/to/my_dataset/metadata.json \
-bash preprocess.sh qwen-image-edit-2511 ./data/preprocessed
+bash preprocess.sh qwen-image-edit-2511 ../data/preprocessed
 ```
 
 Or auto-install dependencies on first run:
@@ -91,7 +91,7 @@ INSTALL_DEPS=1 \
 QWEN_IMAGE_MODEL_ROOT=/path/to/Qwen-Image-Edit-2511 \
 DATASET_BASE_PATH=/path/to/my_dataset \
 DATASET_METADATA_PATH=/path/to/my_dataset/metadata.json \
-bash preprocess.sh qwen-image-edit-2511 ./data/preprocessed
+bash preprocess.sh qwen-image-edit-2511 ../data/preprocessed
 ```
 
 Optional environment variables:
@@ -125,7 +125,7 @@ Each `.pth` file contains the following keys:
 Convert HuggingFace DiT weights to Megatron DCP (fsdp_dtensor) format:
 
 ```bash
-cd examples/qwen_image
+cd examples/qwen_image/checkpoint_convert
 
 HF_CKPT=/path/to/Qwen-Image-Edit-2511/transformer \
 MCORE_CKPT=/path/to/qwen_image_edit_2511_mcore \
@@ -140,7 +140,7 @@ bash convert_qwen_image.sh hg2mcore
 
 #### Configure the Training Script
 
-Edit the key paths in `examples/qwen_image/pretrain_qwen_image_edit_2511.sh`:
+Edit the key paths in `examples/qwen_image/pretrain/pretrain_qwen_image_edit_2511.sh`:
 
 ```bash
 MEGATRON_PATH=/path/to/Loong-Megatron
@@ -154,14 +154,14 @@ MCORE_LOAD_CKPT=/path/to/qwen_image_edit_2511_mcore # Output from Section 3
 Single node:
 
 ```bash
-bash examples/qwen_image/pretrain_qwen_image_edit_2511.sh
+bash examples/qwen_image/pretrain/pretrain_qwen_image_edit_2511.sh
 ```
 
 Multi-node — scale via data parallelism:
 
 ```bash
 NNODES=2 NODE_RANK=0 MASTER_ADDR=<master_ip> \
-bash examples/qwen_image/pretrain_qwen_image_edit_2511.sh
+bash examples/qwen_image/pretrain/pretrain_qwen_image_edit_2511.sh
 ```
 
 Key training parameters (overridable via environment variables):
@@ -182,7 +182,7 @@ Key training parameters (overridable via environment variables):
 After training, convert Megatron weights back to HuggingFace format:
 
 ```bash
-cd examples/qwen_image
+cd examples/qwen_image/checkpoint_convert
 
 MCORE_CKPT=/path/to/trained_mcore_ckpt \
 HF_OUT=/path/to/output_hf_transformer \

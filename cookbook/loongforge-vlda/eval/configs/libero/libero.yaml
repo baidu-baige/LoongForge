@@ -49,7 +49,7 @@ server:
   use_bf16: false
 
 env:
-  eval_root: /path/to/LoongForge/loongforge/embodied/eval
+  eval_root: /path/to/LoongForge/loongforge/evaluation/embodied
   loongforge_root: /path/to/LoongForge
   libero_config_path: /path/to/libero_config
   mujoco_gl: egl

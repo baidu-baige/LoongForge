@@ -130,5 +130,5 @@ echo "Stage $STAGE: output=$OUTPUT_DIR; console log=$LOG_FILE"
 torchrun \
     --nproc_per_node "$GPUS_PER_NODE" --nnodes "$NNODES" --node_rank "$NODE_RANK" \
     --master_addr "${MASTER_ADDR:-localhost}" --master_port "${MASTER_PORT:-29500}" \
-    "$LOONGFORGE_PATH/loongforge/embodied/train.py" "${ARGS[@]}" -- "${MODEL_OVERRIDES[@]}" \
+    "$LOONGFORGE_PATH/loongforge/train.py" "${ARGS[@]}" -- "${MODEL_OVERRIDES[@]}" \
     2>&1 | tee -a "$LOG_FILE"

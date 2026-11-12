@@ -22,16 +22,19 @@ num_attention_heads: 64
 ```
 
 ### 1.2 Register Model Name
-Register in the MODEL_CONFIG_REGISTRY in loongforge/utils/config_map.py, then you can reference the model directly by name (e.g., `llama3-70b`).
+Register the model in the Megatron section of the single
+`MODEL_CONFIG_REGISTRY` in `loongforge/models/catalog.py`, under its model
+family, then reference it by name (for example, `llama3-70b`).
 
 ```python
 MODEL_CONFIG_REGISTRY = {
-    # ... existing models
-    "llama3-70b": {
-            "config_path": "configs/models/llama3",
-            "config_name": "llama3_70b",
+    "megatron": {
+        LanguageModelFamilies.LLAMA: {
+            # ... existing models
+            "llama3-70b": "llama3/llama3_70b.yaml",
         },
-    }
+    },
+}
 ```
 
 ## 2. Supporting VLM Models
@@ -39,7 +42,7 @@ VLM can be viewed as **ViT + Projector + LLM**. When adding new VLM models, the 
 
     1. **Prepare component configurations**: Define LLM base, vision encoder, and projector configurations.
     2. **Create combination configuration**: Write the top-level YAML configuration file for VLM.
-    3. **Register model name**: Register the new model in config_map.py.
+    3. **Register model name**: Register the new model in catalog.py.
 
 ### 2.1 Vision Encoder (ViT) Configuration
 Define Vision Transformer parameters.
@@ -112,21 +115,48 @@ model:
 ```
 
 ### 2.4 Model Registration
-You need to register in loongforge/utils/config_map.py. Open loongforge/utils/config_map.py and add entries to the MODEL_CONFIG_REGISTRY dictionary:
+Register the model in the Megatron section of
+`loongforge/models/catalog.py` by adding it under the matching family:
 
 ```python
 MODEL_CONFIG_REGISTRY = {
-    # ... existing models
-    
-    # === Add your new model ===
-    "my-custom-vlm-8b": {
-        "config_path": "configs/models/<vlm_family>",       # Directory where the combination configuration file is located
-        "config_name": "my_new_vlm",                        # Combination configuration file name (without .yaml)
+    "megatron": {
+        VisionLanguageModelFamilies.VLM: {
+            # === Add your new model ===
+            "my-custom-vlm-8b": "<vlm_family>/my_new_vlm.yaml",
+        },
     },
 }
 ```
 
 After successful registration, you can reference the model directly by name (e.g., `my-custom-vlm-8b`).
+
+### 2.5 Adding a Torch model
+
+Torch models use the same catalog. Their YAML currently contains only
+`model` and `data` fields, without the `_target_` used by Megatron YAML. The
+parser therefore needs the typed model/data config classes for field types,
+defaults, and validation. A Torch entry uses the tuple
+`(yaml_file, model_config_type, data_config_type)`:
+
+```python
+MODEL_CONFIG_REGISTRY = {
+    "torch": {
+        EmbodiedModelFamilies.PI05: {
+            "my-torch-model": (
+                "my_torch_model/my_torch_model.yaml",
+                "loongforge.models.my_torch_model.ModelConfig",
+                "loongforge.data.my_torch_model.DataConfig",
+            ),
+        },
+    },
+}
+```
+
+The YAML `model_type` must match the family used by the Torch trainer
+registration. The registry group selects the engine before parsing; the
+default trainer is then selected by `(engine, model_type, training_phase)`.
+`--trainer-type` remains an optional Torch name override.
 
 ## 3. Supporting Custom Models (Using Wan as Example)
 Wan series model configurations are located in `configs/models/wan/`, for example:
@@ -143,10 +173,11 @@ configs/models/wan/<your_wan_variant>.yaml
 ### 3.2 Register Model Name
 ```python
 MODEL_CONFIG_REGISTRY = {
-    # ... existing models
-    "my-wan-variant": {
-        "config_path": "configs/models/wan",
-        "config_name": "<your_wan_variant>",
+    "megatron": {
+        DiffusionModelFamilies.WAN2_2_I2V: {
+            # ... existing models
+            "my-wan-variant": "wan/<your_wan_variant>.yaml",
+        },
     },
 }
 ```

@@ -13,7 +13,7 @@ Extract and linearly interpolate the Action DiT head weights from the Wan2.2 vid
 ```bash
 LOCAL_MODEL_PATH=/data/models \
 OUTPUT=$LOONGFORGE_PATH/checkpoints/ActionDiT_linear_interp_Wan22_alphascale_1024hdim.pt \
-    bash examples/embodied/fastwam/preprocess_action_dit_backbone.sh
+    bash examples/fastwam/finetuning/preprocess_action_dit_backbone.sh
 ```
 
 #### 0.1.2 Wan-AI/Wan2.2-TI2V-5B Weights
@@ -29,7 +29,7 @@ Encode all task instructions in the dataset into text embeds in one pass, then r
 ```bash
 DATASET_PATH=/data/libero \
 TEXT_EMBEDDING_CACHE_DIR=/data/cache/fastwam_text_embeds \
-    bash examples/embodied/fastwam/precompute_text_embeds.sh
+    bash examples/fastwam/finetuning/precompute_text_embeds.sh
 ```
 
 ### 0.3 Dataset
@@ -71,7 +71,7 @@ export DIFFSYNTH_MODEL_BASE_PATH=/workspace/huggingface.co/Wan-AI/Wan2.2-TI2V-5B
 Single-node DDP training example:
 
 ```bash
-bash examples/embodied/fastwam/run_fastwam_sft_ddp_finetune.sh
+bash examples/fastwam/finetuning/sft_fastwam_ddp.sh
 ```
 
 ### 2.2 Correctness Verification
@@ -93,8 +93,8 @@ SAVE_FORMAT=dcp ASYNC_SAVE=1 \
 GPUS_PER_NODE=8 TRAIN_ITERS=20000 PER_DEVICE_BATCH_SIZE=16 SEED=42 \
 EXTRA_MODEL_OVERRIDES="model.mot_compile_blocks=none" \
 EXTRA_DATA_OVERRIDES="data.norm_stats_path=/path/to/dataset_stats.json" \
-bash examples/embodied/fastwam/run_fastwam_sft_ddp_zero1_finetune.sh \
-  --config-file configs/models/embodied/fastwam.yaml \
+bash examples/fastwam/finetuning/sft_fastwam_ddp_zero1.sh \
+  --config-file configs/models/fastwam/fastwam.yaml \
   --optimizer TorchFusedAdamW \
   --lr-base 1e-4 --lr-warmup-iters 1000 --min-lr 1e-6
 ```
@@ -121,11 +121,11 @@ Notes:
 See the [LIBERO benchmark page](eval_docs/benchmarks/libero.md) for environment setup and protocol notes. Fill the `/path/to/...` placeholders in the suite YAML (checkpoint, Wan2.2 root, `dataset_stats.json`) first:
 
 ```bash
-CONFIG=examples/embodied/fastwam/eval/configs/libero/libero_10.yaml \
+CONFIG=examples/fastwam/eval/configs/libero/libero_10.yaml \
 REPO_ROOT=/path/to/LoongForge-VLA \
 BENCHMARK_PYTHON=/path/to/libero/bin/python \
 DIFFSYNTH_MODEL_BASE_PATH=/path/to/models_root \
-bash examples/embodied/fastwam/eval/run_libero_eval.sh
+bash examples/fastwam/eval/run_libero_eval.sh
 ```
 
 The shipped YAMLs use the reference eval protocol: `episodes_per_task: 50`, `max_steps` 400 (`spatial`/`object`/`goal`) and 700 (`libero_10`), action `sigma_shift: 1.0`, `num_steps_wait: 30`, `controller_force_update: false`, `prefer_controller_ee: false`, binarized gripper, `noise_seed: 42`.
