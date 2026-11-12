@@ -364,7 +364,7 @@ def test_example_configs_match_official_lingbot_va_settings():
 
 
 def test_bridge_wiring_is_known():
-    assert set(robodojo_policy._BRIDGE_WIRING) == {"lingbot_va_joint30", "pi05_joint14", "xvla_ee20", "fastwam_joint14", "gr00t_n17_joint14", "pi05_sf_joint14"}
+    assert set(robodojo_policy._BRIDGE_WIRING) == {"lingbot_va_joint30", "pi05_joint14", "xvla_ee20", "fastwam_joint14", "gr00t_n17_joint14", "gr00t_n16_joint14", "pi05_sf_joint14"}
     assert set(robodojo_policy._EPISODE_END_CHECK) <= set(robodojo_policy._BRIDGE_WIRING)
     assert json.loads(json.dumps(LINGBOT_VA_JOINT_CHANNELS)) == LINGBOT_VA_JOINT_CHANNELS
 
@@ -852,3 +852,64 @@ def test_example_pi05_sf_config_matches_official_adapter():
     assert cfg["benchmark"]["action_bridge"] == "pi05_sf_joint14"
     assert cfg["benchmark"]["first_chunk_len"] == cfg["benchmark"]["chunk_len"] == cfg["model"]["action_horizon"] == 50
     assert cfg["server"]["chunk_execute_steps"] == 0 and cfg["server"]["eval_normalization_mode"] == "q99"
+
+
+def test_bridge_gr00t_n16_payload_matches_official_n17_encode(monkeypatch):
+    """No official N1.6 plugin: N1.6 follows the official GR00T_N17 adapter's state / camera order;
+    the N1.6 model letterboxes in its own eval image transform, so the views go out env-native."""
+    import loongforge.embodied.eval.transport as transport
+
+    monkeypatch.setattr(transport, "PolicyClient", _FakeGr00tClient)
+    model = RoboDojoPolicyModel(
+        {"task_name": "stack_bowls", "action_bridge": "gr00t_n16_joint14", "first_chunk_len": 16, "chunk_len": 16, "lf_port": 1}
+    )
+    assert not model.disable_action_cache and model.episode_end_check == "action"
+    model.reset()
+    outs = [model.get_action(_obs(i)) for i in range(17)]
+    call = model.client.calls[0]
+    assert [i for i, o in enumerate(outs) if o["chunk_end"]] == [15]
+    expected = joint14_to_action_dict(np.linspace(-1, 1, 14, dtype=np.float32))
+    for key, value in expected.items():
+        np.testing.assert_allclose(outs[0]["actions"][0][key], value)
+    enc = _official_gr00t_funcs()["_encode_observation"](_obs(0), "default")
+    ref_state = np.concatenate([enc["state"]["left_arm"][0, 0], enc["state"]["right_arm"][0, 0]])
+    assert call["state"].dtype == np.float32
+    np.testing.assert_array_equal(call["state"], ref_state)
+    for ours, key in zip(call["images"], ["front", "left_wrist", "right_wrist"]):
+        np.testing.assert_array_equal(np.asarray(ours), enc["video"][key][0, 0])
+    assert enc["language"]["annotation.human.task_description"] == [call["instructions"]]
+
+
+def test_gr00t_n16_robodojo_modality_matches_n17():
+    from loongforge.embodied.data.datasets.gr00t_n1_6.transforms import utils as n16
+    from loongforge.embodied.data.datasets.gr00t_n1_7.transforms import gr00t_transform as n17
+
+    assert n16.EMBODIMENT_TAG_TO_PROJECTOR_INDEX["robodojo_arx_x5"] == n16.EMBODIMENT_TAG_TO_PROJECTOR_INDEX["new_embodiment"]
+    assert n16.STATISTICS_TAG_ALIASES == n17.STATISTICS_TAG_ALIASES
+    assert n16.EMBODIMENT_STAT_CONFIGS["robodojo_arx_x5"]["modality_meta"] == n17.ROBODOJO_ARX_X5_MODALITY_META
+    ours, ref = n16.MODALITY_CONFIGS["robodojo_arx_x5"], n17.MODALITY_CONFIGS["robodojo_arx_x5"]
+    for modality in ("video", "state", "action", "language"):
+        assert list(ours[modality].delta_indices) == list(ref[modality].delta_indices)
+        assert list(ours[modality].modality_keys) == list(ref[modality].modality_keys)
+    reps = lambda cfg: [str(getattr(c.rep, "name", c.rep)) for c in cfg["action"].action_configs]
+    assert reps(ours) == reps(ref) == ["RELATIVE", "RELATIVE"]
+
+
+def test_gr00t_n16_eval_transform_starts_with_letterbox():
+    """The transform GrootN1d6Policy.predict_action applies (modeling_gr00t_n1_6.py)."""
+    from loongforge.embodied.data.datasets.gr00t_n1_6.transforms.eagle3_model.image_augmentations import (
+        build_image_transformations_albumentations,
+    )
+
+    _, eval_tf = build_image_transformations_albumentations(None, None, None, None, 256, 0.95)
+    assert type(eval_tf.transforms[0]).__name__ == "LetterBoxPad"
+
+
+def test_example_gr00t_n16_config_matches_n17_adapter():
+    cfg = yaml.safe_load(
+        (_REPO_ROOT / "examples/embodied/gr00t_n1_6/eval/configs/robodojo/put_bottles_into_dustbin.yaml").read_text()
+    )
+    assert cfg["benchmark"]["action_bridge"] == "gr00t_n16_joint14"
+    assert cfg["benchmark"]["first_chunk_len"] == cfg["benchmark"]["chunk_len"] == 16
+    assert cfg["server"]["embodiment_tag"] == "robodojo_arx_x5" and cfg["server"]["chunk_execute_steps"] == 0
+    assert "action_horizon" not in cfg["model"]

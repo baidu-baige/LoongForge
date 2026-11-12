@@ -155,6 +155,17 @@ def _encode_simpler_widowx(state_raw: Dict[str, Any]) -> Optional[np.ndarray]:
     )
 
 
+def _encode_robodojo_joint14(state_raw: Dict[str, Any]) -> Optional[np.ndarray]:
+    """RoboDojo 14D raw joint state, as the official GR00T_N17 adapter's ``_pack_arm_state`` (float32)."""
+    joint = state_raw.get("joint")
+    if joint is None:
+        return None
+    joint = np.asarray(joint, dtype=np.float32).reshape(-1)
+    if joint.size != 14:
+        raise ValueError(f"robodojo_joint14 state expects 14D, got {joint.size}D")
+    return joint
+
+
 @register_payload_builder("gr00tn1d6")
 class GrootN1d6PayloadBuilder(PayloadBuilder):
     """GR00T-N1.6 client-side payload assembly."""
@@ -164,6 +175,7 @@ class GrootN1d6PayloadBuilder(PayloadBuilder):
     # Supported ``state_encoding`` values:
     #   ``libero_ee_euler`` — LIBERO 8D raw state [pos(3), euler(3), grip, grip]
     #   ``simpler_widowx``  — SimplerEnv WidowX 8D raw state [pos(3), euler(3), pad, grip]
+    #   ``robodojo_joint14`` — RoboDojo 14D raw joints [left 6 + grip, right 6 + grip]
     #   ``""``              — no state kwarg emitted
     state_encoding: str = "libero_ee_euler"
     action_encoding: str = "axis_angle"  # x,y,z + roll,pitch,yaw + gripper
@@ -179,6 +191,11 @@ class GrootN1d6PayloadBuilder(PayloadBuilder):
             return _encode_libero_ee_euler(state_raw)
         if self.state_encoding == "simpler_widowx":
             return _encode_simpler_widowx(state_raw)
+        if self.state_encoding == "robodojo_joint14":
+            state = _encode_robodojo_joint14(state_raw)
+            if state is None:
+                raise ValueError("robodojo_joint14 needs canonical state_raw['joint']; refusing a zero proprio")
+            return state
         raise ValueError(f"Unsupported gr00tn1d6 state_encoding: {self.state_encoding!r}")
 
     def build(self, canonical: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:
