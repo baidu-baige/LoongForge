@@ -364,7 +364,7 @@ def test_example_configs_match_official_lingbot_va_settings():
 
 
 def test_bridge_wiring_is_known():
-    assert set(robodojo_policy._BRIDGE_WIRING) == {"lingbot_va_joint30", "pi05_joint14", "xvla_ee20", "fastwam_joint14", "gr00t_n17_joint14", "gr00t_n16_joint14", "pi05_sf_joint14"}
+    assert set(robodojo_policy._BRIDGE_WIRING) == {"lingbot_va_joint30", "pi05_joint14", "xvla_ee20", "fastwam_joint14", "gr00t_n17_joint14", "gr00t_n16_joint14", "dreamzero_joint14", "pi05_sf_joint14"}
     assert set(robodojo_policy._EPISODE_END_CHECK) <= set(robodojo_policy._BRIDGE_WIRING)
     assert json.loads(json.dumps(LINGBOT_VA_JOINT_CHANNELS)) == LINGBOT_VA_JOINT_CHANNELS
 
@@ -913,3 +913,230 @@ def test_example_gr00t_n16_config_matches_n17_adapter():
     assert cfg["benchmark"]["first_chunk_len"] == cfg["benchmark"]["chunk_len"] == 16
     assert cfg["server"]["embodiment_tag"] == "robodojo_arx_x5" and cfg["server"]["chunk_execute_steps"] == 0
     assert "action_horizon" not in cfg["model"] and cfg["model"]["action_dim"] == 14
+
+
+# ── DreamZero-AgiBot (official XPolicyLab/policy/DreamZero) ──
+_DZ_DIR = _ROBODOJO_ROOT / "XPolicyLab" / "policy" / "DreamZero"
+
+
+def _official_dreamzero_ns():
+    """Pure helpers of the official adapter and its vendored groot transforms, taken from source."""
+    import ast
+
+    import torch
+    from einops import rearrange
+
+    model_py = _DZ_DIR / "model.py"
+    if not model_py.is_file():
+        pytest.skip("set ROBODOJO_ROOT to a RoboDojo checkout for the DreamZero parity check")
+    ns = {"np": np, "torch": torch, "Any": object, "rearrange": rearrange}
+    tree = ast.parse(model_py.read_text())
+    wanted = {"_pad_or_trim", "_stack_recent_frames", "_agibot_arm_slot_targets",
+              "_xpolicylab_packed_to_agibot_state", "_agibot_to_xpolicylab_packed"}
+    nodes = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in wanted]
+    nodes += [n for n in tree.body if isinstance(n, ast.Assign) and any(
+        getattr(t, "id", "") in {"AGIBOT_STATE_DIM", "DEFAULT_IMAGE_SIZE", "_AGIBOT_J3_LOCKED_PER_ARM_INDEX",
+                                 "_ARX_X5_ARM_TO_AGIBOT_ARM_SLOTS"} for t in n.targets)]
+    exec(compile(ast.Module(nodes, []), str(model_py), "exec"), ns)
+    sa_py = _DZ_DIR / "dreamzero/groot/vla/data/transform/state_action.py"
+    sa = ast.parse(sa_py.read_text())
+    exec(compile(ast.Module([n for n in sa.body if isinstance(n, ast.ClassDef) and n.name == "Normalizer"], []),
+                 str(sa_py), "exec"), ns)
+    dt_py = _DZ_DIR / "dreamzero/groot/vla/model/dreamzero/transform/dreamzero_cotrain.py"
+    dt = ast.parse(dt_py.read_text())
+    cls = next(n for n in dt.body if isinstance(n, ast.ClassDef) and n.name == "DreamTransform")
+    fn = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "_prepare_video")
+    ns["EmbodimentTag"] = argparse.Namespace(OXE_DROID="oxe_droid")
+    exec(compile(ast.Module([fn], []), str(dt_py), "exec"), ns)
+    ns["dreamzero_cotrain_src"] = dt_py.read_text()
+    return ns
+
+
+_DZ_ROBOT_INFO = {"arm_dim": [6, 6], "ee_dim": [1, 1]}
+
+
+def _dz_stats(rng):
+    from loongforge.embodied.eval.factories.dreamzero_robodojo import AGIBOT_ACTION_KEYS, AGIBOT_STATE_KEYS
+
+    def block(keys):
+        out = {}
+        for key, dim in keys:
+            q01 = rng.normal(size=dim) - 1.0
+            q99 = q01 + rng.uniform(0.5, 2.0, size=dim)
+            if key == "waist_lift":
+                q99 = q01.copy()  # degenerate dim: the official normalizer passes it through
+            out[key] = {"q01": q01.tolist(), "q99": q99.tolist()}
+        return out
+
+    return {"state": block(AGIBOT_STATE_KEYS), "action": block(AGIBOT_ACTION_KEYS)}
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_dreamzero_agibot_state_and_action_mapping_matches_official(seed):
+    import torch
+
+    from loongforge.embodied.eval.factories import dreamzero_robodojo as dz
+
+    official = _official_dreamzero_ns()
+    rng = np.random.default_rng(seed)
+    joint14 = rng.normal(size=14).astype(np.float32)
+    ref20 = official["_xpolicylab_packed_to_agibot_state"](joint14, _DZ_ROBOT_INFO)
+    ours20 = dz.joint14_to_agibot_state(joint14)
+    np.testing.assert_array_equal(ours20, ref20)
+
+    raw = _dz_stats(rng)
+    stats = dz.AgibotQ99(raw)
+    ref_parts = []
+    for key, x in dz.split_keys(ref20, dz.AGIBOT_STATE_KEYS).items():
+        norm = official["Normalizer"]("q99", {k: list(v) for k, v in raw["state"][key].items()})
+        ref_parts.append(norm.forward(torch.from_numpy(x[None].astype(np.float32))).numpy()[0])
+    np.testing.assert_array_equal(stats.normalize_state(ours20), np.concatenate(ref_parts))
+
+    chunk = rng.uniform(-1, 1, size=(48, 32)).astype(np.float32)
+    ours_actions = stats.unnormalize_action(chunk[:, :22])
+    joints = dz.agibot_chunk_to_joint14(ours_actions, ours20, 24)
+    assert joints.shape == (24, 14)
+    raw_state = dz.split_keys(ref20, dz.AGIBOT_STATE_KEYS)
+    for step in (0, 7, 23):
+        ref = {}
+        for key, x in dz.split_keys(chunk[step:step + 1, :22], dz.AGIBOT_ACTION_KEYS).items():
+            norm = official["Normalizer"]("q99", {k: list(v) for k, v in raw["action"][key].items()})
+            value = norm.inverse(torch.from_numpy(x)).numpy()[0]
+            ref[key] = value + raw_state[key] if key in dz.AGIBOT_RELATIVE_ACTION_KEYS else value
+        packed = official["_agibot_to_xpolicylab_packed"](
+            ref["left_arm_joint_position"], ref["right_arm_joint_position"],
+            ref["left_effector_position"], ref["right_effector_position"], "joint", _DZ_ROBOT_INFO)
+        np.testing.assert_allclose(joints[step], packed, rtol=0, atol=1e-6)
+
+
+def test_dreamzero_frame_history_and_grid_match_official():
+    import torch
+    import torchvision.transforms.v2 as T
+
+    from loongforge.embodied.eval.factories import dreamzero_robodojo as dz
+
+    official = _official_dreamzero_ns()
+    rng = np.random.default_rng(3)
+    frames = [rng.integers(0, 255, (480, 640, 3), dtype=np.uint8) for _ in range(6)]
+    for n in (1, 3, 6):
+        np.testing.assert_array_equal(dz.stack_recent_frames(frames[:n], 4),
+                                      official["_stack_recent_frames"](frames[:n], 4))
+    # VideoToTensor -> VideoCrop(eval CenterCrop, 0.95 of the 640x480 metadata) -> VideoResize(176x320,
+    # linear, antialias) -> VideoToNumpy, with the torchvision v2 classes the vendored transform builds.
+    views = [dz.stack_recent_frames(frames[i:i + 4], 4) for i in range(3)]
+    ref_views = []
+    for v in views:
+        x = torch.from_numpy(v).to(torch.float32).div(255.0).permute(0, 3, 1, 2)
+        x = T.Resize((176, 320), interpolation=T.InterpolationMode.BILINEAR, antialias=True)(T.CenterCrop((456, 608))(x))
+        ref_views.append((x.permute(0, 2, 3, 1) * 255).to(torch.uint8).numpy())
+    ours = [dz.agibot_view_transform(v) for v in views]
+    for a, b in zip(ours, ref_views):
+        np.testing.assert_array_equal(a, b)
+    # ConcatTransform order [top_head, hand_left, hand_right] -> (T, V, H, W, C) -> DreamTransform grid.
+    stub = argparse.Namespace(embodiment_tag="agibot")
+    ref_grid = official["_prepare_video"](stub, {"video": np.stack(ref_views, axis=1)})
+    ref_grid = np.transpose(ref_grid[0], (0, 2, 3, 1))  # (1, T, C, 2H, 2W) -> (T, 2H, 2W, C)
+    np.testing.assert_array_equal(dz.agibot_grid(*ours), ref_grid)
+    assert ref_grid.shape == (4, 352, 640, 3)
+
+
+def test_dreamzero_agibot_prompt_matches_official_template():
+    from loongforge.embodied.eval.factories import dreamzero_robodojo as dz
+
+    src = _official_dreamzero_ns()["dreamzero_cotrain_src"]
+    head = '"A multi-view video shows that a robot " + str(item).lower() + " '
+    start = src.index(head) + len(head)
+    middle = src[start:src.index('" + str(item).lower()', start)]
+    instruction = "Pick up the  Bottles and throw them into the dustbin."
+    lowered = instruction.lower()
+    expected = " ".join(("A multi-view video shows that a robot " + lowered + " " + middle + lowered).split())
+    assert dz.agibot_prompt(instruction) == expected
+
+
+class _FakeDreamZeroInfer:
+    def __init__(self):
+        self.calls, self.resets = [], 0
+
+    def predict(self, **kw):
+        self.calls.append(kw)
+        return np.zeros((1, 48, 32), dtype=np.float32)
+
+    def reset(self):
+        self.resets += 1
+
+
+def test_dreamzero_robodojo_eval_model_schedule_and_session():
+    from loongforge.embodied.eval.factories import dreamzero_robodojo as dz
+
+    rng = np.random.default_rng(5)
+    stats = dz.AgibotQ99(_dz_stats(rng))
+    infer = _FakeDreamZeroInfer()
+    model = dz.DreamZeroRoboDojoEvalModel(infer, stats, negative_prompt="neg")
+    state = rng.normal(size=14).astype(np.float32)
+    views = lambda i: [np.full((480, 640, 3), 10 * i + k, dtype=np.uint8) for k in range(3)]
+    for step in range(30):
+        out = model.predict_action([views(step)], ["Stack"], state=state, episode_id="ep0", episode_step=step)
+        assert out.shape == (1, 14)
+    assert len(infer.calls) == 2  # steps 0 and 24
+    first, second = infer.calls
+    assert first["apply_eval_image_transform"] is False and first["video"].shape == (4, 352, 640, 3)
+    assert (first["video"][:, :176, :320] == 0).all()  # four copies of the first head frame (value 0)
+    assert second["video"][-1, 0, 0, 0] == 240 and second["video"][0, 0, 0, 0] == 210  # steps 21..24
+    assert first["state"].shape == (64,) and not first["state"][20:].any()
+    # zero normalized action -> q99 midpoint; relative keys add the raw state.
+    mid = {k: (np.asarray(v[0]) + np.asarray(v[1])) / 2 for k, v in stats.action.items()}
+    raw20 = dz.joint14_to_agibot_state(state)
+    raw = dz.split_keys(raw20, dz.AGIBOT_STATE_KEYS)
+    expected = dz.agibot_to_joint14(mid["left_arm_joint_position"] + raw["left_arm_joint_position"],
+                                    mid["right_arm_joint_position"] + raw["right_arm_joint_position"],
+                                    mid["left_effector_position"], mid["right_effector_position"])
+    np.testing.assert_allclose(out[0], expected, atol=1e-6)
+    model.predict_action([views(0)], ["Stack"], state=state, episode_id="ep1")
+    assert infer.resets == 0 and len(infer.calls) == 3  # new episode: buffers cleared, session kept
+    reset_model = dz.DreamZeroRoboDojoEvalModel(infer, stats, "neg", reset_session_on_new_episode=True)
+    reset_model.predict_action([views(0)], ["Stack"], state=state, episode_id="a")
+    reset_model.predict_action([views(0)], ["Stack"], state=state, episode_id="b")
+    assert infer.resets == 1
+
+
+class _FakeDreamZeroClient(_FakePolicyClient):
+    def predict_action(self, **payload):
+        self.calls.append(payload)
+        return {"ok": True, "data": {"actions": [np.linspace(-1, 1, 14, dtype=np.float32).tolist()],
+                                     "inference_latency_ms": 5.0}}
+
+
+def test_bridge_dreamzero_payload_every_step_and_chunk_end(monkeypatch):
+    import loongforge.embodied.eval.transport as transport
+
+    monkeypatch.setattr(transport, "PolicyClient", _FakeDreamZeroClient)
+    model = RoboDojoPolicyModel(
+        {"task_name": "stack_bowls", "action_bridge": "dreamzero_joint14", "first_chunk_len": 24, "chunk_len": 24, "lf_port": 1}
+    )
+    assert model.disable_action_cache and model.episode_end_check == "action"
+    model.reset()
+    outs = [model.get_action(_obs(i)) for i in range(49)]
+    assert [i for i, o in enumerate(outs) if o["chunk_end"]] == [23, 47]
+    assert len(model.client.calls) == 49 and all(c["disable_action_cache"] for c in model.client.calls)
+    call = model.client.calls[0]
+    for ours, cam in zip(call["images"], ["cam_head", "cam_left_wrist", "cam_right_wrist"]):
+        np.testing.assert_array_equal(ours, _obs(0)["vision"][cam]["color"])
+    ref_state = np.concatenate([np.arange(6) * 0.1, [0.25], -np.arange(6) * 0.1, [0.75]]).astype(np.float32)
+    np.testing.assert_array_equal(call["state"], ref_state)
+    assert call["state"].dtype == np.float32 and call["instructions"] == ["stack the bowls"]
+
+
+def test_example_dreamzero_config_matches_official_adapter():
+    cfg = yaml.safe_load(
+        (_REPO_ROOT / "examples/embodied/dreamzero/eval/configs/robodojo/put_bottles_into_dustbin.yaml").read_text()
+    )
+    model = cfg["model"]
+    assert cfg["benchmark"]["action_bridge"] == "dreamzero_joint14"
+    assert cfg["benchmark"]["first_chunk_len"] == cfg["benchmark"]["chunk_len"] == model["eval_action_horizon"] == 24
+    assert model["eval_protocol"] == "robodojo_agibot" and model["backbone_variant"] == "wan21_14b"
+    assert model["eval_video_history"] == 4 and model["eval_num_inference_timesteps"] == 4
+    assert model["reset_session_on_new_episode"] is False
+    official = yaml.safe_load((_DZ_DIR / "deploy.yml").read_text()) if (_DZ_DIR / "deploy.yml").is_file() else None
+    if official:
+        assert official["action_horizon"] == model["eval_action_horizon"] and official["video_history"] == model["eval_video_history"]
+        assert official["skip_img_transform"] is False and official["native_dojo_action"] is False

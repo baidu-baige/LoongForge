@@ -42,6 +42,10 @@ raw-action channels, RoboDojo action space, PayloadBuilder defaults):
 - ``gr00t_n16_joint14``: GR00T-N1.6 with the same RoboDojo conventions as ``gr00t_n17_joint14``
   (there is no official N1.6 RoboDojo plugin or checkpoint); the N1.6 model applies the
   letterbox in its own eval image transform, so the builder sends the env-native views.
+- ``dreamzero_joint14``: DreamZero-AgiBot as the official RoboDojo DreamZero adapter: called on
+  every env step (the server keeps the last 4 frames of [head, left, right] and the 24-step
+  chunk), AgiBot state / action mapping and four-view prompt server-side (eval_protocol
+  ``robodojo_agibot``); 24 absolute 14-D joint targets executed per chunk.
 
 Chunk boundaries: the official ``deploy.py`` of both policies executes one predicted
 chunk per ``get_action`` and calls ``is_episode_end()`` once more at every chunk
@@ -104,6 +108,13 @@ _BRIDGE_WIRING = {
         None,
         "joint14",
         {"state_encoding": "robodojo_joint14", "action_dim": 14, "action_horizon": 16},
+    ),
+    "dreamzero_joint14": (
+        "dreamzero",
+        "",
+        None,
+        "joint14",
+        {"state_encoding": "robodojo_joint14", "action_dim": 14, "action_horizon": 24},
     ),
 }
 

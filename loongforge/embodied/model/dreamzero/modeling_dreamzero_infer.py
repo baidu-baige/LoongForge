@@ -99,6 +99,7 @@ class DreamZeroInferenceModel:
         prompt: str,
         negative_prompt: str,
         state: np.ndarray,
+        apply_eval_image_transform: bool = True,
     ) -> np.ndarray:
         """Tokenize a prepared prompt and run the action head.
 
@@ -109,13 +110,17 @@ class DreamZeroInferenceModel:
             prompt: Positive prompt already formatted by the eval adapter.
             negative_prompt: Model classifier-free negative prompt.
             state: Prepared normalized state vector.
+            apply_eval_image_transform: Apply the LIBERO two-view crop above; callers
+                that already ran their benchmark's eval transform pass False.
 
         Returns:
             Action predictions as a CPU NumPy array with batch dimension.
         """
         import torch
 
-        video = self._eval_image_transform(np.asarray(video))
+        video = np.asarray(video)
+        if apply_eval_image_transform:
+            video = self._eval_image_transform(video)
         tokenizer = self._load_tokenizer()
         tokens = tokenizer(
             [prompt], return_tensors="pt", padding="max_length", truncation=True,

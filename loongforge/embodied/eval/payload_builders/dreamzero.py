@@ -42,6 +42,25 @@ def _pack_dreamzero_images(images_by_cam: Dict[str, Optional[np.ndarray]]) -> Li
     return [np.asarray(exterior), np.asarray(wrist)]
 
 
+def _pack_robodojo_views(images_by_cam: Dict[str, Optional[np.ndarray]]) -> List[np.ndarray]:
+    """Return ``[head, left wrist, right wrist]`` (official RoboDojo DreamZero camera groups)."""
+    views = [images_by_cam.get(cam) for cam in ("head", "left", "right")]
+    if any(v is None for v in views):
+        raise ValueError("DreamZero RoboDojo eval requires head, left and right views")
+    return [np.asarray(v) for v in views]
+
+
+def encode_robodojo_joint14(state_raw: Dict[str, Any]) -> np.ndarray:
+    """RoboDojo 14-D raw joints [left 6 + gripper, right 6 + gripper] (official ``pack_robot_state``)."""
+    joint = state_raw.get("joint")
+    if joint is None:
+        raise ValueError("DreamZero robodojo_joint14 needs canonical state_raw['joint']")
+    joint = np.asarray(joint, dtype=np.float32).reshape(-1)
+    if joint.size != 14:
+        raise ValueError(f"robodojo_joint14 state expects 14D, got {joint.size}D")
+    return joint
+
+
 def encode_libero_state(state_raw: Dict[str, Any]) -> np.ndarray:
     """Canonical LIBERO proprio -> DreamZero 8D state (pos3 + quat4 + gripper1).
 
@@ -69,6 +88,7 @@ class DreamZeroPayloadBuilder(PayloadBuilder):
     #
     # Supported ``state_encoding`` values:
     #   ``libero_ee`` — eef_pos + eef_quat + gripper -> 8D (LIBERO default)
+    #   ``robodojo_joint14`` — RoboDojo 14D joints, views [head, left, right]
     state_encoding: str = "libero_ee"
     # LIBERO canonical action (pos + axis_angle + gripper) matches the model's
     # decoded 7D action; the composed decoder key is identity.
@@ -85,11 +105,16 @@ class DreamZeroPayloadBuilder(PayloadBuilder):
         state_raw = canonical.get("state_raw") or {}
         if self.state_encoding == "libero_ee":
             return encode_libero_state(state_raw)
+        if self.state_encoding == "robodojo_joint14":
+            return encode_robodojo_joint14(state_raw)
         raise ValueError(f"Unsupported dreamzero state_encoding: {self.state_encoding!r}")
 
     def build(self, canonical: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:
         """Return the kwargs consumed by the DreamZero eval wrapper."""
-        images = _pack_dreamzero_images(canonical["images"])
+        if self.state_encoding == "robodojo_joint14":
+            images = _pack_robodojo_views(canonical["images"])
+        else:
+            images = _pack_dreamzero_images(canonical["images"])
         return {
             "images": images,
             "instructions": [str(canonical["instruction"])],

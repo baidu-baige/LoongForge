@@ -1,0 +1,83 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+# DreamZero-AgiBot (Wan2.1-I2V-14B backbone) on RoboDojo (Isaac Sim 5.1, dual-arm ARX X5) --
+# one task, one seed tag. Change benchmark.task_name for other tasks; set benchmark.eval_num to
+# cap the episode count.
+#
+# RoboDojo releases no DreamZero checkpoint. The official XPolicyLab DreamZero adapter loads the
+# public DreamZero-AgiBot release (HF GEAR-Dreams/DreamZero-AgiBot) zero-shot; this config does
+# the same with the adapter's protocol (eval_protocol robodojo_agibot):
+# - the server is called on every env step and keeps the last 4 frames of [head, left wrist,
+#   right wrist] (left-padded at episode start); each view is center-cropped to 0.95 and resized
+#   to 176x320, then tiled into the 2x2 AgiBot grid;
+# - 14-D joints mapped into the AgiBot 20-D state (J3 / head / waist 0), q99 from the checkpoint's
+#   experiment_cfg/metadata.json; arm / head / waist actions relative to the observed state;
+# - the first 24 of the 48 predicted steps executed per chunk as joint control (the official
+#   deploy checks is_episode_end after every action); 4 flow-matching steps, CFG 5, bf16.
+# Encoders: Wan-AI/Wan2.1-I2V-14B-480P T5 / CLIP / VAE .pth files and its google/umt5-xxl
+# tokenizer (the 14B DiT shards are not needed: the checkpoint carries the full DiT).
+# Fill /path/to/... below. Do not commit machine-specific absolute paths.
+
+benchmark:
+  name: robodojo
+  task_name: put_bottles_into_dustbin
+  seed: 0              # result tag (RoboDojo uses it for the training-seed column)
+  env_cfg_type: arx_x5
+  action_bridge: dreamzero_joint14
+  first_chunk_len: 24  # = eval_action_horizon; every chunk runs to the end
+  chunk_len: 24
+
+model:
+  backend: loongforge
+  model_type: dreamzero
+  name: dreamzero-agibot-robodojo
+  backbone_variant: wan21_14b
+  model_dtype: bfloat16
+  eval_protocol: robodojo_agibot
+  eval_action_horizon: 24
+  eval_video_history: 4
+  reset_session_on_new_episode: false   # official Model.reset() keeps the action-head session
+  # DreamZero-AgiBot geometry (checkpoint config.json action_head_cfg).
+  num_frames: 33
+  action_horizon: 48
+  n_action_steps: 48
+  num_frame_per_block: 2
+  num_action_per_block: 48
+  num_state_per_block: 1
+  max_chunk_size: 4
+  max_state_dim: 64
+  max_action_dim: 32
+  dit_action_state_hidden_size: 1024
+  eval_num_inference_timesteps: 4
+  text_encoder_pretrained_path: /path/to/Wan2.1-I2V-14B-480P/models_t5_umt5-xxl-enc-bf16.pth
+  image_encoder_pretrained_path: /path/to/Wan2.1-I2V-14B-480P/models_clip_open-clip-xlm-roberta-large-vit-huge-14.pth
+  vae_pretrained_path: /path/to/Wan2.1-I2V-14B-480P/Wan2.1_VAE.pth
+
+server:
+  host: 127.0.0.1
+  port: 62161
+  health_port: 62162
+  python: /path/to/loongforge/bin/python
+  start_timeout_sec: 2400   # 14B DiT + UMT5 + VAE + CLIP load
+  random_init: false
+  ckpt_path: /path/to/DreamZero-AgiBot
+  dataset_statistics_path: /path/to/DreamZero-AgiBot/experiment_cfg/metadata.json
+  tokenizer_path: /path/to/Wan2.1-I2V-14B-480P/google/umt5-xxl
+  use_bf16: true
+
+env:
+  eval_root: /path/to/LoongForge/loongforge/embodied/eval
+  loongforge_root: /path/to/LoongForge
+  robodojo_root: /path/to/RoboDojo          # with Assets/ downloaded (scripts/init_assets.sh)
+  robodojo_python: /path/to/robodojo/bin/python   # Isaac Sim 5.1 + IsaacLab + curobo env
+  sim_env: {}          # extra env vars for the sim client (e.g. VK_ICD_FILENAMES)
+
+run:
+  output_dir: /path/to/reports/dreamzero/robodojo/put_bottles_into_dustbin_seed0
+  cuda_visible_devices: "0"   # GPU of the sim client; the policy server inherits CUDA_VISIBLE_DEVICES
+  timestamped_output: false
+
+timeouts:
+  per_task_sec: 0             # whole official client run for this task; 0 = no limit
+  policy_call_sec: 900
