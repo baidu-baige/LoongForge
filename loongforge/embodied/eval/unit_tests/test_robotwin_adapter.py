@@ -668,6 +668,13 @@ def test_worker_script_offline_expert_check_modes(tmp_path: pathlib.Path) -> Non
         args = argparse.Namespace(**fields)
         return robotwin_runner._worker_eval_script(args).read_text(encoding="utf-8")
 
+    # --disable-expert-check without a cache: the shim references
+    # _S_CURRENT_ATTRS, which only the cache header defines. Without this the
+    # first setup_demo raises NameError and the unit silently produces nothing.
+    no_cache = gen(disable_expert_check=True)
+    assert "_S_CURRENT_ATTRS = {}" in no_cache
+    assert no_cache.index("_S_CURRENT_ATTRS = {}") < no_cache.index("_vla_fill_attrs(")
+
     scan = gen(offline_expert_check_scan=str(tmp_path / "cache"))
     assert "_S_SCAN_DIR" in scan
     assert "offline_expert_check scan: expert pass only" in scan  # get_model skipped

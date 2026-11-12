@@ -542,10 +542,16 @@ def _worker_eval_script(args: argparse.Namespace) -> Optional[pathlib.Path]:
         env_anchor = '    TASK_ENV = class_decorator(args["task_name"])\n'
         if env_anchor not in text:
             raise ValueError("env init shim: task-env anchor not found in worker script")
+        # The cache header defines _S_CURRENT_ATTRS at module level. With only
+        # --disable-expert-check and no cache that header is never emitted, and
+        # the shim below would raise NameError on the first setup_demo, leaving
+        # the unit with zero output. Define the holder here in that case.
+        attrs_init = "" if (scan_dir or cache_dir) else "    _S_CURRENT_ATTRS = {}\n"
         env_shim = (
             env_anchor
             + "\n    # --- env init shim (injected) ---\n"
-            "    from loongforge.embodied.eval.orchestrator.runners.robotwin_runner import (\n"
+            + attrs_init
+            + "    from loongforge.embodied.eval.orchestrator.runners.robotwin_runner import (\n"
             "        clear_episode_task_attrs as _vla_clear_attrs,\n"
             "        fill_missing_task_attrs as _vla_fill_attrs,\n"
             "    )\n"
