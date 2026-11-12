@@ -718,6 +718,39 @@ def _fill_missing_optimizer_state(optim_state_dict: dict) -> tuple[dict, int]:
     return patched, len(missing)
 
 
+def _move_fused_step_to_param_device(optimizer) -> None:
+    """Re-host fused/capturable Adam ``step`` on the parameter's device.
+
+    ``ZeroRedundancyOptimizer.load_state_dict`` copies state to each parameter's
+    device and then forces every 0-dim tensor (notably Adam's ``step``) back to
+    CPU. That contradicts ``torch.optim.Optimizer.load_state_dict``, which keeps
+    ``step`` on the parameter's device for fused/capturable groups, and makes
+    the next fused ``step()`` fail with "state_steps is on cpu".
+    """
+    if _is_zero_optimizer(optimizer):
+        # ``_rank_local_optimizer`` yields the object that actually owns the
+        # state: the inner torch optimizer for a ZeRO shard (including the fp32
+        # master adapter) or the tensor-wise optimizer itself.
+        targets = [
+            _rank_local_optimizer(child)
+            for child in _zero_optimizer_children(optimizer)
+        ]
+    else:
+        targets = [optimizer]
+
+    for target in targets:
+        for group in target.param_groups:
+            if not (group.get("fused") or group.get("capturable")):
+                continue
+            for param in group["params"]:
+                state = target.state.get(param)
+                if not state:
+                    continue
+                step = state.get("step")
+                if torch.is_tensor(step) and step.device != param.device:
+                    state["step"] = step.to(param.device)
+
+
 def _resume_legacy(model, optimizer, scheduler, checkpoint_path, ctx, restore_rng):
     """Legacy resume — load training_state.pt and dispatch optim state via FSDP API."""
     state_file = os.path.join(checkpoint_path, "training_state.pt")
@@ -759,6 +792,7 @@ def _resume_legacy(model, optimizer, scheduler, checkpoint_path, ctx, restore_rn
             )
     else:
         optimizer.load_state_dict(state["optimizer"])
+        _move_fused_step_to_param_device(optimizer)
     if ctx.is_main:
         logger.info("optimizer resumed successfully")
 

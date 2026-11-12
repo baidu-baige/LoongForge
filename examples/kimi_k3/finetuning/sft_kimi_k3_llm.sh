@@ -126,7 +126,7 @@ MODEL_PARALLEL_ARGS=(
 
 LOGGING_ARGS=(
   --log-interval 1
-  --tensorboard-dir ${TENSORBOARD_PATH}
+  --tensorboard-dir "${TENSORBOARD_PATH}"
   --log-timers-to-tensorboard
   --log-memory-to-tensorboard
   --log-validation-ppl-to-tensorboard
@@ -134,8 +134,8 @@ LOGGING_ARGS=(
 
 if [ -n "${WANDB_API_KEY:-}" ]; then
   LOGGING_ARGS+=(
-    --wandb-project ${WANDB_PROJECT}
-    --wandb-exp-name ${WANDB_NAME}
+    --wandb-project "${WANDB_PROJECT:?Set WANDB_PROJECT when WANDB_API_KEY is set}"
+    --wandb-exp-name "${WANDB_NAME:?Set WANDB_NAME when WANDB_API_KEY is set}"
   )
 fi
 
@@ -147,5 +147,5 @@ PYTHONPATH=$MEGATRON_PATH:$LOONGFORGE_PATH:$PYTHONPATH \
   ${TRAINING_ARGS[@]} \
   ${MOE_ARGS[@]} \
   ${MODEL_PARALLEL_ARGS[@]} \
-  ${LOGGING_ARGS[@]} \
+  "${LOGGING_ARGS[@]}" \
   model_type=kimi_k3_llm

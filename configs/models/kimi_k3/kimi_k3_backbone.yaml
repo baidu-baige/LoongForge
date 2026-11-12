@@ -56,6 +56,9 @@ activation_situ_linear_beta: 25.0
 untie_embeddings_and_output_weights: true
 vocab_size_in_config_file: 163840
 make_vocab_size_divisible_by: 128
+# PP stage boundaries carry the AttnRes bank ((1 + rows) * hidden wide), so P2P
+# must negotiate shapes; set here because args would otherwise override it to False.
+variable_seq_lengths: true
 
 model_type: kimi_k3
 convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/kimi_k3/ckpt_convert/kimi_k3_convert.yaml

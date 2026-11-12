@@ -314,6 +314,7 @@ Click any model for its training examples; see [`configs/models/`](./configs/mod
 <li><a href="examples/cosmos3/">Cosmos3</a></li>
 <li><a href="examples/dreamzero/">DreamZero</a></li>
 <li><a href="cookbook/loongforge-vlda/">LoongForge-VLDA</a></li>
+<li><a href="examples/giga_brain07/">GigaBrain0.7</a></li>
 </ul>
 </td>
 <td valign="top">

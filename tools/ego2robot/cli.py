@@ -12,8 +12,10 @@ build_arg_parser()/run() functions. See SUBCOMMANDS below for the mapping:
   inpaint      -> steps/inpaint.py
   depth        -> steps/depth_estimate.py (standalone step; optionally included
                   in run-all with --with_depth)
+  gauss-recon  -> steps/gauss_recon.py (DVLT metric depth/cache; --with_gauss,
+                  no gsplat training or novel-view synthesis)
   retarget     -> steps/robot_retarget.py (dual-arm IK retargeting, rendering,
-                  and compositing for 15 morphologies)
+                  and compositing for 16 morphologies)
   quality      -> steps/quality/quality_curation.py (L1/L2 plus SGLang L3)
   path-b       -> steps/path_b.py (pure video -> hand tracks -> Zarr)
   lerobot      -> steps/lerobot_writer.py
@@ -37,6 +39,7 @@ SUBCOMMANDS = {
     "mask": "steps.hand_mask",
     "inpaint": "steps.inpaint",
     "depth": "steps.depth_estimate",
+    "gauss-recon": "steps.gauss_recon",
     "retarget": "steps.robot_retarget",
     "lerobot": "steps.lerobot_writer",
     "validate": "steps.validate",
@@ -55,7 +58,7 @@ def build_parser():
     """Build the main CLI parser and attach each subcommand parser."""
     parser = argparse.ArgumentParser(
         prog="cli.py",
-        description="EgoVerse -> LeRobot H2R data synthesis pipeline for 15 dual-arm morphologies",
+        description="EgoVerse -> LeRobot H2R data synthesis pipeline for 16 dual-arm morphologies",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
