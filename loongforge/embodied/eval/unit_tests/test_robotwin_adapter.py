@@ -668,6 +668,14 @@ def test_worker_script_offline_expert_check_modes(tmp_path: pathlib.Path) -> Non
         args = argparse.Namespace(**fields)
         return robotwin_runner._worker_eval_script(args).read_text(encoding="utf-8")
 
+    # A sharded plan passes seed_stride > 1, which rewrites `now_seed += 1`.
+    # Doing that before the consume patch made its anchor miss, so the handler
+    # was silently never injected and a stale seed fell back to the wrapper's
+    # skip path (an endless seed walk instead of a resume).
+    strided = gen(offline_expert_check=str(tmp_path / "cache"), seed_stride=100)
+    assert "CACHE STALE" in strided
+    assert "_admitted" in strided
+
     # --disable-expert-check without a cache: the shim references
     # _S_CURRENT_ATTRS, which only the cache header defines. Without this the
     # first setup_demo raises NameError and the unit silently produces nothing.
@@ -832,6 +840,13 @@ def test_worker_script_carries_play_once_attrs_through_the_cache(tmp_path: pathl
         "            TASK_ENV.setup_demo(now_ep_num=now_id, seed=now_seed, is_test=True, **args)\n"
         "        except UnStableError:\n"
         "            TASK_ENV.close_env()\n"
+        # The skip-the-seed tail the UnStableError wrapper adds on a real script.
+        "            succ_seed -= 1\n"
+        "            if suc_test_seed_list:\n"
+        "                suc_test_seed_list.pop()\n"
+        "            now_seed += 1\n"
+        '            args["render_freq"] = render_freq\n'
+        "            continue\n"
         '        episode_info_list = [episode_info["info"]]\n'
     )
     (robotwin / "script" / "eval_policy.py").write_text(source, encoding="utf-8")
@@ -856,6 +871,143 @@ def test_worker_script_carries_play_once_attrs_through_the_cache(tmp_path: pathl
     consume = gen(offline_expert_check=str(tmp_path / "cache"))
     assert "_S_CURRENT_ATTRS.update(_S_ATTRS.get(str(now_seed), {}))" in consume
     assert "_vla_fill_attrs(TASK_ENV, _vla_task_name, _S_CURRENT_ATTRS)" in consume
+    # A stale cached seed falls back to the official flow on a replacement seed
+    # instead of aborting the unit.
+    assert "CACHE STALE" in consume
+    assert "_vla_replacement_seeds(_S_SEEDS, _S_OFFSET, test_num, now_seed, attempt=_S_ATTEMPT)" in consume
+    assert "_S_ATTEMPT = 0" in consume
+    # The slot id travels with each episode so a skipped one does not shift the
+    # indices the repair round reasons about.
+    assert "[offline-expert-check] SLOT %d seed %d" in consume
+    assert "REPLACED seed" in consume
+    assert "_S_REPLACED.append(_admitted)" in consume
+    # The loop head re-reads now_seed from the cache array, so the admitted seed
+    # must be pinned there; otherwise the replacement is silently discarded.
+    assert "_S_SEEDS[_S_OFFSET + succ_seed - 1] = _admitted" in consume
+    # Two stale episodes in one unit must not pick the same replacement.
+    assert "if int(_cand) in _S_REPLACED:" in consume
+    assert "succ_seed -= 1" in consume
+    # Any failure while probing a candidate (unstable scene, failed plan, missing
+    # target pose) must reject it, not kill the unit.
+    assert "candidate %d rejected: %s" in consume
+    assert "except Exception as _e:" in consume
+    assert "expert rejected the candidate seed" in consume
+    assert "'expert-unsolved'" in consume
+    assert "_fail_streak += 1" in consume
+    assert "_fail_streak >= 3" in consume
+    assert "isinstance(_e, UnStableError) else 0" not in consume
+    # Three failures mean different things before and after the first good episode:
+    # an unproven process is broken (exit), a process that already ran episodes
+    # just hit a bad seed (skip it, keep the rest of the chunk).
+    assert "if succ_seed > 1:" in consume
+    assert "skipping this episode" in consume
+    assert consume.count("raise SystemExit(3)") == 1
+    assert consume.index("raise SystemExit(3)") > consume.index("skipping this episode")
+
+
+def test_replacement_seed_candidates_stay_outside_the_plan() -> None:
+    """seed+1 collides with another shard; candidates must not be planned seeds."""
+    from loongforge.embodied.eval.orchestrator.runners.robotwin_runner import replacement_seed_candidates
+
+    # Sparse cache: 100 stable seeds out of ~120 candidates.
+    planned = [s for s in range(100000, 100130) if s % 7 != 0][:100]
+    assert 100027 in planned, "fixture must contain the stale seed used in the logs"
+
+    cands = replacement_seed_candidates(planned, offset=0, per_unit=10, stale_seed=100027)
+    assert cands, "expected candidates"
+    assert not (set(cands) & set(planned)), "a replacement must not be a planned seed"
+    assert cands[0] > max(planned)
+
+    # Two shards that go stale must not converge on the same replacement.
+    a = replacement_seed_candidates(planned, offset=0, per_unit=10, stale_seed=100027)
+    b = replacement_seed_candidates(planned, offset=10, per_unit=10, stale_seed=100031)
+    assert not (set(a) & set(b))
+
+    # No cache at all: just walk up from the stale seed.
+    assert replacement_seed_candidates([], offset=0, per_unit=10, stale_seed=5)[:2] == [6, 7]
+
+    # The walk is bounded: a process that cannot build the scene must give up
+    # quickly instead of trying every candidate.
+    assert len(replacement_seed_candidates(planned, 0, 10, 100027)) <= 12
+
+
+def test_replacement_seed_candidates_advance_with_the_attempt() -> None:
+    """A re-launched slot must try seeds an earlier launch did not burn.
+
+    Without the attempt offset every retry recomputed the same three candidates
+    and failed identically (three episodes lost in the randomized full run).
+    """
+    from loongforge.embodied.eval.orchestrator.runners.robotwin_runner import replacement_seed_candidates
+
+    planned = [s for s in range(100000, 100130) if s % 7 != 0][:100]
+    first = replacement_seed_candidates(planned, offset=72, per_unit=1, stale_seed=100193)
+    second = replacement_seed_candidates(planned, offset=72, per_unit=1, stale_seed=100193, attempt=1)
+    third = replacement_seed_candidates(planned, offset=72, per_unit=1, stale_seed=100193, attempt=2)
+    assert first and second and third
+    assert not (set(first) & set(second))
+    assert not (set(first) & set(third))
+    assert not (set(second) & set(third))
+    # The shift is a whole block: a new attempt starts past the previous one.
+    assert second[0] > first[-1]
+    assert third[0] > second[-1]
+    assert not (set(first) & set(planned))
+
+
+def test_parse_official_log_keeps_the_slot_after_a_skip() -> None:
+    """A skipped episode must not shift every later episode by one.
+
+    The full randomized run lost slot 2 of a shard to three failed candidates;
+    the records then ran 0..8, the repair round targeted slot 9, and the next
+    round re-ran the whole shard.
+    """
+    from loongforge.embodied.eval.orchestrator.runners.robotwin_runner import (
+        _parse_official_episode_outcomes,
+    )
+
+    log = "\n".join([
+        "[offline-expert-check] SLOT 0 seed 100006",
+        "Success rate: 1/10 => 10.0%, current seed: 100006",
+        "[offline-expert-check] SLOT 1 seed 100007",
+        "Success rate: 2/10 => 20.0%, current seed: 100007",
+        "[offline-expert-check] CACHE STALE: cached seed 100013 is unstable here",
+        "[offline-expert-check] skipping this episode: 3 candidate(s) failed, "
+        "but 2 episode(s) already ran in this process",
+        "[offline-expert-check] SLOT 3 seed 100016",
+        "Success rate: 3/10 => 30.0%, current seed: 100016",
+    ])
+    episodes = _parse_official_episode_outcomes(log)
+    assert [e["episode_idx"] for e in episodes] == [0, 1, 3]
+    assert [e["seed"] for e in episodes] == [100006, 100007, 100016]
+
+
+def test_parse_official_log_without_slot_markers_keeps_record_order() -> None:
+    """Scan mode and logs from older runs carry no SLOT line."""
+    from loongforge.embodied.eval.orchestrator.runners.robotwin_runner import (
+        _parse_official_episode_outcomes,
+    )
+
+    log = "\n".join([
+        "Success rate: 1/2 => 50.0%, current seed: 7",
+        "Success rate: 2/2 => 100.0%, current seed: 8",
+    ])
+    assert [e["episode_idx"] for e in _parse_official_episode_outcomes(log)] == [0, 1]
+
+
+def test_parse_official_log_uses_the_last_slot_before_the_result() -> None:
+    """A replacement re-enters the same slot; the retry's slot wins."""
+    from loongforge.embodied.eval.orchestrator.runners.robotwin_runner import (
+        _parse_official_episode_outcomes,
+    )
+
+    log = "\n".join([
+        "[offline-expert-check] SLOT 4 seed 100020",
+        "[offline-expert-check] CACHE STALE: cached seed 100020 is unstable here",
+        "[offline-expert-check] SLOT 4 seed 100367",
+        "Success rate: 5/10 => 50.0%, current seed: 100367",
+    ])
+    episodes = _parse_official_episode_outcomes(log)
+    assert [e["episode_idx"] for e in episodes] == [4]
+    assert episodes[0]["seed"] == 100367
 
 
 def test_fill_missing_task_attrs_mirrors_play_once() -> None:

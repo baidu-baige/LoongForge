@@ -122,9 +122,35 @@ unsolvable seeds. That pass can be cached and reused:
    a cache produced on another machine may admit a seed that is unstable here. This
    implementation does **not** record or verify an environment digest, so re-scan
    whenever any of the above changes, and treat the cache as a property of one machine
-   configuration. If a cached seed turns out to be unstable at consume time the unit
-   fails with `CACHE STALE` and the coordinator retries it; re-scan rather than silently
-   skipping.
+   configuration.
+4. **Stale fallback** — a cached seed that turns out to be unstable here does not fail the
+   unit. That episode runs the official expert pass on a **replacement seed outside the
+   planned set** (one residue class per shard, so two stale shards never pick the same
+   one) and keeps the first candidate the expert admits. The replacement is written back
+   into the unit's plan and the episode is replayed with it. The log shows
+   `CACHE STALE`, then `candidate N rejected: <reason>`, then `REPLACED seed X -> Y`.
+   The reasons are distinct — `UnStableError` is a scene that cannot be built,
+   `expert-unsolved` is a scene the expert could not solve — and both count. Three failed
+   candidates **in a row** split two ways: if the process has not completed a single
+   episode it is considered broken and exits (`no episode has run ... giving up`); if it
+   has, only that episode is skipped and the rest of the chunk keeps running. A
+   replacement episode keeps its own seed as its `episode_id`, outside the planned range;
+   the aggregate dedups by id, so a slot covered this way is never scored twice.
+
+   Retries advance the candidate block instead of replaying it. The coordinator counts
+   launches per `(shard, slot)` and passes the count as `benchmark.retry_attempt`; the
+   fallback shifts its first candidate by `attempt × 12 × stride`, so the second launch
+   of a slot tries seeds the first one never reached. A unit that exits with the give-up
+   code is **not** re-queued in place — the candidate list depends only on the shard, so
+   a fresh process would repeat the same failures — and the coverage gate decides what
+   happens next.
+
+   Repair rounds re-dispatch only the slots that produced nothing. Each repair unit
+   carries `repair_slot`, and the worker prints `SLOT n seed s` before every episode so
+   the recorded `episode_idx` stays the slot id after a skipped episode has shifted the
+   result order. A unit that only repeated an episode another slot already produced does
+   not count as covering its slot.
+
 
 Scan cost scales with the number of candidate seeds and the expert rollout length; use
 one shard per available slot to keep the scan short.

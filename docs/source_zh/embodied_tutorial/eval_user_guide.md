@@ -473,7 +473,7 @@ benchmark:
 
 `return_action_chunk` + `skip_intra_chunk_obs` 会让策略在块内开环（每 `chunk_execute_steps` 步才重新感知），因此逐集结果不会与逐步闭环完全一致，详见 8.5。
 
-单元以独立进程组启动；超过 `run.unit_timeout_sec` 或 coordinator 退出（含被 `SIGTERM` 停止）时整组被 kill，避免 sim 脱离 unit 继续占卡占核。
+单元以独立进程组启动；超过 `run.unit_timeout_sec` 或 coordinator 退出（含被 `SIGTERM` 停止）时整组被 kill，避免 sim 脱离 unit 继续占卡占核。补跑阶段默认按 **1 集一个 unit** 派发（`run.repair_episodes_per_chunk`，默认 1）：补跑时大部分槽位空闲，重跑整个 shard 会让尾部时长等于一个 unit，拆成一集一个才能用满空闲槽。RoboTwin 的缓存消费模式会进一步只派**没有产出结果的槽位**（unit 带 `repair_slot`），已经跑过的集不再整段重放；同槽位重试时 `benchmark.retry_attempt` 逐次递增，候选种子整体前移，不会重复烧同一组候选。
 
 ### 8.3 标定（试跑）
 
@@ -526,4 +526,5 @@ RoboTwin 官方流程会先跑专家 rollout 过滤不可解场景，可缓存�
 
 1. **扫描**：`benchmark.offline_expert_check_scan: <dir>` 只跑专家分支（不启动推理服务），`offline_expert_check_scan_shards: k` 按残差类分片，跑完自动 merge；
 2. **消费**：`benchmark.offline_expert_check: <dir>` 跳过专家分支、按索引取 seed；`start_seed` 仍是 seed 值，不用于索引；
-3. **失效**：缓存只在**生成它的环境**有效。「环境」指完整计算栈：GPU 型号、驱动与 CUDA 版本、Python 与依赖版本（torch、SAPIEN/svulkan、cuRobo）、benchmark 资产以及任务/场景定义。GPU 或驱动变化可能改变 seed 的稳定性，异地生成的缓存可能放入一个本地不稳定的 seed。当前实现**不记录也不校验环境摘要**，上述任一项变化都必须重新扫描，缓存应视为某一机器配置的产物；消费时若缓存 seed 不稳定，单元以 `CACHE STALE` 失败并重试，应重新扫描而非静默跳过。
+3. **失效**：缓存只在**生成它的环境**有效。「环境」指完整计算栈：GPU 型号、驱动与 CUDA 版本、Python 与依赖版本（torch、SAPIEN/svulkan、cuRobo）、benchmark 资产以及任务/场景定义。GPU 或驱动变化可能改变 seed 的稳定性，异地生成的缓存可能放入一个本地不稳定的 seed。当前实现**不记录也不校验环境摘要**，上述任一项变化都必须重新扫描，缓存应视为某一机器配置的产物；
+4. **stale 回退**：消费时遇到本地不稳定的 seed 不会让单元失败，而是对**该集**改用官方专家流程，并换一个**计划外**的 seed（按 shard 取残差类，两个 stale 的 shard 不会撞到同一个），取第一个被专家接受且本进程还没用过的候选，然后把新 seed 写回本 unit 的计划并重跑这一集。日志依次是 `CACHE STALE` → `candidate N rejected: <原因>` → `REPLACED seed X -> Y`。原因分两类且都计数：`UnStableError` 是场景建不出来，`expert-unsolved` 是场景建好了但专家解不了。**连续 3 个候选失败**分两种情况：本进程一集都没跑成 → 判定进程坏了、立即退出；已经跑成过 → 只跳过这一集，chunk 其余继续。替换集跑在计划 seed 范围之外，validation 会计为 `unexpected`，但仍计入聚合成功率。

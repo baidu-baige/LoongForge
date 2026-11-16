@@ -712,3 +712,160 @@ def test_sigterm_handler_turns_into_system_exit() -> None:
     finally:
         if previous is not None:
             signal.signal(signal.SIGTERM, previous)
+
+
+def test_repair_shards_split_a_robotwin_consume_shard() -> None:
+    """A repair round has idle slots; a ten-episode unit must not serialize the tail."""
+    from loongforge.embodied.eval.orchestrator import coordinator as coord
+
+    shard = {
+        "id": "dump_bin_bigbin/demo_randomized/seed=100000-100009",
+        "overrides": {"benchmark": {
+            "task_name": "dump_bin_bigbin", "task_config": "demo_randomized",
+            "start_seed": 100000, "test_num": 10, "seed_stride": 100,
+            "offline_expert_check_offset": 40,
+        }},
+        "expected": 10,
+    }
+    subs = coord._repair_shards(shard, 1)
+    assert len(subs) == 10
+    assert [s["overrides"]["benchmark"]["offline_expert_check_offset"] for s in subs] == list(range(40, 50))
+    assert all(s["overrides"]["benchmark"]["test_num"] == 1 for s in subs)
+    assert all(s["expected"] == 1 for s in subs)
+    # The id stays: short_shards unions the records of every unit that carries it.
+    assert {s["id"] for s in subs} == {shard["id"]}
+
+
+def test_repair_shards_split_a_libero_shard_and_keep_the_remainder() -> None:
+    from loongforge.embodied.eval.orchestrator import coordinator as coord
+
+    shard = {
+        "id": "libero_10/task=3/eps=0-4",
+        "overrides": {"benchmark": {"suite": "libero_10", "task_ids": [3],
+                                    "episode_offset": 0, "episodes_per_task": 5}},
+        "expected": 5,
+    }
+    subs = coord._repair_shards(shard, 2)
+    assert [s["overrides"]["benchmark"]["episode_offset"] for s in subs] == [0, 2, 4]
+    assert [s["expected"] for s in subs] == [2, 2, 1]
+
+
+def test_repair_shards_leave_an_unsplittable_shard_alone() -> None:
+    from loongforge.embodied.eval.orchestrator import coordinator as coord
+
+    shard = {"id": "x", "overrides": {"benchmark": {"suite": "calvin"}}, "expected": 10}
+    assert coord._repair_shards(shard, 1) == [shard]
+    # Nothing to gain when the chunk already covers the shard.
+    tw = {"id": "y", "overrides": {"benchmark": {"episode_offset": 0, "episodes_per_task": 3}},
+          "expected": 3}
+    assert coord._repair_shards(tw, 5) == [tw]
+
+
+def test_repair_shards_only_redispatches_the_missing_slots() -> None:
+    """A short shard re-runs its gaps, not the episodes that already ran."""
+    from loongforge.embodied.eval.orchestrator import coordinator as coord
+
+    shard = {
+        "id": "dump_bin_bigbin/demo_randomized/seed=100000-100099",
+        "overrides": {"benchmark": {
+            "task_name": "dump_bin_bigbin", "task_config": "demo_randomized",
+            "start_seed": 100000, "test_num": 10, "seed_stride": 100,
+            "offline_expert_check_offset": 70,
+        }},
+        "expected": 10,
+    }
+    subs = coord._repair_shards(shard, 1, slots=[1, 4])
+    assert [s["overrides"]["benchmark"]["offline_expert_check_offset"] for s in subs] == [71, 74]
+    assert [s["overrides"]["benchmark"]["repair_slot"] for s in subs] == [1, 4]
+    assert all(s["overrides"]["benchmark"]["test_num"] == 1 for s in subs)
+    assert [s["expected"] for s in subs] == [1, 1]
+    assert {s["id"] for s in subs} == {shard["id"]}
+
+
+def test_missing_slots_uses_episode_idx_then_repair_slot() -> None:
+    """Main units say which slots ran; repair units would otherwise all look like slot 0."""
+    from loongforge.embodied.eval.orchestrator import coordinator as coord
+
+    main = {
+        "id": "t/demo_randomized/seed=0-9",
+        "overrides": {"benchmark": {"offline_expert_check_offset": 0, "test_num": 10}},
+        "expected": 10,
+    }
+    records = [
+        {"episode_idx": i, "episode_id": f"t/ep={i}"} for i in (0, 1, 2, 4, 5, 6, 7, 8, 9)
+    ]
+    assert coord._missing_slots(main["id"], 10, [main], [records]) == [3]
+
+    repair = {
+        "id": "t/demo_randomized/seed=0-9",
+        "overrides": {"benchmark": {"offline_expert_check_offset": 3, "test_num": 1,
+                                    "repair_slot": 3}},
+        "expected": 1,
+    }
+    assert coord._missing_slots(repair["id"], 10, [main, repair], [records, []]) == [3]
+    # Nothing left: the caller treats None as "no targeted repair needed".
+    assert coord._missing_slots(
+        repair["id"], 10, [main, repair], [records, [{"episode_idx": 0, "episode_id": "t/ep=3"}]]
+    ) is None
+
+
+def test_missing_slots_ignores_a_repair_that_repeated_another_slot() -> None:
+    """A duplicate episode does not fill the slot it was dispatched for."""
+    from loongforge.embodied.eval.orchestrator import coordinator as coord
+
+    main = {
+        "id": "t/demo_randomized/seed=0-9",
+        "overrides": {"benchmark": {"offline_expert_check_offset": 0, "test_num": 10}},
+        "expected": 10,
+    }
+    records = [{"episode_idx": i, "episode_id": f"t/ep={i}"} for i in range(9)]  # slots 0..8
+    repair = {
+        "id": "t/demo_randomized/seed=0-9",
+        "overrides": {"benchmark": {"offline_expert_check_offset": 9, "test_num": 1,
+                                    "repair_slot": 9}},
+        "expected": 1,
+    }
+    # The "slot 9" repair replayed slot 8's episode, which is deduped.
+    repeated = [{"episode_idx": 0, "episode_id": "t/ep=8"}]
+    assert coord._missing_slots(main["id"], 10, [main, repair], [records, repeated]) == [9]
+    # A fresh episode does cover it.
+    fresh = [{"episode_idx": 0, "episode_id": "t/ep=9"}]
+    assert coord._missing_slots(main["id"], 10, [main, repair], [records, fresh]) is None
+
+
+def test_missing_slots_gives_up_when_the_benchmark_has_no_cache_index() -> None:
+    """Without a RoboTwin cache offset the caller must fall back to the whole shard."""
+    from loongforge.embodied.eval.orchestrator import coordinator as coord
+
+    libero = {"id": "libero_10/task=3/eps=0-4",
+              "overrides": {"benchmark": {"episode_offset": 0, "episodes_per_task": 5}},
+              "expected": 5}
+    assert coord._missing_slots(libero["id"], 5, [libero], [[{"episode_idx": 0}]]) is None
+
+
+def test_run_does_not_retry_a_unit_that_gave_up(monkeypatch: Any, tmp_path: Any) -> None:
+    """Exhausted candidates are deterministic: a second launch repeats the same seeds."""
+    from loongforge.embodied.eval.orchestrator import coordinator as coord
+
+    launches: dict[int, int] = {}
+
+    def fake_launch(config: Any, shard: Any, index: int, url: str, output_dir: Any, tmp: Any) -> _FakeProc:
+        launches[index] = launches.get(index, 0) + 1
+        return _FakeProc(coord.GAVE_UP_RETURNCODE)
+
+    monkeypatch.setattr(coord, "_launch_unit", fake_launch)
+    monkeypatch.setattr(coord, "start_server", lambda args, env=None: _FakeProc(0))
+    monkeypatch.setattr(coord, "wait_healthz", lambda *args, **kwargs: None)
+    monkeypatch.setattr(coord, "_aggregate", lambda *args, **kwargs: {})
+    monkeypatch.setattr(coord, "short_shards", lambda *args, **kwargs: [])
+
+    config = {
+        "benchmark": {"name": "libero", "suite": "libero_10", "task_ids": [0], "episodes_per_task": 2},
+        "servers": [{"gpus": [0]}],
+        "pools": {"cpu_sim": {"n_sims_per_server": 1}},
+        "run": {"output_dir": str(tmp_path)},
+    }
+    result = coord.run(config, "")
+    assert launches[0] == 1  # gave up -> no blind re-launch
+    assert result["failed_units"] == [0, 1]
+

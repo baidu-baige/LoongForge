@@ -72,6 +72,12 @@ _PROXY_ENV_KEYS = ("HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy", "AL
 UNIT_TIMEOUT_SLACK_SEC = 300  # head-room over the episode budget before a unit is killed
 POLICY_TIMEOUT_SAFETY = 2.0  # queue wait is (N-1) x service; keep 2x head-room
 MAX_ATTEMPTS = 2  # a failed unit is re-queued once before it is reported as failed
+# A unit that runs out of replacement candidates exits with this code (see
+# ``robotwin_runner.EXIT_GAVE_UP``). Re-launching it cannot help: the candidate
+# list is a pure function of the shard's offset, so a fresh process walks the
+# same seeds and fails the same way. Report it and let the repair round pick it
+# up instead of burning a second launch.
+GAVE_UP_RETURNCODE = 3
 
 
 def _server_env(index: int, gpu: int) -> Dict[str, str]:
@@ -356,6 +362,134 @@ def _launch_unit(
     )
 
 
+def _repair_shards(
+    shard: Dict[str, Any],
+    chunk: int,
+    slots: Optional[List[int]] = None,
+) -> List[Dict[str, Any]]:
+    """Split a short shard into ``chunk``-episode units for the repair rounds.
+
+    A repair round runs when most slots are idle, so re-dispatching the whole
+    shard makes the tail as long as one unit no matter how many slots are free.
+    Cutting it up lets the survivors run side by side; episodes that did run are
+    re-run too, but they are deduped by ``episode_id`` and cost far less than a
+    serial tail. The shard id is kept on purpose: ``short_shards`` unions the
+    records of every unit that carries it.
+
+    ``slots`` limits the round to the slots that produced nothing (see
+    ``_missing_slots``); each becomes a one-episode unit tagged with
+    ``repair_slot`` so the next round can tell the slots apart. Without it the
+    whole shard is re-split, which is the safe over-approximation used for
+    benchmarks whose slot ids cannot be recovered from the records.
+    """
+    count = int(shard.get("expected") or 0)
+    patch = ((shard.get("overrides") or {}).get("benchmark") or {})
+    if "offline_expert_check_offset" in patch:      # RoboTwin consume: cache index
+        offset_key, count_key = "offline_expert_check_offset", "test_num"
+    elif "episode_offset" in patch:                 # LIBERO episode shard
+        offset_key, count_key = "episode_offset", "episodes_per_task"
+    elif "start_seed" in patch:                     # RoboTwin without a cache
+        offset_key, count_key = "start_seed", "test_num"
+    else:
+        return [shard]
+    if slots:
+        out: List[Dict[str, Any]] = []
+        for slot in slots:
+            sub = copy.deepcopy(shard)
+            b = sub["overrides"]["benchmark"]
+            b[offset_key] = int(b[offset_key]) + int(slot)
+            if count_key in b:
+                b[count_key] = 1
+            b["repair_slot"] = int(slot)
+            sub["expected"] = 1
+            out.append(sub)
+        return out
+    if chunk <= 0 or count <= chunk:
+        return [shard]
+    out = []
+    for start in range(0, count, chunk):
+        take = min(chunk, count - start)
+        sub = copy.deepcopy(shard)
+        b = sub["overrides"]["benchmark"]
+        b[offset_key] = int(b[offset_key]) + start
+        if count_key in b:
+            b[count_key] = take
+        sub["expected"] = take
+        out.append(sub)
+    return out
+
+
+def _attempt_key(shard: Dict[str, Any]) -> Tuple[Any, str, int]:
+    """Identify one unit slot across launches, so retries can advance the salt.
+
+    Units that re-run the same slot must not retry the same replacement seeds;
+    the counter is keyed by the shard id *and* the unit's own offset, so a main
+    unit and its one-episode repair units keep separate histories.
+    """
+    patch = ((shard.get("overrides") or {}).get("benchmark") or {})
+    for key in ("offline_expert_check_offset", "episode_offset", "start_seed"):
+        if key in patch:
+            return (shard.get("id"), key, int(patch[key]))
+    return (shard.get("id"), "", 0)
+
+
+def _missing_slots(
+    shard_id: str,
+    expected: int,
+    launched_shards: List[Dict[str, Any]],
+    records_by_unit: List[List[Dict[str, Any]]],
+) -> Optional[List[int]]:
+    """Slots a short shard still owes, or None when they cannot be recovered.
+
+    ``episode_idx`` is the slot inside its unit, so a main-phase unit says which
+    slots ran; repair units carry ``repair_slot`` because their records use
+    their own one-episode numbering. Only RoboTwin's consume mode is covered --
+    its slot ids are cache indices. Elsewhere the caller falls back to
+    re-splitting the whole shard, which is always safe (the overlap is deduped
+    by ``episode_id``).
+
+    A unit that only *repeated* an episode another slot already produced does
+    not cover its slot: the duplicate is deduped and the shard stays short.
+    Main units claim their ids first, then repair units claim what is left.
+    """
+    main_slots: Dict[int, set] = {}
+    repairs: List[tuple[int, set]] = []
+    derived = False
+    for shard, records in zip(launched_shards, records_by_unit):
+        if shard.get("id") != shard_id:
+            continue
+        patch = (shard.get("overrides") or {}).get("benchmark") or {}
+        ids = {str(r["episode_id"]) for r in records if r.get("episode_id") is not None}
+        if "repair_slot" in patch:
+            derived = True
+            repairs.append((int(patch["repair_slot"]), ids))
+            continue
+        if "offline_expert_check_offset" not in patch:
+            return None
+        derived = True
+        for record in records:
+            idx = record.get("episode_idx")
+            episode_id = record.get("episode_id")
+            if idx is not None and episode_id is not None:
+                main_slots.setdefault(int(idx), set()).add(str(episode_id))
+    if not derived:
+        return None
+    claimed: Dict[str, int] = {}
+    covered = set()
+    for slot, ids in main_slots.items():
+        for episode_id in ids:
+            claimed.setdefault(episode_id, slot)
+        if ids:
+            covered.add(slot)
+    for slot, ids in repairs:
+        fresh = {episode_id for episode_id in ids if episode_id not in claimed}
+        if fresh:
+            covered.add(slot)
+            for episode_id in fresh:
+                claimed[episode_id] = slot
+    return sorted(set(range(int(expected))) - covered) or None
+
+
 def _unit_timeout_sec(config: Dict[str, Any], shards: List[tuple]) -> float:
     """Wall-clock budget for one unit.
 
@@ -601,12 +735,18 @@ def _run_batch(
     timeout_sec: float = 0.0,
     pin_gpu: bool = False,
     on_launch: Optional[Callable[[subprocess.Popen], None]] = None,
+    launch_attempts: Optional[Dict[Tuple[Any, str, int], int]] = None,
 ) -> Tuple[Dict[int, int], List[int]]:
     """Run ``indices`` (into ``shards``) through a bounded pool fed by a global queue.
 
     ``slots`` pairs each worker slot with its server URL and sim GPU. A unit that
     exits non-zero -- or that blows its ``timeout_sec`` budget -- is re-queued
-    once, then reported as failed. Returns ``(returncodes_by_index, failed_indices)``.
+    once, then reported as failed; a unit that exited after exhausting its
+    replacement candidates (``GAVE_UP_RETURNCODE``) is not re-queued, because the
+    candidate list depends only on the shard and a fresh process would repeat it.
+    ``launch_attempts`` counts launches per slot so ``benchmark.retry_attempt``
+    advances across retries and repair rounds. Returns
+    ``(returncodes_by_index, failed_indices)``.
     """
     returncodes: Dict[int, int] = {}
     failures: List[int] = []
@@ -621,6 +761,11 @@ def _run_batch(
             index = pending.pop(0)
             url, gpu = slots[slot]
             started_at[index] = time.time()
+            if launch_attempts is not None:
+                key = _attempt_key(shards[index])
+                patch = shards[index].setdefault("overrides", {}).setdefault("benchmark", {})
+                patch["retry_attempt"] = int(launch_attempts.get(key, 0))
+                launch_attempts[key] = patch["retry_attempt"] + 1
             if pin_gpu:
                 proc = _launch_unit(
                     config, shards[index], index, url, output_dir, tmp, gpu=gpu, pin_gpu=True
@@ -637,6 +782,9 @@ def _run_batch(
         expected = int((shards[index] or {}).get("expected") or 1)
         completed = _unit_completed(output_dir, index, expected)
         if (finished.returncode != 0 or timed_out) and not completed:
+            if finished.returncode == GAVE_UP_RETURNCODE:
+                failures.append(index)
+                continue
             attempts[index] = attempts.get(index, 0) + 1
             if attempts[index] < MAX_ATTEMPTS:
                 pending.append(index)  # re-queue once; a fresh unit may just be a flaky sim
@@ -712,6 +860,8 @@ def run(config: Dict[str, Any], config_path: str = "") -> Dict[str, Any]:
         slots = _build_slots(server_gpus, n_per_server, sim_gpus, placement, urls)
 
     unit_timeout = _unit_timeout_sec(config, plan)
+    # Repair rounds run with idle slots, so a smaller unit is cheaper there.
+    repair_chunk = int((config.get("run") or {}).get("repair_episodes_per_chunk") or 1)
     all_shards: List[Shard] = list(plan)
     failed_units: List[int] = []
     repair_rounds = 0
@@ -737,9 +887,12 @@ def run(config: Dict[str, Any], config_path: str = "") -> Dict[str, Any]:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
+            # One counter per unit slot: the worker turns it into a candidate-seed
+            # salt, so a retry walks seeds the previous launch never tried.
+            launch_attempts: Dict[Tuple[Any, str, int], int] = {}
             _, failed_units = _run_batch(
                 config, all_shards, list(range(len(all_shards))), slots, output_dir, tmp, unit_timeout,
-                pin_gpu=is_gpu_sim, on_launch=unit_procs.append,
+                pin_gpu=is_gpu_sim, on_launch=unit_procs.append, launch_attempts=launch_attempts,
             )
             # Coverage gate: re-run the shards that came up short rather than aborting.
             # A re-run lands in a fresh worker dir, so the overlap is deduped by
@@ -752,10 +905,16 @@ def run(config: Dict[str, Any], config_path: str = "") -> Dict[str, Any]:
                 if not short:
                     break
                 first = len(all_shards)
-                all_shards.extend(shards_by_id[shard_id] for shard_id in short)
+                for shard_id in short:
+                    shard = shards_by_id[shard_id]
+                    slots_missing = _missing_slots(
+                        shard_id, int(shard.get("expected") or 0), all_shards, records
+                    )
+                    all_shards.extend(_repair_shards(shard, repair_chunk, slots=slots_missing))
                 _, extra_failed = _run_batch(
                     config, all_shards, list(range(first, len(all_shards))), slots, output_dir, tmp,
                     unit_timeout, pin_gpu=is_gpu_sim, on_launch=unit_procs.append,
+                    launch_attempts=launch_attempts,
                 )
                 failed_units.extend(extra_failed)
                 repair_rounds += 1

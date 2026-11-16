@@ -29,6 +29,16 @@ _SUCCESS_RATE_LINE_RE = re.compile(
     r"Success rate:\s*(\d+)\s*/\s*(\d+)\s*=>.*?current seed:\s*(\d+)",
     re.IGNORECASE,
 )
+# Consume mode prints this before each episode. The record must keep the slot it
+# belongs to: when an episode is skipped (or the unit gives up mid-chunk), the
+# order of the "Success rate" lines no longer matches the slot order, and the
+# repair round would target the wrong slot.
+_SLOT_LINE_RE = re.compile(r"\[offline-expert-check\]\s+SLOT\s+(\d+)\s+seed")
+# A unit exits with this code when it has run nothing and three replacement
+# candidates in a row failed. The coordinator must not re-queue such a unit: the
+# candidate list depends only on the shard's offset, so a fresh launch walks the
+# same seeds (see ``coordinator.GAVE_UP_RETURNCODE``).
+EXIT_GAVE_UP = 3
 
 
 def _write_deploy_policy(args: argparse.Namespace, path: pathlib.Path) -> None:
@@ -108,6 +118,41 @@ def fill_missing_task_attrs(
             env.arm_tag = arm_tag_factory("right" if obj.get_pose().p[0] > 0 else "left")
         if not hasattr(env, "origin_z"):
             env.origin_z = obj.get_pose().p[2]
+
+
+def replacement_seed_candidates(
+    planned: Any,
+    offset: int,
+    per_unit: int,
+    stale_seed: int,
+    limit: int = 12,
+    attempt: int = 0,
+) -> List[int]:
+    """Seeds to try when a cached seed turns out to be unstable at consume time.
+
+    ``seed + 1`` does not work: the cache only holds the seeds that passed the
+    expert pass, so it is sparse and the neighbour usually belongs to another
+    shard -- replaying it there would produce a duplicate ``episode_id`` and be
+    deduped, leaving the run one episode short.
+
+    Candidates therefore start above the highest planned seed and advance in a
+    residue class keyed by the shard's cache offset, so two shards that both go
+    stale cannot converge on the same replacement.
+
+    ``attempt`` shifts the whole block past everything earlier launches of the
+    same slot could have tried. Without it a re-launched unit recomputes the same
+    list, spends its three-failure budget on the same seeds, and fails identically;
+    the coordinator counts launches per slot and passes the count in.
+    """
+    taken = {int(seed) for seed in (planned or [])}
+    if not taken:
+        return [int(stale_seed) + 1 + j for j in range(limit)]
+    stride = max(1, -(-len(taken) // max(1, int(per_unit))))
+    # Residue = shard index (offset is a cache index, i.e. shard_index * per_unit),
+    # so two stale shards never land on the same replacement. ``attempt * limit``
+    # whole blocks move past every seed an earlier launch could have reached.
+    base = max(taken) + 1 + int(offset) // max(1, int(per_unit)) + int(attempt) * limit * stride
+    return [base + j * stride for j in range(limit) if base + j * stride not in taken]
 
 
 def clear_episode_task_attrs(env: Any) -> None:
@@ -387,11 +432,6 @@ def _worker_eval_script(args: argparse.Namespace) -> Optional[pathlib.Path]:
         anchor = "def eval_policy(task_name,"
         if anchor in text:
             text = text.replace(anchor, timing_patch + anchor, 1)
-    # Advance by a full round of shard blocks, not by one seed: neighbouring
-    # shards own adjacent ranges, so +1 would run another shard's seed.
-    seed_stride = int(getattr(args, "seed_stride", 1) or 1)
-    if seed_stride != 1:
-        text = text.replace("now_seed += 1", f"now_seed += {seed_stride}")
     # Offline expert check (RoboTwin source untouched):
     #   benchmark.offline_expert_check_scan: <dir>  expert-only pass; records every admitted
     #       (seed, episode_info) and dumps <dir>/<task>.pkl as it goes.
@@ -415,6 +455,10 @@ def _worker_eval_script(args: argparse.Namespace) -> Optional[pathlib.Path]:
         _raw_part = getattr(args, "offline_expert_check_part", None)
         _part_index = -1 if _raw_part is None else int(_raw_part)
         _scan_stride = int(getattr(args, "seed_stride", 1) or 1)
+        # How many times this slot was launched before (0 on the first launch).
+        # The fallback shifts its candidate block by this count, so a retry never
+        # re-tries the seeds an earlier launch already burned.
+        _attempt = int(getattr(args, "retry_attempt", 0) or 0)
         header = (
             "\n# --- offline expert check (injected) ---\n"
             "try:\n"
@@ -423,11 +467,13 @@ def _worker_eval_script(args: argparse.Namespace) -> Optional[pathlib.Path]:
             f"    _S_CACHE_PATH = {cache_path!r}\n"
             f"    _S_OFFSET = {offset}\n"
             f"    _S_PART = {_part_index}\n"
+            f"    _S_ATTEMPT = {_attempt}\n"
             "    _S_CACHE = _spk.load(open(_S_CACHE_PATH, 'rb')) if _S_CACHE_PATH else None\n"
             "    _S_SEEDS = list(_S_CACHE['seeds']) if _S_CACHE else []\n"
             "    _S_INFO = dict(_S_CACHE.get('episode_info') or {}) if _S_CACHE else {}\n"
             "    _S_ATTRS = dict(_S_CACHE.get('attrs') or {}) if _S_CACHE else {}\n"
             "    _S_CURRENT_ATTRS = {}\n"
+            "    _S_REPLACED = []\n"
             "    _S_SCAN = []\n"
             "    def _s_task_attrs(env):\n"
             "        _d = {}\n"
@@ -503,18 +549,109 @@ def _worker_eval_script(args: argparse.Namespace) -> Optional[pathlib.Path]:
                 "    expert_check = False  # offline_expert_check: admitted seeds come from the cache\n",
                 1,
             )
-            # A cached seed should be stable in the environment that scanned it;
-            # if it is not, the cache is stale (environment drift) -> say so loudly.
+            # A cached seed should be stable in the environment that scanned it.
+            # When it is not (randomized scenes make the verdict depend on the
+            # process history, see the docs), fall back to the official flow for
+            # that episode instead of aborting the unit:
+            #   1. the same seed cannot be reused -- it fails inside setup_demo,
+            #      which is exactly what the official loop also rejects;
+            #   2. candidates live *outside* the planned set (the cache is sparse,
+            #      so seed+1 would collide with another shard and be deduped),
+            #      in a residue class keyed by this shard's cache offset so two
+            #      stale shards cannot pick the same replacement;
+            #   3. the expert pass must admit the candidate, mirroring the
+            #      official loop's `plan_success and check_success()`.
+            # Three failed candidates *in a row* mean the process itself is
+            # broken (e.g. "Only 0 cluttered objects" builds every scene empty),
+            # not that this seed is unlucky: give up instead of retrying the
+            # whole candidate list on every episode of the unit. Any failure
+            # counts -- an expert-unsolved candidate is as much a dead end as an
+            # unstable scene, and counting only UnStableError lets a broken
+            # process alternate the two and never trip the guard.
             text = text.replace(
                 "        except UnStableError:\n"
-                "            TASK_ENV.close_env()\n",
-                "        except UnStableError:\n"
-                "            print('[offline-expert-check] CACHE STALE: cached seed %d is unstable '"
-                " % now_seed + 'here; re-scan the cache', flush=True)\n"
                 "            TASK_ENV.close_env()\n"
-                "            raise SystemExit(3)  # stale cache: fail loud, do not skip\n",
+                "            succ_seed -= 1\n"
+                "            if suc_test_seed_list:\n"
+                "                suc_test_seed_list.pop()\n"
+                "            now_seed += 1\n"
+                '            args["render_freq"] = render_freq\n'
+                "            continue\n",
+                "        except UnStableError:\n"
+                "            print('[offline-expert-check] CACHE STALE: cached seed %d is unstable here'"
+                " % now_seed, flush=True)\n"
+                "            TASK_ENV.close_env()\n"
+                "            _S_CURRENT_ATTRS.clear()\n"
+                "            from loongforge.embodied.eval.orchestrator.runners.robotwin_runner import (\n"
+                "                replacement_seed_candidates as _vla_replacement_seeds,\n"
+                "            )\n"
+                "            _admitted = None\n"
+                "            _cand_info = None\n"
+                "            _cand_attrs = {}\n"
+                "            _fail_streak = 0\n"
+                "            for _cand in _vla_replacement_seeds(_S_SEEDS, _S_OFFSET, test_num, now_seed,"
+                " attempt=_S_ATTEMPT):\n"
+                # The candidate list does not depend on which seed went stale, so a
+                # second stale episode in the same unit would pick the same first
+                # candidate and write a duplicate episode_id (the unit then ends up
+                # one episode short after dedup). Skip the ones already used here.
+                "                if int(_cand) in _S_REPLACED:\n"
+                "                    continue\n"
+                "                try:\n"
+                "                    TASK_ENV.setup_demo(now_ep_num=now_id, seed=_cand, is_test=True, **args)\n"
+                "                    _cand_info = TASK_ENV.play_once()\n"
+                "                    _cand_attrs = _s_task_attrs(TASK_ENV)\n"
+                "                    TASK_ENV.close_env()\n"
+                "                    if not (TASK_ENV.plan_success and TASK_ENV.check_success()):\n"
+                "                        raise RuntimeError('expert rejected the candidate seed')\n"
+                "                except Exception as _e:\n"
+                "                    TASK_ENV.close_env()\n"
+                "                    _fail_streak += 1\n"
+                "                    _why = ('expert-unsolved' if isinstance(_e, RuntimeError)\n"
+                "                            and str(_e) == 'expert rejected the candidate seed'\n"
+                "                            else type(_e).__name__)\n"
+                "                    print('[offline-expert-check] candidate %d rejected: %s'"
+                " % (_cand, _why), flush=True)\n"
+                "                    if _fail_streak >= 3:\n"
+                "                        break\n"
+                "                    continue\n"
+                "                _admitted = int(_cand)\n"
+                "                episode_info = _cand_info\n"
+                "                print('[offline-expert-check] REPLACED seed %d -> %d (expert admitted)'"
+                " % (now_seed, _admitted), flush=True)\n"
+                "                break\n"
+                "            if suc_test_seed_list:\n"
+                "                suc_test_seed_list.pop()\n"
+                '            args["render_freq"] = render_freq\n'
+                "            if _admitted is not None:\n"
+                "                _S_REPLACED.append(_admitted)\n"
+                # The loop head re-reads now_seed from the cache array, so pin the
+                # admitted seed there and undo the pre-increment to replay this
+                # same episode slot with it. Its expert output and task attrs go
+                # into the same tables the planned seeds use.
+                "                _S_SEEDS[_S_OFFSET + succ_seed - 1] = _admitted\n"
+                "                _S_INFO[str(_admitted)] = _cand_info.get('info', {}) if _cand_info else {}\n"
+                "                _S_ATTRS[str(_admitted)] = _cand_attrs\n"
+                "                succ_seed -= 1\n"
+                "                continue\n"
+                "            if succ_seed > 1:\n"
+                # At least one episode already ran here: this seed (or its scene)
+                # is unlucky, not the process. Skip the episode and let the
+                # coverage gate re-dispatch it; killing the unit would throw away
+                # the rest of the chunk.
+                "                print('[offline-expert-check] skipping this episode: %d candidate(s)"
+                " failed, but %d episode(s) already ran in this process'"
+                " % (_fail_streak, succ_seed - 1), flush=True)\n"
+                "                continue\n"
+                "            print('[offline-expert-check] no episode has run and 3 candidates failed; "
+                "this process cannot run this task -- giving up', flush=True)\n"
+                f"            raise SystemExit({EXIT_GAVE_UP})\n",
                 1,
             )
+            if "CACHE STALE" not in text:
+                raise ValueError(
+                    "offline_expert_check: stale handler was not injected (anchor mismatch)"
+                )
             loop_anchor = (
                 "    while succ_seed < test_num:\n"
                 '        render_freq = args["render_freq"]\n'
@@ -526,6 +663,10 @@ def _worker_eval_script(args: argparse.Namespace) -> Optional[pathlib.Path]:
                 "            raise SystemExit('[offline-expert-check] cache exhausted at index %d (n=%d)'\n"
                 "                             % (_idx, len(_S_SEEDS)))\n"
                 "        now_seed = _S_SEEDS[_idx]\n"
+                # Tell the runner which slot this episode belongs to: a skipped
+                # episode leaves no result line, and the repair round needs the
+                # slot id, not the record order (see _parse_official_episode_outcomes).
+                "        print('[offline-expert-check] SLOT %d seed %d' % (succ_seed, now_seed), flush=True)\n"
                 "        _S_CURRENT_ATTRS.clear()\n"
                 "        _S_CURRENT_ATTRS.update(_S_ATTRS.get(str(now_seed), {}))\n"
                 "        episode_info = {'info': _S_INFO.get(now_seed, _S_INFO.get(str(now_seed), {}))}\n"
@@ -535,6 +676,14 @@ def _worker_eval_script(args: argparse.Namespace) -> Optional[pathlib.Path]:
                 text = text.replace(loop_anchor, loop_new, 1)
             else:
                 raise ValueError("offline_expert_check: eval loop anchor not found in worker script")
+    # Advance by a full round of shard blocks, not by one seed: neighbouring
+    # shards own adjacent ranges, so +1 would run another shard's seed. This must
+    # run *after* the offline-expert-check patches: the consume handler anchors on
+    # the wrapper's `now_seed += 1`, and rewriting that line first silently
+    # prevented the handler from being injected at all.
+    seed_stride = int(getattr(args, "seed_stride", 1) or 1)
+    if seed_stride != 1:
+        text = text.replace("now_seed += 1", f"now_seed += {seed_stride}")
     # Without the expert pre-pass the official loop never calls play_once(), and a
     # few tasks initialise check_success() state (arm_tag / origin_z) there. Seed
     # it right after setup_demo instead of editing the RoboTwin source.
@@ -772,6 +921,7 @@ def _apply_config(args: argparse.Namespace, config: Dict[str, object]) -> argpar
         (benchmark, "max_steps", "max_steps"),
         (benchmark, "start_seed", "start_seed_override"),
         (benchmark, "seed_stride", "seed_stride"),
+        (benchmark, "retry_attempt", "retry_attempt"),
         # episodes_per_task is the whole-run default; a shard's explicit test_num
         # must win, so it is applied after this line.
         (benchmark, "episodes_per_task", "test_num_override"),
@@ -872,11 +1022,21 @@ def _parse_official_episode_outcomes(log_text: str) -> List[Dict[str, Any]]:
 
     Episode success is inferred from the cumulative counter delta
     (suc increases by 1 on success, stays flat on fail).
+
+    ``episode_idx`` is the slot the episode belongs to, taken from the consume
+    handler's ``SLOT n`` line. A skipped episode leaves no ``Success rate`` line,
+    so falling back to the record order would shift every later episode by one
+    and make the repair round re-run the wrong slot.
     """
     episodes: List[Dict[str, Any]] = []
     prev_suc = 0
+    slot: Optional[int] = None
     for raw_line in str(log_text or "").splitlines():
         line = _ANSI_RE.sub("", raw_line)
+        slot_match = _SLOT_LINE_RE.search(line)
+        if slot_match:
+            slot = int(slot_match.group(1))
+            continue
         match = _SUCCESS_RATE_LINE_RE.search(line)
         if not match:
             continue
@@ -887,13 +1047,14 @@ def _parse_official_episode_outcomes(log_text: str) -> List[Dict[str, Any]]:
         prev_suc = suc
         episodes.append(
             {
-                "episode_idx": len(episodes),
+                "episode_idx": slot if slot is not None else len(episodes),
                 "seed": seed,
                 "success": success,
                 "cum_suc": suc,
                 "cum_test_num": test_num,
             }
         )
+        slot = None
     return episodes
 
 
@@ -1243,6 +1404,8 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--start-seed-override", type=int, default=None)
     parser.add_argument("--disable-expert-check", action="store_true")
     parser.add_argument("--seed-stride", type=int, default=1)
+    # Coordinator-set: how many times this slot was launched (0 = first launch).
+    parser.add_argument("--retry-attempt", type=int, default=0)
     parser.add_argument("--control-hz", type=int, default=10)
     parser.add_argument("--instruction-type", default="unseen")
     parser.add_argument("--disable-action-cache", action="store_true")
