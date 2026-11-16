@@ -85,11 +85,141 @@ python cli.py path-b \
   --checkpoint <WiLoR_checkpoint> \
   --detector <WiLoR_detector> \
   --mano_dir <MANO_models_dir> \
+  --geocalib_repo <DynHaMR_dir>/third-party/vipe \
+  --geocalib_weights <GeoCalib_pinhole_checkpoint> \
+  --unidepth_repo <DynHaMR_dir>/third-party/vipe \
+  --unidepth_model <UniDepthV2_checkpoint_directory> \
   --output_dir out_path_b --episode demo_000
 ```
 
-命令会写出 `out_path_b/demo_000/`，其中包含视频帧、左右手 MANO 21 点、固定相机的
-头部位姿和内参，格式与现有 EgoVerse Zarr 兼容。然后直接接现有流水线：
+命令会写出 `out_path_b/demo_000/`，其中包含视频帧、左右手 MANO 21 点、估计的移动相机
+位姿和视频估计内参，格式与现有 EgoVerse Zarr 兼容。数据输入仅为视频；
+不读取测试 Zarr 的内参、手部坐标或头部位姿。默认 GeoCalib 从视频抽取 8 帧，
+联合估计针孔相机，再用 WiLoR 相对手形和其预测 2D 求解正深度的刚体位姿。
+手部初始化、Dyn-HaMR 和导出使用相同的 hand K。
+默认不使用图像宽度焦距先验；旧实验可显式设置
+`--camera_focal_prior_max_deviation 0.35`（并配合
+`--camera_focal_prior_ratio 0.4`）复现。生产流程默认只使用 GeoCalib 的视频内参。
+如需利用视频多视图几何提出共享焦距，可显式启用
+`--camera_self_calibration --camera_focal_prior_max_deviation -1`；该实验后端使用
+两个时间块估计、第三个时间块验证，并在证据不足时保留 GeoCalib。通过后手部
+PnP、相机运动和深度换算共享同一个 K。
+该先验属于启发式保护。GeoCalib 模块可使用 ViPE 中的
+`vipe/priors/geocalib`，另需 `pip install kornia`；checkpoint 可用
+`--geocalib_weights` 指定本地文件，默认 `pinhole` 会获取其官方权重。
+没有 GeoCalib 时会报错；显式 `--camera_estimator assumed` 可使用未标定的近似相机，
+结果会标记为 `assumed`，不能视作真实标定或准确米制坐标。
+
+相机运动默认使用 `--camera_motion colmap`：CPU SIFT / 序列匹配、增量 SfM 和
+bundle adjustment 在每个候选内全程固定内参，WiLoR 手部轮廓及其时间邻域用于屏蔽动态
+手部特征。再通过背景地图点的前后向光流检查和 PnP，为其他视频帧估计位姿。
+无法定位的首尾和长缺口明确标为无效，相机与手部输出均为 NaN；仅插值短的内部
+缺口。整体定位覆盖率不足时显式报错。
+
+显式 `--pose_intrinsics_policy video_consistency` 可增加视频几何验证：触发旧焦距保护时，
+分别用原始 K 和保护 K 运行固定内参重建。两套候选在共同注册的帧、相同的背景
+SIFT 像素上比较模型深度与地图深度的一致性，同时检查有效帧覆盖率、注册率、
+可靠背景观测的空间/时间分布和重投影误差。v2 要求共同背景点的每帧中位数至少
+60、P10 至少 30，中位覆盖不少于 6/12 个画面网格；至少 75% 的共同采样帧和
+60% 的采样时间跨度有足够支撑。只有深度一致性至少改善 10%、至少 60% 视图
+改善且质量门限全部通过时，
+才使用保护 K；证据不足时保留原始 K。DA3Metric 复用同一次网络推理，分别按候选
+焦距换算深度。最终选择的 K 同时用于相机 PnP、米制尺度与相机 NPZ，候选得分、
+失败原因和所选内参写入 `camera_metadata.json`。该策略在当前数据上进行了开发集
+回归，尚无独立测试集验证；显式 `--pose_intrinsics_policy fixed` 可保留原始内参
+策略。图像宽度先验不等于真实标定。候选选择不读取测试 Zarr。
+手部相机拟合默认使用固定形状 PnP；可显式使用
+`--camera_fit pnp_ransac` 对少量异常 2D 关节点做 RANSAC 内点精修。
+该选项已经通过合成离群点测试，但在当前冻结视频回放中没有稳定优于默认
+`pnp`，因此不作为默认配置。
+COLMAP 原生轨迹到米制世界坐标的尺度估计按时间块做共识：每个有效时间块
+先独立估计尺度，再用块中位数汇总；块间尺度不一致时拒绝该尺度并保留明确的
+质量信息，避免局部背景或单段深度漂移支配整段视频。
+地图总点数及其比例保留为诊断信息，候选选择依据共同可靠观测判断地图支撑。
+保护 K 候选如果在 8° 初始三角化角度下注册不足，会复用同一组背景匹配依次尝试
+4°、2°，保持覆盖率要求；这些重试不会修改内参，也不会把定位失败帧填成有效。
+
+安装 `pycolmap>=4.2,<5`，并准备 UniDepthV2 small 权重，例如：
+
+```bash
+python -c 'from huggingface_hub import snapshot_download; snapshot_download("lpiccinelli/unidepth-v2-vits14", local_dir="/path/to/UniDepthV2-ViTS14", allow_patterns=["config.json", "model.safetensors"])'
+```
+
+`--unidepth_repo` 指向 ViPE 或其内置 UniDepth 源码目录。UniDepth 接收对应候选的相机
+内参，使用静态 COLMAP 背景点的深度比值稳健估计整段共享尺度，不读取源 Zarr 的内参、
+头部或手部数据。该尺度来自模型预测，保留不确定性记录，不能当成物理标定。
+
+也可以用 DA3Metric-Large 替换 UniDepthV2 的米制深度尺度后端。它用于把
+COLMAP 的相对平移恢复到模型估计的米制尺度；GeoCalib 仍负责内参，COLMAP
+仍负责相机位姿。先安装官方 Depth Anything 3 源码包并准备
+`depth-anything/DA3METRIC-LARGE` 权重，然后运行：
+
+```bash
+python -m pip install -e /path/to/depth-anything-3 --no-deps
+python cli.py path-b \
+  --video /path/to/video.mp4 \
+  --wilor_repo /path/to/WiLoR \
+  --checkpoint <WiLoR_checkpoint> \
+  --detector <WiLoR_detector> \
+  --mano_dir <MANO_models_dir> \
+  --geocalib_repo <DynHaMR_dir>/third-party/vipe \
+  --geocalib_weights <GeoCalib_pinhole_checkpoint> \
+  --camera_motion colmap \
+  --metric_depth_backend da3_metric \
+  --da3_repo /path/to/depth-anything-3 \
+  --da3_metric_model /path/to/DA3Metric-Large \
+  --output_dir out_path_b --episode demo_000
+```
+
+DA3Metric 输出的是 canonical metric depth。Path B 按官方焦距换算公式在网络
+处理分辨率下完成换算，再恢复到视频分辨率，并在静态 COLMAP 背景点上估计
+一段共享尺度。`--da3_repo` 在当前环境已经安装官方包时可以省略；
+`--da3_metric_process_res` 控制 DA3 处理分辨率，默认 504。保留
+`--metric_depth_backend unidepth` 可以继续使用 UniDepthV2 基线。
+
+实验选项 `--hand_depth_alignment` 可使用视频模型深度校正手部平移，再进行时序处理。
+它在 wrist 和 MCP 关键点周围采样深度，用 hand K 反投影后，稳健估计整只手的平移，
+保留相对手型。深度不足、关节估计不一致、校正过大或 2D 重投影变差时保留原预测。
+COLMAP 模式复用已加载的深度模型，但手部深度换算独立使用 hand K；
+static 模式启用此选项时也需要提供 metric-depth 权重。
+
+```bash
+# 在前面的 path-b 命令中追加这些参数进行受控消融：
+--hand_depth_alignment \
+--hand_depth_patch_size 7 \
+--hand_depth_max_mad 0.03 \
+--hand_depth_max_delta 0.15
+```
+
+此选项默认关闭。旧代码的 5 段开发集消融未显示整体精度提升，因此迁移后继续
+保留为实验开关。`--hand_depth_stride` 默认 1，即处理每个有观测的帧；
+较大的值会保留跳过帧的原始预测。Zarr 属性和相机元数据中的
+`hand_depth_alignment` 记录通过数量、拒绝原因和平移变化统计。
+模型推理异常会显式报错。阈值判定仅使用推理输出；原始 Zarr 仅在预测冻结后由
+独立 evaluator 读取。
+
+输出相机轨迹是第一张成功定位帧为原点的 c2w（`camera_reference_frame_index`，
+通常为 0），供 Dyn-HaMR、世界系平滑、
+Zarr 关键点和 `obs_head_pose` 一致使用；优化时固定相机尺度。
+显式 `--camera_motion static` 使用固定相机假设；不启用手部深度校正时无需深度模型。
+`--pose_stride`（3）、`--pose_max_keyframes`（300）、`--pose_depth_samples`（8）、
+`--pose_threads`（4）、`--pose_mask_margin`（25 像素）控制重建。
+`<episode>_camera_work/` 保存数据库、稀疏地图及质量记录；
+`<episode>_camera.npz` 保存完整轨迹、原生尺度轨迹、米制深度、观测标记和尺度。
+Zarr 中的 `path_b_camera_pose_valid`、`path_b_camera_pose_observed` 会传递到
+`load` / `align`。无效帧的有限相机值仅供优化器内部占位，对应观测置信度为零，
+对外导出的相机位姿保持 NaN；
+`<episode>_wilor_raw.npz` 保存原始 WiLoR 预测供重放。
+旧的 DA3-BASE 相机后端仍已移除。DA3Metric-Large 只通过
+`--metric_depth_backend da3_metric` 参与米制尺度估计及可选手部平移校正，
+不提供 Path B 相机位姿。
+
+原始 WiLoR 2D 是模型自投影，并非独立观测。PnP 保留预测手形的尺度，但不能消除
+单目尺度/姿态歧义；输出仍需外部评估。`--camera_fit translation` 可作仅平移消融。
+`--max_gap` 默认仅插值不超过 5 帧的内部缺口，长缺口和首尾缺失保持无效；
+EE、wrist、3D/2D 关键点的缺失状态一致，保存每手 confidence/observed。
+Loader 为 PathB 保留视频时间线，保存 `frame_valid` 和 `source_frame_indices`。
+然后直接接现有流水线：
 
 ```bash
 python cli.py run-all --input_dir out_path_b --output_dir out_demo \
@@ -117,14 +247,36 @@ python cli.py path-b \
   --detector <WiLoR_detector> \
   --mano_dir <MANO_models_dir> \
   --dynhamr_repo <DynHaMR_dir> \
+  --geocalib_weights <GeoCalib_pinhole_checkpoint> \
+  --unidepth_model <UniDepthV2_checkpoint_directory> \
   --dynhamr_gpu 0 \
   --output_dir path_b_dynhamr --episode source_000
 ```
 
-bridge 会自动准备 Dyn-HaMR 所需的视频帧、track JSON、静态相机和 shot
-文件，调用官方 `dyn-hamr/run_opt.py`，再把优化后的 MANO 参数转换回
-`dynhamr_predictions.npz`。Dyn-HaMR 自身仍需要 `_DATA` 模型资源和依赖，
-请在其仓库执行 `scripts/prepare.sh` 并按官方 README 准备 HaMeR/BMC/HMP。
+bridge 会自动准备完整视频帧、左右手 track JSON、相机和 shot 文件，
+调用官方 `dyn-hamr/run_opt.py` 的 Root/Smooth 优化，默认迭代上限为
+50/300，并采用官方提前停止逻辑。两只已观测的手会一起优化；缺失观测的
+2D 置信度保持为零。最终 MANO 参数按正确的手部均值约定转换回相机坐标，
+保留优化后的平移，不再逐帧对齐回 WiLoR 手腕。
+
+官方 `fa9cd74` 版本需要以下兼容补丁，以延迟加载默认未启用的 HMP/BMC
+资源、去掉未使用的 `mano` 导入、修正缺失的默认数据配置，并让固定相机
+读取提供的标定文件：
+
+```bash
+git -C <DynHaMR_dir> apply <ego2robot_dir>/steps/dynhamr_compat.patch
+python -m pip install tensorboard loguru torchgeometry==0.1.2 gdown
+```
+
+使用 WiLoR 初始化时不需要重复运行 HaMeR 或 SLAM。默认未启用 HMP motion
+prior，BMC 的默认损失权重为零；要开启这些可选阶段，仍需按官方 README
+准备相应权重、统计资源与依赖。相机内参来自视频估计；默认 COLMAP 模式向优化器
+提供估计的动态相机轨迹，显式 static 模式则使用固定相机假设。
+`--dynhamr_gpu -1` 可让优化器在 CPU 运行，WiLoR 仍按自身设备设置运行。
+
+优化日志、输入帧/JSON 和官方结果保存在
+`<output_dir>/<episode>_dynhamr/`，便于回读验证。`--predictions` 也会保留
+WiLoR NPZ 中的 2D 和 MANO 参数，可从已有完整预测重跑官方优化器。
 
 官方 WiLoR 运行还需要 `ultralytics`、`smplx`、`pytorch-lightning`、`yacs`、
 `scikit-image` 等依赖。将 `--mano_dir` 指向 MANO 项目的 `models` 目录
@@ -147,6 +299,8 @@ python cli.py path-b \
   --detector <WiLoR_detector> \
   --mano_dir <MANO_models_dir> \
   --dynhamr_repo <DynHaMR_dir> \
+  --geocalib_weights <GeoCalib_pinhole_checkpoint> \
+  --unidepth_model <UniDepthV2_checkpoint_directory> \
   --dynhamr_gpu 0
 
 # 2) Zarr -> mask/inpaint -> retarget -> LeRobot -> demo
@@ -161,7 +315,7 @@ python cli.py run-all \
 ```
 
 Path B 输出的是 Zarr v3 episode。`left.obs_keypoints` 和
-`right.obs_keypoints` 保存合成相机世界坐标中的 21 点 MANO 手部轨迹，
+`right.obs_keypoints` 保存重建世界坐标中的 21 点 MANO 手部轨迹（static 模式使用相机坐标），
 `images.front_1` 保存原始 JPEG 视频帧。后续 loader 会将其转换为编号步骤目录。
 机器人与背景合成视频位于
 `06_retarget/<episode>_robot_on_bg.mp4`，最终 3x3 演示视频位于
@@ -196,8 +350,9 @@ Gauss 补充依赖为 `accelerate`、`huggingface-hub`、`hydra-core`、`omegaco
 | `models/SO-ARM100/Simulation/SO101` | 仓库内置 | 官方 SO-ARM101 MuJoCo 模型和 mesh 资产 |
 | ProPainter 源码 + `weights/ProPainter.pth`、`weights/raft-things.pth`、`weights/recurrent_flow_completion.pth` | 放在 `EGO2ROBOT_PROPAINTER_DIR` 下 | 三项均必需，inference 脚本使用 [v0.1.0 release](https://github.com/sczhou/ProPainter/releases/tag/v0.1.0) |
 | DA3-BASE `config.json` + `model.safetensors` 及 Python 包 | `depth --model_id` 或 `EGO2ROBOT_DA3_MODEL_DIR` | 仅 depth / `--with_depth` 需要；按 [官方模型清单](https://github.com/ByteDance-Seed/depth-anything-3) 获取 |
+| DA3Metric-Large `config.json` + `model.safetensors` 及官方 Python 包 | `path-b --da3_metric_model`、`--da3_repo` | Path B 可选米制尺度后端；需配合 `--metric_depth_backend da3_metric` |
 | 可选 Path B：WiLoR `wilor_final.ckpt`、`detector.pt`、MANO `MANO_RIGHT.pkl` | `path-b --wilor_repo`、`--checkpoint`、`--detector`、`--mano_dir` | 另需 WiLoR 源码/依赖及许可允许的 MANO 资产，见前文 Path B |
-| 可选 DynHaMR 源码和 `_DATA` 资源 | `path-b --dynhamr_repo` | 按 Dyn-HaMR README / `scripts/prepare.sh` 准备 HaMeR/BMC/HMP 及独立依赖 |
+| 可选 DynHaMR 源码和 MANO 资源 | `path-b --dynhamr_repo` | WiLoR 初始化的 Root/Smooth 路径可复用已有 MANO；其他可选阶段按 Dyn-HaMR README 准备对应权重和依赖 |
 
 以上来源依据本地源码/资产说明，本次未联网验证下载可用性，不随仓库分发权重。DVLT 目录必须包含 `config.json` 和 `model.safetensors`；配置中的 `load_patch_embed_weights=false` 不足以证明 tensor 完整。完整清单见 [安装指南](GAUSS_SETUP_ZH.md)。
 

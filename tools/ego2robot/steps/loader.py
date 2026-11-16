@@ -54,7 +54,16 @@ def load_episode(episode_path: str) -> dict:
         "left_obs_keypoints": np.array(store["left.obs_keypoints"][:total_frames]),
         "right_obs_keypoints": np.array(store["right.obs_keypoints"][:total_frames]),
         "obs_head_pose": np.array(store["obs_head_pose"][:total_frames]),
+        "source_frame_indices": np.arange(total_frames, dtype=np.int64),
     }
+    for side in ("left", "right"):
+        for field in ("confidence", "observed"):
+            key = f"path_b_{side}_{field}"
+            if key in store:
+                data[key] = np.asarray(store[key][:total_frames])
+    for key in ("path_b_camera_pose_valid", "path_b_camera_pose_observed"):
+        if key in store:
+            data[key] = np.asarray(store[key][:total_frames])
 
     # Some hash-named episodes lack obs_rgb_timestamps_ns; synthesize timestamps from FPS.
     if "obs_rgb_timestamps_ns" in store:
@@ -70,7 +79,7 @@ def load_episode(episode_path: str) -> dict:
     annotations = []
     for ann in annotations_raw:
         try:
-            ann_str = bytes(ann).decode("utf-8") if not isinstance(ann, str) else ann
+            ann_str = _blob_bytes(ann).decode("utf-8") if not isinstance(ann, str) else ann
             annotations.append(json.loads(ann_str))
         except (json.JSONDecodeError, UnicodeDecodeError):
             continue
@@ -87,12 +96,20 @@ def load_episode(episode_path: str) -> dict:
     return data
 
 
+def _blob_bytes(value):
+    """Unwrap Zarr 3's scalar object arrays before converting the JPEG bytes."""
+    while isinstance(value, np.ndarray) and value.size == 1 and (
+            value.ndim == 0 or value.dtype.kind == "O"):
+        value = value.reshape(-1)[0]
+    return bytes(value)
+
+
 def decode_frame_jpeg(episode_path: str, frame_idx: int) -> Optional[np.ndarray]:
     """Decode one JPEG frame on demand."""
     store = zarr.open_group(episode_path, mode="r")
     try:
         blob = store["images.front_1"][frame_idx]
-        return simplejpeg.decode_jpeg(bytes(blob), colorspace="RGB")
+        return simplejpeg.decode_jpeg(_blob_bytes(blob), colorspace="RGB")
     except Exception:
         return None
 
@@ -123,7 +140,7 @@ def find_invalid_frames(data: dict, sentinel: float = 1e9) -> np.ndarray:
         ("right_obs_ee_pose", "right_obs_wrist_pose", "right_obs_keypoints"),
     )
     any_hand = np.zeros(n, dtype=bool)
-    for fields in hand_fields:
+    for side, fields in zip(("left", "right"), hand_fields):
         side_present = np.zeros(n, dtype=bool)
         side_valid = np.ones(n, dtype=bool)
         for key in fields:
@@ -137,17 +154,22 @@ def find_invalid_frames(data: dict, sentinel: float = 1e9) -> np.ndarray:
                 flat, nan=0.0, posinf=sentinel, neginf=-sentinel)) < sentinel,
                 axis=1)
             side_present |= present
-            side_valid &= ~present | (finite & below_sentinel)
+            side_valid &= finite & below_sentinel
+        observed = data.get(f"path_b_{side}_observed")
+        if observed is not None:
+            valid &= np.asarray(observed, bool) == side_present
         any_hand |= side_present
-        valid &= side_valid
+        valid &= ~side_present | side_valid
 
-    # Head pose is always required and remains finite for Path B episodes.
+    # An unlocalized camera invalidates the frame, just like an invalid head.
     head = np.asarray(data["obs_head_pose"]).reshape(n, -1)
     valid &= np.isfinite(head).all(axis=1)
     valid &= np.all(np.abs(np.nan_to_num(
         head, nan=sentinel, posinf=sentinel, neginf=-sentinel)) < sentinel,
         axis=1)
     valid &= any_hand
+    if "path_b_camera_pose_valid" in data:
+        valid &= np.asarray(data["path_b_camera_pose_valid"], dtype=bool)
 
     return valid
 
@@ -229,8 +251,10 @@ def transform_pose_to_head_relative(pose7_seq: np.ndarray, head_pose7_seq: np.nd
         (N, 7) head-relative pose
     """
     N = pose7_seq.shape[0]
-    result = np.zeros_like(pose7_seq)
+    result = np.full_like(pose7_seq, np.nan)
     for i in range(N):
+        if not np.isfinite(pose7_seq[i]).all() or not np.isfinite(head_pose7_seq[i]).all():
+            continue
         T_head = pose7_to_matrix(head_pose7_seq[i])
         T_world = pose7_to_matrix(pose7_seq[i])
         T_head_inv = np.linalg.inv(T_head)
@@ -308,6 +332,7 @@ def resample_to_target_fps(data: dict, target_fps: float = 30.0) -> dict:
     # Original and target time axes.
     t_orig = np.linspace(0, 1, n_original)
     t_new = np.linspace(0, 1, n_target)
+    nearest = np.clip(np.rint(t_new * (n_original - 1)).astype(int), 0, n_original - 1)
 
     # Interpolate each numeric field.
     numeric_keys = [
@@ -318,7 +343,11 @@ def resample_to_target_fps(data: dict, target_fps: float = 30.0) -> dict:
     ]
 
     for key in numeric_keys:
-        arr = data[key]  # (n_original, D)
+        arr = data[key].copy()  # (n_original, D)
+        if arr.shape[1] == 7:
+            for i in range(1, len(arr)):
+                if np.dot(arr[i - 1, 3:], arr[i, 3:]) < 0:
+                    arr[i, 3:] *= -1
         D = arr.shape[1]
         resampled = np.zeros((n_target, D))
         for d in range(D):
@@ -332,6 +361,22 @@ def resample_to_target_fps(data: dict, target_fps: float = 30.0) -> dict:
             resampled[:, 3:] = quat / norms
 
         data[key] = resampled
+    for key in ("source_frame_indices", "frame_valid",
+                "path_b_left_confidence", "path_b_right_confidence",
+                "path_b_left_observed", "path_b_right_observed",
+                "path_b_camera_pose_valid", "path_b_camera_pose_observed"):
+        if key in data:
+            data[key] = data[key][nearest]
+    # A resampled side needs finite interpolation endpoints. Keep its observed
+    # flag, confidence and complete pose validity consistent.
+    for side in ("left", "right"):
+        key = f"path_b_{side}_observed"
+        if key in data:
+            good = np.isfinite(data[f"{side}_obs_keypoints"]).all(1)
+            data[key] &= good
+            data[f"path_b_{side}_confidence"][~data[key]] = 0
+            for suffix in ("obs_keypoints", "obs_wrist_pose", "obs_ee_pose"):
+                data[f"{side}_{suffix}"][~data[key]] = np.nan
 
     # Rebuild timestamps.
     data["timestamps_ns"] = np.linspace(
@@ -341,6 +386,8 @@ def resample_to_target_fps(data: dict, target_fps: float = 30.0) -> dict:
     ).astype(np.int64)
 
     data["total_frames"] = n_target
+    if "frame_valid" in data:
+        data["frame_valid"] = find_invalid_frames(data)
     data["_resampled_from_fps"] = actual_fps
 
     return data
@@ -363,6 +410,7 @@ def process_episode(episode_path: str, target_fps: float = 30.0) -> Optional[dic
 
     # Filter 1e9 sentinel frames.
     valid_mask = find_invalid_frames(data)
+    data["frame_valid"] = valid_mask
     n_valid = valid_mask.sum()
     n_invalid = n_orig - n_valid
     print(f"    Frames: {n_orig} total, {n_invalid} invalid pose/keypoint frames")
@@ -373,11 +421,12 @@ def process_episode(episode_path: str, target_fps: float = 30.0) -> Optional[dic
 
     # Drop invalid frames when the ratio is below 50%; otherwise drop the entire episode.
     invalid_ratio = n_invalid / n_orig
-    if invalid_ratio >= 0.5:
+    preserve_timeline = data["attributes"].get("path") == "B"
+    if invalid_ratio >= 0.5 and not preserve_timeline:
         print(f"    SKIP: {invalid_ratio:.0%} frames invalid, dropping episode")
         return None
 
-    if n_invalid > 0:
+    if n_invalid > 0 and not preserve_timeline:
         # Keep only valid frames.
         numeric_keys = [
             "left_obs_ee_pose", "right_obs_ee_pose",
@@ -385,12 +434,15 @@ def process_episode(episode_path: str, target_fps: float = 30.0) -> Optional[dic
             "obs_head_pose",
             "left_obs_keypoints", "right_obs_keypoints",
             "timestamps_ns",
+            "source_frame_indices", "frame_valid",
         ]
         for key in numeric_keys:
             data[key] = data[key][valid_mask]
         data["total_frames"] = n_valid
         data["_dropped_frames"] = int(n_invalid)
         print(f"    Dropped {n_invalid} invalid frames, {n_valid} remaining")
+    elif n_invalid > 0:
+        print(f"    Preserved {n_invalid} invalid frames with frame_valid=False for video synchronization")
 
     # FPS resampling.
     actual_fps = estimate_fps(data["timestamps_ns"])
@@ -458,6 +510,9 @@ def run(args):
             annotations=json.dumps(data["annotations"]),
             episode_path=str(data["_episode_path"]),
             attributes=json.dumps(data["attributes"]),
+            source_frame_indices=data["source_frame_indices"],
+            frame_valid=data["frame_valid"],
+            **{key: value for key, value in data.items() if key.startswith("path_b_")},
         )
         results.append({
             "name": ep_name,
