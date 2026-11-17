@@ -13,9 +13,14 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
+import torch
 from torch import Tensor
+
+if TYPE_CHECKING:  # 只用于标注：layout 不许在运行期依赖 L0/L2 的具体类
+    from .geometry import GeometrySpec
+    from .streams.spec import StreamSpec
 
 __all__ = ["SegmentRange", "TokenLayout", "LabelView"]
 
@@ -184,16 +189,44 @@ class TokenLayout:
         return LabelView(self, "query"), LabelView(self, "key")
 
     @classmethod
-    def from_geometry(cls, geometry, streams) -> TokenLayout:
+    def from_geometry(cls, geometry: GeometrySpec,
+                      streams: Sequence[StreamSpec], *,
+                      token_counts: Mapping[str, int] | None = None
+                      ) -> TokenLayout:
         """由 L0 几何与流清单物化布局（``WorldModel.__init__`` 第②步）。
 
-        Lane A 实现：按 ``streams`` 的顺序给每条流算 token 数、拼 segments、
-        把 ``geometry.build_labels()`` 的四个标签按段铺开、给动作流贴 chunk。
+        ``streams`` 只读 ``.name``，顺序即 concat 顺序（与
+        ``AttentionGroup.members`` 同序 —— C8 校验的正是这件事）。
+
+        ``token_counts`` 给出逐流 token 数。省略时按缺省约定推：第 0 条流是
+        几何所描述的那条（视频主干）⇒ ``padded_seq_len``；其余每条流 ⇒
+        ``action_horizon``。不把它做成 ``StreamSpec`` 的字段，是因为
+        「这条流有多少 token」由几何决定而不由流自己声明 —— 两处声明必然分叉。
+
+        贴出的标签：
+          stream  [total] long  段下标，值 = 在 ``stream_names`` 里的位置
+          frame   [total] long  视频 token 取几何帧号；动作 token 取
+                                ``step // action_video_freq_ratio``，
+                                即它对齐到的那个 latent 帧
+          row/col [total] long  视频 token 取几何 patch 行列；动作 token 为 -1
+          pad     [total] bool  视频 token 取几何对齐填充位；动作 token 为 False
+          chunk   [total] long  动作 token 的块号；视频 token 为 -1
+
+        ``noise_level`` **不在这里贴** —— 它是 L3 加噪时经 ``with_labels``
+        追加的档位标签（interfaces §3.2）。
         """
-        raise NotImplementedError(
-            "TokenLayout.from_geometry 属 Lane A（L1），见 "
-            "docs/design/mot_l0l1_geometry_visibility.detailed.zh-CN.md"
-        )
+        names = [stream.name for stream in streams]
+        if not names:
+            raise ValueError("TokenLayout.from_geometry: streams 不得为空")
+        counts = _resolve_token_counts(geometry, names, token_counts)
+        segments: list[SegmentRange] = []
+        cursor = 0
+        for name in names:
+            segments.append(SegmentRange(stream=name, start=cursor,
+                                         stop=cursor + counts[name]))
+            cursor += counts[name]
+        return cls(segments=tuple(segments),
+                   labels=_build_joint_labels(geometry, tuple(segments)))
 
 
 @dataclass(frozen=True)
@@ -223,3 +256,86 @@ class LabelView:
         """取标签并 reshape 成可广播形状：query 侧 [L, 1]，key 侧 [1, L]。"""
         flat = self.layout.labels_of(key)
         return flat.unsqueeze(1) if self.side == "query" else flat.unsqueeze(0)
+
+    def positions(self) -> Tensor:
+        """本侧的 token 下标，形状同 ``get``。``prefix_only`` 这类
+        「不读标签、只看位置」的规则用它，而不是自己 arange + unsqueeze
+        （写反了不报错，只是把前缀挪到另一侧）。"""
+        flat = torch.arange(self.layout.total, dtype=torch.long)
+        return flat.unsqueeze(1) if self.side == "query" else flat.unsqueeze(0)
+
+
+def _resolve_token_counts(geometry: GeometrySpec, names: Sequence[str],
+                          given: Mapping[str, int] | None) -> dict[str, int]:
+    """逐流 token 数。显式表优先，否则走 ``from_geometry`` 文档里的缺省约定。"""
+    if given is not None:
+        missing = sorted(set(names) - set(given))
+        stray = sorted(set(given) - set(names))
+        if missing or stray:
+            raise ValueError(
+                f"TokenLayout.from_geometry: token_counts 必须恰好覆盖流清单 "
+                f"{list(names)}；缺 {missing}、多 {stray}"
+            )
+        for name in names:
+            if given[name] <= 0:
+                raise ValueError(
+                    f"TokenLayout.from_geometry: 流 {name!r} 的 token 数必须为正，"
+                    f"得到 {given[name]}"
+                )
+        if given[names[0]] != geometry.padded_seq_len:
+            raise ValueError(
+                f"TokenLayout.from_geometry: 第 0 条流 {names[0]!r} 的 token 数 "
+                f"{given[names[0]]} != geometry.padded_seq_len "
+                f"{geometry.padded_seq_len}。视频主干的长度只有几何一个出处"
+                "（INV-2：静态形状的唯一来源）"
+            )
+        return dict(given)
+    counts = {names[0]: geometry.padded_seq_len}
+    for name in names[1:]:
+        if geometry.action_horizon <= 0:
+            raise ValueError(
+                f"TokenLayout.from_geometry: 流 {name!r} 要按缺省约定取 "
+                "action_horizon 个 token，但 geometry.action_horizon=0"
+                "（该几何声明了自己没有动作流）。请显式传 token_counts"
+            )
+        counts[name] = geometry.action_horizon
+    return counts
+
+
+def _build_joint_labels(geometry: GeometrySpec,
+                        segments: tuple[SegmentRange, ...]
+                        ) -> dict[str, Tensor]:
+    """把几何标签按段铺到拼接后序列上，并贴 stream / chunk。
+
+    缺省值刻意取 -1 而不是 0：动作 token 的 ``row`` 若填 0，空间局部性规则
+    会把它当成「第 0 行」而静默生效。-1 不等于任何真实行号。
+    """
+    total = segments[-1].stop
+    frame = torch.full((total,), -1, dtype=torch.long)
+    row = torch.full((total,), -1, dtype=torch.long)
+    col = torch.full((total,), -1, dtype=torch.long)
+    chunk = torch.full((total,), -1, dtype=torch.long)
+    pad = torch.zeros(total, dtype=torch.bool)
+    stream = torch.empty(total, dtype=torch.long)
+    for code, seg in enumerate(segments):
+        stream[seg.start:seg.stop] = code
+
+    video = segments[0]
+    geo = geometry.build_labels()
+    sl = slice(video.start, video.stop)
+    frame[sl] = geo["frame"]
+    row[sl] = geo["row"]
+    col[sl] = geo["col"]
+    pad[sl] = geo["pad"]
+
+    ratio = geometry.action_video_freq_ratio
+    for seg in segments[1:]:
+        step = torch.arange(seg.length, dtype=torch.long)
+        # 动作 token 的 frame 与 chunk 是同一个数：块号就是它对齐到的 latent 帧号。
+        # 两个标签而不是一个，是因为 frame_causal 与 chunk_causal 是两条规则，
+        # 而三流模型（motus）里动作块与 latent 帧不再一一对应
+        aligned = step // ratio
+        chunk[seg.start:seg.stop] = aligned
+        frame[seg.start:seg.stop] = aligned
+    return {"stream": stream, "frame": frame, "row": row, "col": col,
+            "pad": pad, "chunk": chunk}

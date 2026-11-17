@@ -16,7 +16,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -24,16 +24,98 @@ import torch
 from torch import Tensor, nn
 
 from .diffusion.spec import DiffusionSpec
-from .layout import TokenLayout
+from .layout import LabelView, TokenLayout
 from .spec.core import build
 from .spec.world import WorldModelSpec
-from .streams.conditions import ConditionBus
+from .streams.conditions import ConditionBus, ConditionSpec
 from .streams.engine import AttentionGroup, EngineOutput, StreamEngine
 from .streams.state import StreamState
-from .visibility.combine import Visibility
+from .visibility.combine import Visibility, from_predicate
 from .visibility.mask import AttentionPlan
 
-__all__ = ["DiffusionRuntime", "WorldModel"]
+__all__ = ["DiffusionRuntime", "WorldModel", "join_stream_visibility",
+           "materialize_conditions", "query_in_stream"]
+
+
+def materialize_conditions(specs: Sequence[ConditionSpec],
+                           batch: Mapping[str, Any], *,
+                           training: bool) -> ConditionBus:
+    """逐条 ``ConditionSpec`` 物化成 ``Condition``，装进一条总线。
+
+    ``enabled=False`` 的条目**整条跳过**而不是物化一个零张量：
+    关掉的条件不应该在总线上占一个名字，否则 V7 的
+    「总线上的名字 ↔ 各流的 cross_kv_slots」对账会把它算进去。
+
+    两条路还没有落点，命中即抛错而不是悄悄给个空值：
+      - ``encoder`` 非 None —— 条件编码器在 ``__init__`` 四步里没有建造工位；
+      - ``dropout_prob > 0`` 且 ``training`` —— CFG 丢弃是置零还是换成
+        一个可学的 null 向量，两种实现的权重形状不同，要先裁定。
+    """
+    bus = ConditionBus()
+    for spec in specs:
+        if not spec.enabled:
+            continue
+        if spec.encoder is not None:
+            raise NotImplementedError(
+                f"条件 {spec.name!r} 带 encoder；条件编码器的建造工位尚未裁定"
+                "（model_matrix §4.5.1 的四步里没有它），待该裁定落地"
+            )
+        if training and spec.dropout_prob > 0.0:
+            raise NotImplementedError(
+                f"条件 {spec.name!r} 的 dropout_prob={spec.dropout_prob}；"
+                "CFG 条件丢弃的语义（置零 / 换可学 null 向量）待裁定"
+            )
+        if spec.source_key not in batch:
+            raise KeyError(
+                f"条件 {spec.name!r} 要从 batch[{spec.source_key!r}] 取原料，"
+                f"但 batch 只有 {sorted(batch)}"
+            )
+        bus.add(spec.materialize(batch[spec.source_key]))
+    return bus
+
+
+def query_in_stream(name: str) -> Visibility:
+    """「query 落在流 ``name`` 上」。``Visibility.restrict`` 的 where 的取值。
+
+    刻意不进 ``visibility/rules.py`` 的九条原子规则：那九条描述的是两个
+    token 之间的关系，这一条只看 query 一侧 —— 它是个**作用域选择器**，
+    用来把一条规则限制到它的归属流的那些行上。
+    """
+
+    @from_predicate(f"query_in_stream({name!r})")
+    def rule(q: LabelView, k: LabelView) -> Tensor:
+        names = q.layout.stream_names
+        if name not in names:
+            raise KeyError(
+                f"query_in_stream: 布局里没有流 {name!r}；已有流 {list(names)}"
+            )
+        if not q.has("stream"):  # 单流布局不贴 stream 标签 ⇒ 全是这条流
+            return torch.ones((q.layout.total, k.layout.total),
+                              dtype=torch.bool)
+        return (q.get("stream") == names.index(name)).expand(
+            q.layout.total, k.layout.total)
+
+    return rule
+
+
+def join_stream_visibility(declared: Mapping[str, Visibility]
+                           ) -> Visibility | None:
+    """把「流名 → 该流 query 侧的规则」合成一张联合 mask。
+
+    每条规则先 ``restrict`` 到自己流的 query 行上，再把各条 **与** 起来。
+    ``restrict`` 在未命中区域保持全可见 ⇒ 与起来之后每条流的行恰好只受
+    它自己那条规则管，没声明规则的流的行全可见。
+
+    不能直接 ``&``：那会把别的流的 query 行也按这条规则遮掉。
+    症状是跨流边静默消失，形状不变、loss 照降。
+    """
+    if not declared:
+        return None
+    joint: Visibility | None = None
+    for name in sorted(declared):
+        scoped = declared[name].restrict(where=query_in_stream(name))
+        joint = scoped if joint is None else joint & scoped
+    return joint
 
 
 @dataclass
@@ -113,25 +195,14 @@ class WorldModel(nn.Module):
     def _group_visibility(self, group: AttentionGroup) -> Visibility | None:
         """一个组的联合可见性。无人声明 ⇒ None（全双向，单体模型的常态）。
 
-        ``spec.visibility`` 的键是**流名**，值是该流 query 侧的规则。
-        把多条流各自的规则合成一张联合 mask，需要用
-        ``Visibility.restrict(where=same_stream_query(...))`` 把每条规则
-        限制到它自己的 query 行上 —— 而 ``same_stream`` 等九条规则属 Lane A，
-        尚未实现。因此这里：零条或一条时直接给出，多条时明确抛错，
-        **不**用 ``&`` 凑一个看起来能跑的结果（那会把别的流的 query 行也遮掉）。
+        ``spec.visibility`` 的键是**流名**，值是该流 query 侧的规则；
+        合成规则见 ``join_stream_visibility``。只取本组成员的声明 ——
+        别的组的流不在本组的 ``[total, total]`` 里。
         """
-        declared = {name: self.spec.visibility[name]
-                    for name in group.stream_names
-                    if name in self.spec.visibility}
-        if not declared:
-            return None
-        if len(declared) == 1:
-            return next(iter(declared.values()))
-        raise NotImplementedError(
-            f"注意力组 {list(group.stream_names)} 里有 {len(declared)} 条流各自"
-            f"声明了可见性（{sorted(declared)}）；把它们合成一张联合 mask 需要 "
-            "visibility.rules.same_stream + Visibility.restrict，属 Lane A（S2 交付）"
-        )
+        return join_stream_visibility({
+            name: self.spec.visibility[name]
+            for name in group.stream_names
+            if name in self.spec.visibility})
 
     # ---- 训练路径。七步，顺序不可换（model_matrix §4.5.2）----
 
@@ -169,9 +240,8 @@ class WorldModel(nn.Module):
 
     def build_conditions(self, batch: Mapping[str, Any]) -> ConditionBus:
         """扩展点 2：第②步。缺省按 ``ConditionSpec`` 逐条物化。"""
-        raise NotImplementedError(
-            "WorldModel.build_conditions 属 Lane B（L2 条件注入，S2 交付）"
-        )
+        return materialize_conditions(self.spec.conditions, batch,
+                                      training=self.training)
 
     def add_noise(self, batch: Mapping[str, Any],
                   timesteps: Mapping[str, Tensor]) -> DiffusionRuntime:
@@ -182,19 +252,42 @@ class WorldModel(nn.Module):
 
     def initial_states(self, runtime: DiffusionRuntime
                        ) -> dict[str, StreamState]:
-        """扩展点 4：第④步。缺省把 x_t 作为各流的初始残差。"""
+        """扩展点 4：第④步。把 x_t 包成各流的初始 ``StreamState``。
+
+        **卡在一条未裁定的交界上，所以这里抛错而不是给个能跑的版本**：
+        L2 详设 §370 把 patchify 划给 ``StreamModule.prepare``，而
+        ``StreamState.hidden`` 要求恰好三维 ``[B, L, W]``。视频流的 x_t 是
+        ``[B, C, F, H, W]`` 五维 —— 两条约定不能同时成立。两个出口：
+          ① patchify 留在 ``prepare``，则 ``hidden`` 的三维约束要放宽；
+          ② ``hidden`` 的三维约束不动，则空间 → token 的 rearrange 归本方法
+             （它要读 ``geometry.patch_size`` 与 ``padded_seq_len``）。
+        选②会把一段几何相关的算法搬进装配层，选①会让 C8/C9 失去落点。
+        """
         raise NotImplementedError(
-            "WorldModel.initial_states 属 Lane B（L2 入口，S2 交付）"
+            "WorldModel.initial_states：patchify 的归属未裁定 —— "
+            "L2 详设 §370 给 StreamModule.prepare，但 StreamState.hidden "
+            "要求三维 [B, L, W]，而视频流的 x_t 是五维"
         )
 
     def run_group(self, group: AttentionGroup,
                   states: Mapping[str, StreamState],
                   conditions: ConditionBus,
                   runtime: DiffusionRuntime) -> EngineOutput:
-        """扩展点 5：第⑤步。缺省直接转调 ``self.engine.run``。"""
-        raise NotImplementedError(
-            "WorldModel.run_group 属 Lane B（L2 引擎，S2 交付）"
-        )
+        """扩展点 5：第⑤步。按组取 plan 与 captures，转调 ``self.engine.run``。
+
+        ``captures`` 只传本组成员那几条 —— 别的组的流不在本次 run 的参与者里，
+        传过去会被引擎当成未知流名拒掉（那条校验是对的，不要绕）。
+        """
+        index = self.spec.groups.index(group)
+        captures = {name: layers for name, layers in self.captures.items()
+                    if name in group.stream_names}
+        return self.engine.run(
+            group, states,
+            {name: self.blocks[name] for name in group.stream_names},
+            self.plans[index], self.layout, conditions=conditions,
+            timesteps={name: runtime.timesteps.get(name)
+                       for name in group.stream_names},
+            captures=captures)
 
     def compute_losses(self, output: EngineOutput,
                        runtime: DiffusionRuntime,

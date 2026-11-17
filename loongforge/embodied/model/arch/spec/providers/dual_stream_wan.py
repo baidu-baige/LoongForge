@@ -488,10 +488,16 @@ def _fastwam_visibility(tokens_per_frame: int) -> dict[str, Visibility]:
          这里取**更严**的预设：等价性测试要的是「不多给可见性」，
          宁可过严不可过宽 —— 过宽会让模型在等价性测试里看到它本不该看的
          token 而数值仍然收敛，那种偏差查不出来。
+
+    ``same_stream() &`` 这一项不能省：预设只管帧轴，而动作 token 也带帧标签
+    （布局按 ``action_video_freq_ratio`` 给它们贴了 0…F-1），少了这一项，
+    ``frame_causal()`` 会把帧号更小的动作列开给视频 query 行 ——
+    那正是上面说的「没有 video → action 这条边」的反面。
     """
     first_frame_causal = get_preset("first_frame_causal")
     return {
-        "video": first_frame_causal(prefix_tokens=tokens_per_frame),
+        "video": same_stream() & first_frame_causal(
+            prefix_tokens=tokens_per_frame),
         "action": same_stream() | (
             stream_edge("video", "action") & prefix_only(tokens_per_frame)
         ),

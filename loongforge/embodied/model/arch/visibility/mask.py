@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Literal, Protocol
 
+import torch
 from torch import Tensor
 
 from ..layout import SegmentRange, TokenLayout
@@ -22,8 +23,44 @@ from .combine import Visibility
 
 __all__ = [
     "AttentionPlan", "Capability", "Scenario", "CompiledMask",
-    "LayerAttentionOverride",
+    "LayerAttentionOverride", "KNOWN_BACKENDS",
 ]
+
+KNOWN_BACKENDS = ("dense", "sdpa", "flex", "varlen")
+"""已注册的注意力后端。``attention_backend`` 的取值只许落在这里面。
+
+``auto`` 不在表里：它必须在 build 期被解析掉（``Scenario.__post_init__``
+已经在挡这件事），否则协商结果会依赖运行期才知道的东西。
+"""
+
+
+def _block_mask(structural: Tensor, *, block_size: int,
+                key_valid: Tensor | None) -> Any:
+    """由结构通道生成 FlexAttention 的 ``BlockMask``。
+
+    两个通道在这里**合成一个 mask_mod**，而不是把 key_valid 塞进 structural：
+    结构部分只按 (q, kv) 查表、与 b 无关，所以 flex 能把整块全 False 的区域
+    整块跳过；逐样本部分只多一次 ``key_valid[b, kv]`` 查表。
+    反过来做（先 ``&`` 成一张 [B, Q, K]）会让块级跳过失效（I1 两通道的理由）。
+    """
+    from torch.nn.attention.flex_attention import create_block_mask
+
+    device = structural.device
+    valid = None if key_valid is None else key_valid.to(device)
+
+    def mask_mod(b: Tensor, h: Tensor, q_idx: Tensor,
+                 kv_idx: Tensor) -> Tensor:
+        del h
+        keep = structural[q_idx, kv_idx]
+        if valid is None:
+            return keep
+        return keep & valid[b, kv_idx]
+
+    total = int(structural.shape[0])
+    batch = None if valid is None else int(valid.shape[0])
+    return create_block_mask(mask_mod, B=batch, H=None, Q_LEN=total,
+                             KV_LEN=total, device=device,
+                             BLOCK_SIZE=block_size)
 
 
 @dataclass(frozen=True)
@@ -98,14 +135,31 @@ class AttentionPlan:
         structural = None if visibility is None else visibility.evaluate(layout)
         return cls(structural=structural, key_valid=key_valid, layout=layout)
 
+    def dense_bool(self) -> Tensor:
+        """两通道合成的 ``[B 或 1, 1, Lq, Lk]`` bool。dense/sdpa 的共同底座。
+
+        ``key_valid`` 为 None 时 batch 维留 1 —— 广播出去而不实体化，
+        这是「结构通道 batch 共享」在显存上的全部收益。
+        """
+        total = self.total
+        if self.structural is None:
+            device = None if self.key_valid is None else self.key_valid.device
+            base = torch.ones((1, 1, total, total), dtype=torch.bool,
+                              device=device)
+        else:
+            base = self.structural.unsqueeze(0).unsqueeze(0)
+        if self.key_valid is None:
+            return base
+        return base & self.key_valid.to(base.device)[:, None, None, :]
+
     def materialize(self, backend: str, *,
                     block_size: int | None = None) -> Any:
         """按后端产出注意力实际要的那个对象。
 
-        dense → [1, 1, Lq, Lk] bool（广播到 batch，不实体化 batch 维）
-        flex  → BlockMask（由 structural 生成，key_valid 走 score_mod）；
+        dense → [B 或 1, 1, Lq, Lk] bool（batch 维能广播就广播）
+        flex  → BlockMask（结构通道查表，key_valid 并进同一个 mask_mod）；
                 **仅此路径读 block_size**，取 ``WorldModelSpec.attention_block_size``
-        sdpa  → 加性 float bias
+        sdpa  → 加性 float bias（不可见处 -inf）
         两个通道均为 None → 返回 None，调用方走无 mask 的 fast path
 
         返回类型刻意为 Any：各后端要的对象类型本就不同。
@@ -113,14 +167,30 @@ class AttentionPlan:
         if self.structural is None and self.key_valid is None:
             return None
         if backend == "dense":
-            if self.key_valid is not None:
-                raise NotImplementedError(
-                    "AttentionPlan.materialize: dense 后端合并 key_valid 属 Lane A"
+            return self.dense_bool()
+        if backend == "sdpa":
+            dense = self.dense_bool()
+            bias = torch.zeros(dense.shape, dtype=torch.float32,
+                               device=dense.device)
+            return bias.masked_fill(~dense, float("-inf"))
+        if backend == "flex":
+            if self.structural is None:
+                raise ValueError(
+                    "AttentionPlan.materialize(flex)：结构通道为 None（全可见）"
+                    "而只有 key_valid。BlockMask 的块级跳过在这种输入上没有收益，"
+                    "请走 dense 或由调用方直接用 key_valid 做 padding"
                 )
-            return self.structural.unsqueeze(0).unsqueeze(0)
-        raise NotImplementedError(
-            f"AttentionPlan.materialize(backend={backend!r}) 属 Lane A（L1 物化，"
-            "S2 交付；flex 的 as_block_mask 协商在 S4）"
+            if block_size is None:
+                raise ValueError(
+                    "AttentionPlan.materialize(flex) 必须给 block_size，"
+                    "且必须与协商时 Scenario.block_size 用的是同一个值 —— "
+                    "换了值就是换一张 mask，而 BlockMask 会被 torch.compile 捕获"
+                )
+            return _block_mask(self.structural, block_size=block_size,
+                               key_valid=self.key_valid)
+        raise ValueError(
+            f"AttentionPlan.materialize: 未知后端 {backend!r}；"
+            f"已注册 {list(KNOWN_BACKENDS)}"
         )
 
 
@@ -180,19 +250,39 @@ class CompiledMask:
         换了值就是换一张 mask，而 BlockMask 会被 ``torch.compile`` 捕获，
         运行期再改等于触发重编译（硬约束：静态形状）。
         """
-        raise NotImplementedError(
-            "CompiledMask.as_block_mask 属 Lane A（S4 与 Lane B 协商 block_size）"
-        )
+        if self.structural.ndim != 2:
+            raise ValueError(
+                f"CompiledMask.as_block_mask：structural 必须恰为 2 维"
+                f"（INV-1），得到 {tuple(self.structural.shape)}"
+            )
+        if block_size <= 0:
+            raise ValueError(
+                f"CompiledMask.as_block_mask：block_size 必须为正，得到 {block_size}"
+            )
+        return _block_mask(self.structural, block_size=block_size,
+                           key_valid=None)
 
     def as_segments(self) -> tuple[SegmentRange, ...]:
         """段表物化（varlen 路径用）。首批两个模型都不需要，是降级时第一个可砍的。
 
-        实现要先验证结构通道确实是按段分块的，再给段表 ——
-        直接返回 ``layout.segments`` 等于把「可见性恰好是块对角」当成前提。
+        先验证结构通道**确实**是按段分块对角的，再给段表 ——
+        直接返回 ``layout.segments`` 等于把「可见性恰好是块对角」当成前提，
+        而 fastwam / VPP2 的跨流边正好不满足它。
         """
-        raise NotImplementedError(
-            "CompiledMask.as_segments 属 Lane A（varlen 路径，R3 cosmos3 才需要）"
-        )
+        total = self.layout.total
+        expected = torch.zeros((total, total), dtype=torch.bool,
+                               device=self.structural.device)
+        for seg in self.layout.segments:
+            expected[seg.start:seg.stop, seg.start:seg.stop] = True
+        if not torch.equal(self.structural, expected):
+            extra = int((self.structural & ~expected).sum())
+            lost = int((~self.structural & expected).sum())
+            raise ValueError(
+                f"CompiledMask.as_segments：这条可见性不是按段块对角的"
+                f"（段外多了 {extra} 条边、段内缺了 {lost} 条边），"
+                "varlen 表达不了。请改用 dense/flex 后端"
+            )
+        return self.layout.segments
 
     @staticmethod
     def supports(vis: Visibility, scenario: Scenario) -> Capability:
@@ -201,10 +291,30 @@ class CompiledMask:
         要拦住的那一类缺陷：训练期 EXACT、推理期 UNSUPPORTED。
         现状里这类缺陷的表现是「训练支持、推理 raise NotImplementedError」，
         而且只有真跑到推理才知道。协商提前之后，它变成一个配置错误。
+
+        本实现**只看后端与场景**，不看布局 —— 因为签名里没有布局
+        （总纲 §10-5 的未决项正是这件事）。因此 varlen 一档给的是
+        **按表达式判定的保守结论**：只有恒真与纯段内两种表达式判 EXACT，
+        其余一律 UNSUPPORTED。宁过严不过宽：判宽了会让 varlen 看见
+        不该看的 token，而数值仍然收敛，查不出来。
         """
-        raise NotImplementedError(
-            "CompiledMask.supports 属 Lane A；V9 在它交付前按「后端已注册」单条校验"
-        )
+        if scenario.backend not in KNOWN_BACKENDS:
+            return Capability.UNSUPPORTED
+        if scenario.backend in ("dense", "sdpa"):
+            # 整张 [Q, K] 都物化出来，任何逐元素判定都能精确表达
+            return Capability.EXACT
+        if scenario.backend == "flex":
+            if scenario.block_size is None:
+                # 没有块大小就没法建 BlockMask ⇒ 只能退 dense
+                return Capability.DEGRADED
+            if scenario.has_kv_cache:
+                # KV cache 下 KV_LEN 每步在变，BlockMask 得逐步重建 ⇒
+                # 与 cuda_graph 捕获互斥，算降级而不是不支持
+                return Capability.DEGRADED
+            return Capability.EXACT
+        if vis.expr in ("always_visible", "same_stream()"):
+            return Capability.EXACT
+        return Capability.UNSUPPORTED
 
 
 class LayerAttentionOverride(Protocol):
