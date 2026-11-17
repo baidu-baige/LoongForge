@@ -292,6 +292,12 @@ def _convert_checkpoint(args):
     if args.megatron_path is not None:
         sys.path.insert(0, args.megatron_path)
 
+    hf_config_file = getattr(args, "hf_official_config_file", None)
+    if args.save_platform == "huggingface" and hf_config_file is not None:
+        source_hf_path = os.path.dirname(os.path.realpath(hf_config_file))
+        if source_hf_path == os.path.realpath(args.save_ckpt_path):
+            raise ValueError("HF export must use a different directory from the source checkpoint.")
+
     rank_id = int(os.getenv('RANK', '0'))
     world_size = int(os.getenv("WORLD_SIZE", '1'))
     if utils.LOADED_STATE_DICT is None:

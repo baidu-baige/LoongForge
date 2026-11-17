@@ -172,6 +172,27 @@ K3_OUTPUT_ATTN_RES_PROJ = "kimi_k3.output_attn_res_proj"
 ATTENTION_INDEXER_KPOOL_APE = "attention.indexer.kpool_ape"
 ATTENTION_INDEXER_KPOOL_GATE = "attention.indexer.kpool_gate"
 
+# ERNIE 5.5 mixes compressed H attention with D-layer MLA.
+ERNIE55_D_Q_DOWN = "ernie55.d_attention.q_down"
+ERNIE55_D_Q_UP = "ernie55.d_attention.q_up"
+ERNIE55_D_Q_NORM = "ernie55.d_attention.q_norm"
+ERNIE55_D_K_UP = "ernie55.d_attention.k_up"
+ERNIE55_D_V_UP = "ernie55.d_attention.v_up"
+ERNIE55_D_SINK = "ernie55.d_attention.sink"
+ERNIE55_D_GATE = "ernie55.d_attention.gate"
+ERNIE55_H_KV = "ernie55.h_attention.kv"
+ERNIE55_H_GATE = "ernie55.h_attention.gate"
+ERNIE55_VHA_U = "ernie55.vha_u"
+ERNIE55_VHA_V = "ernie55.vha_v"
+ERNIE55_ROUTER_WEIGHT_1 = "ernie55.router.weight_1"
+ERNIE55_ROUTER_SCALE = "ernie55.router.scale"
+ERNIE55_LATENT_DOWN = "ernie55.latent_down"
+ERNIE55_LATENT_UP = "ernie55.latent_up"
+ERNIE55_LATENT_NORM = "ernie55.latent_norm"
+ERNIE55_MULTIMAX_RANGES = "ernie55.multimax_ranges"
+ERNIE55_MULTIMAX_TS = "ernie55.multimax_ts"
+ERNIE55_MTP_ROUTER_BIAS = "ernie55.mtp_router_bias"
+
 ATTENTION_DENSE = "attention.dense"
 ATTENTION_QNORM = "attention.q_a_layernorm"
 ATTENTION_KNORM = "attention.kv_a_layernorm"
@@ -266,14 +287,20 @@ BASE_NAMES = [INPUT_LAYERNORM, ATTENTION_ROTARY_EMB_INV_FREQ, ROTARY_EMB_INV_FRE
             K3_ATTENTION_G_PROJ, K3_ATTENTION_A_LOG, K3_ATTENTION_DT_BIAS,
             K3_ATTENTION_O_NORM, K3_SELF_ATTN_RES_NORM, K3_SELF_ATTN_RES_PROJ,
             K3_MLP_RES_NORM, K3_MLP_RES_PROJ, K3_MOE_FC1_LATENT_PROJ,
-            K3_MOE_ROUTED_EXPERT_NORM, K3_MOE_FC2_LATENT_PROJ]
+            K3_MOE_ROUTED_EXPERT_NORM, K3_MOE_FC2_LATENT_PROJ,
+            ERNIE55_D_Q_DOWN, ERNIE55_D_Q_UP, ERNIE55_D_Q_NORM,
+            ERNIE55_D_K_UP, ERNIE55_D_V_UP, ERNIE55_D_SINK, ERNIE55_D_GATE,
+            ERNIE55_H_KV, ERNIE55_H_GATE, ERNIE55_VHA_U, ERNIE55_VHA_V,
+            ERNIE55_ROUTER_WEIGHT_1, ERNIE55_ROUTER_SCALE,
+            ERNIE55_LATENT_DOWN, ERNIE55_LATENT_UP, ERNIE55_LATENT_NORM]
 MOE_EXPERT_PROJS = [MOE_EXPERT_H_TO_4H, MOE_EXPERT_4H_TO_H]
 LAYER_LOCAL_LAST_NAMES = [K3_OUTPUT_ATTN_RES_NORM, K3_OUTPUT_ATTN_RES_PROJ]
 LAST_LAYER_NAMES = [FINAL_LAYERNORM, WORD_EMBEDDINGS_FOR_HEAD,
                     # DeepSeek V4 HyperHead global parameters
                     HC_HEAD_FN, HC_HEAD_BASE, HC_HEAD_SCALE,
                     # Kimi K3 final AttnRes parameters live on the final MCore layer.
-                    *LAYER_LOCAL_LAST_NAMES] # in the last layer
+                    *LAYER_LOCAL_LAST_NAMES,
+                    ERNIE55_MULTIMAX_RANGES, ERNIE55_MULTIMAX_TS] # in the last layer
 
 # DeepSeek V4 Hyper-Connection per-layer names (not standard BASE_NAMES, handled separately)
 HC_NAMES = [
@@ -290,7 +317,7 @@ MTP_NAMES = [MTP_WORD_EMBEDDING, MTP_ENORM, MTP_HNORM, MTP_EH_PROJ, MTP_SHARED_H
              MTP_HC_ATTN_FN, MTP_HC_ATTN_BASE, MTP_HC_ATTN_ALPHA_PRE, MTP_HC_ATTN_ALPHA_POST, MTP_HC_ATTN_ALPHA_RES,
              MTP_HC_FFN_FN, MTP_HC_FFN_BASE, MTP_HC_FFN_ALPHA_PRE, MTP_HC_FFN_ALPHA_POST, MTP_HC_FFN_ALPHA_RES,
              MTP_HC_HEAD_FN, MTP_HC_HEAD_BASE, MTP_HC_HEAD_SCALE,
-             MTP_HEAD]
+             MTP_HEAD, ERNIE55_MTP_ROUTER_BIAS]
 
 EMBED_NAMES = [
     WORD_EMBEDDINGS, MTP_WORD_EMBEDDING, WORD_EMBEDDINGS_FOR_HEAD,
