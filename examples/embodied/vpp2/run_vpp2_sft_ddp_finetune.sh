@@ -19,7 +19,7 @@ export PYTHONNOUSERSITE=1
 
 # ── Environment ───────────────────────────────────────────────
 export LOONGFORGE_PATH=${LOONGFORGE_PATH:-"$(cd "$SCRIPT_DIR/../../.." && pwd)"}
-export VPP2_ASSETS_ROOT=${VPP2_ASSETS_ROOT:-"$LOONGFORGE_PATH/vpp2_assets"}
+export VPP2_ASSETS_ROOT=${VPP2_ASSETS_ROOT:-"/workspace/vpp2/vpp2_assets"}
 
 # ── Distributed ───────────────────────────────────────────────
 GPUS_PER_NODE=${GPUS_PER_NODE:-8}

@@ -28,8 +28,11 @@ def is_deepspeed_engine(model) -> bool:
     """Return whether *model* is a DeepSpeed engine without importing eagerly."""
     return (
         model is not None
-        and type(model).__name__ == "DeepSpeedEngine"
-        and type(model).__module__.startswith("deepspeed.")
+        and any(
+            base.__name__ == "DeepSpeedEngine"
+            and base.__module__.startswith("deepspeed.")
+            for base in type(model).__mro__
+        )
     )
 
 

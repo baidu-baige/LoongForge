@@ -395,6 +395,10 @@ class LiberoActionModel(VPP2):
                         "mask": video_pre["context_mask"],
                     },
                     "video_attention_mask": attention_mask[:video_seq_len, :video_seq_len],
+                    # Derived at the same source that constructs the mask;
+                    # never infer it from the constructor default or GPU.item().
+                    "video_attention_all_true": self.video_expert.video_attention_mask_mode
+                    in {"bidirectional", "three_frame"},
                 }
                 if return_video_prediction:
                     if max_video_layers is not None:
@@ -434,7 +438,8 @@ class LiberoActionModel(VPP2):
         target_video: Optional[torch.Tensor] = None,
         image_is_pad: Optional[torch.Tensor] = None,
     ):
-        action_pre = self.action_expert.pre_dit(
+        full_action_graph = self.mot.perf_action_execution == "native_graph"
+        action_pre = None if full_action_graph else self.action_expert.pre_dit(
             action_tokens=noisy_action,
             timestep=timestep_action,
             context=context,
@@ -445,6 +450,7 @@ class LiberoActionModel(VPP2):
         first_frame_kv_source = getattr(self, "action_first_frame_kv_source", "clean_prefill")
         first_frame_route_enabled = None is not None or None is not None
         joint_video_loss = bool(False)
+        pred_video = None
         video_cache_result = self._build_frozen_video_cache(
             latents=latents,
             timestep_video=timestep_video,
@@ -452,32 +458,64 @@ class LiberoActionModel(VPP2):
             context_mask=context_mask,
             condition_latents=condition_latents,
             clip_fea=clip_fea,
-            action_seq_len=int(action_pre["tokens"].shape[1]),
+            action_seq_len=int(noisy_action.shape[1] if full_action_graph else action_pre["tokens"].shape[1]),
             fuse_vae_embedding_in_latents=fuse_vae_embedding_in_latents,
             return_video_prediction=False,
             allow_trainable_video=allow_trainable_video,
             max_video_layers=None,
         )
-        pred_video = None
         video_kv_cache, attention_mask, video_seq_len = video_cache_result
-        clean_cache_kwargs = {}
-        action_tokens = self.mot.forward_action_with_video_cache(
-            action_tokens=action_pre["tokens"],
-            action_freqs=action_pre["freqs"],
-            action_t_mod=action_pre["t_mod"],
-            action_context_payload={
-                "context": action_pre["context"],
-                "mask": action_pre["context_mask"],
-            },
-            video_kv_cache=video_kv_cache,
-            attention_mask=attention_mask,
-            video_seq_len=video_seq_len,
-            action_video_conditioning_mask=self._build_action_video_conditioning_mask(
-                timestep_action
-            ),
-            **clean_cache_kwargs,
-        )
-        pred_action = self.action_expert.post_dit(action_tokens, action_pre)
+        if full_action_graph:
+            if clean_start_layer is not None or clean_timestep_cutoff is not None or self._build_action_video_conditioning_mask(timestep_action) is not None:
+                raise ValueError("Full action graphs require the original unconditional video-cache route")
+            from .perf_action_graph import replay_full_action
+            pred_action = replay_full_action(
+                self.mot, self.action_expert, noisy_action, timestep_action,
+                context, context_mask, video_kv_cache, attention_mask,
+                visible_video_tokens=(
+                    min(
+                        video_seq_len,
+                        self.action_visible_video_frames
+                        * (int(latents.shape[-2]) // self.video_expert.patch_size[1])
+                        * (int(latents.shape[-1]) // self.video_expert.patch_size[2]),
+                    )
+                    if (
+                        self.config.perf_action_graph_visible_kv
+                        or self.config.perf_action_visible_kv_sdpa
+                    ) else None
+                ),
+                exact_visible_kv=bool(
+                    self.config.perf_action_visible_kv_sdpa
+                    and not self.config.perf_action_graph_visible_kv
+                ),
+            )
+        else:
+            action_tokens = self.mot.forward_action_with_video_cache(
+                action_tokens=action_pre["tokens"],
+                action_freqs=action_pre["freqs"],
+                action_t_mod=action_pre["t_mod"],
+                action_context_payload={
+                    "context": action_pre["context"],
+                    "mask": action_pre["context_mask"],
+                },
+                video_kv_cache=video_kv_cache,
+                attention_mask=attention_mask,
+                video_seq_len=video_seq_len,
+                action_video_conditioning_mask=self._build_action_video_conditioning_mask(
+                    timestep_action
+                ),
+                visible_video_tokens=(
+                    min(
+                        video_seq_len,
+                        self.action_visible_video_frames
+                        * (int(latents.shape[-2]) // self.video_expert.patch_size[1])
+                        * (int(latents.shape[-1]) // self.video_expert.patch_size[2]),
+                    )
+                    if getattr(self.config, "perf_action_visible_kv_sdpa", False)
+                    else None
+                ),
+            )
+            pred_action = self.action_expert.post_dit(action_tokens, action_pre)
         action_loss_token = F.mse_loss(
             pred_action.float(), target_action.float(), reduction="none"
         ).mean(dim=2)

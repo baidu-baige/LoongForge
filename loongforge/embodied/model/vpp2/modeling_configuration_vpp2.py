@@ -11,7 +11,7 @@ from typing import Any
 
 def _asset_path(*parts: str) -> str:
     """Return a portable default path rooted at ``VPP2_ASSETS_ROOT``."""
-    root = os.environ.get("VPP2_ASSETS_ROOT", "./vpp2_assets")
+    root = os.environ.get("VPP2_ASSETS_ROOT", "/workspace/vpp2/vpp2_assets")
     return os.path.join(root, *parts)
 
 
@@ -49,6 +49,31 @@ class VPP2ModelConfig:
     # Reproduce fresh checkpoint-excluded projections and the training RNG stream.
     initialization_seed: int | None = None
     disable_train_autocast: bool = False
+    # Default-off: omit a structurally all-True mask in the frozen video path.
+    perf_video_attention_mask_elision: bool = False
+    # Direct counterparts of the community environment switches.  The
+    # existing mask-elision/graph switches remain separate so their measured
+    # LoongForge implementations are preserved.
+    perf_video_prefill_unmasked_sdpa: bool = False
+    perf_action_visible_kv_sdpa: bool = False
+    perf_video_rope_fused: bool = False
+    # The accepted implementation uses eager frozen-video prefill.
+    perf_video_execution: str = "eager"
+    perf_action_execution: str = "eager"
+    # Additional frozen encoders; preserve dtype, causal state and parameters.
+    perf_compile_clip: str = "off"
+    perf_compile_vae_encode: str = "off"
+    # Compact only keys excluded by the standard action mask, inside the
+    # existing full ActionDiT graph. The video producer still runs every layer.
+    perf_action_graph_visible_kv: bool = False
+    # Explicit startup warmup, before the trainer's step1 timer (LIBERO B2).
+    perf_warmup_before_training: bool = False
+    # Default-off: omit redundant empty fills in the serial frozen producer.
+    perf_video_skip_uninitialized_fill: bool = False
+    # Default-off: native BF16 LayerNorm input/output, FP32 native statistics.
+    perf_video_native_layer_norm: bool = False
+    # Default-off RMS pointwise fusion with original native FP32 mean/rsqrt.
+    perf_video_rms_pointwise_fused: bool = False
     init_on_meta: bool = True
     video_dit_config: dict[str, Any] = field(default_factory=lambda: {
         "model_type": "i2v",
@@ -101,6 +126,61 @@ class VPP2ModelConfig:
     })
 
     def __post_init__(self) -> None:
+        for name in ("perf_compile_clip", "perf_compile_vae_encode"):
+            if getattr(self, name) not in {"off", "native_graph"}:
+                raise ValueError(f"{name} must be off or native_graph")
+        if (self.perf_compile_clip != "off" or self.perf_compile_vae_encode != "off") and (
+            self.training_stage != "action" or self.init_on_meta
+        ):
+            raise ValueError("Frozen encoder compilation requires materialized action-stage training")
+        if self.perf_action_graph_visible_kv and (
+            self.training_stage != "action" or self.perf_action_execution != "native_graph"
+            or self.action_chunk_size != 1
+        ):
+            raise ValueError("Graph K/V compaction requires the standard full action graph")
+        if self.perf_action_visible_kv_sdpa and (
+            self.training_stage != "action" or self.action_chunk_size != 1
+            or self.perf_action_execution not in {"eager", "native_graph"}
+        ):
+            raise ValueError("Action visible K/V requires the standard action-only direct-K/V path")
+        if self.perf_video_execution != "eager":
+            raise ValueError("Only eager frozen-video execution is supported")
+        if self.perf_action_execution not in {"eager", "native_graph"}:
+            raise ValueError("Unsupported action execution mode")
+        if self.perf_video_attention_mask_elision and (
+            self.training_stage != "action" or self.dtype != "bfloat16"
+            or self.perf_action_execution != "native_graph"
+            or not self.perf_video_rope_fused
+            or not self.perf_video_native_layer_norm
+            or not self.perf_video_rms_pointwise_fused
+            or self.perf_video_skip_uninitialized_fill is False
+            or self.action_chunk_size != 1
+            or int(self.video_dit_config.get("num_layers", 0)) != 40
+            or self.video_dit_config.get("video_attention_mask_mode") not in {"bidirectional", "three_frame"}
+        ):
+            raise ValueError("Mask elision requires the validated frozen BF16 native-LN/RMS action graph path")
+        if self.perf_video_rms_pointwise_fused and (
+            not self.perf_video_native_layer_norm
+            or self.training_stage != "action" or self.dtype != "bfloat16"
+            or self.perf_action_execution not in {"eager", "native_graph"}
+            or not self.perf_video_rope_fused
+            or self.action_chunk_size != 1
+            or int(self.video_dit_config.get("num_layers", 0)) != 40
+        ):
+            raise ValueError("Video RMS fusion requires the validated frozen BF16 native-LN path")
+        if self.perf_video_native_layer_norm and (
+            self.training_stage != "action" or self.dtype != "bfloat16"
+            or self.perf_action_execution not in {"eager", "native_graph"}
+            or not self.perf_video_rope_fused
+            or self.action_chunk_size != 1
+            or int(self.video_dit_config.get("num_layers", 0)) != 40
+        ):
+            raise ValueError("Native video LayerNorm requires the validated frozen BF16 action path")
+        if self.perf_video_skip_uninitialized_fill and (
+            self.training_stage != "action" or self.perf_action_execution not in {"eager", "native_graph"}
+            or not self.perf_video_rope_fused or self.dtype != "bfloat16"
+        ):
+            raise ValueError("Scoped allocation requires the frozen BF16 action path")
         if self.model_type != "vpp2":
             raise ValueError(f"VPP2ModelConfig.model_type must be 'vpp2', got {self.model_type!r}")
         if self.training_stage not in {"action", "joint"}:

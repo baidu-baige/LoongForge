@@ -31,7 +31,12 @@ export OMP_NUM_THREADS=${OMP_NUM_THREADS:-1}
 export NO_ALBUMENTATIONS_UPDATE=${NO_ALBUMENTATIONS_UPDATE:-1}
 export VPP2_DETERMINISTIC=${VPP2_DETERMINISTIC:-1}
 
-export VPP2_ASSETS_ROOT=${VPP2_ASSETS_ROOT:-"$LOONGFORGE_PATH/vpp2_assets"}
+# Main-chain performance switches, migrated to typed LoongForge configuration
+# below. These defaults reproduce the validated 2.6360 samples/s/gpu recipe.
+export VPP2_VIDEO_PREFILL_UNMASKED_SDPA=${VPP2_VIDEO_PREFILL_UNMASKED_SDPA:-1}
+export VPP2_ACTION_VISIBLE_KV_SDPA=${VPP2_ACTION_VISIBLE_KV_SDPA:-1}
+
+export VPP2_ASSETS_ROOT=/workspace/vpp2/vpp2_assets
 
 # ── Distributed ───────────────────────────────────────────────
 export GPUS_PER_NODE=${GPUS_PER_NODE:-8}
@@ -48,7 +53,7 @@ DISTRIBUTED_ARGS=(
 export VPP2_VIDEO_CHECKPOINT=${VPP2_VIDEO_CHECKPOINT:-"$VPP2_ASSETS_ROOT/libero_video_step010000.pt"}
 export VPP2_DATASET_ROOT=${VPP2_DATASET_ROOT:-"$VPP2_ASSETS_ROOT/libero_subset"}
 DATASET_PATH=${DATASET_PATH:-"$VPP2_DATASET_ROOT/libero_spatial_no_noops_lerobot,$VPP2_DATASET_ROOT/libero_object_no_noops_lerobot,$VPP2_DATASET_ROOT/libero_goal_no_noops_lerobot,$VPP2_DATASET_ROOT/libero_10_no_noops_lerobot"}
-OUTPUT_DIR=${OUTPUT_DIR:-"$LOONGFORGE_PATH/outputs/vpp2_deepspeed_zero2/$(date +%Y%m%d_%H%M%S_%N)"}
+export OUTPUT_DIR=${OUTPUT_DIR:-"$LOONGFORGE_PATH/outputs/vpp2_deepspeed_zero2/$(date +%Y%m%d_%H%M%S_%N)"}
 DEEPSPEED_CONFIG=${DEEPSPEED_CONFIG:-"$LOONGFORGE_PATH/examples/embodied/vpp2/zero2_bf16.json"}
 
 # ── Training defaults ─────────────────────────────────────────
@@ -62,7 +67,29 @@ if [[ -n "${SCHEDULE_STEPS:-}" ]]; then
 fi
 GRADIENT_ACCUMULATION_STEPS=${GRADIENT_ACCUMULATION_STEPS:-1}
 SAVE_INTERVAL=${SAVE_INTERVAL:-0}
-NUM_WORKERS=${NUM_WORKERS:-16}
+# Prepare the next batch while the GPU trains. With zero workers, LIBERO
+# decoding and preprocessing run synchronously in the training process.
+export NUM_WORKERS=1
+
+# Highest-throughput LoongForge configuration measured in the local 50-step
+# logs: native frozen CLIP/VAE graphs plus Action Graph visible-K/V compaction.
+export VPP2_COMPILE_CLIP=${VPP2_COMPILE_CLIP:-native_graph}
+export VPP2_COMPILE_VAE_ENCODE=${VPP2_COMPILE_VAE_ENCODE:-native_graph}
+export VPP2_ACTION_GRAPH_VISIBLE_KV=${VPP2_ACTION_GRAPH_VISIBLE_KV:-true}
+VPP2_ACTION_EXECUTION=${VPP2_ACTION_EXECUTION:-native_graph}
+
+# The all-True mask-elision candidate is tied to the captured native graph.
+# Eager mode still uses the migrated unmasked-SDPA switch, but does not enable
+# this separate graph-specific candidate by accident.
+if [[ -z "${VPP2_VIDEO_ATTENTION_MASK_ELISION+x}" ]]; then
+    if [[ "$VPP2_ACTION_EXECUTION" == native_graph ]]; then
+        VPP2_VIDEO_ATTENTION_MASK_ELISION=true
+    else
+        VPP2_VIDEO_ATTENTION_MASK_ELISION=false
+    fi
+fi
+# Capture before the step1 timer without consuming data or updating weights.
+export VPP2_WARMUP_BEFORE_TRAINING=${VPP2_WARMUP_BEFORE_TRAINING:-true}
 
 # ── Runtime options ────────────────────────────────────────────
 export PYTHONPATH="$LOONGFORGE_PATH${PYTHONPATH:+:$PYTHONPATH}"
@@ -74,6 +101,20 @@ fi
 CONFIG_OVERRIDES=(
     model.disable_train_autocast=true
     "model.initialization_seed=$SEED"
+    # Accepted frozen-video/ActionDiT performance recipe.
+    model.perf_video_execution=eager
+    "model.perf_action_execution=$VPP2_ACTION_EXECUTION"
+    model.perf_video_rope_fused=true
+    "model.perf_video_prefill_unmasked_sdpa=$VPP2_VIDEO_PREFILL_UNMASKED_SDPA"
+    model.perf_video_native_layer_norm=true
+    model.perf_video_rms_pointwise_fused=true
+    "model.perf_video_attention_mask_elision=$VPP2_VIDEO_ATTENTION_MASK_ELISION"
+    model.perf_video_skip_uninitialized_fill=true
+    "model.perf_compile_clip='$VPP2_COMPILE_CLIP'"
+    "model.perf_compile_vae_encode='$VPP2_COMPILE_VAE_ENCODE'"
+    "model.perf_action_visible_kv_sdpa=$VPP2_ACTION_VISIBLE_KV_SDPA"
+    "model.perf_action_graph_visible_kv=$VPP2_ACTION_GRAPH_VISIBLE_KV"
+    "model.perf_warmup_before_training=$VPP2_WARMUP_BEFORE_TRAINING"
 )
 
 # ── Model config ──────────────────────────────────────────────

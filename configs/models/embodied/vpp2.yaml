@@ -2,9 +2,9 @@
 model:
   model_type: vpp2
   training_stage: action
-  model_id: ${oc.env:VPP2_ASSETS_ROOT,./vpp2_assets}/Wan2.1-I2V-14B-480P
-  video_checkpoint_path: ${oc.env:VPP2_VIDEO_CHECKPOINT,${oc.env:VPP2_ASSETS_ROOT,./vpp2_assets}/libero_video_step010000.pt}
-  action_dit_pretrained_path: ${oc.env:VPP2_ASSETS_ROOT,./vpp2_assets}/libero/action_init.pt
+  model_id: ${oc.env:VPP2_ASSETS_ROOT,/workspace/vpp2/vpp2_assets}/Wan2.1-I2V-14B-480P
+  video_checkpoint_path: ${oc.env:VPP2_VIDEO_CHECKPOINT,${oc.env:VPP2_ASSETS_ROOT,/workspace/vpp2/vpp2_assets}/libero_video_step010000.pt}
+  action_dit_pretrained_path: ${oc.env:VPP2_ASSETS_ROOT,/workspace/vpp2/vpp2_assets}/libero/action_init.pt
   # Eager construction strictly loads all weights before distributed wrapping.
   init_on_meta: false
   load_text_encoder: false
@@ -22,6 +22,6 @@ data:
   action_video_freq_ratio: 4
   image_size: 224
   context_len: 128
-  text_embedding_cache_dir: ${oc.env:VPP2_ASSETS_ROOT,./vpp2_assets}/text_cache_real
+  text_embedding_cache_dir: ${oc.env:VPP2_ASSETS_ROOT,/workspace/vpp2/vpp2_assets}/text_cache_real
   text_embedding_cache_tag: wan21i2v14b480p
-  norm_stats_path: ${oc.env:VPP2_ASSETS_ROOT,./vpp2_assets}/libero/dataset_stats.json
+  norm_stats_path: ${oc.env:VPP2_ASSETS_ROOT,/workspace/vpp2/vpp2_assets}/libero/dataset_stats.json

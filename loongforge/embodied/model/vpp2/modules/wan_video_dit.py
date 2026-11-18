@@ -44,6 +44,7 @@ def flash_attention(
     v: torch.Tensor,
     num_heads: int,
     ctx_mask: Optional[torch.Tensor] = None,
+    backend: str = "original",
 ):
     q = rearrange(q, "b s (n d) -> b n s d", n=num_heads)
     k = rearrange(k, "b s (n d) -> b n s d", n=num_heads)
@@ -54,7 +55,29 @@ def flash_attention(
         elif ctx_mask.dim() == 3:
             ctx_mask = ctx_mask.unsqueeze(1)
         ctx_mask = ctx_mask.to(device=q.device, dtype=torch.bool)
-    x = F.scaled_dot_product_attention(q, k, v, attn_mask=ctx_mask)
+    if backend == "original":
+        x = F.scaled_dot_product_attention(q, k, v, attn_mask=ctx_mask)
+    elif backend == "sdpa_flash":
+        if ctx_mask is not None:
+            raise ValueError("Flash opt-in requires a structurally proven all-true mask")
+        from torch.nn.attention import sdpa_kernel, SDPBackend
+        # Fail closed: a fallback cannot masquerade as the requested backend.
+        with sdpa_kernel(SDPBackend.FLASH_ATTENTION):
+            x = F.scaled_dot_product_attention(q, k, v, attn_mask=None)
+    elif backend == "sdpa_efficient":
+        if ctx_mask is not None:
+            raise ValueError("Efficient mask elision requires a structurally proven all-true mask")
+        from torch.nn.attention import sdpa_kernel, SDPBackend
+        with sdpa_kernel(SDPBackend.EFFICIENT_ATTENTION):
+            x = F.scaled_dot_product_attention(q, k, v, attn_mask=None)
+    elif backend == "sdpa_unmasked":
+        # Match the community switch: remove the proven all-True mask and let
+        # PyTorch select the best installed no-mask SDPA kernel.
+        if ctx_mask is not None:
+            raise ValueError("Unmasked SDPA requires a structurally proven all-true mask")
+        x = F.scaled_dot_product_attention(q, k, v, attn_mask=None)
+    else:
+        raise ValueError(f"Unsupported attention backend: {backend}")
     return rearrange(x, "b n s d -> b s (n d)", n=num_heads)
 
 
@@ -107,6 +130,9 @@ class WanRMSNorm(nn.Module):
         self.weight = nn.Parameter(torch.ones(dim))
 
     def forward(self, x: torch.Tensor):
+        if hasattr(self, "_perf_rms_pointwise"):
+            from .perf_video_rms import forward
+            return forward(self, x)
         dtype = x.dtype
         x = x.float()
         x = x * torch.rsqrt(x.pow(2).mean(dim=-1, keepdim=True) + self.eps)
@@ -118,6 +144,9 @@ class WanLayerNorm(nn.LayerNorm):
         super().__init__(dim, eps=eps, elementwise_affine=elementwise_affine)
 
     def forward(self, x: torch.Tensor):
+        if hasattr(self, "_perf_native_bf16_ln"):
+            from .perf_video_norm import forward
+            return forward(self, x)
         weight = self.weight.float() if self.weight is not None else None
         bias = self.bias.float() if self.bias is not None else None
         return F.layer_norm(x.float(), self.normalized_shape, weight, bias, self.eps).type_as(x)

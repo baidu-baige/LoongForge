@@ -34,6 +34,13 @@ class MoT(nn.Module):
             None if use_fixed_video_layers is None else int(use_fixed_video_layers)
         )
         self.use_video_tokens = bool(use_video_tokens)
+        self.perf_video_attention_mask_elision = False
+        self.perf_video_prefill_unmasked_sdpa = False
+        self.perf_action_visible_kv_sdpa = False
+        self.perf_video_rope_fused = False
+        self.perf_video_execution = "eager"
+        self.perf_action_execution = "eager"
+        self.perf_video_skip_uninitialized_fill = False
         if mot_checkpoint_mixed_attn:
             logger.info(
                 "Using gradient checkpointing for mixture attention. This will save memory but use more computation."
@@ -148,14 +155,17 @@ class MoT(nn.Module):
         q_cat: torch.Tensor,
         k_cat: torch.Tensor,
         v_cat: torch.Tensor,
-        attention_mask: torch.Tensor,
+        attention_mask: Optional[torch.Tensor],
         num_heads: Optional[int] = None,
+        backend: str = "original",
     ) -> torch.Tensor:
-        attn_mask = attention_mask.to(device=q_cat.device)
+        attn_mask = None if attention_mask is None else attention_mask.to(device=q_cat.device)
         attention_heads = self.num_heads if num_heads is None else int(num_heads)
 
         def _forward(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
-            return flash_attention(q=q, k=k, v=v, num_heads=attention_heads, ctx_mask=attn_mask)
+            if backend == "original":
+                return flash_attention(q=q, k=k, v=v, num_heads=attention_heads, ctx_mask=attn_mask)
+            return flash_attention(q=q, k=k, v=v, num_heads=attention_heads, ctx_mask=attn_mask, backend=backend)
 
         if self.mot_checkpoint_mixed_attn and self.training:
             return torch.utils.checkpoint.checkpoint(
@@ -189,7 +199,8 @@ class MoT(nn.Module):
                 x = x + block.cross_attn(block.norm3(x), context, ctx_mask=context_mask)
 
         mlp_input = modulate(block.norm2(x), shift_mlp, scale_mlp)
-        x = block.gate(x, gate_mlp, block.ffn(mlp_input))
+        ffn_output = block.ffn(mlp_input)
+        x = block.gate(x, gate_mlp, ffn_output)
         return x
 
     def _build_expert_attention_io(
@@ -240,8 +251,13 @@ class MoT(nn.Module):
         k = block.self_attn.norm_k(block.self_attn.k(attn_input))
         v = block.self_attn.v(attn_input)
 
-        q = rope_apply(q, freqs, block.num_heads)
-        k = rope_apply(k, freqs, block.num_heads)
+        if self.perf_video_rope_fused and expert is self.mixtures["video"] and not torch.is_grad_enabled():
+            from .perf_rope import rope_fp64
+            q = rope_fp64(q, freqs, block.num_heads)
+            k = rope_fp64(k, freqs, block.num_heads)
+        else:
+            q = rope_apply(q, freqs, block.num_heads)
+            k = rope_apply(k, freqs, block.num_heads)
 
         use_gradient_checkpointing = bool(getattr(expert, "use_gradient_checkpointing", False))
         return (
@@ -338,6 +354,32 @@ class MoT(nn.Module):
         return_final_tokens: bool = False,
         max_layers: Optional[int] = None,
         video_feature_callback: Optional[Callable[[int, torch.Tensor], None]] = None,
+        video_attention_all_true: bool = False,
+    ):
+        kwargs = dict(
+            video_tokens=video_tokens, video_freqs=video_freqs,
+            video_t_mod=video_t_mod, video_context_payload=video_context_payload,
+            video_attention_mask=video_attention_mask,
+            return_final_tokens=return_final_tokens, max_layers=max_layers,
+            video_feature_callback=video_feature_callback,
+            video_attention_all_true=video_attention_all_true,
+        )
+        if self.perf_video_skip_uninitialized_fill:
+            from .perf_video_allocation import scoped_prefill
+            return scoped_prefill(self, kwargs)
+        return self._prefill_video_cache_eager(**kwargs)
+
+    def _prefill_video_cache_eager(
+        self,
+        video_tokens: torch.Tensor,
+        video_freqs: torch.Tensor,
+        video_t_mod: torch.Tensor,
+        video_context_payload: Optional[dict],
+        video_attention_mask: torch.Tensor,
+        return_final_tokens: bool = False,
+        max_layers: Optional[int] = None,
+        video_feature_callback: Optional[Callable[[int, torch.Tensor], None]] = None,
+        video_attention_all_true: bool = False,
     ) -> list[dict[str, torch.Tensor]] | tuple[list[dict[str, torch.Tensor]], torch.Tensor]:
         """Prefill video branch once and cache K/V or raw tokens for action.
 
@@ -386,6 +428,30 @@ class MoT(nn.Module):
             )
 
         expert = self.mixtures["video"]
+        backend = "original"
+        attention_record = None
+        if self.perf_video_attention_mask_elision:
+            from .perf_video_attention import prepare
+            attention_record = prepare(self, video_tokens, video_attention_all_true, layer_count,
+                                       max_layers, video_feature_callback)
+            # Remove only the structurally proven all-True mask and let the
+            # installed PyTorch dispatcher select the no-mask SDPA kernel.
+            backend = "sdpa_unmasked"
+        elif (
+            self.perf_video_prefill_unmasked_sdpa
+            and not self.training
+            and video_attention_all_true
+            and expert.video_attention_mask_mode in {"bidirectional", "three_frame"}
+            and not torch.is_grad_enabled()
+            and not video_tokens.requires_grad
+            and video_feature_callback is None
+        ):
+            # Direct counterpart of VPP2_VIDEO_PREFILL_UNMASKED_SDPA. The
+            # caller-provided proof comes from the original mask constructor.
+            backend = "sdpa_unmasked"
+        if backend != "original" and not getattr(self, "_perf_attention_logged", False):
+            logger.info("VPP2 video self-attention requested/effective=%s; all-true structural mask; no fallback", backend)
+            self._perf_attention_logged = True
         x = video_tokens
         cache_device = video_tokens.device
         kv_cache: list[dict[str, torch.Tensor]] = []
@@ -424,9 +490,12 @@ class MoT(nn.Module):
                 q_cat=q,
                 k_cat=k,
                 v_cat=v,
-                attention_mask=video_attention_mask,
+                attention_mask=None if backend != "original" else video_attention_mask,
                 num_heads=expert.num_heads,
+                backend=backend,
             )
+            if attention_record is not None:
+                attention_record["attention_calls"] += 1
             cache_entry: dict[str, torch.Tensor] = {}
             if self.use_video_tokens:
                 if self.use_fixed_video_layers is None or layer_idx == self.use_fixed_video_layers:
@@ -470,6 +539,7 @@ class MoT(nn.Module):
         clean_first_frame_start_layer: Optional[int] = None,
         action_video_conditioning_mask: Optional[torch.Tensor] = None,
         action_clean_first_frame_conditioning_mask: Optional[torch.Tensor] = None,
+        visible_video_tokens: Optional[int] = None,
     ) -> torch.Tensor:
         """Run action branch with cached video K/V instead of recomputing video tokens.
 
@@ -573,6 +643,22 @@ class MoT(nn.Module):
             int(video_seq_len),
             "attention_mask",
         )
+        compact_visible_video = None
+        if (
+            self.perf_action_visible_kv_sdpa
+            and not self.training
+            and not self.use_video_tokens
+            and not clean_cache_enabled
+            and action_video_conditioning_mask is None
+            and visible_video_tokens is not None
+            and 0 < int(visible_video_tokens) < int(video_seq_len)
+        ):
+            # The caller derives this prefix from the same frame/patch
+            # geometry that built the standard action mask. After compaction
+            # every remaining video key is visible to every action query, so
+            # the no-mask SDPA path is numerically equivalent to the source
+            # masked call for this fixed topology.
+            compact_visible_video = int(visible_video_tokens)
         clean_action_attention_mask = None
         if clean_cache_enabled:
             clean_action_attention_mask = _action_mask_rows(
@@ -672,6 +758,17 @@ class MoT(nn.Module):
 
         expert = self.mixtures["action"]
         x = action_tokens
+        if self.perf_action_execution == "native_graph":
+            if split_enabled or timestep_clean_enabled or action_video_conditioning_mask is not None:
+                raise ValueError("Action graphs do not support conditional video routing")
+            from .perf_action_graph import replay_action_layers
+
+            return replay_action_layers(
+                self, x, action_freqs, action_t_mod, action_context_payload,
+                video_kv_cache, action_attention_mask,
+            )
+        if self.perf_action_execution != "eager":
+            raise ValueError(f"Unknown action execution mode: {self.perf_action_execution}")
         has_materialized_action_kv = self.use_video_tokens and all(
             "action_k" in layer_cache and "action_v" in layer_cache
             for layer_cache in video_kv_cache
@@ -799,15 +896,21 @@ class MoT(nn.Module):
 
                 # Mixed attention: action queries attend to cached video K/V
                 # plus current action K/V.
+                if compact_visible_video is not None:
+                    k_video = k_video[:, :compact_visible_video]
+                    v_video = v_video[:, :compact_visible_video]
                 k_cat = torch.cat([k_video, k_action], dim=1)
                 v_cat = torch.cat([v_video, v_action], dim=1)
-            mixed = self._mixed_attention(
-                q_cat=q_action,
-                k_cat=k_cat,
-                v_cat=v_cat,
-                attention_mask=selected_action_attention_mask,
-                num_heads=expert.num_heads,
-            )
+            if compact_visible_video is not None:
+                mixed = flash_attention(q_action, k_cat, v_cat, num_heads=expert.num_heads)
+            else:
+                mixed = self._mixed_attention(
+                    q_cat=q_action,
+                    k_cat=k_cat,
+                    v_cat=v_cat,
+                    attention_mask=selected_action_attention_mask,
+                    num_heads=expert.num_heads,
+                )
             x = self._apply_post_with_optional_checkpoint(
                 block=block,
                 residual_x=residual_x,

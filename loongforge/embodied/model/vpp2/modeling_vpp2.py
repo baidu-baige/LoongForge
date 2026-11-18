@@ -88,7 +88,23 @@ class VPP2Model(LiberoActionModel):
                 **{f"loss_{key}": value for key, value in cfg.loss.items()},
             )
             model.config = cfg
+            model.mot.perf_video_attention_mask_elision = cfg.perf_video_attention_mask_elision
+            model.mot.perf_video_prefill_unmasked_sdpa = cfg.perf_video_prefill_unmasked_sdpa
+            model.mot.perf_action_visible_kv_sdpa = cfg.perf_action_visible_kv_sdpa
+            model.mot.perf_video_rope_fused = cfg.perf_video_rope_fused
+            model.mot.perf_video_execution = cfg.perf_video_execution
+            model.mot.perf_action_execution = cfg.perf_action_execution
+            model.mot.perf_video_skip_uninitialized_fill = cfg.perf_video_skip_uninitialized_fill
             model.freeze_modules()
+            if cfg.perf_video_native_layer_norm:
+                from .modules.perf_video_norm import enable
+                enable(model.video_expert)
+            if cfg.perf_video_rms_pointwise_fused:
+                from .modules.perf_video_rms import enable
+                enable(model.video_expert)
+            if cfg.perf_compile_clip != "off" or cfg.perf_compile_vae_encode != "off":
+                from .modules.perf_frozen_compile import enable
+                enable(model, cfg)
             return model
         # Deferred loading constructs a storage-free shell before materialization.
         device = torch.device("meta")
@@ -134,11 +150,24 @@ class VPP2Model(LiberoActionModel):
                 action_only_first_frame_fast_path=cfg.action_only_first_frame_fast_path,
             )
         model.config = cfg
+        model.mot.perf_video_attention_mask_elision = cfg.perf_video_attention_mask_elision
+        model.mot.perf_video_prefill_unmasked_sdpa = cfg.perf_video_prefill_unmasked_sdpa
+        model.mot.perf_action_visible_kv_sdpa = cfg.perf_action_visible_kv_sdpa
+        model.mot.perf_video_rope_fused = cfg.perf_video_rope_fused
+        model.mot.perf_video_execution = cfg.perf_video_execution
+        model.mot.perf_action_execution = cfg.perf_action_execution
+        model.mot.perf_video_skip_uninitialized_fill = cfg.perf_video_skip_uninitialized_fill
         model.model_paths = {
             "video_dit": cfg.video_checkpoint_path,
             "action_dit_backbone": cfg.action_dit_pretrained_path,
         }
         model.freeze_modules()
+        if cfg.perf_video_native_layer_norm:
+            from .modules.perf_video_norm import enable
+            enable(model.video_expert)
+        if cfg.perf_video_rms_pointwise_fused:
+            from .modules.perf_video_rms import enable
+            enable(model.video_expert)
         return model
 
     @staticmethod
@@ -419,6 +448,29 @@ class VPP2Model(LiberoActionModel):
         action_loss = action_loss if torch.is_tensor(action_loss) else torch.tensor(float(action_loss), device=device)
         return loss, {"video_loss": video_loss.detach(), "action_loss": action_loss.detach()}
 
+    def on_train_begin(self, *, ctx):
+        """Capture graphs before DataLoader workers and pinning threads start."""
+        from loongforge.embodied.train.global_vars import get_training_args
+
+        args = get_training_args()
+        # Background pin_memory allocations invalidate global CUDA Graph
+        # capture. The trainer calls this hook before creating iterators;
+        # warmup preserves RNG state and consumes no training batches.
+        if (self.config.perf_warmup_before_training and not args.resume
+                and self.config.perf_action_execution == "native_graph"):
+            from .modules.perf_training_warmup import warmup
+            warmup(self, args)
+        elif (self.config.perf_warmup_before_training and not args.resume
+              and ctx.rank == 0):
+            # The fixed-shape warmup is only valid for the native ActionDiT
+            # graph. Eager execution starts directly with the first batch.
+            import logging
+            logging.getLogger(__name__).info(
+                "VPP2 startup warmup skipped for action execution=%s; "
+                "training starts without graph warmup",
+                self.config.perf_action_execution,
+            )
+
     def on_after_data_iterators_initialized(self, *, args, ctx, optimizer=None, **kwargs):
         """Start the training RNG stream after model and loader initialization."""
         if self.config.initialization_seed is not None and not args.resume:
@@ -435,6 +487,7 @@ class _VPP2JointModel(VPP2):
     default_fp8_targets = staticmethod(VPP2Model.default_fp8_targets)
     default_lora_targets = staticmethod(VPP2Model.default_lora_targets)
     load_pretrained = VPP2Model.load_pretrained
+    on_train_begin = VPP2Model.on_train_begin
     on_after_data_iterators_initialized = VPP2Model.on_after_data_iterators_initialized
 
     @classmethod
