@@ -106,7 +106,14 @@ def _sweep_rows(ns: Sequence[int], root: Path) -> List[Dict[str, Any]]:
         summary = result.get("summary") or {}
         episodes = summary.get("n_episodes")
         requests, mean_ms = timing.get("count"), timing.get("mean")
-        busy = round(requests * mean_ms / 1000.0 / elapsed, 3) if (requests and mean_ms and elapsed) else None
+        # ``requests`` is summed over all servers, so divide by the server count
+        # to keep the busy fraction a per-server 0..1 quantity.
+        n_servers = max(1, len(result.get("gpus") or []))
+        busy = (
+            round(requests * mean_ms / 1000.0 / elapsed / n_servers, 3)
+            if (requests and mean_ms and elapsed)
+            else None
+        )
         rows.append({
             "N": n,
             "workers": result.get("concurrency") or result.get("n_workers"),
@@ -167,6 +174,10 @@ def _point_config(
         # replacing `coordinator` so the user's other tuning survives.
         cfg.setdefault("pools", {}).setdefault("cpu_sim", {})["n_sims_per_server"] = int(n)
         cfg.setdefault("coordinator", {})["n_workers"] = int(n)
+        # Each CPU point runs on its own GPU (its ``CUDA_VISIBLE_DEVICES`` is set
+        # by the caller); shrink the server list so a template with ``gpus:
+        # [0..7]`` does not start 8 servers per point and re-export physical ids.
+        cfg["servers"] = [{"gpus": [int(gpus[index % len(gpus)])]}]
 
     cfg_path = root / f"N{n}.json"
     cfg_path.write_text(json.dumps(cfg), encoding="utf-8")

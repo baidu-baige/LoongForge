@@ -77,6 +77,8 @@ class AsyncBatcher:
             except asyncio.CancelledError:
                 pass
             self._task = None
+        # A submitter still waiting must not outlive the server shutdown.
+        self._fail_queued(RuntimeError("eval batcher stopped"))
         if self._stats_task is not None:
             self._stats_task.cancel()
             try:
@@ -120,6 +122,11 @@ class AsyncBatcher:
         if hasattr(self._policy, "has_cached_action") and self._policy.has_cached_action(payload):
             return await loop.run_in_executor(None, lambda: self._policy.predict_action(**payload))
 
+        # A dead loop can never pick the request up; fail fast instead of
+        # hanging until the caller's own timeout fires.
+        if self._task is not None and self._task.done():
+            raise RuntimeError("eval batcher is not running") from self._task.exception()
+
         future: asyncio.Future = loop.create_future()
         self.total_requests += 1
         await self._queue.put((payload, future))
@@ -127,36 +134,69 @@ class AsyncBatcher:
 
     async def _run(self) -> None:
         loop = asyncio.get_running_loop()
-        while not self._closed:
-            payload, future = await self._queue.get()
-            batch = [(payload, future)]
-            deadline = loop.time() + self._max_wait_s
-            while len(batch) < self._max_batch_size:
-                timeout = deadline - loop.time()
-                if timeout <= 0:
-                    break
-                try:
-                    batch.append(await asyncio.wait_for(self._queue.get(), timeout=timeout))
-                except asyncio.TimeoutError:
-                    break
+        try:
+            while not self._closed:
+                await self._run_batch(loop)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.exception("eval batcher loop died; failing %d queued requests", self._queue.qsize())
+            self._fail_queued(exc)
 
-            payloads = [item[0] for item in batch]
-            start = time.perf_counter()
+    def _fail_batch(self, batch: List[tuple], exc: Exception) -> None:
+        for _, pending in batch:
+            if not pending.done():
+                pending.set_exception(exc)
+
+    def _fail_queued(self, exc: Exception) -> None:
+        while True:
             try:
-                results = await loop.run_in_executor(
-                    None, self._policy.predict_action_batch, payloads
-                )
-            except Exception as exc:  # Propagate to every waiting request.
-                for _, pending in batch:
-                    if not pending.done():
-                        pending.set_exception(exc)
-                continue
+                _, pending = self._queue.get_nowait()
+            except asyncio.QueueEmpty:
+                return
+            if not pending.done():
+                pending.set_exception(exc)
 
+    async def _run_batch(self, loop: asyncio.AbstractEventLoop) -> None:
+        payload, future = await self._queue.get()
+        batch = [(payload, future)]
+        deadline = loop.time() + self._max_wait_s
+        while len(batch) < self._max_batch_size:
+            timeout = deadline - loop.time()
+            if timeout <= 0:
+                break
+            try:
+                batch.append(await asyncio.wait_for(self._queue.get(), timeout=timeout))
+            except asyncio.TimeoutError:
+                break
+
+        payloads = [item[0] for item in batch]
+        start = time.perf_counter()
+        try:
+            results = await loop.run_in_executor(
+                None, self._policy.predict_action_batch, payloads
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # Propagate to every waiting request.
+            self._fail_batch(batch, exc)
+            return
+
+        try:
             elapsed_ms = (time.perf_counter() - start) * 1000.0
             self.total_batches += 1
             self._batch_sizes.append(len(batch))
             if self._latency is not None:
                 self._latency.record(elapsed_ms)
+            if results is None or len(results) != len(batch):
+                raise ValueError(
+                    f"policy returned {0 if results is None else len(results)} results "
+                    f"for {len(batch)} requests"
+                )
             for (_, pending), result in zip(batch, results):
                 if not pending.done():
                     pending.set_result(result)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            self._fail_batch(batch, exc)

@@ -64,15 +64,20 @@ def validate_parallel_config(
         add("gpu: k*vram_per_sim + vram_model <= vram_total", f"{need} <= {vram_total}", need <= vram_total)
 
     timeout = (calibrated.get("timeouts") or {}).get("policy_call_ms")
-    if timeout is not None and n is not None:
-        need = n * service_time_ms * timeout_safety
+    # The queue depth is N (sims per server) whether the pool is CPU- or GPU-sim.
+    n_eff = n if n is not None else k
+    if timeout is not None and n_eff is not None:
+        need = n_eff * service_time_ms * timeout_safety
         add(
             "timeout >= N * mean_service * safety",
             f"{timeout}ms >= {need:.0f}ms",
             timeout >= need,
         )
 
-    return {"checks": checks, "result": "PASS" if checks and all(c["ok"] for c in checks) else "FAIL"}
+    if not checks:
+        # Nothing to validate (no measured bounds), not a failed validation.
+        return {"checks": checks, "result": "UNCHECKED"}
+    return {"checks": checks, "result": "PASS" if all(c["ok"] for c in checks) else "FAIL"}
 
 
 def save_calibration(path: str, key: str, config: Dict[str, Any], report: Dict[str, Any]) -> None:

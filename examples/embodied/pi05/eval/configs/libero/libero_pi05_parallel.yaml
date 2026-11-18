@@ -74,7 +74,6 @@ run:
   save_trace: false
   save_replay: false
   timestamped_output: false
-  worker_local_files: true
 
 timeouts:
   policy_call_ms: 600000

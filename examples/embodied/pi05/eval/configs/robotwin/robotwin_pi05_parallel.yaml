@@ -24,7 +24,9 @@ benchmark:
   use_official_step_limits: true
   plan_order: lpt_long
   long_task_steps: 1200
-  long_task_episodes_per_chunk: 10
+  # Finer than the regular chunk so the long-task tail is short (see the
+  # parallel-eval guide, "Finer chunk for the long tasks only").
+  long_task_episodes_per_chunk: 4
   sim_cpu_threads: 1
   return_action_chunk: true
   skip_intra_chunk_obs: true
@@ -87,6 +89,9 @@ run:
   disable_eval_video_log: true
   keep_config: true
   timestamped_output: false
+  # Backstop for one unit; without it a tail unit inherits per_episode_sec and
+  # can look hung for tens of hours.
+  unit_timeout_sec: 2400
   output_dir: /path/to/LoongForge/outputs/eval/robotwin_pi05_parallel
 
 timeouts:

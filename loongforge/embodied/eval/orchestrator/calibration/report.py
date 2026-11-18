@@ -37,10 +37,18 @@ def build_report(
         row = dict(record)
         requests = row.get("requests")
         wall = row.get("wall_sec") or 0.0
-        # prefer the row's own measured service time (each N has its own timing.json)
+        # Prefer the row's own measured service time (each N has its own timing).
         mean_ms = float(row.get("service_mean_ms") or default_ms)
+        # ``requests`` is summed across servers, so divide by the server count to
+        # keep the busy fraction a per-server 0..1 quantity. The harness records
+        # total workers and N, so servers = workers / N.
+        n_servers = 1.0
+        if row.get("workers") and row.get("N"):
+            n_servers = max(1.0, int(row["workers"]) / int(row["N"]))
         row["server_busy_frac"] = (
-            round(requests * mean_ms / 1000.0 / wall, 3) if requests and wall else None
+            round(requests * mean_ms / 1000.0 / wall / n_servers, 3)
+            if requests and wall
+            else None
         )
         rows.append(row)
     return {
@@ -54,11 +62,11 @@ def build_report(
 def _row_line(row: Dict[str, Any]) -> str:
     busy = row.get("server_busy_frac")
     busy_str = f"{busy:.0%}" if isinstance(busy, (int, float)) else "n/a"
+    peak = row.get("gpu_peak_mb")
+    peak_str = f"{peak:.0f}" if isinstance(peak, (int, float)) else "n/a"
     return (
         f"| {row.get('N')} | {row.get('wall_sec')} | {row.get('throughput_ep_per_min')} | "
-        f"{row.get('gpu_util_mean')}/{row.get('gpu_util_max')} | "
-        f"{row.get('mem_util_mean')}/{row.get('mem_util_max')} | "
-        f"{row.get('cpu_busy_mean')}/{row.get('cpu_busy_max')} | {busy_str} |"
+        f"{peak_str} | {busy_str} |"
     )
 
 
@@ -68,12 +76,12 @@ def render_markdown(report: Dict[str, Any]) -> str:
     lines = [
         "# Calibration report (M0 N-sweep)",
         "",
-        f"- service time: `mean={st.get('mean', 0):.1f}ms p50={st.get('p50', 0):.4f}ms "
-        f"p95={st.get('p95', 0):.0f}ms p99={st.get('p99', 0):.0f}ms max={st.get('max', 0):.0f}ms`",
+        f"- service time: `mean={float(st.get('mean') or 0):.1f}ms p50={float(st.get('p50') or 0):.0f}ms "
+        f"p95={float(st.get('p95') or 0):.0f}ms p99={float(st.get('p99') or 0):.0f}ms "
+        f"max={float(st.get('max') or 0):.0f}ms`",
         "",
-        "| N | wall(s) | throughput(ep/min) | util.gpu mean/max | util.memory mean/max | "
-        "CPU busy mean/max | server busy frac |",
-        "|---|---|---|---|---|---|---|",
+        "| N | wall(s) | throughput(ep/min) | gpu peak (MB) | server busy frac |",
+        "|---|---|---|---|---|",
     ]
     lines += [_row_line(r) for r in report.get("sweep", [])]
     lines += [

@@ -300,6 +300,10 @@ def _classify_exception(exc: Exception) -> str:
         return "env_timeout"
     if isinstance(exc, TimeoutError):
         return "policy_timeout"
+    if isinstance(exc, (FileNotFoundError, IsADirectoryError, NotADirectoryError)):
+        # A local configuration problem (e.g. a missing scene snapshot), not a
+        # connection failure: retrying or reloading the model cannot help.
+        return "episode_error"
     if isinstance(exc, (ConnectionError, OSError, ConnectionClosed)):
         # A dropped websocket (``ConnectionClosedError``) is a *connection* failure, not a
         # model failure: classify it so the retry loop rebuilds the client instead of
@@ -750,9 +754,13 @@ def run_batch(args: argparse.Namespace) -> Dict[str, Any]:
                     }:
                         break
                     if attempt < args.max_retries:
-                        if record.get("failure_reason") == "server_unreachable" and server_manager is not None:
+                        if record.get("failure_reason") == "server_unreachable":
                             client.close()
-                            server_manager.ensure_running()
+                            if server_manager is not None:
+                                server_manager.ensure_running()
+                            # In coordinated mode the worker has no manager; rebuild
+                            # the client against the same external URL instead of
+                            # hammering the dead socket on every retry.
                             client = PolicyClient(
                                 host=args.host, port=args.port, timeout=args.server_connect_timeout_sec
                             )

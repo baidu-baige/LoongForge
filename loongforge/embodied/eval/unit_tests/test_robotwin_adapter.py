@@ -393,9 +393,10 @@ def test_worker_script_skips_unstable_seeds(tmp_path: pathlib.Path) -> None:
         "import sys\n"
         'sys.path.append("./description/utils")\n'
         "def eval_policy():\n"
-        "    while True:\n"
+        "    while succ_seed < test_num:\n"
         "        TASK_ENV.setup_demo(now_ep_num=now_id, seed=now_seed, is_test=True, **args)\n"
         "        TASK_ENV.set_instruction(instruction=instruction)\n"
+        "        now_seed += 1\n"
     )
     (robotwin / "script" / "eval_policy.py").write_text(source, encoding="utf-8")
 
@@ -415,10 +416,120 @@ def test_worker_script_skips_unstable_seeds(tmp_path: pathlib.Path) -> None:
     text = script.read_text(encoding="utf-8")
     assert "except UnStableError" in text
     assert "succ_seed -= 1" in text  # undo the pre-setup increment
-    assert "now_seed += 8" in text  # jump a full round, not into the next shard
-    assert "now_seed += 1" not in text
+    # A skip replaces only its slot, one full round later; the rest keep st_seed + j.
+    assert "now_seed = st_seed + succ_seed + _vla_round * 8" in text
+    assert "            _vla_round += 1\n" in text
+    assert "        now_seed += 1\n" in text  # loop tail untouched (overridden at the head)
     assert "continue" in text
 
+
+# Same branch structure as the official eval loop: three skip branches and a
+# loop-tail advance, plus a policy-phase setup_demo for the UnStableError patch.
+_SLOT_SEED_LOOP = (
+    "import sys\n"
+    'sys.path.append("./description/utils")\n'
+    "class UnStableError(Exception):\n"
+    "    pass\n"
+    "def eval_policy(TASK_ENV, st_seed, test_num, args, expert_check=True):\n"
+    "    now_id = 0\n"
+    "    succ_seed = 0\n"
+    "    suc_test_seed_list = []\n"
+    "    now_seed = st_seed\n"
+    "    while succ_seed < test_num:\n"
+    '        render_freq = args["render_freq"]\n'
+    "        if expert_check:\n"
+    "            try:\n"
+    "                TASK_ENV.setup_demo(now_ep_num=now_id, seed=now_seed, is_test=True, **args)\n"
+    "            except UnStableError as e:\n"
+    "                now_seed += 1\n"
+    '                args["render_freq"] = render_freq\n'
+    "                continue\n"
+    "            except Exception as e:\n"
+    "                now_seed += 1\n"
+    '                args["render_freq"] = render_freq\n'
+    '                print("error occurs !")\n'
+    "                continue\n"
+    "        if (not expert_check) or TASK_ENV.check_success():\n"
+    "            succ_seed += 1\n"
+    "            suc_test_seed_list.append(now_seed)\n"
+    "        else:\n"
+    "            now_seed += 1\n"
+    '            args["render_freq"] = render_freq\n'
+    "            continue\n"
+    "\n"
+    "        TASK_ENV.setup_demo(now_ep_num=now_id, seed=now_seed, is_test=True, **args)\n"
+    "        TASK_ENV.ran.append(now_seed)\n"
+    "        now_seed += 1\n"
+    "    return now_seed, 0\n"
+)
+
+
+class _SlotSeedEnv:
+    """Fake TASK_ENV: raises for unstable seeds, the expert fails on ``unsolved``."""
+
+    def __init__(self, unstable: set, unsolved: set) -> None:
+        self.unstable, self.unsolved, self.ran, self._seed = unstable, unsolved, [], None
+
+    def setup_demo(self, seed, **_):
+        self._seed = seed
+        if seed in self.unstable:
+            raise _SlotSeedEnv.Unstable
+
+    def check_success(self):
+        return self._seed not in self.unsolved
+
+    def close_env(self):
+        pass
+
+
+@pytest.mark.parametrize("expert_check", [True, False])
+def test_online_shards_keep_official_seeds_and_replace_only_skipped_slots(
+    tmp_path: pathlib.Path, expert_check: bool
+) -> None:
+    """Sharded online walk: slot j runs st_seed + j, a skip moves only that slot by +stride."""
+    from loongforge.embodied.eval.orchestrator.planning import plan_robotwin
+    from loongforge.embodied.eval.orchestrator.runners import robotwin_runner
+
+    robotwin = tmp_path / "RoboTwin"
+    (robotwin / "script").mkdir(parents=True)
+    (robotwin / "script" / "eval_policy.py").write_text(_SLOT_SEED_LOOP, encoding="utf-8")
+    config: dict = {
+        "benchmark": {"name": "robotwin", "task_name": "adjust_bottle", "task_config": "demo_clean", "episodes_per_task": 100}
+    }
+    shards = plan_robotwin(config, 4)  # chunk 7, 15 blocks, stride 105
+
+    def run(unstable: set, unsolved: set = frozenset()) -> dict:
+        ran = {}
+        for shard in shards:
+            patch = shard["overrides"]["benchmark"]
+            args = argparse.Namespace(
+                worker_local_files=True, robotwin_path=str(robotwin),
+                output_dir=str(tmp_path / f"out_{patch['start_seed']}"), ckpt_setting="t",
+                step_limit_override=None, start_seed_override=None, test_num_override=None,
+                disable_expert_check=False, disable_eval_video_log=True,
+                seed_stride=patch["seed_stride"],
+            )
+            namespace: dict = {}
+            exec(robotwin_runner._worker_eval_script(args).read_text(encoding="utf-8"), namespace)
+            _SlotSeedEnv.Unstable = namespace["UnStableError"]
+            env = _SlotSeedEnv(unstable, set(unsolved))
+            namespace["eval_policy"](env, patch["start_seed"], patch["test_num"], {"render_freq": 0}, expert_check)
+            ran[patch["start_seed"]] = env.ran
+        return ran
+
+    clean = run(set())
+    assert clean[0] == [0, 1, 2, 3, 4, 5, 6]
+    assert sorted(s for seeds in clean.values() for s in seeds) == list(range(100))
+
+    # seed 3 unstable, and its first replacement (108) too: only slot 3 moves.
+    # Without the expert pass the expert verdict is not consulted, so 50 stays.
+    stale = run({3, 108, 11}, unsolved={50} if expert_check else set())
+    assert stale[0] == [0, 1, 2, 213, 4, 5, 6]
+    assert stale[7] == [7, 8, 9, 10, 116, 12, 13]
+    every = [s for seeds in stale.values() for s in seeds]
+    assert len(every) == len(set(every)) == 100
+    replaced = {3, 11, 50} if expert_check else {3, 11}
+    assert set(range(100)) - set(every) == replaced
 
 def test_crashed_run_without_result_is_not_a_fake_episode() -> None:
     """An official crash before any episode must not become a 100-step failure row."""

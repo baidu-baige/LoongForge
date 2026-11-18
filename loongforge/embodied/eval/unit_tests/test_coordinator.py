@@ -83,7 +83,7 @@ def test_run_retries_a_failed_unit_once(monkeypatch: Any, tmp_path: Any) -> None
 
     launches: dict[int, int] = {}
 
-    def fake_launch(config: Any, shard: Any, index: int, url: str, output_dir: Any, tmp: Any) -> _FakeProc:
+    def fake_launch(config: Any, shard: Any, index: int, url: str, output_dir: Any, tmp: Any, **kwargs: Any) -> _FakeProc:
         launches[index] = launches.get(index, 0) + 1
         return _FakeProc(1 if (index == 0 and launches[index] == 1) else 0)
 
@@ -653,7 +653,7 @@ def test_run_does_not_retry_a_unit_that_wrote_every_episode(monkeypatch: Any, tm
 
     launches: dict[int, int] = {}
 
-    def fake_launch(config: Any, shard: Any, index: int, url: str, output_dir: Any, tmp: Any) -> _FakeProc:
+    def fake_launch(config: Any, shard: Any, index: int, url: str, output_dir: Any, tmp: Any, **kwargs: Any) -> _FakeProc:
         launches[index] = launches.get(index, 0) + 1
         worker = Path(output_dir) / f"worker_{index}"
         worker.mkdir(parents=True, exist_ok=True)
@@ -849,7 +849,7 @@ def test_run_does_not_retry_a_unit_that_gave_up(monkeypatch: Any, tmp_path: Any)
 
     launches: dict[int, int] = {}
 
-    def fake_launch(config: Any, shard: Any, index: int, url: str, output_dir: Any, tmp: Any) -> _FakeProc:
+    def fake_launch(config: Any, shard: Any, index: int, url: str, output_dir: Any, tmp: Any, **kwargs: Any) -> _FakeProc:
         launches[index] = launches.get(index, 0) + 1
         return _FakeProc(coord.GAVE_UP_RETURNCODE)
 
@@ -869,3 +869,27 @@ def test_run_does_not_retry_a_unit_that_gave_up(monkeypatch: Any, tmp_path: Any)
     assert launches[0] == 1  # gave up -> no blind re-launch
     assert result["failed_units"] == [0, 1]
 
+
+
+def test_launch_unit_pins_the_cpu_sim_render_gpu(monkeypatch: Any, tmp_path: Any) -> None:
+    """CPU-sim workers render on one GPU instead of all piling onto device 0."""
+    from loongforge.embodied.eval.orchestrator import coordinator as coord
+
+    captured: dict = {}
+
+    def fake_popen(args: Any, **kwargs: Any) -> _FakeProc:
+        captured["args"] = args
+        captured["env"] = kwargs.get("env")
+        return _FakeProc(0)
+
+    monkeypatch.setattr(coord.subprocess, "Popen", fake_popen)
+    config = {"benchmark": {"name": "libero", "suite": "libero_10"}, "run": {"output_dir": str(tmp_path)}}
+    shard = {"id": "x", "overrides": {"benchmark": {"suite": "libero_10", "episodes_per_task": 1}}, "expected": 1}
+
+    coord._launch_unit(config, shard, 0, None, tmp_path, tmp_path, sim_gpu=3)
+    assert captured["env"]["CUDA_VISIBLE_DEVICES"] == "3"
+    assert captured["env"]["MUJOCO_EGL_DEVICE_ID"] == "3"
+
+    captured.clear()
+    coord._launch_unit(config, shard, 0, None, tmp_path, tmp_path)
+    assert captured["env"] is None

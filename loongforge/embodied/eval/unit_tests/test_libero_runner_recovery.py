@@ -21,6 +21,9 @@ def test_other_failures_keep_their_classification() -> None:
     assert _classify_exception(ConnectionRefusedError()) == "server_unreachable"
     assert _classify_exception(TimeoutError()) == "policy_timeout"
     assert _classify_exception(ValueError("boom")) == "episode_error"
+    # A missing scene snapshot is a local config error, not a dead server: it must
+    # not route through the client rebuild / model reload path.
+    assert _classify_exception(FileNotFoundError("snapshot.pkl")) == "episode_error"
 
 
 def test_camera_sensors_are_swapped_only_while_disabled() -> None:

@@ -188,6 +188,43 @@ def _write_worker_eval_step_limit(args: argparse.Namespace) -> Optional[pathlib.
     return worker_step_limit
 
 
+def _patch_online_slot_seeds(text: str, seed_stride: int) -> str:
+    """Derive each slot's seed from its index so a skip replaces only that slot.
+
+    The official loop walks one ``now_seed`` with ``+= 1``. Slot ``j`` of a
+    sharded unit instead runs ``st_seed + j + r * seed_stride``, where ``r``
+    counts the skips of that slot: skip branches (the ``now_seed += 1`` lines
+    followed by ``continue``) bump ``r``, and the loop-tail advance is left to the
+    loop head. ``succ_seed`` stays at ``j`` across a skip in both flows -- the
+    expert branch increments it only after admission, and the policy-phase
+    ``UnStableError`` handler undoes its increment.
+    """
+    loop_anchor = "    while succ_seed < test_num:\n"
+    if loop_anchor not in text:
+        raise ValueError("seed_stride: eval loop anchor not found in worker script")
+    text = text.replace(
+        loop_anchor,
+        "    _vla_slot, _vla_round = -1, 0\n"
+        + loop_anchor
+        + "        if succ_seed != _vla_slot:\n"
+        "            _vla_slot, _vla_round = succ_seed, 0\n"
+        f"        now_seed = st_seed + succ_seed + _vla_round * {int(seed_stride)}\n",
+        1,
+    )
+    lines = text.split("\n")
+    skips = 0
+    for i, line in enumerate(lines):
+        if line.strip() != "now_seed += 1":
+            continue
+        indent = line[: len(line) - len(line.lstrip())]
+        if any(t == indent + "continue" for t in lines[i + 1 : i + 4]):
+            lines[i] = indent + "_vla_round += 1"
+            skips += 1
+    if not skips:
+        raise ValueError("seed_stride: no skip-branch `now_seed += 1` found in worker script")
+    return "\n".join(lines)
+
+
 def _worker_eval_script(args: argparse.Namespace) -> Optional[pathlib.Path]:
     """Run _worker_eval_script."""
     if not args.worker_local_files:
@@ -676,14 +713,22 @@ def _worker_eval_script(args: argparse.Namespace) -> Optional[pathlib.Path]:
                 text = text.replace(loop_anchor, loop_new, 1)
             else:
                 raise ValueError("offline_expert_check: eval loop anchor not found in worker script")
-    # Advance by a full round of shard blocks, not by one seed: neighbouring
-    # shards own adjacent ranges, so +1 would run another shard's seed. This must
-    # run *after* the offline-expert-check patches: the consume handler anchors on
-    # the wrapper's `now_seed += 1`, and rewriting that line first silently
-    # prevented the handler from being injected at all.
+    # This must run *after* the offline-expert-check patches: the consume handler
+    # anchors on the wrapper's `now_seed += 1`, and rewriting that line first
+    # silently prevented the handler from being injected at all.
     seed_stride = int(getattr(args, "seed_stride", 1) or 1)
-    if seed_stride != 1:
+    if seed_stride != 1 and scan_dir:
+        # A scan shard walks its own residue class (start+i, stride=k): every
+        # advance, skip or not, moves by k.
         text = text.replace("now_seed += 1", f"now_seed += {seed_stride}")
+    elif seed_stride != 1 and not cache_dir:
+        # Online sharded walk: the unit owns the contiguous block
+        # [st_seed, st_seed + test_num). Slot j runs st_seed + j; only a skipped
+        # (unstable / expert-unsolved) slot is replaced, by the same position one
+        # full round of blocks later (+stride), so the other slots keep the
+        # official seeds and no two units collide. Consume mode reads the seed
+        # from the cache at the loop head and needs none of this.
+        text = _patch_online_slot_seeds(text, seed_stride)
     # Without the expert pre-pass the official loop never calls play_once(), and a
     # few tasks initialise check_success() state (arm_tag / origin_z) there. Seed
     # it right after setup_demo instead of editing the RoboTwin source.

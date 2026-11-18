@@ -44,6 +44,12 @@ class GenericPredictActionPolicy:
         self._model = model
         self._dataset_stats = self._load_dataset_stats(dataset_statistics_path)
         self._chunk_cache: Dict[str, tuple[int, np.ndarray]] = {}
+        # ``reset`` runs on the RPC event loop while inference runs in an
+        # executor, so cache access needs its own lock. A generation counter
+        # drops a chunk whose inference started before the reset and would
+        # otherwise be written back afterwards.
+        self._cache_lock = threading.Lock()
+        self._cache_generation: Dict[str, int] = {}
         self._request_id_prefix = request_id_prefix
         # One model instance serves every sim client pinned to this server, and
         # the RPC server dispatches their requests from an executor. Models that
@@ -93,7 +99,9 @@ class GenericPredictActionPolicy:
 
     def reset(self, episode_id: str) -> Dict[str, Any]:
         """Reset action cache for an episode."""
-        self._chunk_cache.pop(episode_id, None)
+        with self._cache_lock:
+            self._chunk_cache.pop(episode_id, None)
+            self._cache_generation[episode_id] = self._cache_generation.get(episode_id, 0) + 1
         return {"episode_id": episode_id}
 
     def predict_action(
@@ -133,17 +141,27 @@ class GenericPredictActionPolicy:
         # exhausted. Caching server-side in that case would replay the *old*
         # chunk on the next request instead of running inference.
         use_cache = not (disable_action_cache or return_action_chunk)
-        cache_entry = self._chunk_cache.get(episode_id) if use_cache else None
+        with self._cache_lock:
+            generation = self._cache_generation.get(episode_id, 0)
+            cache_entry = self._chunk_cache.get(episode_id) if use_cache else None
         if cache_entry is not None:
             chunk_index, chunk = cache_entry
             chunk_index += 1
             if chunk_index < chunk.shape[0]:
-                self._chunk_cache[episode_id] = (chunk_index, chunk)
-                return {
-                    "actions": chunk if return_action_chunk else chunk[chunk_index : chunk_index + 1],
-                    "inference_latency_ms": None,
-                    "request_id": self._request_id(episode_id, episode_step),
-                }
+                stale = False
+                with self._cache_lock:
+                    if self._cache_generation.get(episode_id, 0) != generation:
+                        # A reset landed between the read and this advance; the
+                        # cached chunk belongs to the old episode.
+                        stale = True
+                    else:
+                        self._chunk_cache[episode_id] = (chunk_index, chunk)
+                if not stale:
+                    return {
+                        "actions": chunk if return_action_chunk else chunk[chunk_index : chunk_index + 1],
+                        "inference_latency_ms": None,
+                        "request_id": self._request_id(episode_id, episode_step),
+                    }
 
         start_time = time.perf_counter()
         episode_kwargs = {
@@ -162,7 +180,11 @@ class GenericPredictActionPolicy:
         )
         inference_latency_ms = (time.perf_counter() - start_time) * 1000.0
         if use_cache:
-            self._chunk_cache[episode_id] = (0, chunk)
+            with self._cache_lock:
+                # A reset that landed while this inference was in flight must not
+                # see the old episode's chunk resurrected here.
+                if self._cache_generation.get(episode_id, 0) == generation:
+                    self._chunk_cache[episode_id] = (0, chunk)
         return {
             "actions": chunk if return_action_chunk else chunk[0:1],
             "inference_latency_ms": inference_latency_ms,
@@ -178,7 +200,8 @@ class GenericPredictActionPolicy:
         """
         if payload.get("disable_action_cache") or payload.get("return_action_chunk"):
             return False
-        entry = self._chunk_cache.get(str(payload.get("episode_id", "default")))
+        with self._cache_lock:
+            entry = self._chunk_cache.get(str(payload.get("episode_id", "default")))
         return entry is not None and entry[0] + 1 < entry[1].shape[0]
 
     def predict_action_batch(self, payloads: list) -> list:
@@ -214,7 +237,12 @@ class GenericPredictActionPolicy:
         images = []
         instructions = []
         states = []
+        generations = []
         for payload in payloads:
+            with self._cache_lock:
+                generations.append(
+                    self._cache_generation.get(str(payload.get("episode_id", "default")), 0)
+                )
             payload_images = payload.get("images")
             payload_instructions = payload.get("instructions")
             if not isinstance(payload_images, (list, tuple)) or not payload_images:
@@ -232,7 +260,15 @@ class GenericPredictActionPolicy:
                 instructions.append(payload_instructions[0])
             else:
                 raise ValueError("batched inference expects one instruction per payload")
-            states.append(np.asarray(payload.get("state"), dtype=np.float32).reshape(-1))
+            raw_state = payload.get("state")
+            # ``np.asarray(None)`` is a NaN scalar: keep the missing state
+            # explicit and let the sequential path handle it instead of feeding
+            # the model a NaN row.
+            states.append(
+                None if raw_state is None else np.asarray(raw_state, dtype=np.float32).reshape(-1)
+            )
+        if any(state is None for state in states) or len({state.shape for state in states}) != 1:
+            return [self.predict_action(**payload) for payload in payloads]
         state_batch = np.stack(states, axis=0)
 
         start = time.perf_counter()
@@ -267,10 +303,13 @@ class GenericPredictActionPolicy:
         actions = actions[..., :action_dim]
 
         responses = []
-        for payload, row in zip(payloads, actions):
+        for payload, row, generation in zip(payloads, actions, generations):
             episode_id = str(payload.get("episode_id", "default"))
             if not payload.get("disable_action_cache") and not payload.get("return_action_chunk"):
-                self._chunk_cache[episode_id] = (0, row)
+                with self._cache_lock:
+                    # Drop the write if the episode was reset while this batch ran.
+                    if self._cache_generation.get(episode_id, 0) == generation:
+                        self._chunk_cache[episode_id] = (0, row)
             responses.append(
                 {
                     "actions": row if payload.get("return_action_chunk") else row[0:1],

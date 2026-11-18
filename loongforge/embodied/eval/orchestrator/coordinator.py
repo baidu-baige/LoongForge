@@ -339,6 +339,7 @@ def _launch_unit(
     tmp: Path,
     gpu: int | None = None,
     pin_gpu: bool = False,
+    sim_gpu: int | None = None,
 ) -> subprocess.Popen:
     """Launch one unit as an ``orchestrator.run`` subprocess pointed at its server."""
     shard_cfg = _shard_config(
@@ -351,6 +352,13 @@ def _launch_unit(
     # assign a new worker index, so create the directory before the unit starts.
     (output_dir / f"worker_{index}").mkdir(parents=True, exist_ok=True)
     log = open(output_dir / f"worker_{index}.log", "a", buffering=1)
+    env = None
+    if sim_gpu is not None:
+        # CPU-sim families render with MuJoCo/EGL (LIBERO) on a GPU the policy
+        # server does not own; without a pin every worker lands on device 0.
+        env = dict(os.environ)
+        env["CUDA_VISIBLE_DEVICES"] = str(sim_gpu)
+        env["MUJOCO_EGL_DEVICE_ID"] = str(sim_gpu)
     return subprocess.Popen(
         [sys.executable, "-m", "loongforge.embodied.eval.orchestrator.run", "--config", str(cfg_path)],
         stdout=log,
@@ -359,6 +367,7 @@ def _launch_unit(
         # subprocess, so killing only the wrapper (what a plain ``proc.kill()``
         # does) leaves the sim running for ever. ``_kill_tree`` signals the group.
         start_new_session=True,
+        env=env,
     )
 
 
@@ -771,7 +780,7 @@ def _run_batch(
                     config, shards[index], index, url, output_dir, tmp, gpu=gpu, pin_gpu=True
                 )
             else:
-                proc = _launch_unit(config, shards[index], index, url, output_dir, tmp)
+                proc = _launch_unit(config, shards[index], index, url, output_dir, tmp, sim_gpu=gpu)
             if on_launch is not None:
                 on_launch(proc)
             pool[proc] = (slot, index)
@@ -787,6 +796,9 @@ def _run_batch(
                 continue
             attempts[index] = attempts.get(index, 0) + 1
             if attempts[index] < MAX_ATTEMPTS:
+                # A re-queued unit reuses the same output dir; LIBERO/CALVIN's
+                # guard would refuse it unless we ask to resume the partial run.
+                shards[index].setdefault("overrides", {}).setdefault("run", {})["resume"] = True
                 pending.append(index)  # re-queue once; a fresh unit may just be a flaky sim
             else:
                 failures.append(index)

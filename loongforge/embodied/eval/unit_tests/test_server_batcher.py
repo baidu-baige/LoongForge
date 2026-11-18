@@ -234,3 +234,52 @@ def test_concurrent_requests_never_enter_the_model_together() -> None:
         list(pool.map(lambda index: policy.predict_action(**_policy_payload(index)), range(8)))
 
     assert model.max_active == 1
+
+
+def test_batch_without_state_falls_back_to_sequential() -> None:
+    """`np.asarray(None)` is a NaN row; a missing state must not enter a batch."""
+    model = _BatchModel()
+    policy = _batch_policy(model)
+
+    responses = policy.predict_action_batch([
+        _policy_payload(0, state=None),
+        _policy_payload(1, state=None),
+    ])
+
+    assert model.calls == 2  # sequential path, one model call per payload
+    assert len(responses) == 2
+    assert [response["actions"].shape for response in responses] == [(1, 7), (1, 7)]
+
+
+class _BlockingModel(_BatchModel):
+    """Holds the inference open so a reset can land in the middle of it."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.started = threading.Event()
+        self.release = threading.Event()
+
+    def predict_action(self, images, instructions, state=None, dataset_stats=None, seeds=None):
+        self.started.set()
+        self.release.wait(timeout=5)
+        return super().predict_action(images, instructions, state, dataset_stats, seeds)
+
+
+def test_reset_during_inference_drops_the_stale_chunk() -> None:
+    """A chunk whose episode was reset mid-flight must not be cached."""
+    model = _BlockingModel()
+    policy = _batch_policy(model)
+    done = {}
+
+    def run() -> None:
+        done["responses"] = policy.predict_action_batch([_policy_payload(0)])
+
+    worker = threading.Thread(target=run)
+    worker.start()
+    assert model.started.wait(timeout=5)
+    policy.reset("episode-0")
+    model.release.set()
+    worker.join(timeout=5)
+
+    assert len(done["responses"]) == 1
+    assert policy.has_cached_action({"episode_id": "episode-0"}) is False
