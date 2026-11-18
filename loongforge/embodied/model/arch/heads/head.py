@@ -1,13 +1,14 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""L4 输出头协议 ``OutputHead``（Lane C）。
+"""L4 output head protocol ``OutputHead`` (Lane C).
 
-签名以 ``docs/design/mot_layer_interfaces.zh-CN.md`` §5.6 为准。
+The signature follows ``docs/design/mot_layer_interfaces.zh-CN.md`` §5.6.
 
-头是 ``nn.Module``（它有参数），但引擎看不见它 —— 头在
-``WorldModel.forward`` 第⑥步被调用，输入是 ``HiddenStateRef.resolve``
-取出来的张量。头与流的解耦就是这一条：**头不参与联合注意力**。
+A head is an ``nn.Module`` (it owns parameters), but the engine never sees it:
+heads are called in step 6 of ``WorldModel.forward``, with the tensor pulled out
+by ``HiddenStateRef.resolve`` as input. That is exactly how heads and streams
+stay decoupled: **a head does not take part in the joint attention**.
 """
 
 from __future__ import annotations
@@ -21,24 +22,35 @@ __all__ = ["OutputHead"]
 
 
 class OutputHead(Protocol):
-    """一个输出头。两个方法：算输出、声明输出宽度。
+    """One output head. Two members: compute the output, declare its width.
 
-    ``forward`` 的 ``conditions`` 是只读映射，给需要条件的头
-    （动作头常要 state / proprio）。不需要的头忽略它即可 ——
-    空字典是常态，不需要分支。
+    ``forward``'s ``conditions`` is a read-only mapping, there for heads that
+    need conditions (action heads usually want state / proprio). Heads that do
+    not need it can just ignore it: an empty mapping is the normal case, so no
+    branching is required.
     """
 
     def forward(self, hidden: Tensor, *,
                 timestep: Tensor | None = None,
                 conditions: Mapping[str, Any] | None = None) -> Tensor:
-        """隐状态 → 输出。
+        """Map a hidden state to an output.
 
-        ``timestep`` 非 None 仅当头自己带调制（动作头的两槽调制，
-        见 ``streams.spec.HEAD_SLOTS``）。
+        Args:
+            hidden: Hidden state taken from the source stream.
+            timestep: Non-None only when the head modulates on its own (the
+                action head's two-slot modulation, see
+                ``streams.spec.HEAD_SLOTS``).
+            conditions: Read-only condition mapping; heads may ignore it.
+
+        Returns:
+            The head's output tensor.
         """
         ...
 
     @property
     def output_width(self) -> int:
-        """输出最后一维的宽度。构造期常量，V8 用它与 ``HeadSpec`` 对账。"""
+        """Width of the output's last dimension.
+
+        A construction-time constant; V8 reconciles it against ``HeadSpec``.
+        """
         ...

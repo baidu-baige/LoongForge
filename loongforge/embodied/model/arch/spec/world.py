@@ -1,24 +1,32 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""``WorldModelSpec`` 与九条构造期校验 V1–V9，以及 ``build_world_model``。
+"""``WorldModelSpec``, its construction-time checks, and ``build_world_model``.
 
-签名以 ``docs/design/mot_spec_config.zh-CN.md`` §3.2 / §3.8 为准。
+Signatures follow ``docs/design/mot_spec_config.zh-CN.md`` §3.2 / §3.8.
 
-本文件是整条配置链路的收口：一个 ``WorldModelSpec`` 构造成功，
-就意味着 V1–V9 全过，``WorldModel.__init__`` 不需要再校验任何形状。
+The nine checks are grouped by the layer they belong to, one method per layer:
+``_validate_visibility_layer`` (L1), ``_validate_stream_layer`` (L2),
+``_validate_diffusion_layer`` (L3) and ``_validate_head_layer`` (L4). L0
+(geometry and layout) has nothing to check here, so it has no method.
 
-**全部校验抛 ``ValueError``，一个 ``assert`` 都没有** ——
-``python -O`` 会删掉 assert，而这些校验恰恰是生产环境最需要的那些。
+This file closes the config chain: once a ``WorldModelSpec`` is constructed
+successfully, every layer check has passed and ``WorldModel.__init__`` no
+longer has to validate any shape.
+
+**Every check raises ``ValueError``; there is not a single ``assert``.**
+``python -O`` strips asserts, and these checks are exactly the ones production
+needs most.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import Any
 
+from ..diffusion.loss import LossSpec, WeightRamp
 from ..diffusion.spec import DiffusionSpec
 from ..geometry import GeometrySpec
 from ..heads.spec import HeadSpec
@@ -31,16 +39,41 @@ from .core import get_provider
 __all__ = ["WorldModelSpec", "build_world_model"]
 
 _KNOWN_BACKENDS = frozenset({"dense", "flex", "sdpa", "flash"})
-"""已知注意力后端。V9 在 ``CompiledMask.supports`` 交付前按这一条校验。"""
+"""Known attention backends.
+
+``_validate_visibility_layer`` validates against this set until
+``CompiledMask.supports`` ships (Lane A, milestone S4).
+"""
 
 
 @dataclass(frozen=True)
 class WorldModelSpec:
-    """一个世界模型的完整声明。provider 的返回类型，``WorldModel`` 的唯一输入。
+    """Complete declaration of one world model.
 
-    ``groups`` 是**注意力组的元组**而不是一个流列表：EWAM 的 VL 流与
-    视频流不在同一张联合注意力里，这件事必须在类型里可见。
-    单体模型 ⇒ 一个组、组里一条流（N=1 退化，不是特例）。
+    The return type of a provider and the only input of ``WorldModel``.
+
+    ``groups`` is a **tuple of attention groups**, not a flat list of streams:
+    in EWAM the VL stream and the video stream do not share one joint
+    attention, and that fact has to be visible in the type. A monolithic model
+    is one group holding one stream (N=1 degenerates, it is not a special
+    case).
+
+    Attributes:
+        model_type: Provider registry key for this model.
+        geometry: Token geometry shared by all streams.
+        groups: Attention groups; each group is one joint attention.
+        diffusion: Timestep schedule and loss table.
+        heads: Output head declarations.
+        conditions: Condition declarations (channel concat, cross-attention,
+            append-to-slot).
+        visibility: Keyed by **stream name**, the visibility on that stream's
+            query side. A missing key means fully bidirectional
+            (``structural=None``), which is what monolithic models and the
+            existing motus code do.
+        attention_backend: Concrete backend resolved from YAML; ``"auto"`` is
+            rejected by the L1 check.
+        attention_block_size: Only meaningful for ``backend="flex"``; it must
+            equal the ``Scenario.block_size`` used during negotiation.
     """
 
     model_type: str
@@ -50,29 +83,30 @@ class WorldModelSpec:
     heads: tuple[HeadSpec, ...] = ()
     conditions: tuple[ConditionSpec, ...] = ()
     visibility: Mapping[str, Visibility] = field(default_factory=dict)
-    # 键是**流名**，值是该流 query 侧的可见性。缺键 ⇒ 全双向
-    # （structural=None，单体模型与存量 motus 的常态）
-    attention_backend: str = "dense"    # [YAML] 解析后的具体后端，不接受 "auto"
+    # Keyed by **stream name**; value is that stream's query-side visibility.
+    # Missing key => fully bidirectional (structural=None).
+    attention_backend: str = "dense"    # [YAML] resolved backend, not "auto"
     attention_block_size: int | None = None
-    # 仅 backend="flex" 有意义；它必须与协商时 Scenario.block_size 同值
+    # Only meaningful for backend="flex"; must match Scenario.block_size.
 
     def __post_init__(self) -> None:
-        self._v1_stream_names()
-        self._v2_groups()
-        self._v3_joint_widths()
-        self._v4_routes()
-        self._v5_v6_diffusion()
-        self._v7_conditions()
-        self._v8_heads()
-        self._v9_backend()
+        self._validate_stream_layer()
+        self._validate_diffusion_layer()
+        self._validate_head_layer()
+        self._validate_visibility_layer()
         object.__setattr__(self, "visibility",
                            MappingProxyType(dict(self.visibility)))
 
-    # ---- 查询 ----
+    # ---- queries ----
 
     @property
     def streams(self) -> tuple[StreamSpec, ...]:
-        """全部流，按组序 + 组内序。顺序稳定，供 optimizer 分组使用。"""
+        """All streams, ordered by group then by position inside the group.
+
+        Returns:
+            A stable ordering, which is what optimizer parameter grouping
+            relies on.
+        """
         return tuple(spec for group in self.groups for spec in group.members)
 
     @property
@@ -84,18 +118,32 @@ class WorldModelSpec:
             if spec.name == name:
                 return spec
         raise KeyError(
-            f"模型 {self.model_type!r} 没有流 {name!r}；"
-            f"有的是 {list(self.stream_names)}"
+            f"model {self.model_type!r} has no stream {name!r}; "
+            f"it has {list(self.stream_names)}"
         )
 
     def group_of(self, stream: str) -> AttentionGroup:
-        """这条流在哪个注意力组里。跨组的流不存在（V1 保证流名全局唯一）。"""
+        """Find the attention group holding ``stream``.
+
+        A stream never spans two groups: ``_check_stream_identity`` makes
+        stream names globally unique.
+
+        Args:
+            stream: Stream name.
+
+        Returns:
+            The group whose members include ``stream``.
+
+        Raises:
+            KeyError: No stream by that name; the message lists the existing
+                names.
+        """
         for group in self.groups:
             if stream in group.stream_names:
                 return group
         raise KeyError(
-            f"模型 {self.model_type!r} 没有流 {stream!r}；"
-            f"有的是 {list(self.stream_names)}"
+            f"model {self.model_type!r} has no stream {stream!r}; "
+            f"it has {list(self.stream_names)}"
         )
 
     def head(self, name: str) -> HeadSpec:
@@ -103,12 +151,46 @@ class WorldModelSpec:
             if spec.name == name:
                 return spec
         raise KeyError(
-            f"模型 {self.model_type!r} 没有输出头 {name!r}；"
-            f"有的是 {[h.name for h in self.heads]}"
+            f"model {self.model_type!r} has no output head {name!r}; "
+            f"it has {[h.name for h in self.heads]}"
+        )
+
+    def condition(self, name: str) -> ConditionSpec:
+        """Look up one condition declaration by name.
+
+        The consumers (a stream module building its cross-attention condition
+        projector, an input convolution counting channels) need
+        ``ConditionSpec.width``, and the condition table is held only by this
+        class. Letting stream modules scan ``conditions`` themselves would
+        give the "slot name -> width" mapping a second implementation.
+
+        Args:
+            name: Condition name.
+
+        Returns:
+            The matching ``ConditionSpec``.
+
+        Raises:
+            KeyError: No condition by that name; the message lists the
+                existing names.
+        """
+        for spec in self.conditions:
+            if spec.name == name:
+                return spec
+        raise KeyError(
+            f"model {self.model_type!r} has no condition {name!r}; "
+            f"it has {[c.name for c in self.conditions]}"
         )
 
     def captures(self) -> dict[str, tuple[int, ...]]:
-        """由头表推出的引擎抓取请求（I3 请求侧）。声明 → 请求，只推一次。"""
+        """Derive the engine's capture requests from the head table.
+
+        This is the request side of interface I3: declaration to request,
+        derived in exactly one place.
+
+        Returns:
+            ``{stream_name: (joint_layer_id, ...)}`` with layer ids sorted.
+        """
         wanted: dict[str, set[int]] = {}
         for spec in self.heads:
             key = spec.capture_key
@@ -117,63 +199,169 @@ class WorldModelSpec:
         return {stream: tuple(sorted(layers))
                 for stream, layers in wanted.items()}
 
-    # ---- V1–V9。全部 ValueError，一个 assert 都没有 ----
+    def appended_to(self, slot: str, stream: str) -> tuple[str, ...]:
+        """Condition names appended to slot ``slot`` for stream ``stream``.
 
-    def _v1_stream_names(self) -> None:
-        """V1：流名非空、全局唯一。
+        The order is the **declaration order** written by the provider, which
+        is also the concatenation order along the token axis. It therefore
+        needs a single source: relying on lexicographic order or on dict
+        insertion order shows up as "renaming a condition moved the KV that
+        attention reads" while every shape stays identical.
 
-        全局唯一而不是组内唯一：流名同时是 ``TokenLayout`` 的标签值、
-        capture hook 的键、optimizer 分组的键。三处共用一个名字空间。
+        Entries with ``enabled=False`` are skipped. That is the opposite of
+        ``concat_channels``: here turning one off really removes a token, and
+        a cross-attention KV length is data-dependent anyway, so it enters no
+        weight shape.
+
+        Args:
+            slot: Host cross-attention slot name.
+            stream: Target stream name.
+
+        Returns:
+            The appended condition names in declaration order.
+
+        Raises:
+            KeyError: ``stream`` is not a stream of this model.
+        """
+        self.stream(stream)
+        return tuple(
+            cond.name for cond in self.conditions
+            if cond.kind is InjectionKind.APPEND_TO_SLOT
+            and cond.enabled and cond.append_to == slot
+            and stream in cond.targets
+        )
+
+    def concat_channels(self, stream: str) -> int:
+        """Sum of condition channels concatenated onto ``stream``'s channels.
+
+        This is where the existing ``in_dim=36`` comes from:
+        ``wan_video_dit.py:484`` does ``torch.cat([x, y], dim=1)`` where ``y``
+        is itself ``torch.cat([mask, y], dim=1)`` at ``:418``. So
+        36 = 16 stream channels + 4 mask + 16 condition-frame latent. It is a
+        **derived quantity** and does not deserve a field.
+
+        It lives on ``WorldModelSpec`` rather than ``StreamSpec`` because the
+        sum needs the stream name and the condition table at the same time,
+        and only this class holds both. Conditions with ``enabled=False``
+        still count: turning a condition off changes its value, not the shape
+        of the input convolution. If it could change the shape, one YAML
+        switch would make the same checkpoint fail to load.
+
+        Args:
+            stream: Target stream name.
+
+        Returns:
+            Total extra channel count, 0 when nothing concatenates.
+
+        Raises:
+            KeyError: ``stream`` is not a stream of this model.
+        """
+        self.stream(stream)             # raises and lists the existing names
+        return sum(
+            condition.width or 0
+            for condition in self.conditions
+            if condition.kind is InjectionKind.CHANNEL_CONCAT
+            and stream in condition.targets
+        )
+
+    # ---- Per-layer checks. All raise ValueError; not a single assert ----
+    # Message tags read (L<layer>/V<check>), so an error still points back at
+    # the numbered check in the design doc.
+
+    def _validate_stream_layer(self) -> None:
+        """L2: stream identity, groups, joint widths, routes and conditions."""
+        self._check_stream_identity()
+        self._check_layer_mapping()
+        self._check_joint_head_dim()
+        self._check_kv_routes()
+        self._check_condition_slots()
+        self._check_appended_slots()
+
+    def _check_stream_identity(self) -> None:
+        """Stream names are non-empty and globally unique.
+
+        Globally unique rather than unique within a group: a stream name is
+        at the same time a ``TokenLayout`` label value, a capture hook key,
+        and an optimizer grouping key. Those three share one namespace.
+
+        Raises:
+            ValueError: ``groups`` is empty, a name is the empty string, or
+                two streams share a name.
         """
         if not self.groups:
             raise ValueError(
-                f"WorldModelSpec({self.model_type!r}).groups 不得为空（V1）"
+                f"WorldModelSpec({self.model_type!r}).groups must not be "
+                f"empty (L2/V1)"
             )
         names = [spec.name for spec in self.streams]
         if any(not name for name in names):
-            raise ValueError(f"流名不得为空字符串（V1）：{names}")
+            raise ValueError(
+                f"stream names must not be the empty string (L2/V1): {names}"
+            )
         duplicates = sorted({name for name in names if names.count(name) > 1})
         if duplicates:
             raise ValueError(
-                f"流名必须全局唯一（V1），重复的是 {duplicates}。"
-                "流名同时是布局标签值、capture 键与 optimizer 分组键"
+                f"stream names must be globally unique (L2/V1), duplicates "
+                f"are {duplicates}. A stream name is at once a layout label "
+                "value, a capture key and an optimizer grouping key"
             )
 
-    def _v2_groups(self) -> None:
-        """V2：每条流的层对应在其组的联合层数下可解析。
+    def _check_layer_mapping(self) -> None:
+        """Every stream's layer mapping resolves under its group's depth.
 
-        ``resolve_layer_index_map`` 自带「解析出的参与层数 == num_layers」
-        这条断言，所以这里只要调一遍就等于把 STRIDED / AT_LAYERS 的
-        边界条件全查了。
+        ``resolve_layer_index_map`` already asserts that the number of
+        resolved participating layers equals the stream's ``num_layers``, so
+        calling it once per stream covers the boundary conditions of the
+        STRIDED and AT_LAYERS mapping modes.
+
+        Raises:
+            ValueError: A stream's layer mapping cannot be resolved against
+                its group's joint layer count.
         """
         for group in self.groups:
             for spec in group.members:
                 spec.resolve_layer_index_map(group.num_layers)
 
-    def _v3_joint_widths(self) -> None:
-        """V3：联合成员的 head_dim 相等；``num_heads`` 与 residual_width 可以不等。
+    def _check_joint_head_dim(self) -> None:
+        """Joint members share one ``head_dim``.
 
-        ``AttentionGroup.__post_init__`` 已查过本条，这里重查是**刻意的**：
-        provider 可以手搓 ``AttentionGroup``，但也可以从别处拿到一个；
-        在 spec 层再查一次让错误消息带上 model_type。
+        ``num_heads`` and the residual width may differ between members; only
+        ``head_dim`` has to match, because the members' queries and keys meet
+        in one attention.
+
+        ``AttentionGroup.__post_init__`` checks this already. Re-checking here
+        is **deliberate**: a provider may hand-build an ``AttentionGroup`` or
+        receive one from elsewhere, and checking again at the spec layer puts
+        ``model_type`` in the error message.
+
+        Raises:
+            ValueError: Members of one group disagree on ``head_dim``.
         """
         for group in self.groups:
             head_dims = {spec.name: spec.head_dim for spec in group.members}
             if len(set(head_dims.values())) != 1:
                 raise ValueError(
-                    f"模型 {self.model_type!r} 的注意力组 "
-                    f"{list(group.stream_names)} 内 head_dim 不等（V3）："
-                    f"{head_dims}"
+                    f"model {self.model_type!r}: attention group "
+                    f"{list(group.stream_names)} has unequal head_dim "
+                    f"(L2/V3): {head_dims}"
                 )
 
-    def _v4_routes(self) -> None:
-        """V4：KV 路由的端点在**同一组**内，且两侧层号都落在各自流的局部层范围里。
+    def _check_kv_routes(self) -> None:
+        """KV route endpoints are in one group with in-range layer ids.
 
-        跨组路由被拒：两个组各有自己的联合注意力，跨组取 KV 等于
-        把两张注意力耦合起来，而可见性（L1）看不到这件事。
-        ``AttentionGroup.__post_init__`` 已查过端点归属，这里重查层号两侧 ——
-        路由的层号是**局部**层号（``KVRoute`` 的约定），
-        与联合层号混用是这一处最容易犯的错。
+        Cross-group routing is rejected: each group owns its own joint
+        attention, so taking KV across groups couples two attentions in a way
+        that visibility (L1) cannot see.
+
+        ``AttentionGroup.__post_init__`` already checks that both endpoints
+        belong to the group; what is re-checked here are the layer ids on both
+        sides. Route layer ids are **local** to each stream (the ``KVRoute``
+        convention), and mixing them up with joint layer ids is the easiest
+        mistake to make here.
+
+        Raises:
+            ValueError: A ``src_layers`` or ``dst_layers`` entry is >= that
+                stream's ``num_layers``.
         """
         for group in self.groups:
             for route in group.routes:
@@ -186,43 +374,38 @@ class WorldModelSpec:
                            if layer >= spec.num_layers]
                     if bad:
                         raise ValueError(
-                            f"KVRoute({route.src!r} → {route.dst!r}).{side} 含 "
-                            f"{bad}，超出流 {spec.name!r} 的 num_layers="
-                            f"{spec.num_layers}（V4）"
+                            f"KVRoute({route.src!r} → {route.dst!r}).{side} "
+                            f"contains {bad}, out of range for stream "
+                            f"{spec.name!r} with num_layers="
+                            f"{spec.num_layers} (L2/V4)"
                         )
 
-    def _v5_v6_diffusion(self) -> None:
-        """V5：timestep 配置与 ``needs_timestep`` 一一对应。
-        V6：每条 loss 的来源（流或头）确实存在。
+    def _check_condition_slots(self) -> None:
+        """Reconcile the condition table against each stream's slots.
 
-        V5 替掉的现状行为是「流里拿不到 timestep 就当成 0」——
-        那让一次忘配变成静默的无噪声训练，数值上看不出来。
-        """
-        self.diffusion.validate_against(self.streams)
-        head_names = {spec.name for spec in self.heads}
-        for loss in self.diffusion.losses:
-            if loss.head is not None and loss.head not in head_names:
-                raise ValueError(
-                    f"LossSpec({loss.name!r}).head={loss.head!r} 不是本模型的头；"
-                    f"本模型的头为 {sorted(head_names)}（V6）"
-                )
+        Both directions are checked:
 
-    def _v7_conditions(self) -> None:
-        """V7：条件声明与各流的 ``cross_kv_slots`` 双向对账。
+          - a condition's ``targets`` must be real stream names;
+          - a CROSS_ATTENTION condition's name must appear in the target
+            stream's ``cross_kv_slots``, and conversely every slot a stream
+            declares must be filled by some condition.
 
-        两个方向都查：
-          - 条件的 ``targets`` 必须是真实的流名；
-          - 走 CROSS_ATTENTION 的条件，其名字必须出现在目标流的
-            ``cross_kv_slots`` 里，反之目标流声明的每个槽都必须有条件填。
-        这一条是「第 N 个条件输入」与「第 N 个输出头」分家之后的对账点：
-        现状靠下标对齐，加一条条件会悄悄串到别的槽上。
+        This is the reconciliation point created by separating "the Nth
+        condition input" from "the Nth output head". The existing code aligns
+        them by index, so adding one condition silently shifts the rest onto
+        the wrong slots.
+
+        Raises:
+            ValueError: Duplicate condition names, a target naming a
+                non-existent stream, a declared slot with no condition, or a
+                condition injecting a slot the stream never declared.
         """
         known = set(self.stream_names)
         names = [spec.name for spec in self.conditions]
         duplicates = sorted({name for name in names if names.count(name) > 1})
         if duplicates:
             raise ValueError(
-                f"ConditionSpec 名字重复（V7）：{duplicates}"
+                f"duplicate ConditionSpec names (L2/V7): {duplicates}"
             )
         cross_by_stream: dict[str, set[str]] = {
             name: set() for name in known
@@ -231,8 +414,9 @@ class WorldModelSpec:
             missing = sorted(set(cond.targets) - known)
             if missing:
                 raise ValueError(
-                    f"ConditionSpec({cond.name!r}).targets 含不存在的流 "
-                    f"{missing}；本模型的流为 {sorted(known)}（V7）"
+                    f"ConditionSpec({cond.name!r}).targets names streams that "
+                    f"do not exist: {missing}; this model has "
+                    f"{sorted(known)} (L2/V7)"
                 )
             if cond.kind is InjectionKind.CROSS_ATTENTION and cond.enabled:
                 for target in cond.targets:
@@ -243,35 +427,135 @@ class WorldModelSpec:
             unfilled = sorted(declared - filled)
             if unfilled:
                 raise ValueError(
-                    f"流 {spec.name!r} 声明了 cross_kv_slots {unfilled}，"
-                    "但没有 CROSS_ATTENTION 条件注入到它们（V7）"
+                    f"stream {spec.name!r} declares cross_kv_slots "
+                    f"{unfilled}, but no CROSS_ATTENTION condition injects "
+                    "them (L2/V7)"
                 )
             unused = sorted(filled - declared)
             if unused:
                 raise ValueError(
-                    f"条件 {unused} 以 CROSS_ATTENTION 注入流 {spec.name!r}，"
-                    f"但该流的 cross_kv_slots={list(spec.cross_kv_slots)} "
-                    "里没有这些槽（V7）"
+                    f"conditions {unused} inject stream {spec.name!r} as "
+                    f"CROSS_ATTENTION, but its "
+                    f"cross_kv_slots={list(spec.cross_kv_slots)} "
+                    "does not contain those slots (L2/V7)"
                 )
 
-    def _v8_heads(self) -> None:
-        """V8：头名唯一；头吃的流存在；吃中间层时该层号在那条流的参与层里。
+    def _check_appended_slots(self) -> None:
+        """The four checks on ``APPEND_TO_SLOT``.
 
-        最后一条是现状最容易出错的地方：取中间层靠 hook，层号写在调用点，
-        而「这条流到底参不参与那一层」要读 ``layer_mapping`` 才知道。
-        在这里查完之后，``captures()`` 推出来的请求必然是可满足的。
+        This kind of condition creates no KV weights of its own; it rides on a
+        host slot. So what has to be checked is whether the ride exists and
+        whether there is room on it:
+
+          1. the host slot must be a real condition that uses
+             CROSS_ATTENTION. Appending onto a channel-concat condition is
+             meaningless, and the symptom would be a dimension mismatch in a
+             ``cat`` during forward;
+          2. the two ``width`` values must be equal, since both go through the
+             same condition projector;
+          3. ``targets`` must be a subset of the host's ``targets``, otherwise
+             some stream receives a span of context it has no projector for;
+          4. if the host is disabled, this condition must be disabled too:
+             with no host there is nowhere to append.
+
+        Raises:
+            ValueError: Any of the four checks fails.
+        """
+        by_name = {cond.name: cond for cond in self.conditions}
+        for cond in self.conditions:
+            if cond.kind is not InjectionKind.APPEND_TO_SLOT:
+                continue
+            host = by_name.get(str(cond.append_to))
+            if host is None:
+                raise ValueError(
+                    f"condition {cond.name!r} appends to slot "
+                    f"{cond.append_to!r}, but this model has no such "
+                    f"condition; it has {sorted(by_name)} (L2/V7)"
+                )
+            if host.kind is not InjectionKind.CROSS_ATTENTION:
+                raise ValueError(
+                    f"condition {cond.name!r} appends to {host.name!r}, whose "
+                    f"kind={host.kind.value!r}; only a CROSS_ATTENTION slot "
+                    "has a tail to append to (L2/V7)"
+                )
+            if cond.width != host.width:
+                raise ValueError(
+                    f"condition {cond.name!r} has width={cond.width} while "
+                    f"host slot {host.name!r} has width={host.width} "
+                    f"(L2/V7); "
+                    "both go through the same condition projector, so "
+                    "different widths cannot be concatenated"
+                )
+            outside = sorted(set(cond.targets) - set(host.targets))
+            if outside:
+                raise ValueError(
+                    f"condition {cond.name!r} injects streams {outside}, but "
+                    f"host slot {host.name!r} does not inject them (targets="
+                    f"{list(host.targets)}); those streams have no projector "
+                    "for that span of context (L2/V7)"
+                )
+            if cond.enabled and not host.enabled:
+                raise ValueError(
+                    f"condition {cond.name!r} is enabled, but its host slot "
+                    f"{host.name!r} is disabled; the append has nowhere to go "
+                    "(L2/V7)"
+                )
+
+    def _validate_diffusion_layer(self) -> None:
+        """L3: timestep wiring and loss sources.
+
+        V5: the timestep configuration matches each stream's
+        ``needs_timestep`` one-to-one. It replaces the existing behaviour of
+        treating a missing timestep in a stream as 0, which turns one
+        forgotten config line into silent noise-free training that looks fine
+        numerically.
+
+        V6: every loss term's source (a stream or a head) exists.
+
+        Raises:
+            ValueError: V5 fails inside ``DiffusionSpec.validate_against``, or
+                a ``LossSpec.head`` names a head this model does not have.
+        """
+        self.diffusion.validate_against(self.streams)
+        head_names = {spec.name for spec in self.heads}
+        for loss in self.diffusion.losses:
+            if loss.head is not None and loss.head not in head_names:
+                raise ValueError(
+                    f"LossSpec({loss.name!r}).head={loss.head!r} is not a "
+                    f"head of this model; its heads are "
+                    f"{sorted(head_names)} (L3/V6)"
+                )
+
+    def _validate_head_layer(self) -> None:
+        """L4: head names are unique and every head's source is reachable.
+
+        Three checks: unique head names, the source stream exists, and when a
+        head reads an intermediate layer, that joint layer id is one the
+        stream actually participates in.
+
+        The last one is the easiest to get wrong today: intermediate layers
+        are taken with a hook, the layer id is written at the call site, and
+        whether the stream participates in that layer can only be known by
+        reading ``layer_mapping``. Once this passes, the requests derived by
+        ``captures()`` are necessarily satisfiable.
+
+        Raises:
+            ValueError: Duplicate head names, an unknown ``source_stream``, or
+                a capture layer the stream does not participate in.
         """
         names = [spec.name for spec in self.heads]
         duplicates = sorted({name for name in names if names.count(name) > 1})
         if duplicates:
-            raise ValueError(f"输出头名字重复（V8）：{duplicates}")
+            raise ValueError(
+                f"duplicate output head names (L4/V8): {duplicates}"
+            )
         known = set(self.stream_names)
         for spec in self.heads:
             if spec.source_stream not in known:
                 raise ValueError(
-                    f"HeadSpec({spec.name!r}).source 指向流 "
-                    f"{spec.source_stream!r}，它不是本模型的流；"
-                    f"本模型的流为 {sorted(known)}（V8）"
+                    f"HeadSpec({spec.name!r}).source points at stream "
+                    f"{spec.source_stream!r}, which is not a stream of this "
+                    f"model; its streams are {sorted(known)} (L4/V8)"
                 )
             key = spec.capture_key
             if key is None:
@@ -281,83 +565,339 @@ class WorldModelSpec:
             index_map = group.layer_index_maps()[stream_name]
             if layer_id not in index_map:
                 raise ValueError(
-                    f"HeadSpec({spec.name!r}) 要抓流 {stream_name!r} 的联合层 "
-                    f"{layer_id}，但该流在这一层不参与联合注意力；"
-                    f"可抓的层为 {sorted(index_map)}（V8）"
+                    f"HeadSpec({spec.name!r}) captures joint layer "
+                    f"{layer_id} of stream {stream_name!r}, but that stream "
+                    f"does not take part in the joint attention at that "
+                    f"layer; capturable layers are {sorted(index_map)} "
+                    f"(L4/V8)"
                 )
 
-    def _v9_backend(self) -> None:
-        """V9：注意力后端已注册，且 ``flex`` 必须给 ``attention_block_size``。
+    def _validate_visibility_layer(self) -> None:
+        """L1: the backend is known, and ``flex`` carries a block size.
 
-        完整形态是 ``CompiledMask.supports(vis, scenario)`` 的三档协商
-        （训练 / 推理各协商一次）。它属 Lane A、S4 交付；在那之前
-        V9 退化成本方法这两条单项校验 —— 退化的是**严格度**，不是时机：
-        校验仍然发生在构造期，而不是跑到推理才 raise。
+        The full form of this check is the three-way negotiation
+        ``CompiledMask.supports(vis, scenario)``, run once for training and
+        once for inference. That belongs to Lane A and ships with S4. Until
+        then it degrades to the two single-field checks in this method. What
+        degrades is the **strictness**, not the timing: the check still happens
+        at construction time rather than raising once inference starts.
+
+        Raises:
+            ValueError: ``attention_backend`` is ``"auto"`` or unknown,
+                ``"flex"`` without a positive ``attention_block_size``, or a
+                block size given for a non-flex backend.
         """
         if self.attention_backend == "auto":
             raise ValueError(
-                f"模型 {self.model_type!r} 的 attention_backend 不接受 'auto'："
-                "build 期必须已解析成具体后端（V9）"
+                f"model {self.model_type!r}: attention_backend does not "
+                "accept 'auto'; it must already be resolved to a concrete "
+                "backend at build time (L1/V9)"
             )
         if self.attention_backend not in _KNOWN_BACKENDS:
             raise ValueError(
-                f"未知注意力后端 {self.attention_backend!r}；"
-                f"已知的是 {sorted(_KNOWN_BACKENDS)}（V9）"
+                f"unknown attention backend {self.attention_backend!r}; "
+                f"known ones are {sorted(_KNOWN_BACKENDS)} (L1/V9)"
             )
         if self.attention_backend == "flex":
             if self.attention_block_size is None \
                     or self.attention_block_size <= 0:
                 raise ValueError(
-                    "attention_backend='flex' 必须给出正的 attention_block_size"
-                    f"（V9），得到 {self.attention_block_size}。"
-                    "它必须与协商时 Scenario.block_size 同值 —— "
-                    "换值等于换一张 mask，而 BlockMask 会被 torch.compile 捕获"
+                    "attention_backend='flex' requires a positive "
+                    f"attention_block_size (L1/V9), got "
+                    f"{self.attention_block_size}. "
+                    "It must equal the Scenario.block_size used during "
+                    "negotiation: a different value is a different mask, and "
+                    "the BlockMask gets captured by torch.compile"
                 )
         elif self.attention_block_size is not None:
             raise ValueError(
-                f"attention_block_size 只在 backend='flex' 时有意义，"
-                f"当前 backend={self.attention_backend!r}（V9）"
+                f"attention_block_size is only meaningful when "
+                f"backend='flex'; current "
+                f"backend={self.attention_backend!r} (L1/V9)"
             )
 
 
-def build_world_model(config: Any, *,
-                      overrides: Mapping[str, Any] | None = None
-                      ) -> WorldModelSpec:
-    """配置 → ``WorldModelSpec``。四步**有序**，顺序不可换。
+_SECTION_KEYS: tuple[str, ...] = (
+    "geometry", "streams", "diffusion", "heads",
+    "attention_backend", "attention_block_size",
+)
+"""The config fields ``build_world_model`` reads, besides ``model_type``.
 
-    1. 从 ``config.model_type`` 取 provider（``get_provider``）。
-       模型身份的唯一出处是启动参数 ``--model-name``，它映射到一份配置，
-       配置里的 ``model_type`` 就是这里的键。
-    2. 调 provider 产出 ``WorldModelSpec``，拓扑与算法全在 provider 的
-       Python 代码里（R5：它们从不进 YAML）。
-    3. 施加 YAML 覆写 —— 只允许标 [YAML] 的那些字段。
-    4. 构造 ``WorldModelSpec``，此时 V1–V9 一次全跑（在 ``__post_init__`` 里）。
+Every arch model shares these; nothing here names a model or a topology (rule
+R5). A per-model config subclass adds only *provider keyword arguments* on top,
+which is what ``provider_kwargs()`` returns.
+"""
 
-    为什么覆写在 provider **之后**而不是之前：provider 要看到完整的拓扑
-    才能算出派生量（联合层数、各流 token 数）。先覆写会让 provider
-    对着半成品算。
+_HEAD_KNOBS: frozenset[str] = frozenset({"weight", "warmup_steps", "enabled"})
+"""Keys a YAML ``heads.<name>:`` block may carry.
 
-    为什么第 4 步的校验在 dataclass 的 ``__post_init__`` 而不是这里：
-    手搓 ``WorldModelSpec``（测试与 provider 自己）也必须过同一套校验。
-    校验写在 build 里就会被绕过。
+All three land on the ``LossSpec`` that consumes the head, never on the
+``HeadSpec``: weight ownership is defined in exactly one place, and a head that
+also carried a weight would let two numbers disagree silently (``WorldModel``
+has a matching check that a weight has a single owner).
+"""
+
+
+def _plain(value: Any) -> dict[str, Any]:
+    """Shallow-convert a config section to a plain ``dict``.
+
+    OmegaConf hands back ``DictConfig`` objects, which are ``MutableMapping``
+    but are not ``dict`` and resolve interpolations lazily. One level of
+    ``dict()`` per nesting level keeps the spec layer free of an OmegaConf
+    import while still accepting both plain dicts and ``DictConfig``.
+
+    Args:
+        value: A mapping section, or ``None`` / an empty mapping.
+
+    Returns:
+        A plain ``dict``; empty when ``value`` is falsy.
+
+    Raises:
+        TypeError: ``value`` is neither falsy nor a mapping.
+    """
+    if not value:
+        return {}
+    if not isinstance(value, Mapping):
+        raise TypeError(
+            f"a config section must be a mapping, got "
+            f"{type(value).__name__}; geometry / streams / diffusion / heads "
+            "are all key: value structures"
+        )
+    return dict(value)
+
+
+def _flatten_per_stream(section: str, body: dict[str, Any],
+                        into: dict[str, Any]) -> None:
+    """Flatten a ``<stream>: {<key>: value}`` section into provider kwargs.
+
+    The provider signature is flat (``video_num_layers=``, ``action_shift=``),
+    while the YAML is nested per stream. Flattening here rather than giving the
+    providers a nested parameter keeps one invariant worth having: a typo in a
+    YAML key becomes an unexpected keyword argument at the provider call, which
+    names both the model and the key.
+
+    Args:
+        section: Section name, used only in the collision message.
+        body: The already-plain section, ``{stream_name: {key: value}}``.
+        into: Accumulator for the provider keyword arguments; mutated in place.
+
+    Raises:
+        TypeError: A stream's body is not a mapping.
+        ValueError: Two sections produce the same keyword argument. That can
+            only happen when the same ``<stream>_<key>`` is written twice, and
+            silently keeping one of them would make half the YAML inert.
+    """
+    for stream_name, knobs in body.items():
+        if not isinstance(knobs, Mapping):
+            raise TypeError(
+                f"{section}.{stream_name} must be a mapping, "
+                f"got {type(knobs).__name__}"
+            )
+        for key, value in knobs.items():
+            name = f"{stream_name}_{key}"
+            if name in into:
+                raise ValueError(
+                    f"the config gives {name!r} two sources "
+                    f"({section}.{stream_name}.{key} and another section); "
+                    "a provider can only take one value"
+                )
+            into[name] = value
+
+
+def _reweight(loss: LossSpec, knobs: Mapping[str, Any]) -> LossSpec:
+    """Apply one ``heads.<name>:`` block to the ``LossSpec`` that consumes it.
+
+    ``weight`` and ``warmup_steps`` are two views of the same number, so they
+    are resolved together: with a warmup the effective weight lives in
+    ``WeightRamp.end_value`` and ``LossSpec.weight`` is ignored by
+    ``weight_at``, which is why writing only ``weight`` onto a ramped loss has
+    to move ``end_value`` rather than ``weight``.
+
+    Args:
+        loss: The term declared by the provider.
+        knobs: The YAML block, already plain.
+
+    Returns:
+        A new ``LossSpec``; ``loss`` itself when the block is empty.
+
+    Raises:
+        ValueError: The block carries a key outside ``_HEAD_KNOBS``.
+    """
+    stray = sorted(set(knobs) - _HEAD_KNOBS)
+    if stray:
+        raise ValueError(
+            f"heads.{loss.head} got unknown keys {stray}; "
+            f"the writable ones are {sorted(_HEAD_KNOBS)}"
+        )
+    ramp = loss.ramp
+    weight = float(knobs.get("weight",
+                             ramp.end_value if ramp else loss.weight))
+    warmup = int(knobs.get("warmup_steps", ramp.end_step if ramp else 0))
+    if warmup > 0:
+        ramp = WeightRamp(start_step=ramp.start_step if ramp else 0,
+                          end_step=warmup,
+                          start_value=ramp.start_value if ramp else 0.0,
+                          end_value=weight)
+    else:
+        ramp = None
+    out = replace(loss, weight=weight, ramp=ramp)
+    if "enabled" in knobs:
+        out = replace(out, enabled=bool(knobs["enabled"]))
+    return out
+
+
+def _apply_heads(spec: WorldModelSpec,
+                 heads: dict[str, Any]) -> WorldModelSpec:
+    """Rewrite the loss table from the ``heads:`` section.
+
+    This one override is safe *after* the provider has run, unlike the
+    geometry: no provider derives anything from a loss weight, so replacing the
+    table cannot leave a stale derived value behind.
+
+    Args:
+        spec: The provider's output.
+        heads: ``{head_name: {knob: value}}``, already plain.
+
+    Returns:
+        ``spec`` when the section is empty, otherwise a copy whose
+        ``diffusion.losses`` carries the new weights.
+
+    Raises:
+        ValueError: A head name matches no loss term. The message lists the
+            terms that do exist, because the usual cause is naming the head
+            (``video_flow``) where the loss happens to use another name.
+    """
+    if not heads:
+        return spec
+    known = {loss.head: loss.name for loss in spec.diffusion.losses
+             if loss.head is not None}
+    stray = sorted(set(heads) - set(known))
+    if stray:
+        raise ValueError(
+            f"{stray} in the heads section is consumed by no loss term; "
+            f"the current head to loss term mapping is {known}"
+        )
+    losses = tuple(
+        _reweight(loss, _plain(heads[loss.head]))
+        if loss.head in heads else loss
+        for loss in spec.diffusion.losses
+    )
+    return replace(spec, diffusion=replace(spec.diffusion, losses=losses))
+
+
+def _apply_backend(spec: WorldModelSpec, backend: str | None,
+                   block_size: int | None) -> WorldModelSpec:
+    """Swap the attention backend, keeping ``attention_block_size`` consistent.
+
+    The two fields are coupled by the L1 check: a block size is required
+    exactly when the backend is ``"flex"`` and rejected otherwise. Overriding
+    the backend alone would therefore fail in both directions, so the block
+    size is carried along here instead of being a second, independently
+    overridable knob.
+
+    Args:
+        spec: The provider's output.
+        backend: Target backend, or ``None`` to keep the provider's choice.
+        block_size: Block size for ``"flex"``. ``None`` reuses the provider's
+            value, which is what a YAML that only names the backend wants.
+
+    Returns:
+        ``spec`` unchanged when nothing is overridden.
+
+    Raises:
+        ValueError: Switching to ``"flex"`` with no block size available from
+            either the YAML or the provider.
+    """
+    if backend is None and block_size is None:
+        return spec
+    backend = backend or spec.attention_backend
+    if backend == "flex":
+        block_size = block_size or spec.attention_block_size
+        if not block_size:
+            raise ValueError(
+                "attention_backend='flex' needs an attention_block_size, "
+                "and neither the config nor the provider supplied one (L1/V9)"
+            )
+    else:
+        # A non-flex backend carrying a block size is rejected outright by the
+        # L1 check. Clear it here instead of raising, because "switch from
+        # flex to dense" should take one config line.
+        block_size = None
+    return replace(spec, attention_backend=backend,
+                   attention_block_size=block_size)
+
+
+def build_world_model(config: Any) -> WorldModelSpec:
+    """Turn one model config into a ``WorldModelSpec``.
+
+    The four steps are ordered and the order is load-bearing:
+
+    1. Look the provider up by ``config.model_type``. Model identity has a
+       single source — the ``--model-name`` launch argument, which selects the
+       config whose ``model_type`` is this key. No YAML line says "this is
+       VPP2" beyond that one field.
+    2. Translate the config sections into **keyword arguments**: ``geometry:``
+       stays a mapping, ``streams:`` and ``diffusion:`` are flattened to
+       ``<stream>_<key>``, and the per-model subclass fields are passed by
+       name. The config object itself never reaches a provider (rule R5): a
+       provider that could read it would be free to pull topology out of YAML.
+    3. Call the provider. Everything structural — stream count, visibility,
+       condition table, loss terms — is Python code there, so steps 1–2 can
+       only move numbers, never shapes of the graph.
+    4. Apply the two overrides that are safe afterwards: loss weights and the
+       attention backend. Geometry is deliberately *not* here; it has to reach
+       the provider as an argument because visibility and the flow heads are
+       derived from it (see ``_resolve_geometry``).
+
+    Args:
+        config: A model config instance. Required: ``model_type``. Optional:
+            the six names in ``_SECTION_KEYS`` plus a ``provider_kwargs()``
+            method returning the per-model extras (absent ⇒ no extras).
+
+    Returns:
+        A validated ``WorldModelSpec``. The four layer checks run inside
+        ``__post_init__``, both for this path and for a hand-written spec in a
+        test, so no check can be bypassed by constructing one directly.
+
+    Raises:
+        ValueError: No ``model_type``, or a section is malformed.
+        KeyError: ``model_type`` is not a registered provider.
+        TypeError: The provider returned something other than a
+            ``WorldModelSpec``, or a section has the wrong Python type.
     """
     model_type = getattr(config, "model_type", None)
     if not model_type:
         raise ValueError(
-            "配置里没有 model_type；它是 provider 注册表的键。"
-            "模型身份的唯一出处是启动参数 --model-name"
+            "the config has no model_type; it is the provider registry key. "
+            "Model identity has a single source, the --model-name launch "
+            "argument"
         )
     provider = get_provider(model_type)
-    spec = provider(config)
+
+    kwargs: dict[str, Any] = {}
+    geometry = _plain(getattr(config, "geometry", None))
+    if geometry:
+        kwargs["geometry"] = geometry
+    _flatten_per_stream("streams", _plain(getattr(config, "streams", None)),
+                        kwargs)
+    _flatten_per_stream("diffusion",
+                        _plain(getattr(config, "diffusion", None)), kwargs)
+    extras = getattr(config, "provider_kwargs", None)
+    if callable(extras):
+        kwargs.update(extras())
+
+    spec = provider(**kwargs)
     if not isinstance(spec, WorldModelSpec):
         raise TypeError(
-            f"provider(model_type={model_type!r}) 返回了 {type(spec).__name__}，"
-            "必须是 WorldModelSpec"
+            f"provider(model_type={model_type!r}) returned "
+            f"{type(spec).__name__}, it must return a WorldModelSpec"
         )
-    if overrides:
-        raise NotImplementedError(
-            "build_world_model 的第③步（YAML 覆写施加）属配置层，"
-            "判据见 mot_spec_config.zh-CN.md §3.8 的 R1–R5；"
-            f"收到待施加的覆写 {sorted(overrides)}"
-        )
-    return spec
+    spec = _apply_heads(spec, _plain(getattr(config, "heads", None)))
+    return _apply_backend(spec, getattr(config, "attention_backend", None),
+                          getattr(config, "attention_block_size", None))
+
+
+
+
+
+

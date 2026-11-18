@@ -1,0 +1,77 @@
+# InternW0-Δ — dual-stream world model with five supervision terms, on the
+# five-layer ``arch`` spec.
+#
+# Launch:
+#   torchrun ... loongforge/train.py --model-name internw0_delta \
+#       --training-phase sft --pretrained-checkpoint <internw0 .pt>
+#
+# Status: the provider builds, but the ``track_align`` head's implementation is
+# still a stub, so construction raises ``NotImplementedError``. The row is
+# registered and this file is complete so that the gate, the config merge and
+# the schema are exercised now rather than when the head lands.
+#
+# As with vpp2, nothing below names the model (identity is ``--model-name``) and
+# nothing below changes topology: the five heads, the extra visibility rules and
+# the per-frame timestep shape are Python code in
+# ``model/arch/spec/providers/dual_stream_wan.py``.
+
+model:
+  # Wan2.2 generation: 48 latent channels, /16 spatial stride. Only the encoder
+  # stack (VAE + CLIP) is read from here; DiT weights come from
+  # ``--pretrained-checkpoint``.
+  model_id: Wan-AI/Wan2.2-TI2V-5B
+  dtype: bfloat16
+  tokenizer_max_len: 128
+
+  geometry:
+    # ``num_frames`` must equal ``data.num_video_frames``: it is the pixel frame
+    # count handed to the VAE. 9 pixel frames → 1 + 8/4 = 3 latent frames.
+    frame_height: 192
+    frame_width: 256
+    num_frames: 9
+    num_views: 2
+    action_horizon: 32
+    action_video_freq_ratio: 4
+
+  streams:
+    video:  {residual_width: 3072, num_heads: 24, head_dim: 128, num_layers: 30, ffn_width: 14336}
+    action: {residual_width: 1024, num_heads: 24, head_dim: 128, num_layers: 30, ffn_width: 4096}
+
+  # Both streams sample a timestep here, with different shifts — unlike vpp2,
+  # whose video stream is pinned to pure noise.
+  diffusion:
+    video:  {shift: 6.0}
+    action: {shift: 1.0}
+
+  # Five terms in one flat table. In the pre-refactor config these weights lived
+  # at three nesting levels and one of them in a different file
+  # (``configs/task/4D_distillation.yaml``); here each one is the single source
+  # for the loss term that consumes the head of the same name.
+  heads: {video_flow: {weight: 0.5}, action_flow: {weight: 1.0},
+          future_delta: {weight: 0.5}, semantic_future: {weight: 0.1},
+          track_align: {weight: 0.1, warmup_steps: 2000}}
+
+  # The only member of this family that uses flex attention. The block size is
+  # not a knob here: it has to agree with the value the visibility/backend
+  # negotiation used, so the provider owns it.
+  attention_backend: flex
+
+  inference_steps: 10
+  proprio_dim: 80
+
+data:
+  # Must equal model.geometry.num_frames (see the comment there).
+  num_video_frames: 9
+  image_size: 224
+  image_normalize_mode: siglip
+  image_resize_strategy: center_crop
+  text_embedding_cache_dir: data/text_embeds_cache/internw0
+  use_image_transform: true
+  normalization_mode: q99
+  norm_stats_path: null
+  fastwam_norm_mode: min/max
+  # Null rather than a 80-long list: the whole-body action vector here is not
+  # the LIBERO eef-delta layout, so no dimension is marked as a delta dim.
+  delta_action_dim_mask: null
+  action_padding_strategy: zero
+  action_video_freq_ratio: 4

@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""L2 流、参数与联合注意力引擎（Lane B）。"""
+"""L2 streams, their parameters, and the joint attention engine (Lane B)."""
 
 from __future__ import annotations
 

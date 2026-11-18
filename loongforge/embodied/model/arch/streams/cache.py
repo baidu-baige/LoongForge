@@ -1,14 +1,15 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""L2 KV cache 的签名：``CacheSignature`` / ``CacheScope``（Lane B）。
+"""L2 KV cache signatures: ``CacheSignature`` / ``CacheScope`` (Lane B).
 
-签名以 ``docs/design/mot_layer_interfaces.zh-CN.md`` §4.6 为准。
+Signatures follow ``docs/design/mot_layer_interfaces.zh-CN.md`` §4.6.
 
-**首批两个模型都不用 KV cache**，本模块只定签名、不实现。
-它存在的理由是让「推理期要不要 cache」在构造期就能协商
-（``CompiledMask.supports`` 的 ``Scenario.has_kv_cache``），
-而不是等真跑到推理才发现表达不了。
+Neither of the first two models uses a KV cache, so this module declares the
+signatures and implements nothing. It exists so that "does inference need a
+cache" can be negotiated at construction time, through
+``Scenario.has_kv_cache`` in ``CompiledMask.supports``, instead of
+discovering at inference time that the question cannot be expressed.
 """
 
 from __future__ import annotations
@@ -23,14 +24,22 @@ __all__ = ["CacheSignature", "CacheScope"]
 
 @dataclass(frozen=True)
 class CacheSignature:
-    """一条流一层的 cache 形状签名。静态形状（INV-2）由它保证。
+    """Cache shape signature for one stream at one layer.
 
-    ``max_tokens`` 必须是构造期常量：cache 一旦进 CUDA graph 捕获，
-    运行期改长度等于触发重捕获。
+    This is what guarantees static shapes (INV-2).
+
+    Attributes:
+        stream: Stream name.
+        layer_id: Joint layer index.
+        num_heads: Number of attention heads for this stream.
+        head_dim: Per-head width.
+        max_tokens: Maximum cached token count. Must be a construction-time
+            constant: once the cache is captured in a CUDA graph, changing
+            the length at runtime forces a recapture.
     """
 
     stream: str
-    layer_id: int               # 联合层号
+    layer_id: int
     num_heads: int
     head_dim: int
     max_tokens: int
@@ -41,50 +50,90 @@ class CacheSignature:
             if value <= 0:
                 raise ValueError(
                     f"CacheSignature({self.stream!r}, L{self.layer_id})."
-                    f"{name} 必须为正，得到 {value}"
+                    f"{name} must be positive, got {value}"
                 )
         if self.layer_id < 0:
             raise ValueError(
-                f"CacheSignature({self.stream!r}).layer_id 必须非负，"
-                f"得到 {self.layer_id}"
+                f"CacheSignature({self.stream!r}).layer_id must be "
+                f"non-negative, got {self.layer_id}"
             )
 
     @property
     def key(self) -> tuple[str, int]:
-        """cache 字典的键。与 ``EngineOutput.captured`` 同构，刻意一致。"""
+        """Key for the cache dict.
+
+        Returns:
+            ``(stream, layer_id)``, deliberately the same shape of key as
+            ``EngineOutput.captured``.
+        """
         return (self.stream, self.layer_id)
 
     def shape(self, batch_size: int) -> tuple[int, int, int, int]:
-        """[B, max_tokens, num_heads, head_dim]。与 ``QKV`` 的布局一致。"""
+        """Cache tensor shape for a given batch size.
+
+        Args:
+            batch_size: Number of sequences.
+
+        Returns:
+            ``[B, max_tokens, num_heads, head_dim]``, matching the ``QKV``
+            layout.
+
+        Raises:
+            ValueError: If ``batch_size`` is not positive.
+        """
         if batch_size <= 0:
-            raise ValueError(f"batch_size 必须为正，得到 {batch_size}")
+            raise ValueError(f"batch_size must be positive, got {batch_size}")
         return (batch_size, self.max_tokens, self.num_heads, self.head_dim)
 
 
 class CacheScope(Protocol):
-    """一次推理内的 cache 生命周期。首批只定签名。
+    """Cache lifetime within one inference run. Signature only for now.
 
-    ``reset`` 存在而不是靠重建对象：重建会重新分配显存，
-    而 CUDA graph 捕获的是地址。
+    ``reset`` exists instead of rebuilding the object because rebuilding
+    reallocates device memory, while a CUDA graph captures addresses.
     """
 
     def signatures(self) -> tuple[CacheSignature, ...]:
-        """本 scope 管的全部 cache 槽。构造期可枚举。"""
+        """List every cache slot this scope manages.
+
+        Returns:
+            All slots, enumerable at construction time.
+        """
         ...
 
     def read(self, signature: CacheSignature) -> tuple[Tensor, Tensor]:
-        """取 (key, value)。形状即 ``signature.shape(batch_size)``。"""
+        """Read one cache slot.
+
+        Args:
+            signature: Slot to read.
+
+        Returns:
+            The ``(key, value)`` pair, each of shape
+            ``signature.shape(batch_size)``.
+        """
         ...
 
     def write(self, signature: CacheSignature, *, key: Tensor, value: Tensor,
               at: int) -> None:
-        """就地写入第 ``at`` 个位置起的若干 token。不得改变 cache 形状。"""
+        """Write tokens into one cache slot in place.
+
+        Args:
+            signature: Slot to write.
+            key: Key tensor to store.
+            value: Value tensor to store.
+            at: Token offset at which the write starts. The cache shape must
+                not change.
+        """
         ...
 
     def reset(self) -> None:
-        """清空有效长度，**不**重新分配显存。"""
+        """Clear the valid length without reallocating device memory."""
         ...
 
     def state(self) -> dict[str, Any]:
-        """调试用的快照。不进 state_dict（INV-3）。"""
+        """Return a debugging snapshot.
+
+        Returns:
+            Plain Python values. This never enters state_dict (INV-3).
+        """
         ...

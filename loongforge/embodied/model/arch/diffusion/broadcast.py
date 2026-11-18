@@ -1,15 +1,17 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""L3 广播规格 ``BroadcastSpec``（Lane C）。
+"""L3 broadcast spec ``BroadcastSpec`` (Lane C).
 
-签名以 ``docs/design/mot_layer_interfaces.zh-CN.md`` §5.4 为准。
+The signature follows ``docs/design/mot_layer_interfaces.zh-CN.md`` §5.4.
 
-本模块是交界面 **I2**（A → C）在 C 侧的落点：timestep / 噪声按哪些轴广播，
-必须由 ``TokenLayout`` 的标签名决定，**不许按张量 ndim 猜**。
+This module is where interface **I2** (A -> C) lands on the C side: which axes a
+timestep / noise value varies along must be decided by the label names of
+``TokenLayout``, and **never guessed from the tensor's ndim**.
 
-现状的反面做法是 ``has_seq = len(t.shape) == 4``：形状一变就静默走错分支。
-``axes`` 写死标签名之后，标签缺失是构造期的 KeyError。
+The practice being replaced is ``has_seq = len(t.shape) == 4``: the moment a
+shape changes, that test silently picks the wrong branch. Once ``axes`` names
+the labels explicitly, a missing label is a construction-time KeyError.
 """
 
 from __future__ import annotations
@@ -25,64 +27,120 @@ __all__ = ["BroadcastSpec", "DEFAULT_PER_SAMPLE"]
 
 @dataclass(frozen=True)
 class BroadcastSpec:
-    """timestep / 噪声沿哪些**标签轴**变化。
+    """Which **label axes** a timestep / noise value varies along.
 
-    ``axes = ()`` ⇒ 逐样本一个标量（最常见，存量全部模型都是这档）。
-    ``axes = ("frame",)`` ⇒ 逐帧一个 timestep（VPP2 的 per-frame 噪声）。
-    ``axes = ("frame", "chunk")`` ⇒ 帧 × 动作块。
+    ``axes = ()`` means one scalar per sample (the common case; every existing
+    model sits here). ``axes = ("frame",)`` means one timestep per frame (VPP2's
+    per-frame noise). ``axes = ("frame", "chunk")`` means frame x action chunk.
 
-    轴名必须是 ``TokenLayout`` 里真实存在的标签（I2），
-    ``validate`` 在构造期查一次 —— 查不到就抛错，不退化成逐样本。
-    退化是现状那条错误路径的入口。
+    Axis names must be labels that actually exist in ``TokenLayout`` (I2);
+    ``validate`` checks this once at construction time. A name that is not found
+    raises instead of degrading to per-sample, because that degradation is
+    exactly the entry point of the ndim-guessing path described above.
+
+    Attributes:
+        axes: Declared label names, in the order the value's axes follow.
     """
 
     axes: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if len(set(self.axes)) != len(self.axes):
-            raise ValueError(f"BroadcastSpec.axes 有重复轴：{self.axes}")
+            raise ValueError(
+                f"BroadcastSpec.axes has duplicate axes: {self.axes}")
 
     @property
     def is_per_sample(self) -> bool:
-        """无轴 ⇒ 逐样本标量。"""
+        """No axes means a single scalar per sample."""
         return not self.axes
 
     def validate(self, layout: TokenLayout) -> None:
-        """I2 的校验：每个轴名必须是布局里真实存在的标签。
+        """Check I2: every axis name must be a label present in the layout.
 
-        **必须在构造期调用**（``WorldModelSpec`` 的 V5 / V6）。
-        forward 期再查就晚了：那时错误表现为广播出一个形状恰好能乘的张量。
+        **Must be called at construction time** (V5 / V6 of ``WorldModelSpec``).
+        Checking during forward is too late: by then the error shows up as a
+        broadcast tensor whose shape happens to multiply cleanly.
+
+        Args:
+            layout: The token layout whose labels the axis names must exist in.
+
+        Raises:
+            ValueError: If any axis name is not a label of ``layout``.
         """
         missing = [axis for axis in self.axes if not layout.has_label(axis)]
         if missing:
             raise ValueError(
-                f"BroadcastSpec.axes 里的标签 {missing} 不在布局里；"
-                f"布局提供的标签为 {sorted(layout.labels)}。"
-                "标签缺失不退化成逐样本 —— 那正是现状靠 ndim 猜轴的那条错误路径"
+                f"BroadcastSpec.axes labels {missing} are not in the layout; "
+                f"the layout provides labels {sorted(layout.labels)}. "
+                "A missing label does not degrade to per-sample, that is "
+                "exactly the ndim-guessing path this replaces"
             )
 
     def expand(self, value: Tensor, layout: TokenLayout) -> Tensor:
-        """把一个按 ``axes`` 组织的值广播到 ``[B, total, 1]``。
+        """Broadcast a value organised by ``axes`` out to ``[B, total, 1]``.
 
-        ``axes = ()`` ⇒ ``value`` 形状 [B]，结果 [B, 1, 1]（纯视图，不复制）。
-        ``axes = ("frame",)`` ⇒ ``value`` 形状 [B, num_frames]，
-        按 ``layout.labels_of("frame")`` 做 gather。
+        ``axes = ()`` expects ``value`` of shape [B] and returns [B, 1, 1] (a
+        pure view, no copy). ``axes = ("frame",)`` expects ``value`` of shape
+        [B, num_frames] and gathers along ``layout.labels_of("frame")``.
 
-        实现属 Lane C；签名在此固定，因为 L2 的调制入口要按它接。
+        With several axes the labels are folded into one C-order flat index in
+        the **declared order** of ``axes``, matching the axis order of
+        ``value``; so ``axes=("frame", "chunk")`` requires ``value`` to be
+        ``[B, num_frames, num_chunks]``.
+
+        Tokens whose label value is **-1** (alignment padding, and ``row`` /
+        ``col`` on action tokens) have **no position** on that axis and always
+        get 0. They are not gathered from a neighbour: -1 used as an index wraps
+        around to the tail and would silently pick up the last frame's
+        timestep with an exactly correct shape.
+
+        Args:
+            value: Values laid out as ``[B, *axis_sizes]`` (or ``[B]`` when
+                ``axes`` is empty).
+            layout: Layout supplying the per-token label vectors.
+
+        Returns:
+            A ``[B, total, 1]`` tensor aligned with the layout's token order.
+
+        Raises:
+            ValueError: If ``value`` has the wrong rank, or a label exceeds the
+                corresponding axis length of ``value``.
         """
         self.validate(layout)
         if not self.axes:
             if value.ndim != 1:
                 raise ValueError(
-                    f"BroadcastSpec(axes=()).expand 期望 [B] 的逐样本标量，"
-                    f"得到 {tuple(value.shape)}"
+                    f"BroadcastSpec(axes=()).expand expects a per-sample "
+                    f"scalar of shape [B], got {tuple(value.shape)}"
                 )
             return value.view(-1, 1, 1)
-        raise NotImplementedError(
-            f"BroadcastSpec.expand(axes={self.axes}) 属 Lane C（L3 广播，S3 交付）；"
-            "逐轴 gather 的判据见 C 组等价性测试"
-        )
+        if value.ndim != 1 + len(self.axes):
+            raise ValueError(
+                f"BroadcastSpec(axes={self.axes}).expand expects "
+                f"[B, {', '.join(self.axes)}], {1 + len(self.axes)} dims in "
+                f"total, got {tuple(value.shape)}"
+            )
+        flat = None
+        undefined = None
+        for position, axis in enumerate(self.axes):
+            label = layout.labels_of(axis).to(value.device)
+            size = value.shape[1 + position]
+            index = label.clamp(min=0)
+            highest = int(index.max())
+            if highest >= size:
+                raise ValueError(
+                    f"BroadcastSpec.expand: axis {axis!r} has largest label "
+                    f"{highest}, which exceeds length {size} of value dim "
+                    f"{1 + position}"
+                )
+            flat = index if flat is None else flat * size + index
+            missing = label < 0
+            undefined = missing if undefined is None else undefined | missing
+        picked = value.reshape(value.shape[0], -1).index_select(1, flat)
+        assert undefined is not None            # axes non-empty => one pass ran
+        return picked.masked_fill(undefined.unsqueeze(0), 0.0).unsqueeze(-1)
 
 
 DEFAULT_PER_SAMPLE = BroadcastSpec(axes=())
-"""逐样本一个标量。**存量全部模型的档位**，也是缺省值。"""
+"""One scalar per sample. **The setting every existing model uses**, and the
+default."""

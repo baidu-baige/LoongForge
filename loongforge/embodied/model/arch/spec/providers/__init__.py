@@ -1,24 +1,36 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""模型 provider。每个文件一个模型族的工厂 + 一个 ``@register_provider``。
+"""Model providers, one package per model.
 
-本目录里的代码是**拓扑与算法的唯一落点**（R5）：流怎么分、哪些流进同一张
-联合注意力、可见性怎么组合、loss 有几条 —— 全写在这里的 Python 里，
-YAML 一行也看不见。
+The directory layout mirrors that split: ``<model_type>/spec.py`` holds that
+model's visibility and its single ``@register_provider`` entry, while the
+files at this level are named after the **topology families** of
+``docs/design/mot_spec_model_matrix.zh-CN.md`` §1 and hold only what the
+models of one family share.
 
-两条约定：
+The code in this directory is the **only place topology and algorithm live**
+(rule R5): how streams are split, which streams enter the same joint attention,
+how visibility is composed, how many loss terms there are. All of it is written
+in the Python here, and none of it appears in YAML.
 
-1. **注册表的键是 ``model_type``**，与配置里那个键一一对应。
-2. 六个拓扑族（dual_stream_wan 之类）是**不注册的工厂函数**，
-   不是对外契约；它们被 provider 调用，但 YAML 与启动参数都看不见它们。
+Two conventions:
+
+1. **The registry key is ``model_type``**, one-to-one with that key in the
+   model config, and one-to-one with the package name here.
+2. The six topology families (``dual_stream_wan`` and friends) are
+   **unregistered factory functions**, not a public contract; providers call
+   them, but neither YAML nor the launch arguments can name them.
 """
 
 from __future__ import annotations
 
-# import 即注册：``@register_provider`` 是 import 期的副作用，
-# 所以每加一个 provider 文件都必须在这里列一行 —— 少列一行的症状是
-# ``get_provider('vpp2')`` 报「没有这个 model_type」而文件就在旁边。
-from . import dual_stream_wan  # noqa: F401
+# Importing is registering: ``@register_provider`` fires as an import-time side
+# effect, so every new provider package must be listed here. The symptom of a
+# missing line is ``get_provider('vpp2')`` reporting an unknown model_type
+# while the package sits right next to this file.
+from . import fastwam  # noqa: F401
+from . import internw0_delta  # noqa: F401
+from . import vpp2  # noqa: F401
 
 __all__: list[str] = []

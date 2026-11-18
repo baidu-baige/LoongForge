@@ -1,11 +1,12 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""L1 布局：拼接后序列的标签表与段表（Lane A）。
+"""L1 layout: label table and segment table of the concatenated sequence (Lane A).
 
-签名以 ``docs/design/mot_layer_interfaces.zh-CN.md`` §3.2 为准。
-``labels_of`` 是交界面 I2 的全部内容：Lane C 的逐帧 timestep 与
-``BroadcastSpec.axes`` 只许由这里的标签对齐，不许按 shape 猜轴。
+Signatures follow ``docs/design/mot_layer_interfaces.zh-CN.md`` §3.2.
+``labels_of`` is the entirety of interface I2: Lane C's per-frame timestep and
+``BroadcastSpec.axes`` may only align through the labels defined here, never
+by guessing an axis from a tensor shape.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from typing import TYPE_CHECKING, Literal
 import torch
 from torch import Tensor
 
-if TYPE_CHECKING:  # 只用于标注：layout 不许在运行期依赖 L0/L2 的具体类
+if TYPE_CHECKING:  # Annotation only: layout must not depend on L0/L2 at runtime
     from .geometry import GeometrySpec
     from .streams.spec import StreamSpec
 
@@ -27,135 +28,161 @@ __all__ = ["SegmentRange", "TokenLayout", "LabelView"]
 
 @dataclass(frozen=True)
 class SegmentRange:
-    """一条流在拼接后序列里占的半开区间 [start, stop)。
+    """The half-open interval [start, stop) a stream occupies after concat.
 
-    名字从早先的 ``Segment`` 改过来，是为了和被否决的 EasyWAM
-    ``AttentionSegment`` 区间代数方案区分：本类**只记位置**，
-    不承载任何可见性语义。
+    The name was changed from the earlier ``Segment`` to keep it distinct from
+    the rejected EasyWAM ``AttentionSegment`` interval-algebra design: this
+    class **records positions only** and carries no visibility semantics.
+
+    Attributes:
+        stream: Name of the owning stream, same namespace as ``StreamSpec.name``.
+        start: First index, inclusive.
+        stop: End index, exclusive.
     """
 
-    stream: str             # 段所属的流名，与 StreamSpec.name 同一套名字
-    start: int              # 起点，含
-    stop: int               # 终点，不含
+    stream: str
+    start: int
+    stop: int
 
     def __post_init__(self) -> None:
         if not self.stream:
-            raise ValueError("SegmentRange.stream 不得为空")
+            raise ValueError("SegmentRange.stream must not be empty")
         if self.start < 0 or self.stop < self.start:
             raise ValueError(
-                f"SegmentRange({self.stream!r}): 区间非法 "
+                f"SegmentRange({self.stream!r}): invalid interval "
                 f"[{self.start}, {self.stop})"
             )
 
     @property
     def length(self) -> int:
-        """``stop - start``。派生量 —— 存成字段就能配出 length 与区间不符的三元组。"""
+        """``stop - start``. Derived, because a stored field could disagree."""
         return self.stop - self.start
 
 
 @dataclass(frozen=True)
 class TokenLayout:
-    """拼接后序列的标签表 + 段表。I2 的载体。
+    """Label table plus segment table of the concatenated sequence; carries I2.
 
-    为什么是**开放标签字典**而不是封闭枚举：新增一条可见性规则时，
-    它需要的标签往往是现有枚举里没有的（``noise_level`` 就是这样进来的）。
-    开放字典让「加一条规则」不必改本类。
+    Why an **open label dict** instead of a closed enum: when a new visibility
+    rule arrives, the label it needs is usually not in the existing enum
+    (``noise_level`` entered exactly that way). An open dict means "add a
+    rule" does not mean "edit this class".
 
-    缺省语义（重要）：某个标签不存在，表示**依赖它的规则不可用**，
-    不是报错。例如没贴 ``noise_level`` 的模型，``noise_gate`` 规则直接返回
-    全 True，而不是抛异常 —— 这让同一份可见性表达式可以跨模型复用。
+    Default semantics (important): a missing label means **the rules that
+    depend on it are unavailable**, not an error. For a model that never
+    attaches ``noise_level``, the ``noise_gate`` rule simply returns all True
+    rather than raising, which lets one visibility expression be reused across
+    models.
 
-    不变量：
-      - 所有标签张量第一维长度 == total，且**不含 batch 维**；
-      - segments 两两不重叠、并集恰好覆盖 [0, total)；
-      - segments 的顺序 == 实际 concat 顺序（这是 Lane B 的 C8 校验对象）。
+    Invariants:
+      - every label tensor's first dimension equals total, and carries **no
+        batch dimension**;
+      - segments are pairwise disjoint and their union is exactly [0, total);
+      - segment order equals the actual concat order (this is what Lane B's
+        C8 check verifies).
+
+    Attributes:
+        segments: Segments in **actual concat order**, same order as
+            ``AttentionGroup.members`` (C8 checks this).
+        labels: Label name to a [total] tensor, **batch independent**.
+            frame / row / col / pad come from L0's
+            ``GeometrySpec.build_labels()``; stream is appended by each stream
+            via ``with_labels``; chunk is attached by the action stream, and
+            noise_level by L3 when it adds noise. Batch-dependent validity
+            travels on the other channel (``AttentionPlan.key_valid``).
     """
 
-    segments: tuple[SegmentRange, ...]  # 按**实际 concat 顺序**，与
-                                        # AttentionGroup.members 同序（C8 校验这件事）
-    labels: Mapping[str, Tensor]        # 标签名 → [total] 张量，**batch 无关**。
-                                        # frame / row / col / pad 由 L0 的
-                                        # GeometrySpec.build_labels() 产出；
-                                        # stream 由各流 with_labels 追加，
-                                        # chunk 由动作流贴，noise_level 由 L3 加噪时贴。
-                                        # batch 相关的有效性走另一条通道
-                                        # （AttentionPlan.key_valid）
+    segments: tuple[SegmentRange, ...]
+    labels: Mapping[str, Tensor]
 
     def __post_init__(self) -> None:
         if not self.segments:
-            raise ValueError("TokenLayout.segments 不得为空（单流模型也有一个段）")
+            raise ValueError(
+                "TokenLayout.segments must not be empty (a single-stream "
+                "model still has one segment)"
+            )
         cursor = 0
         seen: set[str] = set()
         for seg in self.segments:
             if seg.stream in seen:
-                raise ValueError(f"TokenLayout: 段名重复 {seg.stream!r}")
+                raise ValueError(
+                    f"TokenLayout: duplicate segment name {seg.stream!r}"
+                )
             seen.add(seg.stream)
             if seg.start != cursor:
                 raise ValueError(
-                    f"TokenLayout: 段 {seg.stream!r} 的 start={seg.start} "
-                    f"与上一段的 stop={cursor} 不衔接（段必须覆盖 [0, total) 且不重叠）"
+                    f"TokenLayout: segment {seg.stream!r} has "
+                    f"start={seg.start}, which does not join the previous "
+                    f"stop={cursor} (segments must cover [0, total) without "
+                    f"overlap)"
                 )
             cursor = seg.stop
         for key, tensor in self.labels.items():
             if tensor.ndim != 1:
                 raise ValueError(
-                    f"TokenLayout.labels[{key!r}]: ndim 必须为 1（标签不含 batch 维，"
-                    f"逐样本信息走 AttentionPlan.key_valid），得到 {tuple(tensor.shape)}"
+                    f"TokenLayout.labels[{key!r}]: ndim must be 1 (labels "
+                    f"carry no batch dimension; per-sample information "
+                    f"travels on AttentionPlan.key_valid), got "
+                    f"{tuple(tensor.shape)}"
                 )
             if tensor.shape[0] != cursor:
                 raise ValueError(
-                    f"TokenLayout.labels[{key!r}]: 长度 {tensor.shape[0]} "
+                    f"TokenLayout.labels[{key!r}]: length {tensor.shape[0]} "
                     f"!= total {cursor}"
                 )
         object.__setattr__(self, "labels", MappingProxyType(dict(self.labels)))
 
-    # ---- 查询 ----
+    # ---- Queries ----
 
     @property
     def total(self) -> int:
-        """拼接后的总 token 数。"""
+        """Total token count after concatenation."""
         return self.segments[-1].stop
 
     @property
     def stream_names(self) -> tuple[str, ...]:
-        """按 concat 顺序给出的流名元组。"""
+        """Stream names as a tuple, in concat order."""
         return tuple(seg.stream for seg in self.segments)
 
     def has_label(self, key: str) -> bool:
-        """标签是否存在。规则库用它实现「缺省则规则不可用」。"""
+        """Whether the label exists; rules use it to degrade when it is absent."""
         return key in self.labels
 
     def labels_of(self, key: str) -> Tensor:
-        """取某个标签的 [total] 张量（交界面 I2）。
+        """Return the [total] tensor of one label (interface I2).
 
-        不存在时抛 ``KeyError`` 并列出已有标签 —— 调用方应先 ``has_label``。
-        Lane C 在标签缺省时**必须报错**，不许按 shape 猜轴。
+        Raises ``KeyError`` listing the labels that do exist, so callers are
+        expected to check ``has_label`` first. Lane C **must** fail when a
+        label is missing instead of guessing the axis from a shape.
         """
         try:
             return self.labels[key]
         except KeyError:
             raise KeyError(
-                f"TokenLayout 没有标签 {key!r}；已有标签："
+                f"TokenLayout has no label {key!r}; existing labels: "
                 f"{sorted(self.labels)}"
             ) from None
 
     def range_of(self, stream: str) -> SegmentRange:
-        """取某条流的区间。Lane B 的 split_by_layout 的唯一依据。"""
+        """Return one stream's interval; the only basis for Lane B's split_by_layout."""
         for seg in self.segments:
             if seg.stream == stream:
                 return seg
         raise KeyError(
-            f"TokenLayout 没有流 {stream!r}；已有流：{list(self.stream_names)}"
+            f"TokenLayout has no stream {stream!r}; existing streams: "
+            f"{list(self.stream_names)}"
         )
 
-    # ---- 变换 ----
+    # ---- Transforms ----
 
     def split(self, packed: Tensor, *, dim: int = 1,
               streams: Sequence[str] | None = None) -> dict[str, Tensor]:
-        """按段把拼接张量切回逐流字典。
+        """Slice a concatenated tensor back into a per-stream dict.
 
-        替代各模型手写的 start/end 游标。``streams`` 为 None 时切全部段；
-        给定时只切这些段（引擎在某些层只有部分流参与时用）。
+        This replaces the hand-written start/end cursors each model used to
+        carry. When ``streams`` is None every segment is sliced; when given,
+        only those segments are (the engine needs this on layers where just a
+        subset of streams participates).
         """
         if packed.shape[dim] != self.total:
             raise ValueError(
@@ -170,22 +197,26 @@ class TokenLayout:
         return out
 
     def with_labels(self, **extra: Tensor) -> TokenLayout:
-        """返回追加了标签的新对象（本类不可变）。各流贴 stream 标签时用。
+        """Return a new object with extra labels appended (this class is frozen).
 
-        同名标签**抛错而不是覆盖**：标签的来源不同（几何 / 流 / L3 加噪），
-        一旦允许覆盖，同一个标签就会有两个源头，而后写的那个会静默赢。
+        Used when a stream attaches its stream label.
+
+        A name collision **raises instead of overwriting**: labels come from
+        different owners (geometry / stream / L3 noising), and once overwriting
+        is allowed the same label has two sources, with the later write winning
+        silently.
         """
         clash = sorted(set(extra) & set(self.labels))
         if clash:
             raise ValueError(
-                f"TokenLayout.with_labels: 标签已存在 {clash}；"
-                f"同一个标签只许有一个源头"
+                f"TokenLayout.with_labels: labels already exist {clash}; "
+                f"one label may have only one source"
             )
         return TokenLayout(segments=self.segments,
                            labels={**self.labels, **extra})
 
     def label_views(self) -> tuple[LabelView, LabelView]:
-        """产出 (query 侧, key 侧) 两个标签视图，交给 ``Predicate``。"""
+        """Return the (query side, key side) label views handed to ``Predicate``."""
         return LabelView(self, "query"), LabelView(self, "key")
 
     @classmethod
@@ -193,31 +224,41 @@ class TokenLayout:
                       streams: Sequence[StreamSpec], *,
                       token_counts: Mapping[str, int] | None = None
                       ) -> TokenLayout:
-        """由 L0 几何与流清单物化布局（``WorldModel.__init__`` 第②步）。
+        """Materialize the layout from L0 geometry and the stream list.
 
-        ``streams`` 只读 ``.name``，顺序即 concat 顺序（与
-        ``AttentionGroup.members`` 同序 —— C8 校验的正是这件事）。
+        This is step 2 of ``WorldModel.__init__``.
 
-        ``token_counts`` 给出逐流 token 数。省略时按缺省约定推：第 0 条流是
-        几何所描述的那条（视频主干）⇒ ``padded_seq_len``；其余每条流 ⇒
-        ``action_horizon``。不把它做成 ``StreamSpec`` 的字段，是因为
-        「这条流有多少 token」由几何决定而不由流自己声明 —— 两处声明必然分叉。
+        Only ``.name`` is read from ``streams``, and their order *is* the
+        concat order (same order as ``AttentionGroup.members`` -- exactly what
+        C8 checks).
 
-        贴出的标签：
-          stream  [total] long  段下标，值 = 在 ``stream_names`` 里的位置
-          frame   [total] long  视频 token 取几何帧号；动作 token 取
-                                ``step // action_video_freq_ratio``，
-                                即它对齐到的那个 latent 帧
-          row/col [total] long  视频 token 取几何 patch 行列；动作 token 为 -1
-          pad     [total] bool  视频 token 取几何对齐填充位；动作 token 为 False
-          chunk   [total] long  动作 token 的块号；视频 token 为 -1
+        ``token_counts`` gives the per-stream token count. When omitted the
+        default convention applies: stream 0 is the one the geometry describes
+        (the video backbone) and gets ``padded_seq_len``; every other stream
+        gets ``action_horizon``. It is deliberately not a ``StreamSpec`` field
+        because "how many tokens does this stream have" is decided by the
+        geometry, not declared by the stream; two declarations would inevitably
+        diverge.
 
-        ``noise_level`` **不在这里贴** —— 它是 L3 加噪时经 ``with_labels``
-        追加的档位标签（interfaces §3.2）。
+        Labels attached here:
+          stream  [total] long  segment index, the position in ``stream_names``
+          frame   [total] long  video tokens take the geometric frame index;
+                                action tokens take
+                                ``step // action_video_freq_ratio``, i.e. the
+                                latent frame they align to
+          row/col [total] long  video tokens take the geometric patch row and
+                                column; action tokens get -1
+          pad     [total] bool  video tokens take the geometric alignment pad
+                                flag; action tokens get False
+          chunk   [total] long  chunk index of action tokens; video tokens -1
+
+        ``noise_level`` is **not** attached here: it is the noise-bucket label
+        appended by L3 through ``with_labels`` when it adds noise
+        (interfaces §3.2).
         """
         names = [stream.name for stream in streams]
         if not names:
-            raise ValueError("TokenLayout.from_geometry: streams 不得为空")
+            raise ValueError("TokenLayout.from_geometry: streams must not be empty")
         counts = _resolve_token_counts(geometry, names, token_counts)
         segments: list[SegmentRange] = []
         cursor = 0
@@ -231,12 +272,17 @@ class TokenLayout:
 
 @dataclass(frozen=True)
 class LabelView:
-    """判定函数看到的**单侧**标签视图（query 侧或 key 侧）。
+    """The **one-sided** label view a predicate sees (query side or key side).
 
-    存在的理由：每条规则都要写成
-    ``q.get("frame") >= k.get("frame")`` 这样的逐元素表达式，
-    两侧必须已经 reshape 成可广播的形状。让每条规则自己写 unsqueeze，
-    写反的那一条不报错 —— 它只是把因果方向弄反。
+    Why it exists: every rule is written as an elementwise expression such as
+    ``q.get("frame") >= k.get("frame")``, which requires both sides to already
+    be reshaped into broadcastable shapes. If each rule did its own unsqueeze,
+    the one that gets it backwards would not fail -- it would silently reverse
+    the causal direction.
+
+    Attributes:
+        layout: The layout whose labels are being viewed.
+        side: Either ``"query"`` or ``"key"``.
     """
 
     layout: TokenLayout
@@ -245,58 +291,69 @@ class LabelView:
     def __post_init__(self) -> None:
         if self.side not in ("query", "key"):
             raise ValueError(
-                f"LabelView.side 只能是 'query' 或 'key'，得到 {self.side!r}"
+                f"LabelView.side must be 'query' or 'key', got {self.side!r}"
             )
 
     def has(self, key: str) -> bool:
-        """标签是否存在。规则据此退化为全 True。"""
+        """Whether the label exists; a rule degrades to all True when it does not."""
         return self.layout.has_label(key)
 
     def get(self, key: str) -> Tensor:
-        """取标签并 reshape 成可广播形状：query 侧 [L, 1]，key 侧 [1, L]。"""
+        """Return the label reshaped to broadcast: [L, 1] on query, [1, L] on key."""
         flat = self.layout.labels_of(key)
         return flat.unsqueeze(1) if self.side == "query" else flat.unsqueeze(0)
 
     def positions(self) -> Tensor:
-        """本侧的 token 下标，形状同 ``get``。``prefix_only`` 这类
-        「不读标签、只看位置」的规则用它，而不是自己 arange + unsqueeze
-        （写反了不报错，只是把前缀挪到另一侧）。"""
+        """Token indices on this side, shaped like ``get``.
+
+        Rules such as ``prefix_only`` that read no label and only look at
+        position use this instead of their own arange plus unsqueeze (getting
+        that backwards does not fail, it just moves the prefix to the other
+        side).
+        """
         flat = torch.arange(self.layout.total, dtype=torch.long)
         return flat.unsqueeze(1) if self.side == "query" else flat.unsqueeze(0)
 
 
 def _resolve_token_counts(geometry: GeometrySpec, names: Sequence[str],
                           given: Mapping[str, int] | None) -> dict[str, int]:
-    """逐流 token 数。显式表优先，否则走 ``from_geometry`` 文档里的缺省约定。"""
+    """Per-stream token counts.
+
+    An explicit table wins; otherwise the default convention documented on
+    ``from_geometry`` applies.
+    """
     if given is not None:
         missing = sorted(set(names) - set(given))
         stray = sorted(set(given) - set(names))
         if missing or stray:
             raise ValueError(
-                f"TokenLayout.from_geometry: token_counts 必须恰好覆盖流清单 "
-                f"{list(names)}；缺 {missing}、多 {stray}"
+                f"TokenLayout.from_geometry: token_counts must cover the "
+                f"stream list exactly {list(names)}; missing {missing}, "
+                f"extra {stray}"
             )
         for name in names:
             if given[name] <= 0:
                 raise ValueError(
-                    f"TokenLayout.from_geometry: 流 {name!r} 的 token 数必须为正，"
-                    f"得到 {given[name]}"
+                    f"TokenLayout.from_geometry: stream {name!r} token count "
+                    f"must be positive, got {given[name]}"
                 )
         if given[names[0]] != geometry.padded_seq_len:
             raise ValueError(
-                f"TokenLayout.from_geometry: 第 0 条流 {names[0]!r} 的 token 数 "
-                f"{given[names[0]]} != geometry.padded_seq_len "
-                f"{geometry.padded_seq_len}。视频主干的长度只有几何一个出处"
-                "（INV-2：静态形状的唯一来源）"
+                f"TokenLayout.from_geometry: stream 0 {names[0]!r} has token "
+                f"count {given[names[0]]} != geometry.padded_seq_len "
+                f"{geometry.padded_seq_len}. The video backbone length has "
+                "geometry as its only source (INV-2: the single source of "
+                "static shape)"
             )
         return dict(given)
     counts = {names[0]: geometry.padded_seq_len}
     for name in names[1:]:
         if geometry.action_horizon <= 0:
             raise ValueError(
-                f"TokenLayout.from_geometry: 流 {name!r} 要按缺省约定取 "
-                "action_horizon 个 token，但 geometry.action_horizon=0"
-                "（该几何声明了自己没有动作流）。请显式传 token_counts"
+                f"TokenLayout.from_geometry: stream {name!r} would take "
+                "action_horizon tokens by the default convention, but "
+                "geometry.action_horizon=0 (this geometry declares it has no "
+                "action stream). Pass token_counts explicitly"
             )
         counts[name] = geometry.action_horizon
     return counts
@@ -305,10 +362,13 @@ def _resolve_token_counts(geometry: GeometrySpec, names: Sequence[str],
 def _build_joint_labels(geometry: GeometrySpec,
                         segments: tuple[SegmentRange, ...]
                         ) -> dict[str, Tensor]:
-    """把几何标签按段铺到拼接后序列上，并贴 stream / chunk。
+    """Spread the geometric labels across the concatenated sequence.
 
-    缺省值刻意取 -1 而不是 0：动作 token 的 ``row`` 若填 0，空间局部性规则
-    会把它当成「第 0 行」而静默生效。-1 不等于任何真实行号。
+    Also attaches the stream and chunk labels.
+
+    The fill value is deliberately -1 rather than 0: if an action token's
+    ``row`` were 0, a spatial-locality rule would treat it as "row 0" and take
+    effect silently. -1 matches no real row index.
     """
     total = segments[-1].stop
     frame = torch.full((total,), -1, dtype=torch.long)
@@ -331,9 +391,11 @@ def _build_joint_labels(geometry: GeometrySpec,
     ratio = geometry.action_video_freq_ratio
     for seg in segments[1:]:
         step = torch.arange(seg.length, dtype=torch.long)
-        # 动作 token 的 frame 与 chunk 是同一个数：块号就是它对齐到的 latent 帧号。
-        # 两个标签而不是一个，是因为 frame_causal 与 chunk_causal 是两条规则，
-        # 而三流模型（motus）里动作块与 latent 帧不再一一对应
+        # An action token's frame and chunk are the same number: the chunk
+        # index is the latent frame it aligns to. Two labels rather than one,
+        # because frame_causal and chunk_causal are two separate rules, and in
+        # a three-stream model (motus) action chunks and latent frames are no
+        # longer one-to-one.
         aligned = step // ratio
         chunk[seg.start:seg.stop] = aligned
         frame[seg.start:seg.stop] = aligned

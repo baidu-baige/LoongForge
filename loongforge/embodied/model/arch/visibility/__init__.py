@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""L1 可见性：规则、组合运算、预设与物化（Lane A）。"""
+"""L1 visibility: rules, combinators, presets and materialization (Lane A)."""
 
 from __future__ import annotations
 

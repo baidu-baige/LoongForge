@@ -1,31 +1,44 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""L2 逐流状态与 ``StreamModule`` 协议（Lane B）。
+"""L2 per-stream state and the ``StreamModule`` protocol (Lane B).
 
-签名以 ``docs/design/mot_layer_interfaces.zh-CN.md`` §4.3 为准。
+Signatures follow ``docs/design/mot_layer_interfaces.zh-CN.md`` §4.3.
 
-``StreamModule`` 的四个方法把「一层做什么」切成四段，引擎只按顺序调用它们，
-**不碰流内部的张量语义**。这是单流退化成 N=1 而不是走另一条代码路径的前提。
+The four ``StreamModule`` methods cut "what one layer does" into four
+stages. The engine only calls them in order and never touches the tensor
+semantics inside a stream. That is what lets a single-stream model degrade
+to N=1 instead of taking a separate code path.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Any, Protocol, TYPE_CHECKING
 
 from torch import Tensor
+
+if TYPE_CHECKING:       # typing only; not imported at runtime so that
+                        # state and conditions do not form an import cycle
+    from .conditions import ConditionBus
 
 __all__ = ["StreamState", "QKV", "StreamModule"]
 
 
 @dataclass
 class QKV:
-    """一条流在某一层算出来的 Q/K/V。**未拼接**，形状逐流可以不同。
+    """Q/K/V produced by one stream at one layer, not yet concatenated.
 
-    形状约定：``[B, L, num_heads, head_dim]``。最后两维分开而不是摊平成
-    attn_width，是因为联合注意力要求各流 ``num_heads`` 可以不同、
-    ``head_dim`` 必须相同（V3）—— 摊平后这条校验就看不见了。
+    Shapes may differ per stream. The convention is
+    ``[B, L, num_heads, head_dim]``. The last two axes stay separate instead
+    of being flattened into attn_width because joint attention allows each
+    stream a different ``num_heads`` but requires the same ``head_dim``
+    (validator V3); flattening would hide that check.
+
+    Attributes:
+        q: Query tensor, ``[B, L_self, num_heads, head_dim]``.
+        k: Key tensor, ``[B, L_self, num_heads, head_dim]``.
+        v: Value tensor, same token count as ``k``.
     """
 
     q: Tensor
@@ -37,113 +50,200 @@ class QKV:
             tensor = getattr(self, name)
             if tensor.ndim != 4:
                 raise ValueError(
-                    f"QKV.{name} 必须是 [B, L, num_heads, head_dim] 四维，"
-                    f"得到 {tuple(tensor.shape)}"
+                    f"QKV.{name} must be 4-D [B, L, num_heads, head_dim], "
+                    f"got {tuple(tensor.shape)}"
                 )
         if self.k.shape[1] != self.v.shape[1]:
             raise ValueError(
-                f"QKV: k 的 token 数 {self.k.shape[1]} != v 的 "
+                f"QKV: k has {self.k.shape[1]} tokens != v has "
                 f"{self.v.shape[1]}"
             )
         if self.q.shape[-1] != self.k.shape[-1]:
             raise ValueError(
-                f"QKV: q 的 head_dim {self.q.shape[-1]} != k 的 "
-                f"{self.k.shape[-1]}（V3 要求联合成员 head_dim 相等）"
+                f"QKV: q head_dim {self.q.shape[-1]} != k head_dim "
+                f"{self.k.shape[-1]} (V3 requires joint members to share "
+                "head_dim)"
             )
 
     @property
     def head_dim(self) -> int:
+        """Per-head width, read off the last axis of ``q``."""
         return int(self.q.shape[-1])
 
     @property
     def num_query_tokens(self) -> int:
+        """Number of query tokens this stream contributes at this layer."""
         return int(self.q.shape[1])
 
 
 @dataclass
 class StreamState:
-    """一条流在层间传递的全部东西。引擎持有它，流模块读写它。
+    """Everything one stream carries from layer to layer.
 
-    ``hidden`` 的宽度是 ``StreamSpec.residual_width``，**不是** attn_width。
-    ``extras`` 存流自己要跨层带的东西（例如 RoPE 频率、per-layer 调制缓存），
-    引擎不解释它的内容，只负责原样传递。
+    The engine owns the instance; the stream module reads and writes it.
+
+    Attributes:
+        stream: Stream name, equal to ``StreamSpec.name``.
+        hidden: Residual tensor ``[B, L, residual_width]``. The width is
+            ``StreamSpec.residual_width``, NOT attn_width.
+        modulation: Packed modulation tensor, or None. Slot order is given by
+            ``StreamSpec.modulation_slots``.
+        extras: Anything the stream itself needs across layers, for example
+            RoPE frequencies or a per-layer modulation cache. The engine does
+            not interpret the contents and only passes them through.
     """
 
-    stream: str                                  # 流名，与 StreamSpec.name 相等
-    hidden: Tensor                               # [B, L, residual_width]
-    modulation: Tensor | None = None             # 打包的调制张量，槽序见 spec
+    stream: str
+    hidden: Tensor
+    modulation: Tensor | None = None
     extras: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.hidden.ndim != 3:
             raise ValueError(
-                f"StreamState({self.stream!r}).hidden 必须是 "
-                f"[B, L, residual_width] 三维，得到 {tuple(self.hidden.shape)}"
+                f"StreamState({self.stream!r}).hidden must be 3-D "
+                f"[B, L, residual_width], got {tuple(self.hidden.shape)}"
             )
 
     @property
     def num_tokens(self) -> int:
-        """本流的 token 数。C8/C9 用它断言「层前后 token 数不变」。"""
+        """Token count of this stream.
+
+        Returns:
+            ``hidden.shape[1]``. Checks C8/C9 use it to assert the token
+            count is unchanged across a layer.
+        """
         return int(self.hidden.shape[1])
 
     @property
     def width(self) -> int:
+        """Residual width of this stream, read off ``hidden.shape[-1]``."""
         return int(self.hidden.shape[-1])
 
     def replace_hidden(self, hidden: Tensor) -> StreamState:
-        """换残差、保留其余字段。要求 token 数不变（C9）。
+        """Return a copy with a new residual and the other fields kept.
 
-        引擎每层用它写回输出 —— 用 ``dataclasses.replace`` 不做这条校验，
-        所以这里是一个显式方法而不是 replace 的别名。
+        The engine uses this to write each layer's output back.
+        ``dataclasses.replace`` would not run the token-count check, which is
+        why this is an explicit method rather than an alias for it.
+
+        Args:
+            hidden: New residual tensor; its token count must match.
+
+        Returns:
+            A new ``StreamState`` sharing ``modulation`` and a shallow copy
+            of ``extras``.
+
+        Raises:
+            ValueError: If the token count changed (check C9: a layer must
+                not change a stream's token count).
         """
         if hidden.shape[1] != self.num_tokens:
             raise ValueError(
-                f"StreamState({self.stream!r}).replace_hidden：token 数从 "
-                f"{self.num_tokens} 变成了 {hidden.shape[1]}；"
-                "层不得改变流的 token 数（C9）"
+                f"StreamState({self.stream!r}).replace_hidden: token count "
+                f"went from {self.num_tokens} to {hidden.shape[1]}; a layer "
+                "must not change a stream's token count (C9)"
             )
         return StreamState(stream=self.stream, hidden=hidden,
                            modulation=self.modulation, extras=dict(self.extras))
 
 
 class StreamModule(Protocol):
-    """一条流的 block 必须满足的协议。``build(StreamSpec.impl, ...)`` 的产出物。
+    """Protocol a stream's block must satisfy.
 
-    四段切分的理由：联合注意力必须在**所有流算完 QKV 之后、
-    任何流做 post-attn 之前**发生。把一层写成一个 ``forward`` 就做不到这件事，
-    现状正是因此在 MoT 的 forward 里把两条流的代码交织在一起。
+    It is what ``build(StreamSpec.impl, ...)`` produces.
 
-    ``local_layer_id`` 是**本流的局部层号**，由
-    ``StreamSpec.resolve_layer_index_map`` 在构造期解析。
-    流模块永远看不到联合层号 —— 看见了就会有流自己判断「我参不参与」的实现。
+    Why four stages: joint attention has to happen after every stream has
+    computed its QKV and before any stream runs its post-attention part.
+    Writing a layer as one ``forward`` cannot express that, which is why the
+    current code interleaves two streams' code inside ``MoT.forward``.
+
+    ``local_layer_id`` is this stream's own local layer index, resolved at
+    construction time by ``StreamSpec.resolve_layer_index_map``. A stream
+    module never sees the joint layer index; if it did, streams would start
+    deciding "do I take part" on their own.
     """
 
-    def prepare(self, state: StreamState, *,
-                timestep: Tensor | None) -> StreamState:
-        """进入第一层之前做一次。调制量的计算、RoPE 频率的准备都在这里。
+    def prepare(self, x: Tensor, *,
+                timestep: Tensor | None = None,
+                conditions: ConditionBus | None = None) -> StreamState:
+        """Turn the raw input tensor into this stream's layer-0 state.
 
-        ``timestep is None`` 对应 ``StreamSpec.needs_timestep=False``
-        （VL 这类纯条件流）。
+        Called once per forward pass.
+
+        The argument is a bare tensor rather than a ``StreamState`` because
+        patchify and tokenization belong to the stream (L2 detailed design
+        §1.1 assigns them to ``prepare``), and before patchify the raw video
+        is ``[B, C, F, H, W]`` while actions are ``[B, T, D]``, neither of
+        which is the ``[B, L, W]`` that ``StreamState`` requires. Making
+        ``prepare`` take a ``StreamState`` would force tokenization to happen
+        outside it, and that outside could only be the engine or the builder,
+        so every new modality would mean a framework code change.
+
+        Modulation computation and RoPE frequency preparation also happen
+        here; their products hang off ``modulation`` and ``extras``.
+
+        Args:
+            x: Raw input tensor for this stream, taken from
+                ``batch[StreamSpec.batch_key]``.
+            timestep: Diffusion timestep, or None when
+                ``StreamSpec.needs_timestep`` is False (a condition-only
+                stream such as VL).
+            conditions: The whole condition bus. The stream module picks the
+                conditions it wants by name (§4.4). It appears only in this
+                method: CROSS_ATTENTION KV and CHANNEL_CONCAT channels are
+                layer-invariant, so projecting once and storing the result in
+                ``extras`` is cheaper than reprojecting per layer, and it
+                keeps the ``pre_attn`` / ``post_attn`` signatures independent
+                of how many conditions exist.
+
+        Returns:
+            A ``StreamState`` whose ``hidden`` is ``[B, L, residual_width]``,
+            where ``L`` must equal the segment length the layout assigns to
+            this stream (the engine reconciles this in ``run``).
         """
         ...
 
     def pre_attn(self, state: StreamState, *, local_layer_id: int) -> QKV:
-        """算本层的 Q/K/V。**不做注意力**。"""
+        """Compute this layer's Q/K/V without performing attention.
+
+        Args:
+            state: Current state of this stream.
+            local_layer_id: Index into this stream's own layer list.
+
+        Returns:
+            The ``QKV`` triple, each ``[B, L_self, num_heads, head_dim]``.
+        """
         ...
 
     def post_attn(self, state: StreamState, attn_out: Tensor, *,
                   local_layer_id: int) -> StreamState:
-        """吃联合注意力切回来的本流输出，做投影、残差、FFN。
+        """Consume this stream's slice of the joint attention output.
 
-        ``attn_out`` 形状 ``[B, L_self, num_heads, head_dim]``，
-        token 数必须等于 ``pre_attn`` 返回的 ``q`` 的 token 数。
+        Performs the output projection, the residual add, and the FFN.
+
+        Args:
+            state: State as passed to ``pre_attn`` for the same layer.
+            attn_out: ``[B, L_self, num_heads, head_dim]``. Its token count
+                must equal the token count of the ``q`` returned by
+                ``pre_attn``.
+            local_layer_id: Index into this stream's own layer list.
+
+        Returns:
+            The updated state, with the same token count.
         """
         ...
 
     def finalize(self, state: StreamState) -> StreamState:
-        """走完所有层之后做一次。最终 norm 之类。
+        """Run once after all layers, for example a final norm.
 
-        **不含输出头** —— 头是 L4 的事（``heads/``），通过
-        ``HiddenStateRef`` 取这里的产出物。
+        This excludes output heads: heads belong to L4 (``heads/``) and read
+        this method's product through ``HiddenStateRef``.
+
+        Args:
+            state: State after the last layer.
+
+        Returns:
+            The finalized state.
         """
         ...

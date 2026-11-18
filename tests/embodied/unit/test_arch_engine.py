@@ -1,13 +1,16 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""L2 引擎：cat → 一次联合注意力 → split（交界面 I3）。
+"""L2 engine: cat -> one joint attention -> split (interface I3).
 
-两条主断言：
-  1. **cat→attn→split ≡ 逐流独立注意力**（当可见性恰好是按段块对角时）。
-     这是「一次联合注意力」这条路没有把别的流的 token 混进来的证据。
-  2. **调用顺序不可重排**：一层里全部参与流的 ``pre_attn`` 必须在
-     任何流的 ``post_attn`` 之前完成。
+Two main assertions:
+  1. **cat->attn->split is equivalent to per-stream attention** when the
+     visibility is exactly block diagonal over the layout segments. This is the
+     evidence that the single joint attention does not mix another stream's
+     tokens in.
+  2. **The call order cannot be rearranged**: within one layer every
+     participating stream's ``pre_attn`` has to finish before any stream's
+     ``post_attn`` runs.
 """
 
 from __future__ import annotations
@@ -36,16 +39,24 @@ NUM_HEADS = 2
 
 def spec(name: str, *, num_layers: int = 3, residual_width: int = 16,
          **extra) -> StreamSpec:
+    """A ``StreamSpec`` backed by ``_ToyStream``, at test widths."""
+    # ``needs_timestep`` defaults to True, which makes
+    # ``timestep_embed_width`` mandatory (the if-and-only-if check in
+    # StreamSpec). It is a setdefault rather than a fixed value so a
+    # needs_timestep=False case can override it to None at the same time.
+    extra.setdefault("timestep_embed_width", 256)
     return StreamSpec(name=name, impl=Spec(impl=_ToyStream),
                       residual_width=residual_width, num_heads=NUM_HEADS,
                       head_dim=HEAD_DIM, num_layers=num_layers, **extra)
 
 
 class _ToyStream:
-    """最小 ``StreamModule``：四段各做一件可观测的事，不含 nn.Module。
+    """Minimal ``StreamModule``: each of the four stages does one observable
+    thing, and it holds no ``nn.Module``.
 
-    放在测试里而不是包里：它是脚手架，不是参考实现 ——
-    包里多一个玩具 DiT，迟早有人把它当成模板。
+    It lives in the test rather than in the package because it is scaffolding,
+    not a reference implementation: one more toy DiT in the package and someone
+    will eventually treat it as a template.
     """
 
     def __init__(self, stream_spec: StreamSpec, *, trace: list, seed: int = 0):
@@ -61,11 +72,17 @@ class _ToyStream:
                                       generator=gen) * scale
                           for _ in range(stream_spec.num_layers)]
 
-    def prepare(self, state: StreamState, *, timestep):
+    def prepare(self, x: torch.Tensor, *, timestep, conditions=None):
+        """Wrap the already token-shaped input into a ``StreamState``."""
         self.trace.append((self.spec.name, "prepare", timestep is None))
-        return state
+        # The toy stream's input is already [B, L, W], so prepare only wraps it.
+        # A real implementation patchifies here (video [B,C,F,H,W]) or projects
+        # (action [B,T,D]); the "raw tensor in, StreamState out" contract is the
+        # same in both cases.
+        return StreamState(stream=self.spec.name, hidden=x)
 
     def pre_attn(self, state: StreamState, *, local_layer_id: int) -> QKV:
+        """Project the hidden state into per-head q/k/v of shape [B, L, H, D]."""
         self.trace.append((self.spec.name, "pre_attn", local_layer_id))
         batch, tokens, _ = state.hidden.shape
         packed = state.hidden @ self.to_qkv[local_layer_id]
@@ -75,6 +92,7 @@ class _ToyStream:
 
     def post_attn(self, state: StreamState, attn_out: torch.Tensor, *,
                   local_layer_id: int) -> StreamState:
+        """Project the attention output back and add it to the residual."""
         self.trace.append((self.spec.name, "post_attn", local_layer_id))
         batch, tokens = attn_out.shape[:2]
         flat = attn_out.reshape(batch, tokens, -1)
@@ -82,6 +100,7 @@ class _ToyStream:
             state.hidden + flat @ self.from_attn[local_layer_id])
 
     def finalize(self, state: StreamState) -> StreamState:
+        """Scale by 2 so a skipped ``finalize`` is visible in the output."""
         self.trace.append((self.spec.name, "finalize", None))
         return state.replace_hidden(state.hidden * 2.0)
 
@@ -93,6 +112,7 @@ BATCH = 2
 
 def joint_layout(*, video: int = VIDEO_TOKENS,
                  action: int = ACTION_TOKENS) -> TokenLayout:
+    """8 video tokens then 4 action tokens, with a ``stream`` label."""
     return TokenLayout(
         segments=(SegmentRange("video", 0, video),
                   SegmentRange("action", video, video + action)),
@@ -100,7 +120,13 @@ def joint_layout(*, video: int = VIDEO_TOKENS,
 
 
 def two_streams(*, num_layers: int = 3, action_extra: dict | None = None):
-    """两条流的完整入参：group / layout / modules / states / trace。"""
+    """Every argument the engine needs: group / layout / modules / inputs /
+    trace.
+
+    ``inputs`` holds **bare tensors** rather than ``StreamState`` objects:
+    step 1 of the engine calls ``prepare``, and ``prepare`` consumes raw inputs
+    (tokenization belongs to the stream).
+    """
     video_spec = spec("video", num_layers=num_layers)
     action_spec = spec("action", num_layers=num_layers, residual_width=12,
                        **(action_extra or {}))
@@ -110,17 +136,18 @@ def two_streams(*, num_layers: int = 3, action_extra: dict | None = None):
     modules = {"video": _ToyStream(video_spec, trace=trace, seed=1),
                "action": _ToyStream(action_spec, trace=trace, seed=2)}
     gen = torch.Generator().manual_seed(7)
-    states = {
-        "video": StreamState(stream="video", hidden=torch.randn(
-            BATCH, VIDEO_TOKENS, video_spec.residual_width, generator=gen)),
-        "action": StreamState(stream="action", hidden=torch.randn(
-            BATCH, ACTION_TOKENS, action_spec.residual_width, generator=gen)),
+    inputs = {
+        "video": torch.randn(BATCH, VIDEO_TOKENS, video_spec.residual_width,
+                             generator=gen),
+        "action": torch.randn(BATCH, ACTION_TOKENS, action_spec.residual_width,
+                              generator=gen),
     }
-    return group, joint_layout(), modules, states, trace
+    return group, joint_layout(), modules, inputs, trace
 
 
-def run(engine, group, layout, modules, states, *, plan=None, **extra):
-    return engine.run(group, states, modules,
+def run(engine, group, layout, modules, inputs, *, plan=None, **extra):
+    """Call ``engine.run`` with an empty condition bus and no timesteps."""
+    return engine.run(group, inputs, modules,
                       plan if plan is not None else AttentionPlan(layout=layout),
                       layout, conditions=ConditionBus(),
                       timesteps={name: None for name in group.stream_names},
@@ -128,7 +155,12 @@ def run(engine, group, layout, modules, states, *, plan=None, **extra):
 
 
 def test_call_order_is_not_reorderable():
-    """一层里全部参与流 pre_attn → 一次注意力 → 各流 post_attn（§7）。"""
+    """Per layer: every participating stream's ``pre_attn``, then one joint
+    attention, then every stream's ``post_attn`` (§7).
+
+    With 3 layers and 2 streams the body is exactly 12 calls in that order,
+    bracketed by two ``prepare`` and two ``finalize`` calls.
+    """
     group, layout, modules, states, trace = two_streams()
     run(JointAttentionEngine(), group, layout, modules, states)
     assert trace[:2] == [("video", "prepare", True),
@@ -146,6 +178,8 @@ def test_call_order_is_not_reorderable():
 
 
 def test_output_shapes_and_stream_set():
+    """Each stream comes back at its own residual width (16 and 12 here), so the
+    split undoes the concatenation rather than returning a shared tensor."""
     group, layout, modules, states, _ = two_streams()
     out = run(JointAttentionEngine(), group, layout, modules, states)
     assert isinstance(out, EngineOutput)
@@ -153,14 +187,16 @@ def test_output_shapes_and_stream_set():
     assert out.require("video").hidden.shape == (BATCH, VIDEO_TOKENS, 16)
     assert out.require("action").hidden.shape == (BATCH, ACTION_TOKENS, 12)
     assert out.captured == {}
-    with pytest.raises(KeyError, match="没有流"):
+    with pytest.raises(KeyError, match="has no state for stream"):
         out.require("vl")
 
 
 def test_joint_attention_equals_per_stream_when_block_diagonal():
-    """cat→attn→split ≡ 逐流独立注意力（可见性恰为 same_stream() 时）。
+    """With ``same_stream()`` visibility, cat->attn->split equals running each
+    stream's attention on its own.
 
-    这是「一次联合注意力」没有把别的流的 token 混进来的直接证据。
+    This is the direct evidence that the single joint attention does not mix in
+    tokens from the other stream.
     """
     group, layout, modules, states, _ = two_streams()
     plan = AttentionPlan.from_visibility(same_stream(), layout)
@@ -175,7 +211,12 @@ def test_joint_attention_equals_per_stream_when_block_diagonal():
 
 
 def test_cross_stream_edge_actually_changes_the_result():
-    """加一条跨流边必须改变结果 —— 否则上一条等价性测试是空的。"""
+    """Adding one cross-stream edge has to change the result, otherwise the
+    equivalence test above would be vacuous.
+
+    The edge is directed: ``stream_edge("video", "action")`` lets action attend
+    to video, so the video output must stay bit-comparable.
+    """
     group, layout, modules, states, _ = two_streams()
     diag = AttentionPlan.from_visibility(same_stream(), layout)
     crossed = AttentionPlan.from_visibility(
@@ -185,25 +226,29 @@ def test_cross_stream_edge_actually_changes_the_result():
             plan=crossed)
     assert not torch.allclose(a.require("action").hidden,
                               b.require("action").hidden, atol=1e-6)
-    # 有向：action 的入边不改变 video 的结果
+    # Directed: an incoming edge on action does not change the video result
     assert torch.allclose(a.require("video").hidden,
                           b.require("video").hidden, atol=1e-6)
 
 
 def _self_attend(qkv: QKV) -> torch.Tensor:
-    """逐流独立注意力基准。进出都是 [B, L, H, D]。"""
+    """Per-stream attention reference. In and out are both [B, L, H, D]."""
     q, k, v = (t.transpose(1, 2) for t in (qkv.q, qkv.k, qkv.v))
     scores = (q @ k.transpose(-1, -2)) / math.sqrt(qkv.head_dim)
     out = torch.softmax(scores, dim=-1) @ v
     return out.transpose(1, 2)
 
 
-def _per_stream_reference(group, modules, states) -> dict[str, StreamState]:
-    """不经引擎、逐流跑完全部层。各流只看自己 ⇒ 块对角可见性的应有结果。"""
+def _per_stream_reference(group, modules, inputs) -> dict[str, StreamState]:
+    """Run every layer stream by stream, bypassing the engine.
+
+    Each stream only sees itself, which is the expected result under block
+    diagonal visibility.
+    """
     final: dict[str, StreamState] = {}
     for stream_spec in group.members:
         module = modules[stream_spec.name]
-        state = module.prepare(states[stream_spec.name], timestep=None)
+        state = module.prepare(inputs[stream_spec.name], timestep=None)
         for layer in range(stream_spec.num_layers):
             qkv = module.pre_attn(state, local_layer_id=layer)
             state = module.post_attn(state, _self_attend(qkv),
@@ -213,7 +258,8 @@ def _per_stream_reference(group, modules, states) -> dict[str, StreamState]:
 
 
 def test_single_stream_is_an_n_equals_one_degeneration():
-    """单流走的是同一条路：plan.structural 为 None、routes 为空，没有特例分支。"""
+    """A single stream takes the same path: ``plan.structural`` is None,
+    ``routes`` is empty, and there is no special-case branch."""
     only = spec("video", num_layers=2)
     group = AttentionGroup(members=(only,), num_layers=2)
     assert group.routes == ()
@@ -222,9 +268,7 @@ def test_single_stream_is_an_n_equals_one_degeneration():
     trace: list = []
     modules = {"video": _ToyStream(only, trace=trace, seed=3)}
     gen = torch.Generator().manual_seed(11)
-    states = {"video": StreamState(
-        stream="video",
-        hidden=torch.randn(BATCH, VIDEO_TOKENS, 16, generator=gen))}
+    states = {"video": torch.randn(BATCH, VIDEO_TOKENS, 16, generator=gen)}
     plan = AttentionPlan.from_visibility(None, layout)
     assert plan.structural is None
     out = run(JointAttentionEngine(), group, layout, modules, states, plan=plan)
@@ -233,35 +277,45 @@ def test_single_stream_is_an_n_equals_one_degeneration():
 
 
 def test_captures_are_keyed_by_stream_and_joint_layer():
+    """Captures are keyed by ``(stream, joint layer id)`` and hold the hidden
+    state **after that layer**, not the finalized output."""
     group, layout, modules, states, _ = two_streams()
     out = run(JointAttentionEngine(), group, layout, modules, states,
               captures={"action": (0, 2)})
     assert sorted(out.captured) == [("action", 0), ("action", 2)]
     grabbed = out.require_capture("action", 0)
     assert grabbed.shape == (BATCH, ACTION_TOKENS, 12)
-    # 抓的是**该层之后**的隐状态，不是 finalize 之后的
+    # What is captured is the hidden state after that layer, not post-finalize
     assert not torch.allclose(grabbed, out.require("action").hidden)
-    with pytest.raises(KeyError, match="没有抓取点"):
+    with pytest.raises(KeyError, match="has no capture point"):
         out.require_capture("video", 0)
 
 
 def test_captures_reject_unknown_stream_and_layer():
+    """A capture naming a stream outside the group, or a layer that stream does
+    not participate in, is rejected rather than silently dropped."""
     group, layout, modules, states, _ = two_streams()
-    with pytest.raises(KeyError, match="不在本组里的流"):
+    with pytest.raises(KeyError, match="requested streams outside this group"):
         run(JointAttentionEngine(), group, layout, modules, states,
             captures={"vl": (0,)})
-    with pytest.raises(ValueError, match="不参与这一层"):
+    with pytest.raises(ValueError, match="does not participate in this layer"):
         run(JointAttentionEngine(), group, layout, modules, states,
             captures={"action": (7,)})
 
 
 def test_strided_stream_participates_in_a_subset_of_layers():
-    """层数不等靠 ``LayerMapping`` 协调，不靠「三者全等」校验。"""
+    """Unequal layer counts are reconciled by ``LayerMapping``, not by requiring
+    all streams to have the same depth.
+
+    With 3 joint layers and ``stride=2`` the action stream must declare 2 layers
+    and maps onto joint layers 0 and 2; declaring 3 is rejected.
+    """
     group, layout, modules, states, trace = two_streams(
         num_layers=3, action_extra={"layer_mapping": LayerMapping.STRIDED,
                                     "stride": 2})
-    # action 的 num_layers 仍是 3 ⇒ 与 stride=2 在联合层数 3 下解析不出 3 层
-    with pytest.raises(ValueError, match="两者必须相等"):
+    # action still declares num_layers=3, which stride=2 over 3 joint layers
+    # cannot resolve to 3 local layers
+    with pytest.raises(ValueError, match="The two must be equal"):
         group.layer_index_maps()
 
     video_spec = spec("video", num_layers=3)
@@ -275,15 +329,14 @@ def test_strided_stream_participates_in_a_subset_of_layers():
                "action": _ToyStream(action_spec, trace=trace, seed=2)}
     gen = torch.Generator().manual_seed(7)
     states = {
-        "video": StreamState(stream="video", hidden=torch.randn(
-            BATCH, VIDEO_TOKENS, 16, generator=gen)),
-        "action": StreamState(stream="action", hidden=torch.randn(
-            BATCH, ACTION_TOKENS, 12, generator=gen)),
+        "video": torch.randn(BATCH, VIDEO_TOKENS, 16, generator=gen),
+        "action": torch.randn(BATCH, ACTION_TOKENS, 12, generator=gen),
     }
     plan = AttentionPlan.from_visibility(same_stream(), layout)
     out = run(JointAttentionEngine(), group, layout, modules, states,
               plan=plan)
-    # 联合层 1 只有 video 参与 ⇒ action 的局部层号只出现 0 和 1
+    # Only video participates in joint layer 1, so the action stream's local
+    # layer ids are just 0 and 1
     assert [item for item in trace if item[0] == "action"
             and item[1] == "pre_attn"] == [("action", "pre_attn", 0),
                                            ("action", "pre_attn", 1)]
@@ -292,7 +345,8 @@ def test_strided_stream_participates_in_a_subset_of_layers():
 
 
 def test_restrict_to_streams_is_identity_on_the_common_case():
-    """全部流都参与是首批两个模型的常态，不该为它付一次 index_select。"""
+    """When every stream participates, ``restrict_to_streams`` returns the same
+    objects, so the common case pays no ``index_select``."""
     layout = joint_layout()
     plan = AttentionPlan.from_visibility(same_stream(), layout)
     sub_layout, sub_plan = restrict_to_streams(layout, plan,
@@ -302,57 +356,112 @@ def test_restrict_to_streams_is_identity_on_the_common_case():
 
 
 def test_restrict_to_streams_renumbers_and_selects_both_channels():
+    """Restricting to a subset renumbers the segments from 0 and selects both
+    mask channels: the structural mask and the per-sample ``key_valid``."""
     layout = joint_layout()
     key_valid = torch.ones((BATCH, layout.total), dtype=torch.bool)
     key_valid[1, -1] = False
     plan = AttentionPlan.from_visibility(same_stream(), layout,
                                          key_valid=key_valid)
     sub_layout, sub_plan = restrict_to_streams(layout, plan, ("action",))
-    # 剩下的段重新从 0 连续编号 —— TokenLayout 要求覆盖 [0, total)
+    # The surviving segments are renumbered from 0 without gaps, because
+    # TokenLayout requires the segments to cover [0, total)
     assert [(s.stream, s.start, s.stop) for s in sub_layout.segments] == \
         [("action", 0, ACTION_TOKENS)]
     assert sub_layout.labels_of("stream").tolist() == [1] * ACTION_TOKENS
     assert sub_plan.structural.shape == (ACTION_TOKENS, ACTION_TOKENS)
-    assert bool(sub_plan.structural.all())      # action 段内部全可见
+    assert bool(sub_plan.structural.all())      # fully visible within action
     assert sub_plan.key_valid.shape == (BATCH, ACTION_TOKENS)
     assert not bool(sub_plan.key_valid[1, -1])
-    with pytest.raises(KeyError, match="布局里没有流"):
+    with pytest.raises(KeyError, match="layout has no stream"):
         restrict_to_streams(layout, plan, ("vl",))
 
 
 def test_num_heads_must_match_across_participating_streams():
+    """Joint attention concatenates along the token axis, so unequal
+    ``num_heads`` is rejected at run time with a named error."""
     video_spec = spec("video")
     action_spec = StreamSpec(name="action", impl=Spec(impl=_ToyStream),
                              residual_width=12, num_heads=NUM_HEADS + 1,
-                             head_dim=HEAD_DIM, num_layers=3)
+                             head_dim=HEAD_DIM, num_layers=3,
+                             timestep_embed_width=256)
     group = AttentionGroup(members=(video_spec, action_spec), num_layers=3)
     trace: list = []
     modules = {"video": _ToyStream(video_spec, trace=trace, seed=1),
                "action": _ToyStream(action_spec, trace=trace, seed=2)}
     gen = torch.Generator().manual_seed(7)
     states = {
-        "video": StreamState(stream="video", hidden=torch.randn(
-            BATCH, VIDEO_TOKENS, 16, generator=gen)),
-        "action": StreamState(stream="action", hidden=torch.randn(
-            BATCH, ACTION_TOKENS, 12, generator=gen)),
+        "video": torch.randn(BATCH, VIDEO_TOKENS, 16, generator=gen),
+        "action": torch.randn(BATCH, ACTION_TOKENS, 12, generator=gen),
     }
-    with pytest.raises(ValueError, match="num_heads 相等"):
+    with pytest.raises(ValueError, match="share num_heads"):
         run(JointAttentionEngine(), group, joint_layout(), modules, states)
 
 
 def test_shape_signature_guards_c8_and_c9():
+    """C8/C9: the set of streams and each stream's token count are invariant
+    across the engine run, so a module cannot add or drop tokens."""
     before = {"video": StreamState(stream="video",
                                    hidden=torch.zeros(1, 8, 16))}
     assert_shape_signature(before, dict(before))
-    with pytest.raises(ValueError, match="流集合变了"):
+    with pytest.raises(ValueError, match="stream set changed across the layer"):
         assert_shape_signature(before, {})
     grown = {"video": StreamState(stream="video",
                                   hidden=torch.zeros(1, 9, 16))}
-    with pytest.raises(ValueError, match="token 数"):
+    with pytest.raises(ValueError, match="token count went from"):
         assert_shape_signature(before, grown)
 
 
+def test_prepare_eats_a_raw_tensor_and_tokenizes_it():
+    """``prepare`` receives the raw tensor: tokenization (patchify) belongs to
+    the stream.
+
+    This is nailed down with a stream whose input is not ``[B, L, W]``: if the
+    engine wrapped the input into a ``StreamState`` before calling ``prepare``,
+    that object could not even be constructed (``StreamState.hidden`` requires
+    rank 3) and the test would fail before the run.
+    """
+    only = spec("video", num_layers=2)
+    group = AttentionGroup(members=(only,), num_layers=2)
+    layout = TokenLayout(segments=(SegmentRange("video", 0, VIDEO_TOKENS),),
+                         labels={})
+    trace: list = []
+
+    class _Patchifying(_ToyStream):
+        def prepare(self, x, *, timestep, conditions=None):
+            # The raw input is [B, C, L] and needs a transpose to be a token
+            # sequence
+            trace.append((self.spec.name, "prepare", timestep is None))
+            return StreamState(stream=self.spec.name, hidden=x.transpose(1, 2))
+
+    modules = {"video": _Patchifying(only, trace=trace, seed=3)}
+    raw = {"video": torch.zeros(BATCH, 16, VIDEO_TOKENS)}
+    out = run(JointAttentionEngine(), group, layout, modules, raw,
+              plan=AttentionPlan.from_visibility(None, layout))
+    assert out.require("video").hidden.shape == (BATCH, VIDEO_TOKENS, 16)
+
+
+def test_prepare_must_produce_the_layout_segment_length():
+    """The token count out of ``prepare`` must equal the layout segment length,
+    which is where the geometry and the patchify are reconciled.
+
+    Nowhere else reports the cause of an off-by-one: the concatenation only
+    reports a wrong total, and the total is the sum over both streams.
+    """
+    group, layout, modules, raw, _ = two_streams()
+
+    class _Short(_ToyStream):
+        def prepare(self, x, *, timestep, conditions=None):
+            return StreamState(stream=self.spec.name, hidden=x[:, :-1])
+
+    modules["action"] = _Short(group.spec_of("action"), trace=[], seed=2)
+    with pytest.raises(ValueError, match="the layout gives it a segment length"):
+        run(JointAttentionEngine(), group, layout, modules, raw)
+
+
 def test_module_changing_token_count_is_rejected():
+    """C9: a stream whose ``finalize`` drops a token is rejected, because the
+    caller indexes the output by the same layout it passed in."""
     group, layout, modules, states, _ = two_streams()
 
     class _Grower(_ToyStream):
@@ -366,12 +475,15 @@ def test_module_changing_token_count_is_rejected():
 
 
 def test_run_validates_stream_sets_and_segment_order():
+    """``inputs``, ``modules`` and the layout segment order must all agree with
+    the group (C8), so a reordered layout is an error rather than a silent
+    permutation of the concatenated tokens."""
     group, layout, modules, states, _ = two_streams()
     engine = JointAttentionEngine()
-    with pytest.raises(ValueError, match="states 的流集合"):
+    with pytest.raises(ValueError, match="inputs stream set"):
         run(engine, group, layout, modules,
             {"video": states["video"]})
-    with pytest.raises(ValueError, match="modules 的流集合"):
+    with pytest.raises(ValueError, match="modules stream set"):
         run(engine, group, layout, {"video": modules["video"]}, states)
     swapped = TokenLayout(
         segments=(SegmentRange("action", 0, ACTION_TOKENS),
@@ -383,7 +495,8 @@ def test_run_validates_stream_sets_and_segment_order():
 
 
 def test_dead_layer_is_rejected():
-    """没有任何流参与的联合层是配置错误，不是空操作。"""
+    """A joint layer in which no stream participates is a configuration error,
+    not a no-op."""
     strided = spec("video", num_layers=2, residual_width=16,
                    layer_mapping=LayerMapping.AT_LAYERS,
                    participating_layers=(0, 1))
@@ -392,42 +505,50 @@ def test_dead_layer_is_rejected():
                          labels={})
     trace: list = []
     modules = {"video": _ToyStream(strided, trace=trace, seed=1)}
-    states = {"video": StreamState(stream="video",
-                                   hidden=torch.zeros(BATCH, VIDEO_TOKENS, 16))}
-    with pytest.raises(ValueError, match="死层"):
+    states = {"video": torch.zeros(BATCH, VIDEO_TOKENS, 16)}
+    with pytest.raises(ValueError, match="which makes it a dead layer"):
         run(JointAttentionEngine(), group, layout, modules, states)
 
 
 def test_group_validates_members_and_routes():
+    """``AttentionGroup`` rejects an empty member list, a non-positive layer
+    count, duplicate stream names, unequal ``head_dim`` and bad routes.
+
+    V3 allows ``num_heads`` and ``residual_width`` to differ per stream but not
+    ``head_dim``, since the joint attention shares one score scale.
+    """
     video_spec = spec("video")
     assert AttentionGroup(members=(video_spec,),
                           num_layers=3).head_dim == HEAD_DIM
-    with pytest.raises(ValueError, match="不得为空"):
+    with pytest.raises(ValueError, match="must not be empty"):
         AttentionGroup(members=(), num_layers=3)
-    with pytest.raises(ValueError, match="num_layers 必须为正"):
+    with pytest.raises(ValueError, match="num_layers must be positive"):
         AttentionGroup(members=(video_spec,), num_layers=0)
-    with pytest.raises(ValueError, match="重名流"):
+    with pytest.raises(ValueError, match="has duplicate stream names"):
         AttentionGroup(members=(video_spec, spec("video")), num_layers=3)
-    # V3：num_heads 与 residual_width 可以不等，head_dim 不行
+    # V3: num_heads and residual_width may differ, head_dim may not
     wide = StreamSpec(name="action", impl=Spec(impl=_ToyStream),
                       residual_width=12, num_heads=NUM_HEADS,
-                      head_dim=HEAD_DIM * 2, num_layers=3)
-    with pytest.raises(ValueError, match="head_dim 必须相等"):
+                      head_dim=HEAD_DIM * 2, num_layers=3,
+                      timestep_embed_width=256)
+    with pytest.raises(ValueError, match="must share head_dim"):
         AttentionGroup(members=(video_spec, wide), num_layers=3)
-    with pytest.raises(ValueError, match="不在本组里的流"):
+    with pytest.raises(ValueError, match="points at .*streams outside this group"):
         AttentionGroup(members=(video_spec,), num_layers=3,
                        routes=(KVRoute(src="video", dst="vl",
                                        src_layers=(0,), dst_layers=(0,)),))
-    # 路由的层号是**局部**层号，不是联合层号
+    # Route layer ids are **local** layer ids, not joint layer ids
     action_spec = spec("action", num_layers=2, residual_width=12,
                        layer_mapping=LayerMapping.STRIDED, stride=2)
-    with pytest.raises(ValueError, match="局部"):
+    with pytest.raises(ValueError, match="local.. layer indices"):
         AttentionGroup(members=(video_spec, action_spec), num_layers=3,
                        routes=(KVRoute(src="video", dst="action",
                                        src_layers=(0,), dst_layers=(2,)),))
 
 
 def test_group_routes_into():
+    """``routes_into`` returns the KV routes targeting one stream, and an empty
+    tuple is the normal answer rather than an error."""
     video_spec = spec("video")
     action_spec = spec("action", residual_width=12)
     route = KVRoute(src="video", dst="action", src_layers=(0,),
@@ -435,21 +556,24 @@ def test_group_routes_into():
     group = AttentionGroup(members=(video_spec, action_spec), num_layers=3,
                            routes=(route,))
     assert group.routes_into("action") == (route,)
-    # 空元组是常态（单流模型恒为空），不是错误
+    # An empty tuple is normal (always empty for a single-stream model)
     assert group.routes_into("video") == ()
-    with pytest.raises(KeyError, match="没有流"):
+    with pytest.raises(KeyError, match="AttentionGroup has no stream"):
         group.spec_of("vl")
 
 
 def test_engine_backend_is_validated_at_construction():
-    with pytest.raises(ValueError, match="不支持"):
+    """An unsupported backend name and a ``flex`` backend without a block size
+    are both rejected when the engine is built, not on the first forward."""
+    with pytest.raises(ValueError, match="is not supported"):
         JointAttentionEngine(backend="flash")
-    with pytest.raises(ValueError, match="必须给 block_size"):
+    with pytest.raises(ValueError, match="requires block_size"):
         JointAttentionEngine(backend="flex")
 
 
 def test_sdpa_backend_matches_dense_backend():
-    """两个后端吃的是同一份两通道 plan，结果必须一致。"""
+    """Both backends consume the same two-channel plan, so their results have to
+    agree to 1e-6."""
     group, layout, modules, states, _ = two_streams()
     plan = AttentionPlan.from_visibility(
         same_stream() | stream_edge("video", "action"), layout)
@@ -463,7 +587,10 @@ def test_sdpa_backend_matches_dense_backend():
 
 
 class _ZeroOverride:
-    """接管一层并把注意力输出清零。走 override 的层不进 CUDA graph 捕获。"""
+    """Takes over one layer and zeroes the attention output.
+
+    Layers that go through an override are not captured into a CUDA graph.
+    """
 
     def __init__(self, layer_id: int, *, drop: str | None = None):
         self.layer_id = layer_id
@@ -480,6 +607,8 @@ class _ZeroOverride:
 
 
 def test_override_takes_over_one_layer():
+    """An override replaces the attention of exactly the layer it claims, and
+    the result differs from the plain run."""
     group, layout, modules, states, _ = two_streams()
     plan = AttentionPlan.from_visibility(same_stream(), layout)
     override = _ZeroOverride(1)
@@ -493,8 +622,10 @@ def test_override_takes_over_one_layer():
 
 
 def test_override_must_return_every_active_stream():
+    """An override that omits an active stream is rejected, instead of leaving
+    that stream without an attention output for the layer."""
     group, layout, modules, states, _ = two_streams()
     plan = AttentionPlan.from_visibility(same_stream(), layout)
-    with pytest.raises(ValueError, match="返回的流集合"):
+    with pytest.raises(ValueError, match="LayerAttentionOverride returned stream set"):
         run(JointAttentionEngine(), group, layout, modules, states, plan=plan,
             override=_ZeroOverride(1, drop="action"))

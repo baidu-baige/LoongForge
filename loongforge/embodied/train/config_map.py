@@ -49,6 +49,11 @@ from loongforge.embodied.data.datasets.lingbot_vla_v2.transforms.data_configurat
     LingbotVLAV2DataConfig,
 )
 
+from loongforge.embodied.model.arch.model_configuration_arch import (
+    InternW0DeltaConfig,
+    Vpp2Config,
+)
+
 _CONFIGS_DIR = (
     Path(__file__).resolve().parent.parent.parent.parent
     / "configs" / "models" / "embodied"
@@ -105,6 +110,13 @@ MODEL_SCHEMA = {
     "wall_oss_0_5": ModelSchema("wall_oss_0_5.yaml", WallOss05ModelConfig, WallOss05DataConfig),
     "giga_brain07": ModelSchema(
         "giga_brain07.yaml", GigaBrain07ModelConfig, GigaBrain07DataConfig
+    ),
+    # Five-layer ``arch`` world models. They reuse FastWAMDataConfig because
+    # they consume the same pixel-space batch; what differs is the model side,
+    # and that difference is entirely inside the per-model config subclass.
+    "vpp2": ModelSchema("arch/vpp2.yaml", Vpp2Config, FastWAMDataConfig),
+    "internw0_delta": ModelSchema(
+        "arch/internw0_delta.yaml", InternW0DeltaConfig, FastWAMDataConfig
     ),
 }
 

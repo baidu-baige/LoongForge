@@ -1,11 +1,17 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""L1 物化：两通道、四个后端与能力协商（交界面 I1）。
+"""L1 materialisation: two channels, four backends, capability negotiation (I1).
 
-核心断言是 **flex ≡ dense 逐元素相等**：同一份 ``structural`` 物化出的
-BlockMask 与 dense bool 必须选中同一批 (q, kv)。两者分叉的症状是
-训练收敛但等价性测试看见了不该看见的 token，在 loss 上看不出来。
+An ``AttentionPlan`` splits visibility into two channels: ``structural``, a
+``[total, total]`` batch-shared bool matrix, and ``key_valid``, a ``[B, total]``
+per-sample validity row. ``AttentionPlan`` plus ``CompiledMask`` form interface
+I1, the only way Lane B may ask about visibility.
+
+The central assertion is **flex == dense elementwise**: the BlockMask and the
+dense bool materialised from one ``structural`` must select the same set of
+(q, kv) pairs. If they diverge, training still converges while the equivalence
+test sees tokens it should not, and the loss curve shows nothing.
 """
 
 from __future__ import annotations
@@ -22,29 +28,34 @@ from loongforge.embodied.model.arch.visibility.rules import (
     frame_causal, same_stream, stream_edge)
 
 HAS_FLEX = torch.cuda.is_available()
-try:  # flex 只在 torch>=2.5 且有 CUDA 时可用
+try:  # flex needs torch>=2.5 and CUDA
     from torch.nn.attention.flex_attention import (  # noqa: F401
         create_block_mask, flex_attention)
-except ImportError:  # pragma: no cover - 取决于 torch 版本
+except ImportError:  # pragma: no cover - depends on the torch version
     HAS_FLEX = False
 needs_flex = pytest.mark.skipif(
-    not HAS_FLEX, reason="FlexAttention 需要 CUDA 与 torch>=2.5")
+    not HAS_FLEX, reason="FlexAttention needs CUDA and torch>=2.5")
 
 
 @pytest.fixture
 def exact_matmul():
-    """关掉 TF32。等价性比较必须在同一精度下做，否则精度差盖住语义差。"""
+    """Disable TF32 so the equivalence comparison runs at one precision.
+
+    With TF32 on, the numeric difference between the two matmul paths is large
+    enough to hide the semantic difference being looked for.
+    """
     prior = torch.backends.cuda.matmul.allow_tf32
     torch.backends.cuda.matmul.allow_tf32 = False
     yield
     torch.backends.cuda.matmul.allow_tf32 = prior
 
 
-TOTAL = 128      # 取 block_size 的整数倍，免得 BlockMask 的尾块干扰逐元素比较
-VIDEO = 96
+TOTAL = 128      # A multiple of block_size, so BlockMask has no tail block
+VIDEO = 96       # Video tokens; the remaining 32 are action tokens
 
 
 def layout(total: int = TOTAL) -> TokenLayout:
+    """Two segments, 96 video tokens then 32 action ones, 32 tokens per frame."""
     frame = torch.arange(total, dtype=torch.long) // 32
     stream = (torch.arange(total, dtype=torch.long) >= VIDEO).long()
     return TokenLayout(
@@ -54,25 +65,37 @@ def layout(total: int = TOTAL) -> TokenLayout:
 
 
 def plan(**extra) -> AttentionPlan:
+    """A plan for "within a stream, plus video to action under frame causality"."""
     lay = layout()
     vis = same_stream() | (stream_edge("video", "action") & frame_causal(2))
     return AttentionPlan.from_visibility(vis, lay, **extra)
 
 
 def test_structural_must_not_carry_batch_dim():
+    """``structural`` is exactly 2-D and square, and matches ``layout.total``.
+
+    INV-1: a batch dimension on the structural channel would make the whole
+    mask per-sample, which kills BlockMask reuse and forces every backend down
+    to dense.
+    """
     lay = layout()
     with pytest.raises(ValueError, match="INV-1"):
         AttentionPlan(structural=torch.ones((2, TOTAL, TOTAL),
                                             dtype=torch.bool), layout=lay)
-    with pytest.raises(ValueError, match="必须是方阵"):
+    with pytest.raises(ValueError, match="must be square"):
         AttentionPlan(structural=torch.ones((TOTAL, TOTAL - 1),
                                             dtype=torch.bool))
-    with pytest.raises(ValueError, match="不一致"):
+    with pytest.raises(ValueError, match="disagrees with layout.total"):
         AttentionPlan(structural=torch.ones((8, 8), dtype=torch.bool),
                       layout=lay)
 
 
 def test_key_valid_must_be_two_dims():
+    """``key_valid`` is ``[B, total]``, the per-sample channel.
+
+    A 1-D tensor would be ambiguous between a batch row and a token row, and a
+    wrong second dimension would broadcast padding onto the wrong tokens.
+    """
     lay = layout()
     with pytest.raises(ValueError, match=r"\[B, total\]"):
         AttentionPlan(key_valid=torch.ones(TOTAL, dtype=torch.bool),
@@ -83,7 +106,12 @@ def test_key_valid_must_be_two_dims():
 
 
 def test_structural_none_is_the_single_stream_norm():
-    """单流 + 无因果 ⇒ 全可见，此时不物化 [L, L] 全 True 张量。"""
+    """One stream with no causality means ``structural is None``, not all-True.
+
+    Materialising a ``[L, L]`` all-True matrix would waste memory and block the
+    attention kernels' unmasked fast path, so None is the normal case for a
+    single-stream model.
+    """
     lay = layout()
     empty = AttentionPlan.from_visibility(None, lay)
     assert empty.structural is None
@@ -92,12 +120,22 @@ def test_structural_none_is_the_single_stream_norm():
 
 
 def test_dense_bool_broadcasts_when_key_valid_absent():
+    """Without ``key_valid``, ``dense_bool`` is ``[1, 1, L, L]`` and broadcasts.
+
+    Keeping the batch and head axes at size 1 means one allocation is shared by
+    the whole batch instead of being expanded per sample.
+    """
     dense = plan().dense_bool()
     assert dense.shape == (1, 1, TOTAL, TOTAL)
     assert dense.dtype == torch.bool
 
 
 def test_two_channels_combine_without_touching_structural():
+    """Combining the channels yields ``[B, 1, L, L]`` and leaves the first alone.
+
+    The structural channel is the batch-shared, cacheable half; an in-place
+    ``&`` with ``key_valid`` would poison it for every later sample.
+    """
     lay = layout()
     key_valid = torch.ones((2, TOTAL), dtype=torch.bool)
     key_valid[1, -4:] = False
@@ -107,11 +145,17 @@ def test_two_channels_combine_without_touching_structural():
     structural = both.structural
     assert torch.equal(dense[0, 0], structural)
     assert not bool(dense[1, 0, :, -4:].any())
-    # 结构通道本身没有被就地改掉 —— 它是 batch 共享、可缓存的那一半
+    # The structural channel was not modified in place: it is the batch-shared,
+    # cacheable half
     assert torch.equal(both.structural, structural)
 
 
 def test_sdpa_bias_is_additive_minus_inf():
+    """The sdpa form is an additive float bias: 0.0 where visible, -inf elsewhere.
+
+    ``scaled_dot_product_attention`` adds this to the scores, so the zero set
+    must coincide exactly with the dense bool mask.
+    """
     p = plan()
     bias = p.materialize("sdpa")
     dense = p.dense_bool()
@@ -122,28 +166,40 @@ def test_sdpa_bias_is_additive_minus_inf():
 
 
 def test_unknown_backend_lists_registered_ones():
-    with pytest.raises(ValueError, match="未知后端"):
+    """An unregistered backend name fails at materialisation time.
+
+    ``KNOWN_BACKENDS`` is the closed set ``("dense", "sdpa", "flex",
+    "varlen")``; a typo like "flash" must not fall through to a default.
+    """
+    with pytest.raises(ValueError, match="unknown backend"):
         plan().materialize("flash")
     assert KNOWN_BACKENDS == ("dense", "sdpa", "flex", "varlen")
 
 
 def test_flex_requires_block_size_and_structural():
+    """The flex path needs both a positive ``block_size`` and a structural mask.
+
+    A BlockMask is defined in terms of blocks, and the per-sample channel alone
+    carries no (q, kv) structure to build one from.
+    """
     p = plan()
-    with pytest.raises(ValueError, match="必须给 block_size"):
+    with pytest.raises(ValueError, match="requires block_size"):
         p.materialize("flex")
     only_valid = AttentionPlan(key_valid=torch.ones((2, TOTAL),
                                                     dtype=torch.bool),
                                layout=layout())
-    with pytest.raises(ValueError, match="结构通道为 None"):
+    with pytest.raises(ValueError, match="structural channel is None"):
         only_valid.materialize("flex", block_size=64)
 
 
 @needs_flex
 def test_flex_block_mask_equals_dense_attention(exact_matmul):
-    """flex 与 dense 必须选中同一批 (q, kv)。
+    """flex and dense must select the same (q, kv) pairs for one visibility.
 
-    比的是**注意力输出**而不是 BlockMask 的块级 ``to_dense()``：
-    块级表示在块内是全 1，逐元素的差异只有把 mask 真正用进 kernel 才看得见。
+    The comparison is on the **attention output**, not on the BlockMask's
+    block-level ``to_dense()``: the block-level form is all-ones inside a
+    block, so an elementwise difference only shows once the mask is used by
+    the kernel.
     """
     device = torch.device("cuda")
     lay = layout()
@@ -158,6 +214,12 @@ def test_flex_block_mask_equals_dense_attention(exact_matmul):
 
 @needs_flex
 def test_flex_block_mask_carries_key_valid(exact_matmul):
+    """The per-sample channel survives into the BlockMask, giving ``[B, 1, L, L]``.
+
+    The two channels are combined inside one ``mask_mod`` rather than ANDed
+    into a ``[B, Q, K]`` tensor, so block-level skipping still works; this
+    checks that the combination is also numerically right.
+    """
     device = torch.device("cuda")
     lay = layout()
     structural = same_stream().evaluate(lay).to(device)
@@ -173,7 +235,7 @@ def test_flex_block_mask_carries_key_valid(exact_matmul):
 
 
 def _qkv(device: torch.device, batch: int = 1):
-    """固定种子的 [B, H, L, D] 三元组，两条路径共用同一份输入。"""
+    """A seeded ``[B, H, L, D]`` triple; both paths consume the same input."""
     gen = torch.Generator(device="cpu").manual_seed(0)
     shape = (batch, 2, TOTAL, 16)
     return tuple(torch.randn(shape, generator=gen).to(device)
@@ -181,17 +243,19 @@ def _qkv(device: torch.device, batch: int = 1):
 
 
 def _flex_out(block_mask, device: torch.device, batch: int = 1):
+    """Attention output of the FlexAttention path under ``block_mask``."""
     from torch.nn.attention.flex_attention import flex_attention
     q, k, v = _qkv(device, batch)
     return flex_attention(q, k, v, block_mask=block_mask)
 
 
 def _dense_out(dense: torch.Tensor, device: torch.device, batch: int = 1):
-    """手写 masked softmax 基准。
+    """Hand-written masked softmax reference.
 
-    不用 ``scaled_dot_product_attention`` 做基准：它在 CUDA 上走 TF32 矩阵乘，
-    与 flex 的 triton kernel 有 ~5e-4 的精度差，会盖住真正要查的
-    「两条路径选中的 (q, kv) 不同」这类差异（后者量级在 1e-1）。
+    ``scaled_dot_product_attention`` is deliberately not the reference: on CUDA
+    it uses TF32 matmuls, which differ from flex's triton kernel by about 5e-4
+    and would hide the difference actually under test, "the two paths selected
+    different (q, kv) pairs", whose magnitude is around 1e-1.
     """
     q, k, v = _qkv(device, batch)
     mask = dense.to(device)
@@ -201,29 +265,54 @@ def _dense_out(dense: torch.Tensor, device: torch.device, batch: int = 1):
 
 
 def test_as_segments_requires_block_diagonal():
+    """``as_segments`` only succeeds when the mask is block diagonal per segment.
+
+    varlen attention can express nothing but per-segment blocks, so a mask with
+    a cross-stream edge has to raise rather than return a segment table that
+    silently drops that edge.
+    """
     lay = layout()
-    # same_stream() 恰好是按段块对角的 ⇒ varlen 表达得了
+    # same_stream() happens to be exactly block diagonal per segment, so varlen
+    # can express it
     diag = same_stream().compile(lay, backend="varlen")
     assert diag.as_segments() == lay.segments
-    # 多一条跨流边就不是了，必须抛错而不是返回段表
+    # One cross-stream edge breaks that, and must raise instead of returning a
+    # segment table
     crossed = (same_stream() | stream_edge("video", "action")).compile(
         lay, backend="varlen")
-    with pytest.raises(ValueError, match="不是按段块对角"):
+    with pytest.raises(ValueError, match="not block-diagonal by segment"):
         crossed.as_segments()
 
 
 def test_compiled_mask_block_size_guard():
+    """``as_block_mask`` rejects a non-positive ``block_size``.
+
+    A zero block size would otherwise reach ``create_block_mask`` and fail deep
+    inside the kernel launch.
+    """
     compiled = same_stream().compile(layout(), backend="flex")
-    with pytest.raises(ValueError, match="block_size 必须为正"):
+    with pytest.raises(ValueError, match="block_size must be positive"):
         compiled.as_block_mask(block_size=0)
 
 
 def test_scenario_rejects_auto_backend():
-    with pytest.raises(ValueError, match="必须已解析成具体后端"):
+    """A ``Scenario`` carries a resolved backend, never ``"auto"``.
+
+    ``auto`` has to be resolved at build time; negotiating against it would
+    make the capability answer depend on something only known at run time.
+    """
+    with pytest.raises(ValueError, match="must already have resolved it to a concrete backend"):
         Scenario(phase="train", backend="auto")
 
 
 def test_supports_negotiation_table():
+    """``CompiledMask.supports`` grades each backend EXACT/DEGRADED/UNSUPPORTED.
+
+    The grading is what lets the engine pick a backend without trying it:
+    dense, sdpa and blocked flex are exact; flex without a block size or with a
+    KV cache falls back to dense, which is a degradation rather than a refusal;
+    varlen errs strict and refuses any cross-stream edge.
+    """
     vis = same_stream() | stream_edge("video", "action")
 
     def cap(**kwargs) -> Capability:
@@ -232,11 +321,13 @@ def test_supports_negotiation_table():
     assert cap(backend="dense") is Capability.EXACT
     assert cap(backend="sdpa") is Capability.EXACT
     assert cap(backend="flex", block_size=64) is Capability.EXACT
-    # 没有块大小 / 带 KV cache ⇒ 只能退 dense，算降级而不是不支持
+    # No block size, or a KV cache present, means falling back to dense: a
+    # degradation, not a refusal
     assert cap(backend="flex") is Capability.DEGRADED
     assert cap(backend="flex", block_size=64,
                has_kv_cache=True) is Capability.DEGRADED
-    # varlen 一档宁过严不过宽：带跨流边的表达式判不支持
+    # varlen errs on the strict side: an expression with a cross-stream edge is
+    # reported unsupported
     assert cap(backend="varlen") is Capability.UNSUPPORTED
     assert CompiledMask.supports(
         same_stream(), Scenario(phase="train",

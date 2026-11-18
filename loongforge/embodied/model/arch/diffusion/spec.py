@@ -1,13 +1,14 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""L3 扩散规格 ``DiffusionSpec``（Lane C）。
+"""L3 diffusion spec ``DiffusionSpec`` (Lane C).
 
-签名以 ``docs/design/mot_layer_interfaces.zh-CN.md`` §5.1 为准。
+The signature follows ``docs/design/mot_layer_interfaces.zh-CN.md`` §5.1.
 
-一个 ``DiffusionSpec`` 描述「这个模型怎么加噪、怎么算 loss、怎么推理」。
-它是**逐流**的字典而不是全局单值 —— VPP2 的视频流与动作流用不同的
-timestep 分布，现状里这件事表现为两段分别硬编码的采样代码。
+One ``DiffusionSpec`` describes how a model adds noise, computes its losses and
+runs inference. It is **per stream** (a mapping) rather than one global value:
+VPP2's video stream and action stream use different timestep distributions, and
+today that shows up as two separately hard-coded sampling blocks.
 """
 
 from __future__ import annotations
@@ -27,106 +28,162 @@ __all__ = ["DiffusionSpec"]
 
 @dataclass(frozen=True)
 class DiffusionSpec:
-    """扩散 / flow-matching 的全部配置。
+    """The complete diffusion / flow-matching configuration.
 
-    ``timesteps`` 的键是**流名**：只有 ``StreamSpec.needs_timestep=True``
-    的流需要条目，多给或少给都是构造期错误（V5）。
-    这条校验替掉的现状行为是「流里拿不到 timestep 就当成 0」——
-    它让「忘配 timestep」变成一次静默的无噪声训练。
+    The keys of ``timesteps`` are **stream names**: only streams with
+    ``StreamSpec.needs_timestep=True`` need an entry, and both a missing and an
+    extra entry are construction-time errors (V5). The behaviour this check
+    replaces is "if a stream cannot find a timestep, treat it as 0", which turns
+    a forgotten timestep into a silent noise-free training run.
+
+    Attributes:
+        timesteps: Stream name -> timestep sampler; frozen to a read-only
+            mapping at construction time.
+        losses: The loss terms, with unique ``name`` values.
+        schedule: The forward noising process; rectified flow by default.
+        gate: Which stream steps when during iterative sampling, or None.
+        sampler: The per-step update rule, or None.
+        noise_levels: Discrete noise levels, if any.
     """
 
     timesteps: Mapping[str, TimestepSampler]
     losses: tuple[LossSpec, ...]
     schedule: NoiseSchedule = field(default_factory=RectifiedFlow)
-    gate: SteppingGate | None = None        # None ⇒ 本模型不走迭代采样
-    sampler: Sampler | None = None          # None ⇒ 同上
+    gate: SteppingGate | None = None        # None => no iterative sampling
+    sampler: Sampler | None = None          # None => same as above
     noise_levels: tuple[float, ...] = ()
-    # 离散噪声档位。非空 ⇒ visibility.rules.noise_gate 可用。
-    # 必须是**离散档**而不是连续 sigma：连续值会让 structural 变成逐样本的
-    # （INV-1）。这是 12/04 闸门的对象
+    # Discrete noise levels. Non-empty => visibility.rules.noise_gate is usable.
+    # They must be **discrete levels** rather than a continuous sigma: a
+    # continuous value would make the structural mask per-sample (INV-1).
+    # This is the subject of the 12/04 gate
 
     def __post_init__(self) -> None:
         if not self.losses:
-            raise ValueError("DiffusionSpec.losses 不得为空：没有 loss 的模型训不动")
+            raise ValueError(
+                "DiffusionSpec.losses must not be empty: a model with no loss "
+                "cannot train"
+            )
         names = [loss.name for loss in self.losses]
         if len(set(names)) != len(names):
-            raise ValueError(f"DiffusionSpec.losses 有重名项：{names}")
+            raise ValueError(
+                f"DiffusionSpec.losses has duplicate names: {names}")
         if (self.gate is None) != (self.sampler is None):
             raise ValueError(
-                "DiffusionSpec.gate 与 sampler 必须同时给或同时不给："
-                f"当前 gate={self.gate!r}, sampler={self.sampler!r}"
+                "DiffusionSpec.gate and sampler must both be given or both be "
+                f"omitted: got gate={self.gate!r}, sampler={self.sampler!r}"
             )
         if len(set(self.noise_levels)) != len(self.noise_levels):
             raise ValueError(
-                f"DiffusionSpec.noise_levels 有重复档位：{self.noise_levels}"
+                f"DiffusionSpec.noise_levels has duplicate levels: "
+                f"{self.noise_levels}"
             )
         if any(level < 0 for level in self.noise_levels):
             raise ValueError(
-                f"DiffusionSpec.noise_levels 必须非负：{self.noise_levels}"
+                f"DiffusionSpec.noise_levels must be non-negative: "
+                f"{self.noise_levels}"
             )
         object.__setattr__(self, "timesteps",
                            MappingProxyType(dict(self.timesteps)))
 
-    # ---- 查询 ----
+    # ---- queries ----
 
     @property
     def is_iterative(self) -> bool:
-        """是否走迭代采样。False ⇒ 单步前馈（蒸馏后的模型）。"""
+        """Whether iterative sampling is used. False means single-step
+        feed-forward (a distilled model)."""
         return self.gate is not None
 
     @property
     def supports_noise_gate(self) -> bool:
-        """是否声明了离散噪声档位，从而 ``noise_gate`` 规则可用。"""
+        """Whether discrete noise levels are declared, making the
+        ``noise_gate`` rule usable."""
         return bool(self.noise_levels)
 
     def sampler_for(self, stream: str) -> TimestepSampler:
-        """取一条流的 timestep 采样器。缺失即抛错并列出已配的流。"""
+        """Return one stream's timestep sampler.
+
+        Args:
+            stream: Stream name.
+
+        Returns:
+            The timestep sampler configured for that stream.
+
+        Raises:
+            KeyError: If the stream has no entry; the message lists the streams
+                that are configured.
+        """
         try:
             return self.timesteps[stream]
         except KeyError:
             raise KeyError(
-                f"DiffusionSpec.timesteps 没有流 {stream!r} 的条目；"
-                f"已配：{sorted(self.timesteps)}"
+                f"DiffusionSpec.timesteps has no entry for stream {stream!r}; "
+                f"configured: {sorted(self.timesteps)}"
             ) from None
 
     def losses_of(self, *, stream: str | None = None,
                   head: str | None = None) -> tuple[LossSpec, ...]:
-        """按来源筛 loss。两个都不给 ⇒ 返回全部。"""
+        """Filter losses by source. Passing neither returns all of them.
+
+        Args:
+            stream: Keep only losses computed on this stream.
+            head: Keep only losses computed on this head.
+
+        Returns:
+            The matching loss specs, in declaration order.
+
+        Raises:
+            ValueError: If both ``stream`` and ``head`` are given.
+        """
         if stream is not None and head is not None:
-            raise ValueError("losses_of：stream 与 head 不得同时给")
+            raise ValueError(
+                "losses_of: stream and head must not both be given")
         if stream is None and head is None:
             return self.losses
         return tuple(loss for loss in self.losses
                      if (loss.stream == stream if stream is not None
                          else loss.head == head))
 
-    # ---- V5 / V6：与流集合对账。构造期调用，不是 forward 期 ----
+    # ---- V5 / V6: reconcile with the stream set. Construction time, not
+    # forward time ----
 
     def validate_against(self, streams: Sequence[StreamSpec]) -> None:
-        """校验 timestep 配置与流的 ``needs_timestep`` 声明一致（V5），
-        且每条 loss 的 ``stream`` 确实存在（V6 的流侧部分）。
+        """Check that the timestep configuration matches the streams'
+        ``needs_timestep`` declarations (V5), and that every loss's ``stream``
+        actually exists (the stream half of V6).
 
-        head 侧由 ``WorldModelSpec`` 持有头表时一并校验 —— 本类看不到头。
+        The head half is checked by ``WorldModelSpec``, which holds the head
+        table; this class cannot see the heads.
+
+        Args:
+            streams: The stream specs of this model.
+
+        Raises:
+            ValueError: If a stream needing a timestep has no entry, if an entry
+                names a stream that does not need one, or if a loss references
+                an unknown stream.
         """
         needs = {spec.name for spec in streams if spec.needs_timestep}
         configured = set(self.timesteps)
         missing = sorted(needs - configured)
         if missing:
             raise ValueError(
-                f"流 {missing} 声明了 needs_timestep=True，但 "
-                "DiffusionSpec.timesteps 里没有条目（V5）。"
-                "缺条目不退化成零噪声 —— 那是一次静默的无噪声训练"
+                f"streams {missing} declare needs_timestep=True but have no "
+                "entry in DiffusionSpec.timesteps (L3/V5). A missing entry "
+                "does not degrade to zero noise, that would be a silent "
+                "noise-free training run"
             )
         extra = sorted(configured - needs)
         if extra:
             raise ValueError(
-                f"DiffusionSpec.timesteps 配了流 {extra}，但它们的 "
-                "needs_timestep=False 或根本不是本模型的流（V5）"
+                f"DiffusionSpec.timesteps configures streams {extra}, but "
+                "their needs_timestep=False or they are not streams of this "
+                "model at all (L3/V5)"
             )
         known = {spec.name for spec in streams}
         for loss in self.losses:
             if loss.stream is not None and loss.stream not in known:
                 raise ValueError(
-                    f"LossSpec({loss.name!r}).stream={loss.stream!r} 不是本模型的流；"
-                    f"本模型的流为 {sorted(known)}（V6）"
+                    f"LossSpec({loss.name!r}).stream={loss.stream!r} is not a "
+                    f"stream of this model; this model's streams are "
+                    f"{sorted(known)} (L3/V6)"
                 )

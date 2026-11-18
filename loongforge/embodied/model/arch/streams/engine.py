@@ -1,18 +1,21 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""L2 联合注意力引擎：``AttentionGroup`` / ``EngineOutput`` / ``StreamEngine``。
+"""L2 joint attention engine: ``AttentionGroup`` / ``EngineOutput`` /
+``StreamEngine``.
 
-签名以 ``docs/design/mot_layer_interfaces.zh-CN.md`` §4.6 为准。
+Signatures follow ``docs/design/mot_layer_interfaces.zh-CN.md`` §4.6.
 
-两条硬约定，整个 L2 的性质都挂在它们上面：
+Two hard conventions carry the properties of all of L2:
 
-1. **引擎不是 ``nn.Module``。** 它不持有参数、不进 state_dict（INV-3）。
-   参数全在流模块里。引擎一旦读参数，FSDP2 / ZeRO-3 的 all-gather
-   就会在引擎这一层被触发，而引擎是不被 FSDP 包裹的。
-2. **单流是 N=1 退化，不是特例。** 引擎里不得出现
-   ``if len(members) == 1``。退化只体现在两处数据上：
-   ``AttentionPlan.structural is None`` 与 ``routes == ()``。
+1. The engine is not an ``nn.Module``. It holds no parameters and never
+   enters state_dict (INV-3). All parameters live in the stream modules. If
+   the engine read parameters, the FSDP2 / ZeRO-3 all-gather would be
+   triggered at the engine level, and the engine is not FSDP-wrapped.
+2. A single stream is the N=1 degenerate case, not a special case. The
+   engine must contain no ``if len(members) == 1``. The degeneracy shows up
+   only in two pieces of data: ``AttentionPlan.structural is None`` and
+   ``routes == ()``.
 """
 
 from __future__ import annotations
@@ -40,11 +43,16 @@ __all__ = [
 
 @dataclass(frozen=True)
 class AttentionGroup:
-    """参与同一张联合注意力的一组流 + 联合层数。
+    """A set of streams sharing one joint attention, plus the layer count.
 
-    ``num_layers`` 是**联合层数**，与任何单条流的 ``num_layers`` 都无关 ——
-    这正是放宽「三者全等」校验之后需要一个独立数字的地方。
-    各流用 ``StreamSpec.resolve_layer_index_map(num_layers)`` 对上号。
+    Attributes:
+        members: Specs of the streams in this group, in token order.
+        num_layers: Number of joint layers. It is unrelated to any single
+            stream's ``num_layers``; this independent number is exactly what
+            the relaxation of "all three num_layers equal" requires. Each
+            stream lines up through
+            ``StreamSpec.resolve_layer_index_map(num_layers)``.
+        routes: Cross-stream KV routes inside this group.
     """
 
     members: tuple[StreamSpec, ...]
@@ -53,114 +61,183 @@ class AttentionGroup:
 
     def __post_init__(self) -> None:
         if not self.members:
-            raise ValueError("AttentionGroup.members 不得为空")
+            raise ValueError("AttentionGroup.members must not be empty")
         if self.num_layers <= 0:
             raise ValueError(
-                f"AttentionGroup.num_layers 必须为正，得到 {self.num_layers}"
+                f"AttentionGroup.num_layers must be positive, got "
+                f"{self.num_layers}"
             )
         names = [spec.name for spec in self.members]
         if len(set(names)) != len(names):
-            raise ValueError(f"AttentionGroup.members 有重名流：{names}")
-        # V3：联合成员的 head_dim 必须相等。num_heads 与 residual_width 可以不等 ——
-        # 这是「放宽 num_layers 三者全等」之后剩下的唯一宽度约束。
+            raise ValueError(
+                f"AttentionGroup.members has duplicate stream names: {names}"
+            )
+        # V3: joint members must share head_dim. num_heads and
+        # residual_width may differ. This is the only width constraint left
+        # after relaxing the "all three num_layers equal" rule.
         head_dims = {spec.name: spec.head_dim for spec in self.members}
         if len(set(head_dims.values())) != 1:
             raise ValueError(
-                f"AttentionGroup 成员的 head_dim 必须相等（V3），得到 {head_dims}"
+                f"AttentionGroup members must share head_dim (L2/V3), got "
+                f"{head_dims}"
             )
         known = set(names)
         for route in self.routes:
             missing = {route.src, route.dst} - known
             if missing:
                 raise ValueError(
-                    f"KVRoute({route.src!r} → {route.dst!r}) 指向了不在本组里的流："
-                    f"{sorted(missing)}；本组成员为 {names}"
+                    f"KVRoute({route.src!r} -> {route.dst!r}) points at "
+                    f"streams outside this group: {sorted(missing)}; group "
+                    f"members are {names}"
                 )
             if max(route.dst_layers) >= self.spec_of(route.dst).num_layers:
                 raise ValueError(
-                    f"KVRoute({route.src!r} → {route.dst!r}).dst_layers 最大层号 "
-                    f"{max(route.dst_layers)} 超出流 {route.dst!r} 的 num_layers="
-                    f"{self.spec_of(route.dst).num_layers}。"
-                    "路由的层号是**局部**层号，不是联合层号"
+                    f"KVRoute({route.src!r} -> {route.dst!r}).dst_layers max "
+                    f"layer index {max(route.dst_layers)} exceeds stream "
+                    f"{route.dst!r} num_layers="
+                    f"{self.spec_of(route.dst).num_layers}. Route layer "
+                    "indices are **local** layer indices, not joint ones"
                 )
 
     @property
     def head_dim(self) -> int:
-        """联合 head_dim。__post_init__ 已保证全组相等。"""
+        """Shared head_dim of the group.
+
+        Returns:
+            The first member's ``head_dim``; ``__post_init__`` has already
+            checked that all members agree.
+        """
         return self.members[0].head_dim
 
     @property
     def stream_names(self) -> tuple[str, ...]:
+        """Member stream names, in member order."""
         return tuple(spec.name for spec in self.members)
 
     def spec_of(self, name: str) -> StreamSpec:
+        """Look up one member's spec.
+
+        Args:
+            name: Stream name.
+
+        Returns:
+            That stream's ``StreamSpec``.
+
+        Raises:
+            KeyError: If the stream is not a member of this group.
+        """
         for spec in self.members:
             if spec.name == name:
                 return spec
         raise KeyError(
-            f"AttentionGroup 没有流 {name!r}；成员为 {list(self.stream_names)}"
+            f"AttentionGroup has no stream {name!r}; members are "
+            f"{list(self.stream_names)}"
         )
 
     def layer_index_maps(self) -> dict[str, dict[int, int]]:
-        """全组的「联合层号 → 局部层号」表。构造期算一次，forward 期只查。"""
+        """Build every member's joint-to-local layer index map.
+
+        Returns:
+            Stream name to {joint layer index: local layer index}. Computed
+            once at construction time; the forward pass only reads it.
+        """
         return {spec.name: spec.resolve_layer_index_map(self.num_layers)
                 for spec in self.members}
 
     def routes_into(self, dst: str) -> tuple[KVRoute, ...]:
-        """取以 ``dst`` 为终点的路由。空元组是常态（单流模型恒为空）。"""
+        """Collect the routes ending at one stream.
+
+        Args:
+            dst: Destination stream name.
+
+        Returns:
+            Matching routes. An empty tuple is normal and is always the case
+            for a single-stream model.
+        """
         return tuple(route for route in self.routes if route.dst == dst)
 
 
 @dataclass
 class EngineOutput:
-    """引擎跑完一组之后的产出。交界面 **I3**（B → C）的载体。
+    """What the engine produces after running one group.
 
-    ``captured`` 的键是 ``(流名, 联合层号)``，供 L3/L4 取中间层隐状态
-    （``HiddenStateRef``）。请求侧是 ``captures: Mapping[str, tuple[int, ...]]``，
-    即「这条流要抓哪几个联合层」。
+    This is the carrier of interface **I3** (Lane B to Lane C).
 
-    为什么键里带层号：现状取中间层靠的是 hook + 全局变量，
-    层号散落在调用点。显式键让「抓了哪层」在类型里可见，
-    V8 能在构造期校验请求的层号确实存在。
+    Attributes:
+        states: Stream name to final ``StreamState``.
+        captured: Keyed by ``(stream name, joint layer index)``, holding
+            intermediate hidden states for L3/L4 to read through
+            ``HiddenStateRef``. The request side is
+            ``captures: Mapping[str, tuple[int, ...]]``, i.e. which joint
+            layers each stream should capture. The layer index is part of the
+            key because the current code takes intermediate layers through a
+            hook plus a global variable, which scatters layer indices across
+            call sites. An explicit key makes "which layer was captured"
+            visible in the type, and lets validator V8 check at construction
+            time that the requested layer exists.
     """
 
     states: dict[str, StreamState]
     captured: dict[tuple[str, int], Tensor] = field(default_factory=dict)
 
     def require(self, stream: str) -> StreamState:
+        """Fetch one stream's final state.
+
+        Args:
+            stream: Stream name.
+
+        Returns:
+            That stream's ``StreamState``.
+
+        Raises:
+            KeyError: If absent; the message lists the available streams.
+        """
         try:
             return self.states[stream]
         except KeyError:
             raise KeyError(
-                f"EngineOutput 没有流 {stream!r} 的状态；"
-                f"有的是 {sorted(self.states)}"
+                f"EngineOutput has no state for stream {stream!r}; "
+                f"available: {sorted(self.states)}"
             ) from None
 
     def require_capture(self, stream: str, layer_id: int) -> Tensor:
-        """取一个抓取点。缺失时报错并列出全部已抓的键。"""
+        """Fetch one capture point.
+
+        Args:
+            stream: Stream name.
+            layer_id: Joint layer index.
+
+        Returns:
+            The captured hidden state tensor.
+
+        Raises:
+            KeyError: If absent; the message lists every captured key.
+        """
         key = (stream, layer_id)
         try:
             return self.captured[key]
         except KeyError:
             raise KeyError(
-                f"EngineOutput 没有抓取点 {key}；"
-                f"已抓：{sorted(self.captured)}"
+                f"EngineOutput has no capture point {key}; "
+                f"captured: {sorted(self.captured)}"
             ) from None
 
 
 class StreamEngine(Protocol):
-    """联合注意力引擎的协议。``run`` 是 L2 的全部入口。
+    """Protocol of the joint attention engine. ``run`` is all of L2's entry.
 
-    调用顺序（interfaces §7，三条不可重排）：
-      1. 全部流 ``prepare``；
-      2. 逐联合层：全部参与流 ``pre_attn`` → **一次**联合注意力 → 各流
-         ``post_attn``；
-      3. 全部流 ``finalize``。
-    「所有流算完 QKV 再做注意力」是第 2 步里不可重排的那一条。
+    Call order (interfaces §7; these three steps must not be reordered):
+      1. ``prepare`` on every stream, taking each stream's raw input tensor
+         (patchify happens inside this step);
+      2. per joint layer: ``pre_attn`` on every participating stream, then
+         exactly one joint attention, then ``post_attn`` on each stream;
+      3. ``finalize`` on every stream.
+    "All streams compute QKV before attention runs" is the part of step 2
+    that cannot be reordered.
     """
 
     def run(self, group: AttentionGroup,
-            states: Mapping[str, StreamState],
+            inputs: Mapping[str, Tensor],
             modules: Mapping[str, Any],
             plan: AttentionPlan,
             layout: TokenLayout,
@@ -169,55 +246,131 @@ class StreamEngine(Protocol):
             timesteps: Mapping[str, Tensor | None],
             captures: Mapping[str, Sequence[int]] | None = None,
             override: LayerAttentionOverride | None = None) -> EngineOutput:
-        """跑完一个注意力组的所有联合层。
+        """Run every joint layer of one attention group.
 
-        ``modules`` 是流名 → ``StreamModule``；``timesteps`` 是流名 →
-        timestep（``needs_timestep=False`` 的流给 None）。
-        ``override`` 非 None 时，被它接管的层不走拼接 + 一次 attention
-        这条路（也因此不能进 CUDA graph 捕获）。
+        Args:
+            group: Streams and joint layer count.
+            inputs: Stream name to its untokenized raw tensor (video
+                ``[B, C, F, H, W]``, actions ``[B, T, D]``). Tokenization is
+                done by each stream's ``prepare``; the engine recognizes no
+                modality's raw shape.
+            modules: Stream name to ``StreamModule``.
+            plan: Visibility plan for the joint sequence.
+            layout: Token layout whose segment order equals the member order.
+            conditions: The whole condition bus, passed to every stream.
+            timesteps: Stream name to timestep; None for streams with
+                ``needs_timestep=False``.
+            captures: Stream name to the joint layers to capture.
+            override: When not None, the layers it takes over skip the
+                concat-plus-single-attention path, which also makes them
+                ineligible for CUDA graph capture.
+
+        Returns:
+            An ``EngineOutput`` with the final states and the captures.
         """
         ...
 
 
+def _assert_prepared_against_layout(live: Mapping[str, StreamState],
+                                    layout: TokenLayout) -> None:
+    """Check each prepared token count against the layout segment length.
+
+    This check replaces the old "token count unchanged across prepare" rule:
+    ``prepare`` now takes a raw tensor and is supposed to change the token
+    count (patchify turns ``[B, C, F, H, W]`` into ``[B, L, W]``), so the
+    layout is the only thing left to reconcile against. The segment lengths
+    ultimately come from ``GeometrySpec.padded_seq_len``, the single source
+    of static shapes (INV-2). A failure here means geometry and patchify
+    disagree; continuing would raise a shape error at the concat site, far
+    from the cause.
+
+    Args:
+        live: Stream name to the state returned by ``prepare``.
+        layout: Token layout for the joint sequence.
+
+    Raises:
+        ValueError: If any stream's token count differs from its segment
+            length.
+    """
+    for name, state in live.items():
+        want = layout.range_of(name).length
+        if state.num_tokens != want:
+            raise ValueError(
+                f"stream {name!r} prepare produced {state.num_tokens} "
+                f"tokens, but the layout gives it a segment length of "
+                f"{want}. Segment lengths come from "
+                "GeometrySpec.padded_seq_len (the single source of static "
+                "shapes), so a mismatch means geometry and patchify disagree"
+            )
+
+
 def assert_shape_signature(before: Mapping[str, StreamState],
                            after: Mapping[str, StreamState]) -> None:
-    """C8 / C9：一层前后，流集合与各流 token 数必须完全一致。
+    """Check C8 / C9 across one layer.
 
-    放在模块级而不是引擎内部，是为了让 Lane B 的实现与测试共用同一份判定。
+    C8: the set of streams must be identical before and after the layer.
+    C9: each stream's token count must be unchanged.
+
+    This lives at module level rather than inside the engine so that the
+    Lane B implementation and its tests share one copy of the decision.
+
+    Args:
+        before: Stream name to state before the layer.
+        after: Stream name to state after the layer.
+
+    Raises:
+        ValueError: If the stream set changed (C8) or any token count
+            changed (C9).
     """
     if set(before) != set(after):
         raise ValueError(
-            f"层前后流集合变了：前 {sorted(before)}，后 {sorted(after)}（C8）"
+            f"stream set changed across the layer: before {sorted(before)}, "
+            f"after {sorted(after)} (C8)"
         )
     for name, state in before.items():
         got = after[name].num_tokens
         if got != state.num_tokens:
             raise ValueError(
-                f"流 {name!r} 的 token 数从 {state.num_tokens} 变成了 {got}；"
-                "层不得改变流的 token 数（C9）"
+                f"stream {name!r} token count went from {state.num_tokens} "
+                f"to {got}; a layer must not change a stream's token count "
+                "(C9)"
             )
 
 
 def restrict_to_streams(layout: TokenLayout, plan: AttentionPlan,
                         names: tuple[str, ...]
                         ) -> tuple[TokenLayout, AttentionPlan]:
-    """把布局与 plan 限制到参与某一层的那几条流上。
+    """Restrict a layout and a plan to the streams active at one layer.
 
-    不参与的流被整段抠掉，剩下的段**重新连续编号** —— ``TokenLayout``
-    要求段覆盖 ``[0, total)``。两个通道按同一个下标表 index_select，
-    于是 structural 的行列、key_valid 的列、以及 frame/chunk/stream 三个标签
-    在抠掉之后仍然对得上同一个 token。
+    Streams that do not participate are cut out whole, and the remaining
+    segments are renumbered contiguously because ``TokenLayout`` requires
+    the segments to cover ``[0, total)``. Both plan channels are
+    index_select'ed with the same index table, so after the cut the rows and
+    columns of ``structural``, the columns of ``key_valid``, and the
+    frame/chunk/stream labels still refer to the same token.
 
-    ``names == layout.stream_names`` 时原样返回：这是**首批两个模型的常态**
-    （两条流等深、逐层都参与），不该为它付一次 index_select。
+    Args:
+        layout: Full joint token layout.
+        plan: Full visibility plan.
+        names: Stream names to keep, in layout order.
+
+    Returns:
+        The restricted ``(layout, plan)`` pair. When
+        ``names == layout.stream_names`` the inputs are returned unchanged;
+        that is the normal case for the first two models (two equal-depth
+        streams participating at every layer), which should not pay for an
+        index_select.
+
+    Raises:
+        KeyError: If ``names`` contains a stream absent from the layout.
     """
     if names == layout.stream_names:
         return layout, plan
     stray = sorted(set(names) - set(layout.stream_names))
     if stray:
         raise KeyError(
-            f"restrict_to_streams: 布局里没有流 {stray}；"
-            f"已有 {list(layout.stream_names)}"
+            f"restrict_to_streams: the layout has no streams {stray}; "
+            f"it has {list(layout.stream_names)}"
         )
     keep = [seg for seg in layout.segments if seg.stream in names]
     index = torch.cat([torch.arange(seg.start, seg.stop, dtype=torch.long)
@@ -244,11 +397,25 @@ def restrict_to_streams(layout: TokenLayout, plan: AttentionPlan,
 
 
 def _joint_attention(packed: QKV, mask: Any, *, backend: str) -> Tensor:
-    """一次联合注意力。进出都是 ``[B, L, num_heads, head_dim]``。
+    """Run one joint attention call.
 
-    ``QKV`` 把 heads 与 head_dim 分开存，而两条 kernel 都要
-    ``[B, num_heads, L, head_dim]`` ⇒ transpose 只在这一个函数里出现。
-    散在调用点的 transpose 写漏一次不报错，只是把 head 当成 token 来算。
+    Args:
+        packed: Concatenated Q/K/V, each ``[B, L, num_heads, head_dim]``.
+        mask: Backend-specific mask: a ``BlockMask`` for flex, a dense
+            boolean tensor for dense/sdpa.
+        backend: One of ``"flex"``, ``"dense"``, ``"sdpa"``.
+
+    Returns:
+        ``[B, L, num_heads, head_dim]``. ``QKV`` stores heads and head_dim
+        on separate axes while both kernels want
+        ``[B, num_heads, L, head_dim]``, so the transpose appears only in
+        this function. A transpose scattered across call sites raises
+        nothing when one is missed; it just treats heads as tokens.
+
+    Raises:
+        ValueError: If the backend is unknown. varlen needs the segment
+            table from ``CompiledMask.as_segments`` wired up first, which is
+            rule R3 (cosmos3).
     """
     q = packed.q.transpose(1, 2)
     k = packed.k.transpose(1, 2)
@@ -260,43 +427,64 @@ def _joint_attention(packed: QKV, mask: Any, *, backend: str) -> Tensor:
         out = F.scaled_dot_product_attention(q, k, v, attn_mask=mask)
     else:
         raise ValueError(
-            f"_joint_attention: 后端 {backend!r} 没有实现。varlen 要先把 "
-            "CompiledMask.as_segments 的段表接上，属 R3（cosmos3）"
+            f"_joint_attention: backend {backend!r} is not implemented. "
+            "varlen needs the segment table from CompiledMask.as_segments "
+            "wired up first, which is rule R3 (cosmos3)"
         )
     return out.transpose(1, 2)
 
 
 class JointAttentionEngine:
-    """``StreamEngine`` 的实现：cat → 一次联合注意力 → split。
+    """``StreamEngine`` implementation: concat, one joint attention, split.
 
-    **不是 nn.Module**（engine 模块开头的约定 1）：不持参数、不进 state_dict。
-    **没有 ``if len(members) == 1``**（约定 2）：单流走的是同一条路，
-    只是 cat/split 各只有一项、``plan.structural`` 为 None。
+    Not an ``nn.Module`` (convention 1 at the top of this module): it holds
+    no parameters and never enters state_dict. It contains no
+    ``if len(members) == 1`` (convention 2): a single stream takes the same
+    path, with one-item concat/split and ``plan.structural`` set to None.
 
-    mask 的物化是**逐次 run 一张**，按「本层参与的流集合」缓存在 run 内部的
-    局部字典里。不跨 run 缓存的理由：``plan.key_valid`` 是逐 batch 的，
-    跨 run 复用会把上一个 batch 的 padding 带进来 —— 这类缺陷在 loss 上
-    看不出来。flex 后端下 ``create_block_mask`` 因此每次 forward 跑一遍；
-    把它提到构造期要先结清 key_valid 的归属（总纲 §10-5）。
+    Masks are materialized once per ``run`` call and cached in a dict local
+    to ``run``, keyed by the set of streams active at that layer. They are
+    not cached across runs because ``plan.key_valid`` is per batch, so reuse
+    would carry the previous batch's padding over, and that kind of defect
+    is invisible in the loss. With the flex backend this means
+    ``create_block_mask`` runs once per forward; hoisting it to construction
+    time requires settling who owns key_valid first (master plan §10-5).
+
+    Attributes:
+        backend: ``"dense"``, ``"sdpa"`` or ``"flex"``.
+        block_size: BlockMask block size, required by the flex backend.
     """
 
     def __init__(self, *, backend: str = "dense",
                  block_size: int | None = None) -> None:
+        """Configure the attention backend.
+
+        Args:
+            backend: ``"dense"``, ``"sdpa"`` or ``"flex"``.
+            block_size: BlockMask block size. Required when
+                ``backend == "flex"`` because it changes the BlockMask shape
+                and the BlockMask is captured by ``torch.compile``.
+
+        Raises:
+            ValueError: If the backend is unsupported, or if flex is chosen
+                without a ``block_size``.
+        """
         if backend not in ("dense", "sdpa", "flex"):
             raise ValueError(
-                f"JointAttentionEngine: 后端 {backend!r} 不支持；"
-                "可选 'dense' / 'sdpa' / 'flex'"
+                f"JointAttentionEngine: backend {backend!r} is not "
+                "supported; choose 'dense', 'sdpa' or 'flex'"
             )
         if backend == "flex" and block_size is None:
             raise ValueError(
-                "JointAttentionEngine(backend='flex') 必须给 block_size —— "
-                "它改变 BlockMask 的形状，而 BlockMask 会被 torch.compile 捕获"
+                "JointAttentionEngine(backend='flex') requires block_size; "
+                "it changes the BlockMask shape and the BlockMask is "
+                "captured by torch.compile"
             )
         self.backend = backend
         self.block_size = block_size
 
     def run(self, group: AttentionGroup,
-            states: Mapping[str, StreamState],
+            inputs: Mapping[str, Tensor],
             modules: Mapping[str, Any],
             plan: AttentionPlan,
             layout: TokenLayout,
@@ -305,30 +493,64 @@ class JointAttentionEngine:
             timesteps: Mapping[str, Tensor | None],
             captures: Mapping[str, Sequence[int]] | None = None,
             override: LayerAttentionOverride | None = None) -> EngineOutput:
-        """跑完一个注意力组的所有联合层。调用顺序见 ``StreamEngine``。"""
-        del conditions      # 条件由流模块自己按名从总线取（§4.4）；引擎不解释它
+        """Run every joint layer of one attention group.
+
+        See ``StreamEngine.run`` for the argument contract and the fixed
+        three-step call order.
+
+        Args:
+            group: Streams and joint layer count.
+            inputs: Stream name to its untokenized raw tensor.
+            modules: Stream name to ``StreamModule``.
+            plan: Visibility plan for the joint sequence.
+            layout: Token layout; its segment order must equal the member
+                order (C8).
+            conditions: The whole condition bus.
+            timesteps: Stream name to timestep, or None per stream.
+            captures: Stream name to the joint layers to capture.
+            override: Optional per-layer attention override.
+
+        Returns:
+            An ``EngineOutput`` with the finalized states and the captures.
+
+        Raises:
+            ValueError: If the input or module stream sets differ from the
+                group members, if the layout segment order differs, if a
+                joint layer has no participating stream, or if an override
+                returns the wrong stream set.
+        """
+
         names = group.stream_names
-        for label, got in (("states", set(states)), ("modules", set(modules))):
+        for label, got in (("inputs", set(inputs)), ("modules", set(modules))):
             if got != set(names):
                 raise ValueError(
-                    f"JointAttentionEngine.run: {label} 的流集合 {sorted(got)} "
-                    f"!= 组成员 {list(names)}"
+                    f"JointAttentionEngine.run: {label} stream set "
+                    f"{sorted(got)} != group members {list(names)}"
                 )
         if layout.stream_names != names:
             raise ValueError(
-                f"JointAttentionEngine.run: 布局的段顺序 "
-                f"{list(layout.stream_names)} != 组成员顺序 {list(names)}（C8）"
+                f"JointAttentionEngine.run: layout segment order "
+                f"{list(layout.stream_names)} != group member order "
+                f"{list(names)} (C8)"
             )
         index_maps = group.layer_index_maps()
         wanted = _resolve_captures(captures, index_maps)
 
-        # ① 全部流 prepare
-        live = {name: modules[name].prepare(states[name],
-                                            timestep=timesteps.get(name))
+        # Step 1: prepare every stream; each takes its raw tensor and
+        # tokenizes it itself.
+        # The whole condition bus goes to the stream module, which picks the
+        # conditions it wants by name (§4.4): the engine interprets no
+        # condition's semantics but must pass the bus down, otherwise
+        # cross-attention KV and channel-concat conditions would have no
+        # path into L2 at all.
+        live = {name: modules[name].prepare(inputs[name],
+                                            timestep=timesteps.get(name),
+                                            conditions=conditions)
                 for name in names}
-        assert_shape_signature(states, live)
+        _assert_prepared_against_layout(live, layout)
 
-        # ② 逐联合层：全部参与流 pre_attn → 一次联合注意力 → 各流 post_attn
+        # Step 2: per joint layer, pre_attn on all participating streams,
+        # one joint attention, then post_attn on each stream.
         masks: dict[tuple[str, ...], tuple[TokenLayout, Any]] = {}
         captured: dict[tuple[str, int], Tensor] = {}
         for layer_id in range(group.num_layers):
@@ -336,8 +558,9 @@ class JointAttentionEngine:
                            if layer_id in index_maps[name])
             if not active:
                 raise ValueError(
-                    f"联合层 {layer_id} 没有任何流参与 —— 这是一个死层。"
-                    f"各流的参与层为 "
+                    f"joint layer {layer_id} has no participating stream, "
+                    f"which makes it a dead layer. Participating layers per "
+                    f"stream: "
                     f"{ {n: sorted(m) for n, m in index_maps.items()} }"
                 )
             qkvs = {
@@ -349,8 +572,9 @@ class JointAttentionEngine:
                 outs = override.run_attention(layer_id, qkvs, plan, layout)
                 if set(outs) != set(active):
                     raise ValueError(
-                        f"LayerAttentionOverride 在层 {layer_id} 返回的流集合 "
-                        f"{sorted(outs)} != 参与流 {list(active)}"
+                        f"LayerAttentionOverride returned stream set "
+                        f"{sorted(outs)} at layer {layer_id} != "
+                        f"participating streams {list(active)}"
                     )
             else:
                 outs = self._attend(active, qkvs, plan, layout, masks)
@@ -364,7 +588,7 @@ class JointAttentionEngine:
                 if layer_id in wanted.get(name, ()):
                     captured[(name, layer_id)] = live[name].hidden
 
-        # ③ 全部流 finalize
+        # Step 3: finalize every stream
         final = {name: modules[name].finalize(live[name]) for name in names}
         assert_shape_signature(live, final)
         return EngineOutput(states=final, captured=captured)
@@ -375,13 +599,35 @@ class JointAttentionEngine:
                 layout: TokenLayout,
                 masks: dict[tuple[str, ...], tuple[TokenLayout, Any]]
                 ) -> dict[str, Tensor]:
-        """拼 QKV → 一次 masked attention → 按段切回逐流输出。"""
+        """Concat QKV, run one masked attention, split back per stream.
+
+        Args:
+            active: Stream names participating at this layer, in layout
+                order.
+            qkvs: Per-stream ``QKV`` from ``pre_attn``.
+            plan: Full visibility plan.
+            layout: Full joint token layout.
+            masks: Cache local to one ``run`` call, keyed by ``active``,
+                holding the restricted layout and the materialized mask.
+
+        Returns:
+            Stream name to its slice of the attention output,
+            ``[B, L_self, num_heads, head_dim]``.
+
+        Raises:
+            ValueError: If the participating streams disagree on
+                ``num_heads``, or if the concatenated token count differs
+                from the restricted layout total.
+        """
+
         heads = {name: int(qkvs[name].q.shape[2]) for name in active}
         if len(set(heads.values())) != 1:
             raise ValueError(
-                f"联合注意力要求参与流的 num_heads 相等（否则沿 token 维拼不起来），"
-                f"得到 {heads}。V3 只管住了 head_dim —— num_heads 不等的拓扑"
-                "需要逐流独立的注意力，不是一张联合 mask"
+                f"joint attention requires participating streams to share "
+                f"num_heads (otherwise they cannot be concatenated along the "
+                f"token axis), got {heads}. V3 only constrains head_dim; a "
+                "topology with unequal num_heads needs per-stream separate "
+                "attention, not one joint mask"
             )
         q = torch.cat([qkvs[name].q for name in active], dim=1)
         k = torch.cat([qkvs[name].k for name in active], dim=1)
@@ -402,8 +648,9 @@ class JointAttentionEngine:
         sub_layout, mask = masks[active]
         if q.shape[1] != sub_layout.total:
             raise ValueError(
-                f"拼接后 token 数 {q.shape[1]} != 布局 total {sub_layout.total}；"
-                f"参与流 {list(active)} 的段长为 "
+                f"token count after concat {q.shape[1]} != layout total "
+                f"{sub_layout.total}; segment lengths of participating "
+                f"streams {list(active)} are "
                 f"{[(s.stream, s.length) for s in sub_layout.segments]}"
             )
         out = _joint_attention(QKV(q=q, k=k, v=v), mask, backend=self.backend)
@@ -413,27 +660,41 @@ class JointAttentionEngine:
 def _resolve_captures(captures: Mapping[str, Sequence[int]] | None,
                       index_maps: Mapping[str, Mapping[int, int]]
                       ) -> dict[str, tuple[int, ...]]:
-    """校验抓取请求并归一成 {流名: 联合层号元组}。
+    """Validate capture requests and normalize them.
 
-    请求了一条流不参与的联合层**抛错**而不是静默跳过：静默跳过的症状是
-    ``EngineOutput.require_capture`` 在 L4 那边报 KeyError，
-    而那时已经离开了声明这件事的地方（V8 要在构造期拦住它）。
+    Args:
+        captures: Stream name to the joint layers to capture, or None.
+        index_maps: Stream name to its joint-to-local layer index map.
+
+    Returns:
+        Stream name to a tuple of joint layer indices. An empty dict when
+        ``captures`` is falsy.
+
+    Raises:
+        KeyError: If a requested stream is not in the group.
+        ValueError: If a requested joint layer is one the stream does not
+            participate in. Raising beats skipping silently: the symptom of
+            a silent skip is a KeyError from
+            ``EngineOutput.require_capture`` over in L4, far from where the
+            request was declared (validator V8 is meant to stop it at
+            construction time).
     """
     if not captures:
         return {}
     stray = sorted(set(captures) - set(index_maps))
     if stray:
         raise KeyError(
-            f"captures 请求了不在本组里的流 {stray}；"
-            f"本组成员为 {sorted(index_maps)}"
+            f"captures requested streams outside this group: {stray}; "
+            f"group members are {sorted(index_maps)}"
         )
     resolved: dict[str, tuple[int, ...]] = {}
     for name, layer_ids in captures.items():
         for layer_id in layer_ids:
             if layer_id not in index_maps[name]:
                 raise ValueError(
-                    f"captures 请求抓流 {name!r} 的联合层 {layer_id}，"
-                    f"但该流不参与这一层；它参与的联合层为 "
+                    f"captures asked to capture joint layer {layer_id} of "
+                    f"stream {name!r}, but that stream does not participate "
+                    f"in this layer; it participates in joint layers "
                     f"{sorted(index_maps[name])}"
                 )
         resolved[name] = tuple(layer_ids)

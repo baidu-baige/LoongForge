@@ -1,0 +1,393 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+"""L3 numerics: timestep distributions, noise schedules, broadcasting, loss
+objectives and the Euler step.
+
+Division of labour with ``test_arch_diffusion.py`` (the declaration-layer
+cases): this file only tests **numbers**. Five things are checked:
+
+1. All four distributions land in [0, 1], and the shift / Beta formulas match
+   the existing implementation line for line.
+2. Rectified-flow noising and its target degenerate to known values at both
+   endpoints.
+3. ``BroadcastSpec.expand`` gathers per axis in step with the token labels, and
+   a ``-1`` label does not wrap around to the last row.
+4. Both loss objectives return ``[B]``, raise on mismatched shapes, and the MSE
+   is independent of the element count.
+5. The Euler step only touches active streams and its sign is a **subtraction**.
+"""
+
+from __future__ import annotations
+
+import pytest
+import torch
+
+from loongforge.embodied.model.arch.diffusion.broadcast import BroadcastSpec
+from loongforge.embodied.model.arch.diffusion.loss import (
+    CosineDistance, LossSpec, MeanSquaredError)
+from loongforge.embodied.model.arch.diffusion.schedule import (
+    ConstantSigma, RectifiedFlow)
+from loongforge.embodied.model.arch.diffusion.stepping import (
+    EulerSampler, Trajectory, UniformSteps)
+from loongforge.embodied.model.arch.diffusion.timesteps import (
+    BetaDist, Constant, LogitNormal, TimestepSampler, UniformShift)
+from loongforge.embodied.model.arch.geometry import GeometrySpec
+from loongforge.embodied.model.arch.layout import TokenLayout
+
+CPU = torch.device("cpu")
+N = 4096
+
+
+class _Stream:
+    """Minimal stand-in for a ``StreamSpec``: the layout only reads ``name``."""
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
+def small_layout() -> TokenLayout:
+    """The same 12-token geometry as ``test_arch_layout.py``: 2 latent frames x
+    4 video tokens plus 4 action tokens."""
+    geo = GeometrySpec(frame_height=32, frame_width=32, num_frames=5,
+                       num_views=1, vae_spatial_stride=16, patch_size=(1, 1, 1),
+                       action_horizon=4, action_dim=7,
+                       action_video_freq_ratio=2)
+    return TokenLayout.from_geometry(geo, [_Stream("video"), _Stream("action")])
+
+
+# ---- 1. distributions ----
+
+
+@pytest.mark.parametrize("dist", [
+    UniformShift(), UniformShift(shift=3.0), UniformShift(shift=5.0),
+    LogitNormal(), LogitNormal(mean=-0.5, std=1.5),
+    BetaDist(), BetaDist(alpha=0.5, beta=2.0),
+    Constant(), Constant(value=1.0),
+])
+def test_every_distribution_lands_in_the_unit_interval(dist):
+    """A [0, 1] range is part of the protocol.
+
+    Converting to sigma and the 1000x rescaling belong to the schedule, not to
+    the distribution, so a sampler that returned raw sigmas would break every
+    consumer.
+    """
+    torch.manual_seed(0)
+    value = dist.sample((N,), device=CPU, dtype=torch.float32)
+    assert value.shape == (N,)
+    assert torch.isfinite(value).all()
+    assert float(value.min()) >= 0.0
+    assert float(value.max()) <= 1.0
+
+
+def test_uniform_shift_matches_the_existing_phi():
+    """``UniformShift`` applies ``phi(u) = s*u / (1 + (s-1)*u)``, the same map as
+    ``scheduler_continuous.py:37-39``.
+
+    The check is on the mean rather than elementwise: the distribution cannot
+    reproduce a random stream, but ``phi`` is monotone, so ``shift > 1`` must
+    push mass towards the high-noise end while ``shift=1`` must be exactly
+    uniform.
+    """
+    torch.manual_seed(0)
+    plain = UniformShift().sample((N,), device=CPU, dtype=torch.float32)
+    shifted = UniformShift(shift=5.0).sample((N,), device=CPU,
+                                             dtype=torch.float32)
+    assert abs(float(plain.mean()) - 0.5) < 0.02      # shift=1 => uniform
+    assert float(shifted.mean()) > float(plain.mean())
+    # Fixed points of phi: u=0 -> 0 and u=1 -> 1, independent of shift
+    for shift in (1.0, 3.0, 5.0):
+        u = torch.tensor([0.0, 1.0])
+        phi = shift * u / (1.0 + (shift - 1.0) * u)
+        assert torch.allclose(phi, u)
+
+
+def test_constant_is_the_no_noise_declaration():
+    """``Constant`` is not a debugging aid: it is how "this stream is not noised"
+    is stated."""
+    value = Constant(value=0.0).sample((3, 2), device=CPU,
+                                       dtype=torch.float32)
+    assert value.shape == (3, 2)
+    assert torch.equal(value, torch.zeros(3, 2))
+
+
+@pytest.mark.parametrize("bad", [
+    (UniformShift, {"shift": 0.0}), (LogitNormal, {"std": 0.0}),
+    (BetaDist, {"alpha": 0.0}), (BetaDist, {"beta": -1.0}),
+    (BetaDist, {"eps": 0.0}), (Constant, {"value": 1.5}),
+])
+def test_distribution_parameters_are_validated_at_construction(bad):
+    """Degenerate distribution parameters are rejected when the object is built,
+    not when it is first sampled inside a training step."""
+    cls, kwargs = bad
+    with pytest.raises(ValueError):
+        cls(**kwargs)
+
+
+def test_sampler_axis_sizes_must_match_the_broadcast_axes():
+    """``axis_sizes`` corresponds one-to-one with ``broadcast.axes`` instead of
+    relying on broadcasting rules to absorb a mismatch.
+
+    A per-sample sampler takes no axis sizes and yields ``[B]``; a per-frame one
+    takes one size and yields ``[B, F]``.
+    """
+    per_sample = TimestepSampler(distribution=UniformShift())
+    assert per_sample.sample(3, device=CPU).shape == (3,)
+    with pytest.raises(ValueError, match="axis_sizes"):
+        per_sample.sample(3, device=CPU, axis_sizes=(2,))
+    per_frame = TimestepSampler(distribution=UniformShift(),
+                                broadcast=BroadcastSpec(axes=("frame",)))
+    assert per_frame.sample(3, device=CPU, axis_sizes=(2,)).shape == (3, 2)
+    with pytest.raises(ValueError, match="batch_size"):
+        per_frame.sample(0, device=CPU, axis_sizes=(2,))
+
+
+# ---- 2. noise schedules ----
+
+
+def test_rectified_flow_degenerates_at_both_endpoints():
+    """t=0 gives back the clean sample, t=1 gives pure noise, and the target is
+    ``noise - clean`` for every t (the defining property of rectified flow)."""
+    flow = RectifiedFlow()
+    clean = torch.randn(2, 5)
+    noise = torch.randn(2, 5)
+    assert torch.allclose(flow.add_noise(clean, noise, torch.zeros(2, 1)), clean)
+    assert torch.allclose(flow.add_noise(clean, noise, torch.ones(2, 1)), noise)
+    for t in (torch.zeros(2, 1), torch.rand(2, 1), torch.ones(2, 1)):
+        assert torch.allclose(flow.target(clean, noise, t), noise - clean)
+    t = torch.rand(4)
+    assert torch.equal(flow.sigma(t), t)        # sigma is the identity here
+
+
+def test_rectified_flow_is_the_straight_line():
+    """Noising is linear interpolation, so t=0.5 lands exactly halfway between
+    clean and noise."""
+    flow = RectifiedFlow()
+    clean, noise = torch.zeros(1, 3), torch.ones(1, 3)
+    half = flow.add_noise(clean, noise, torch.full((1, 1), 0.5))
+    assert torch.allclose(half, torch.full((1, 3), 0.5))
+
+
+def test_constant_sigma_zero_is_the_identity():
+    """With ``sigma=0`` a clean conditioning stream runs the **same code path**
+    as a noised stream.
+
+    The scaled form adds ``sigma * noise`` and its target is the noise itself.
+    """
+    clean, noise = torch.randn(2, 3), torch.randn(2, 3)
+    assert torch.equal(ConstantSigma().add_noise(clean, noise, torch.zeros(2)),
+                       clean)
+    scaled = ConstantSigma(sigma_value=0.2)
+    assert torch.allclose(scaled.add_noise(clean, noise, torch.zeros(2)),
+                          clean + 0.2 * noise)
+    assert torch.equal(scaled.target(clean, noise, torch.zeros(2)), noise)
+    with pytest.raises(ValueError, match="must be non-negative"):
+        ConstantSigma(sigma_value=-1.0)
+
+
+# ---- 3. broadcasting ----
+
+
+def test_per_sample_expand_is_a_view():
+    """A per-sample timestep expands to ``[B, 1, 1]`` without copying, and a
+    non-scalar input is rejected."""
+    layout = small_layout()
+    value = torch.rand(3)
+    out = BroadcastSpec().expand(value, layout)
+    assert out.shape == (3, 1, 1)
+    assert out.data_ptr() == value.data_ptr()        # a view, no copy
+    with pytest.raises(ValueError, match="expects a per-sample scalar of shape"):
+        BroadcastSpec().expand(torch.rand(3, 2), layout)
+
+
+def test_per_frame_expand_gathers_by_the_frame_label():
+    """Per-frame timesteps are gathered by ``labels_of('frame')``, so video and
+    action tokens share one frame numbering.
+
+    In the small geometry the frame labels are
+    ``[0,0,0,0,1,1,1,1, 0,0,1,1]``: an action token takes ``step // ratio``,
+    the latent frame it aligns to. So "add more noise to frame 1" acts on the
+    video and the action side at once, which is the point of cross-stream frame
+    alignment.
+    """
+    layout = small_layout()
+    spec = BroadcastSpec(axes=("frame",))
+    value = torch.tensor([[0.25, 0.75], [1.0, 0.0]])
+    out = spec.expand(value, layout)
+    assert out.shape == (2, layout.total, 1)
+    want = torch.tensor([0.25] * 4 + [0.75] * 4 + [0.25, 0.25, 0.75, 0.75])
+    assert torch.allclose(out[0, :, 0], want)
+    assert torch.allclose(out[1, :, 0],
+                          torch.tensor([1.0] * 4 + [0.0] * 4
+                                       + [1.0, 1.0, 0.0, 0.0]))
+
+
+def test_negative_label_becomes_zero_not_a_wrapped_neighbour():
+    """A token labelled ``-1`` has no position on that axis, so it reads 0
+    rather than wrapping around to the last row.
+
+    The ``row`` label is -1 for action tokens, and indexing with -1 would pick
+    up the last row with a perfectly correct shape. That is the silent failure
+    this case nails down.
+    """
+    layout = small_layout()
+    spec = BroadcastSpec(axes=("row",))
+    value = torch.tensor([[0.1, 0.2]])      # two rows
+    out = spec.expand(value, layout)
+    assert out.shape == (1, layout.total, 1)
+    rows = layout.labels_of("row")
+    for token in range(layout.total):
+        if int(rows[token]) < 0:
+            assert float(out[0, token, 0]) == 0.0
+        else:
+            assert float(out[0, token, 0]) == float(value[0, int(rows[token])])
+    assert float(out[0, 8, 0]) == 0.0       # an action token, not 0.2
+
+
+def test_two_axis_expand_is_c_order():
+    """Multiple axes fold into a C-order flat index in the declared order of
+    ``axes``, and a token with -1 on any axis still reads 0."""
+    layout = small_layout()
+    spec = BroadcastSpec(axes=("frame", "chunk"))
+    # value[b, frame, chunk]; chunk is -1 for video, so the video segment is 0
+    value = torch.arange(4, dtype=torch.float32).reshape(1, 2, 2)
+    out = spec.expand(value, layout)
+    assert torch.allclose(out[0, :8, 0], torch.zeros(8))
+    # The action tokens have (frame, chunk) = (0,0) (0,0) (1,1) (1,1)
+    assert torch.allclose(out[0, 8:, 0], torch.tensor([0.0, 0.0, 3.0, 3.0]))
+
+
+def test_expand_rejects_unknown_axis_and_wrong_rank():
+    """An axis name absent from the layout, a wrong rank, an axis size larger
+    than the value, and a repeated axis are all rejected."""
+    layout = small_layout()
+    with pytest.raises(ValueError, match="are not in the layout"):
+        BroadcastSpec(axes=("noise_level",)).expand(torch.rand(1, 2), layout)
+    with pytest.raises(ValueError, match="2 dims in total"):
+        BroadcastSpec(axes=("frame",)).expand(torch.rand(2), layout)
+    with pytest.raises(ValueError, match="which exceeds length"):
+        BroadcastSpec(axes=("frame",)).expand(torch.rand(1, 1), layout)
+    with pytest.raises(ValueError, match="has duplicate axes"):
+        BroadcastSpec(axes=("frame", "frame"))
+
+
+# ---- 4. loss objectives ----
+
+
+def test_objectives_return_one_number_per_sample():
+    """Objectives return ``[B]`` rather than a scalar, because per-sample
+    weighting has to multiply **before** the batch mean."""
+    pred, target = torch.randn(3, 4, 5), torch.randn(3, 4, 5)
+    for objective in (MeanSquaredError(), CosineDistance()):
+        out = objective(pred, target)
+        assert out.shape == (3,), objective
+        assert torch.isfinite(out).all()
+        assert out.dtype == torch.float32
+
+
+def test_mean_squared_error_is_independent_of_element_count():
+    """The MSE takes the **mean** over the non-batch axes, so the relative
+    weight of the video and action losses is set by ``LossSpec.weight`` alone.
+
+    Summing and dividing by a fixed number would let the video loss, with two
+    orders of magnitude more elements, absorb the whole gradient while
+    ``LossSpec.weight`` still reads 0.5 / 1.0.
+    """
+    mse = MeanSquaredError()
+    small = mse(torch.ones(2, 4), torch.zeros(2, 4))
+    large = mse(torch.ones(2, 4000), torch.zeros(2, 4000))
+    assert torch.allclose(small, torch.ones(2))
+    assert torch.allclose(large, torch.ones(2))
+
+
+def test_cosine_distance_is_scale_invariant_and_mse_is_not():
+    """The two objectives are not interchangeable: cosine ignores magnitude,
+    MSE does not.
+
+    Cosine distance is 0 for a positively scaled copy and 2 for the negated
+    tensor.
+    """
+    pred = torch.randn(2, 8)
+    assert torch.allclose(CosineDistance()(pred, pred * 3.0),
+                          torch.zeros(2), atol=1e-5)
+    assert float(MeanSquaredError()(pred, pred * 3.0).min()) > 0.0
+    # The other direction: opposite directions give a cosine distance of 2
+    assert torch.allclose(CosineDistance()(pred, -pred),
+                          torch.full((2,), 2.0), atol=1e-5)
+
+
+def test_objective_rejects_mismatched_shapes():
+    """Equal shapes are a design guarantee (a head's output shape equals the
+    raw target shape), so a mismatch raises instead of broadcasting."""
+    for objective in (MeanSquaredError(), CosineDistance()):
+        with pytest.raises(ValueError, match="have different shapes"):
+            objective(torch.randn(2, 4), torch.randn(2, 1))
+        with pytest.raises(ValueError, match="expected at least 2 dims"):
+            objective(torch.randn(4), torch.randn(4))
+
+
+def test_loss_spec_objective_defaults_to_mse_and_is_not_yaml():
+    """The objective is a Python-level default on ``LossSpec``, not a YAML key,
+    and a loss term names exactly one of ``stream`` or ``head``."""
+    spec = LossSpec(name="video_flow", head="video_flow")
+    assert isinstance(spec.objective, MeanSquaredError)
+    cosine = LossSpec(name="semantic", head="semantic",
+                      objective=CosineDistance())
+    assert isinstance(cosine.objective, CosineDistance)
+    # Exactly one of stream/head is filled in; new fields must not loosen this
+    with pytest.raises(ValueError, match="exactly one of stream and head must be set"):
+        LossSpec(name="bad", stream="video", head="video_flow")
+
+
+# ---- 5. the Euler step ----
+
+
+def test_euler_step_subtracts_and_only_touches_active_streams():
+    """The update is ``x <- x - dt * v``.
+
+    A flipped sign samples pure noise while every shape and every loss value
+    still looks normal, so the direction is pinned down numerically: with
+    ``num_steps=4`` the step is 0.25, so v=4 drives 1.0 down to 0.0 and v=-4
+    drives 0.0 up to 1.0.
+    """
+    gate = UniformSteps(num_steps=4)
+    traj = Trajectory(latents={"video": torch.ones(1, 3),
+                               "action": torch.zeros(1, 2)})
+    out = EulerSampler().step(traj, {"video": torch.full((1, 3), 4.0),
+                                     "action": torch.full((1, 2), -4.0)},
+                              gate=gate)
+    assert out.step == 1
+    assert torch.allclose(out.latents["video"], torch.zeros(1, 3))
+    assert torch.allclose(out.latents["action"], torch.ones(1, 2))
+    # The input trajectory is not rewritten (advancing returns a new object)
+    assert torch.allclose(traj.latents["video"], torch.ones(1, 3))
+
+
+def test_skipped_stream_must_not_receive_a_prediction():
+    """A stream in ``gate.skip`` raises if a prediction is handed to it.
+
+    Fast-WAM drops the video stream at inference time. Ignoring the extra
+    prediction instead of raising would make "drop the video stream" silently
+    ineffective, and nothing in the numbers would show it.
+    """
+    gate = UniformSteps(num_steps=2, skip=frozenset({"video"}))
+    traj = Trajectory(latents={"video": torch.ones(1, 3),
+                               "action": torch.ones(1, 2)})
+    assert traj.active_streams(gate) == ("action",)
+    with pytest.raises(KeyError, match="video"):
+        EulerSampler().step(traj, {"video": torch.ones(1, 3),
+                                   "action": torch.ones(1, 2)}, gate=gate)
+    out = EulerSampler().step(traj, {"action": torch.full((1, 2), 2.0)},
+                              gate=gate)
+    assert torch.allclose(out.latents["video"], torch.ones(1, 3))
+    assert torch.allclose(out.latents["action"], torch.zeros(1, 2))
+
+
+def test_missing_prediction_for_an_active_stream_is_named():
+    """An active stream with no prediction raises a ``KeyError`` naming it,
+    rather than leaving that stream's latent frozen for the step."""
+    gate = UniformSteps(num_steps=2)
+    traj = Trajectory(latents={"video": torch.ones(1, 3),
+                               "action": torch.ones(1, 2)})
+    with pytest.raises(KeyError, match="action"):
+        EulerSampler().step(traj, {"video": torch.ones(1, 3)}, gate=gate)

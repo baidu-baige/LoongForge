@@ -1,15 +1,18 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""L4 隐状态引用 ``HiddenStateRef``（Lane C）。
+"""L4 hidden-state reference ``HiddenStateRef`` (Lane C).
 
-签名以 ``docs/design/mot_layer_interfaces.zh-CN.md`` §5.6 为准。
+The signature follows ``docs/design/mot_layer_interfaces.zh-CN.md`` §5.6.
 
-本模块修的是三家框架共有缺口之二：**「第 N 个条件输入」与「第 N 个输出头」
-被混为一谈**。条件走 ``streams/conditions.py``，头取隐状态走这里。
+This module fixes the second of the two gaps shared by all three surveyed
+frameworks: **"the N-th conditioning input" and "the N-th output head" are
+conflated**. Conditions go through ``streams/conditions.py``; a head reaching
+for a hidden state goes through here.
 
-``HiddenStateRef`` 让「这个头吃哪条流的哪一层」成为一个可校验的声明，
-而不是现状的 hook + 全局变量 + 散落的层号。
+``HiddenStateRef`` turns "which layer of which stream does this head read" into
+a checkable declaration, instead of today's hooks plus globals plus layer
+indices scattered around.
 """
 
 from __future__ import annotations
@@ -25,15 +28,21 @@ __all__ = ["HiddenStateRef", "captures_from_refs"]
 
 @dataclass(frozen=True)
 class HiddenStateRef:
-    """指向某条流某一层的隐状态。
+    """Pointer to the hidden state of one layer of one stream.
 
-    ``layer`` 为 None ⇒ 取该流 ``finalize`` 之后的最终输出（最常见）。
-    给定整数 ⇒ 取那个**联合层号**的中间隐状态，此时引擎必须被请求抓它
-    （``captures``），V8 在构造期对账这件事。
+    ``layer`` = None means the stream's final output, after ``finalize`` (the
+    common case). An integer means the intermediate hidden state at that
+    **joint** layer index, in which case the engine must have been asked to
+    capture it (``captures``); V8 reconciles that at construction time.
 
-    为什么层号是联合层号而不是局部层号：写这个引用的人（L4 的作者）
-    看到的是「第 12 层」这个模型层面的概念，而局部层号是 L2 的内部编号。
-    换算由 ``StreamSpec.resolve_layer_index_map`` 负责。
+    Why the index is a joint layer index and not a per-stream local one: the
+    person writing this reference (the author of L4) thinks in terms of
+    "layer 12" at the model level, while local indices are L2's internal
+    numbering. ``StreamSpec.resolve_layer_index_map`` does the conversion.
+
+    Attributes:
+        stream: Name of the stream to read.
+        layer: Joint layer index, or None for the stream's final output.
     """
 
     stream: str
@@ -42,30 +51,45 @@ class HiddenStateRef:
     def __post_init__(self) -> None:
         if self.layer is not None and self.layer < 0:
             raise ValueError(
-                f"HiddenStateRef({self.stream!r}).layer 必须非负或 None，"
-                f"得到 {self.layer}"
+                f"HiddenStateRef({self.stream!r}).layer must be non-negative "
+                f"or None, got {self.layer}"
             )
 
     @property
     def is_final(self) -> bool:
-        """是否取最终输出（而不是某个中间层）。"""
+        """Whether this points at the final output rather than some mid layer."""
         return self.layer is None
 
     @property
     def capture_key(self) -> tuple[str, int] | None:
-        """需要引擎抓取时的键，取最终输出时为 None。
+        """Key the engine needs in order to capture this state.
 
-        键的构造只在这一处 —— ``EngineOutput.captured`` 的键格式由它定义。
+        The key is built in this one place only: it defines the key format of
+        ``EngineOutput.captured``.
+
+        Returns:
+            ``(stream, layer)``, or None when the final output is wanted.
         """
         if self.layer is None:
             return None
         return (self.stream, self.layer)
 
     def resolve(self, output: EngineOutput) -> Tensor:
-        """从引擎产出里取出这个隐状态。
+        """Pull this hidden state out of the engine's output.
 
-        取中间层时走 ``require_capture``，缺失即抛错并列出已抓的键 ——
-        「请求了但没抓」是 V8 应该在构造期拦住的，这里是第二道网。
+        Intermediate layers go through ``require_capture``, which raises on a
+        miss and lists the keys that were captured. "Requested but not
+        captured" is something V8 should have blocked at construction time;
+        this is the second net.
+
+        Args:
+            output: The engine output to read from.
+
+        Returns:
+            The referenced hidden-state tensor.
+
+        Raises:
+            KeyError: If the stream or the requested capture is missing.
         """
         if self.layer is None:
             return output.require(self.stream).hidden
@@ -74,10 +98,18 @@ class HiddenStateRef:
 
 def captures_from_refs(
         refs: tuple[HiddenStateRef, ...]) -> dict[str, tuple[int, ...]]:
-    """把一组引用翻成引擎的 ``captures`` 请求（I3 的请求侧）。
+    """Turn a set of refs into the engine's ``captures`` request (request side of I3).
 
-    ``WorldModel.__init__`` 第④步调它：头表声明了要哪些隐状态，
-    引擎的抓取请求就**从声明推出来**，而不是两处各写一遍。
+    Step 4 of ``WorldModel.__init__`` calls this: the head table declares which
+    hidden states it wants, and the engine's capture request is **derived from
+    that declaration** instead of being written out a second time.
+
+    Args:
+        refs: The hidden-state references collected from the head table.
+
+    Returns:
+        Mapping from stream name to the sorted, deduplicated joint layer
+        indices to capture. Refs pointing at final outputs are skipped.
     """
     wanted: dict[str, list[int]] = {}
     for ref in refs:

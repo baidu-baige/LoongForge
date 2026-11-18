@@ -1,15 +1,18 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""L3 推理步进：``Sampler`` / ``SteppingGate`` / ``Trajectory``（Lane C）。
+"""L3 inference stepping: ``Sampler`` / ``SteppingGate`` / ``Trajectory``
+(Lane C).
 
-签名以 ``docs/design/mot_layer_interfaces.zh-CN.md`` §5.5 为准。
-``Trajectory`` / ``SteppingGate`` 的**配置期归属**是总纲 §10-7 的未决项，
-这里只定运行期签名。
+The signatures follow ``docs/design/mot_layer_interfaces.zh-CN.md`` §5.5.
+**Where ``Trajectory`` / ``SteppingGate`` belong at configuration time** is an
+open item in the master plan §10-7; only the runtime signatures are fixed here.
 
-``SteppingGate`` 要表达的事情，现状没有抽象：**不同流的步数可以不同**。
-Fast-WAM 推理期砍掉视频流（视频流步数 0、动作流 10 步）就是这一档，
-现状里它表现为 ``infer_action`` 里一段与训练路径完全分叉的代码。
+What ``SteppingGate`` expresses has no abstraction today: **different streams
+may take a different number of steps**. Fast-WAM dropping the video stream at
+inference (video stream 0 steps, action stream 10) is this case, and today it
+shows up as a block inside ``infer_action`` that forks completely away from the
+training path.
 """
 
 from __future__ import annotations
@@ -26,9 +29,15 @@ __all__ = ["Trajectory", "SteppingGate", "UniformSteps", "Sampler",
 
 @dataclass
 class Trajectory:
-    """一次采样过程的状态。逐流一个 latent + 一个当前步号。
+    """State of one sampling run: one latent per stream plus the current step.
 
-    ``step`` 是**全局步号**；某条流这一步要不要动，由 ``SteppingGate`` 答。
+    ``step`` is the **global** step number; whether a given stream moves on this
+    step is answered by ``SteppingGate``.
+
+    Attributes:
+        latents: Stream name -> current latent.
+        step: Global step number.
+        extras: Free-form carry-over state for samplers that need it.
     """
 
     latents: dict[str, Tensor]
@@ -36,17 +45,38 @@ class Trajectory:
     extras: dict[str, object] = field(default_factory=dict)
 
     def active_streams(self, gate: SteppingGate) -> tuple[str, ...]:
-        """本步要前进的流名。空元组合法 —— 意味着这一步谁都不动。"""
+        """Stream names that advance on this step.
+
+        An empty tuple is legal: it means nothing moves this step.
+
+        Args:
+            gate: The gate deciding per-stream stepping.
+
+        Returns:
+            The active stream names, sorted.
+        """
         return tuple(name for name in sorted(self.latents)
                      if gate.should_step(name, self.step))
 
     def advance(self, updates: Mapping[str, Tensor]) -> Trajectory:
-        """写回被更新的流并把步号 +1。未出现在 ``updates`` 里的流原样保留。"""
+        """Write back the updated streams and increment the step number.
+
+        Streams absent from ``updates`` are carried over unchanged.
+
+        Args:
+            updates: Stream name -> new latent.
+
+        Returns:
+            A new trajectory at ``step + 1``.
+
+        Raises:
+            KeyError: If ``updates`` names a stream not in this trajectory.
+        """
         unknown = set(updates) - set(self.latents)
         if unknown:
             raise KeyError(
-                f"Trajectory.advance 收到未知流 {sorted(unknown)}；"
-                f"本轨迹的流为 {sorted(self.latents)}"
+                f"Trajectory.advance got unknown streams {sorted(unknown)}; "
+                f"this trajectory's streams are {sorted(self.latents)}"
             )
         latents = dict(self.latents)
         latents.update(updates)
@@ -55,23 +85,31 @@ class Trajectory:
 
 
 class SteppingGate(Protocol):
-    """哪条流在第几步前进。推理期**逐流步数不同**的唯一表达处。"""
+    """Which stream advances on which step. The only place where a per-stream
+    step count is expressed at inference."""
 
     def total_steps(self) -> int:
-        """全局步数上限。构造期常量（INV-2：推理图也要静态）。"""
+        """Global upper bound on the step count. A construction-time constant
+        (INV-2: the inference graph must be static too)."""
         ...
 
     def should_step(self, stream: str, step: int) -> bool:
-        """``stream`` 在第 ``step`` 步是否前进。"""
+        """Whether ``stream`` advances on step ``step``."""
         ...
 
 
 @dataclass(frozen=True)
 class UniformSteps:
-    """所有流同步步进 ``num_steps`` 步。**多数模型的档位**，也是缺省。
+    """Every stream steps in lockstep for ``num_steps`` steps. **The setting
+    most models use**, and the default.
 
-    ``skip`` 列出推理期整条砍掉的流（Fast-WAM 的视频流）。
-    砍掉表达为「这条流 should_step 恒 False」，而不是另一条代码路径。
+    ``skip`` lists streams dropped entirely at inference (Fast-WAM's video
+    stream). Dropping is expressed as "``should_step`` is always False for this
+    stream", not as a separate code path.
+
+    Attributes:
+        num_steps: Number of sampling steps; must be positive.
+        skip: Streams that never advance.
     """
 
     num_steps: int
@@ -80,7 +118,8 @@ class UniformSteps:
     def __post_init__(self) -> None:
         if self.num_steps <= 0:
             raise ValueError(
-                f"UniformSteps.num_steps 必须为正，得到 {self.num_steps}"
+                f"UniformSteps.num_steps must be positive, "
+                f"got {self.num_steps}"
             )
 
     def total_steps(self) -> int:
@@ -88,36 +127,79 @@ class UniformSteps:
 
     def should_step(self, stream: str, step: int) -> bool:
         if step < 0:
-            raise ValueError(f"step 必须非负，得到 {step}")
+            raise ValueError(f"step must be non-negative, got {step}")
         return stream not in self.skip and step < self.num_steps
 
 
 class Sampler(Protocol):
-    """一步 ODE / SDE 更新。``WorldModel`` 推理第②步循环调它。"""
+    """One ODE / SDE update step. The inference loop of ``WorldModel`` calls it
+    in step (2)."""
 
     def step(self, trajectory: Trajectory,
              prediction: Mapping[str, Tensor], *,
              gate: SteppingGate) -> Trajectory:
-        """吃模型预测，产出下一个轨迹点。
+        """Consume the model prediction and produce the next trajectory point.
 
-        只更新 ``trajectory.active_streams(gate)`` 里的流 ——
-        更新了不该动的流会让「砍掉视频流」失效，而且数值上看不出来。
+        Only the streams in ``trajectory.active_streams(gate)`` may be updated:
+        updating a stream that should not move defeats "drop the video stream",
+        and nothing in the numbers reveals it.
         """
         ...
 
 
 @dataclass(frozen=True)
 class EulerSampler:
-    """一阶 Euler ODE 更新。rectified flow 系的缺省采样器。
+    """First-order Euler ODE update. The default sampler for rectified flow.
 
-    **本类不带步数**：步数归 ``SteppingGate``。现状把两者挤在一个 scheduler
-    对象里（VPP2 的四个 scheduler 实例彼此只差一个 shift，
-    ``vpp2.py:122-137``），于是「改步数」与「改分布」会互相牵连。
+    **This class carries no step count**: the step count belongs to
+    ``SteppingGate``. Today both are crammed into one scheduler object (VPP2's
+    four scheduler instances differ only by a shift, ``vpp2.py:122-137``), so
+    "change the step count" and "change the distribution" interfere.
     """
 
     def step(self, trajectory: Trajectory,
              prediction: Mapping[str, Tensor], *,
              gate: SteppingGate) -> Trajectory:
-        raise NotImplementedError(
-            "EulerSampler.step 属 Lane C（L3 推理步进，S3 交付）"
-        )
+        """``x <- x - dt * v`` with dt = 1 / total_steps.
+
+        A rectified flow trajectory is ``x_t = (1-t)*x_0 + t*eps``, so
+        ``dx/dt = eps - x_0``, which is exactly the velocity the head regresses
+        (``RectifiedFlow.target``). Sampling walks from t=1 down to t=0, so the
+        step **subtracts**. The symptom of flipping the sign is that sampling
+        returns pure noise while shapes and losses all look fine.
+
+        Only the streams active on this step are updated. A prediction supplied
+        for an inactive stream raises instead of being ignored: when "drop the
+        video stream" silently fails, nothing in the numbers shows it, so this
+        check is the only thing that surfaces it.
+
+        Args:
+            trajectory: Current trajectory point.
+            prediction: Stream name -> predicted velocity.
+            gate: The gate deciding per-stream stepping.
+
+        Returns:
+            The next trajectory point.
+
+        Raises:
+            KeyError: If ``prediction`` covers an inactive stream, or misses an
+                active one.
+        """
+        active = trajectory.active_streams(gate)
+        extra = sorted(set(prediction) - set(active))
+        if extra:
+            raise KeyError(
+                f"EulerSampler.step: step {trajectory.step} got predictions "
+                f"for streams {extra}, but they do not advance on this step "
+                f"(active={list(active)})"
+            )
+        missing = sorted(set(active) - set(prediction))
+        if missing:
+            raise KeyError(
+                f"EulerSampler.step: step {trajectory.step} is missing "
+                f"predictions for streams {missing}"
+            )
+        delta = 1.0 / gate.total_steps()
+        return trajectory.advance({
+            name: trajectory.latents[name] - delta * prediction[name]
+            for name in active})

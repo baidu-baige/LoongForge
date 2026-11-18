@@ -1,13 +1,16 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""配置层：``Spec`` / ``build`` / provider 注册表 / ``WorldModelSpec``。
+"""Config layer: ``Spec`` / ``build`` / provider registry / ``WorldModelSpec``.
 
-``core`` 是依赖图的根（无依赖），所以它在这里**直接导入**。
-``world`` 反过来依赖 L0–L4 的全部模块，而那些模块又要从本包取 ``Spec`` ——
-因此 ``world`` 走 PEP 562 的惰性导出：``arch.spec.WorldModelSpec`` 照常可用，
-但 ``import arch.spec.core`` 不会把 ``world`` 连带拉起来。
-这是整棵树无环的唯一一处技巧，别在别的 ``__init__`` 里复制它。
+``core`` is the root of the dependency graph (it imports nothing from ``arch``),
+so it is imported eagerly here. ``world`` goes the other way: it depends on every
+module in L0-L4, and those modules in turn import ``Spec`` from this package.
+``world`` is therefore exported lazily through PEP 562 ``__getattr__``:
+``arch.spec.WorldModelSpec`` still resolves, but ``import arch.spec.core`` does
+not drag ``world`` in and create an import cycle.
+This is the only place in the tree that uses this trick; do not copy it into
+other ``__init__`` files.
 """
 
 from __future__ import annotations

@@ -1,13 +1,16 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""L3 噪声调度 ``NoiseSchedule`` / ``ConstantSigma``（Lane C）。
+"""L3 noise schedules ``NoiseSchedule`` / ``ConstantSigma`` (Lane C).
 
-签名以 ``docs/design/mot_layer_interfaces.zh-CN.md`` §5.3 为准。
+The signatures follow ``docs/design/mot_layer_interfaces.zh-CN.md`` §5.3.
 
-与 ``timesteps.py`` 的分工：分布决定**采到哪个 t**，调度决定**t 对应多少噪声**。
-两者分开的直接理由是 rectified flow 下 ``x_t = (1-t)·x_0 + t·ε`` 这条式子
-里 t 既是分布的样本又是插值系数，混写之后换分布会顺带换掉插值。
+Division of labour with ``timesteps.py``: the distribution decides **which t is
+drawn**, the schedule decides **how much noise t corresponds to**. The direct
+reason for keeping them apart is that under rectified flow
+``x_t = (1-t)*x_0 + t*eps`` the same t is both the sample from the distribution
+and the interpolation coefficient; written together, swapping the distribution
+would also swap the interpolation.
 """
 
 from __future__ import annotations
@@ -21,38 +24,44 @@ __all__ = ["NoiseSchedule", "ConstantSigma", "RectifiedFlow"]
 
 
 class NoiseSchedule(Protocol):
-    """t → (加噪的系数, 回归目标)。三个方法就是一个前向过程的全部。"""
+    """t -> (noising coefficients, regression target).
+
+    These three methods are the whole of a forward process.
+    """
 
     def add_noise(self, clean: Tensor, noise: Tensor,
                   t: Tensor) -> Tensor:
-        """产出 ``x_t``。``t`` 已由 ``BroadcastSpec.expand`` 广播到可乘的形状。"""
+        """Produce ``x_t``. ``t`` is already broadcast to a multipliable shape
+        by ``BroadcastSpec.expand``."""
         ...
 
     def target(self, clean: Tensor, noise: Tensor, t: Tensor) -> Tensor:
-        """回归目标。rectified flow 下是 ``noise - clean``（速度）。
+        """Regression target. Under rectified flow this is ``noise - clean``
+        (the velocity).
 
-        它是一个**方法**而不是常量字符串："v_prediction" 这类枚举
-        在现状里要在三处分别 if 一遍。
+        It is a **method** rather than a constant string: enumerations like
+        "v_prediction" force a separate ``if`` in three places today.
         """
         ...
 
     def sigma(self, t: Tensor) -> Tensor:
-        """t 对应的噪声尺度。``visibility.rules.noise_gate`` 的离散档位由它换算。"""
+        """Noise scale for t. ``visibility.rules.noise_gate`` converts its
+        discrete levels through this."""
         ...
 
 
 @dataclass(frozen=True)
 class RectifiedFlow:
-    """rectified flow。**13 个模型里 12 个是这一档**，所以它是缺省。
+    """Rectified flow. **12 of the 13 models use it**, so it is the default.
 
-    ``x_t = (1-t)·clean + t·noise``，目标 ``noise - clean``。
+    ``x_t = (1-t)*clean + t*noise``, with target ``noise - clean``.
     """
 
     def add_noise(self, clean: Tensor, noise: Tensor, t: Tensor) -> Tensor:
         return (1.0 - t) * clean + t * noise
 
     def target(self, clean: Tensor, noise: Tensor, t: Tensor) -> Tensor:
-        del t                      # 目标与 t 无关，这是 rectified flow 的性质
+        del t                      # target is t-independent under rectified flow
         return noise - clean
 
     def sigma(self, t: Tensor) -> Tensor:
@@ -61,10 +70,15 @@ class RectifiedFlow:
 
 @dataclass(frozen=True)
 class ConstantSigma:
-    """固定噪声尺度。配 ``timesteps.Constant`` 表达「这条流不加噪」。
+    """Fixed noise scale. With ``timesteps.Constant`` it expresses "this stream
+    is not noised".
 
-    ``sigma=0.0`` 时 ``add_noise`` 恒等返回 clean —— 这让 clean 条件流
-    与噪声流走**同一条代码路径**，而不是靠 ``if is_condition`` 分支。
+    When ``sigma=0.0``, ``add_noise`` returns ``clean`` unchanged, which lets a
+    clean conditioning stream and a noised stream take the **same code path**
+    instead of branching on ``if is_condition``.
+
+    Attributes:
+        sigma_value: Constant noise scale; 0.0 makes ``add_noise`` the identity.
     """
 
     sigma_value: float = 0.0
@@ -72,7 +86,8 @@ class ConstantSigma:
     def __post_init__(self) -> None:
         if self.sigma_value < 0:
             raise ValueError(
-                f"ConstantSigma.sigma_value 必须非负，得到 {self.sigma_value}"
+                f"ConstantSigma.sigma_value must be non-negative, "
+                f"got {self.sigma_value}"
             )
 
     def add_noise(self, clean: Tensor, noise: Tensor, t: Tensor) -> Tensor:

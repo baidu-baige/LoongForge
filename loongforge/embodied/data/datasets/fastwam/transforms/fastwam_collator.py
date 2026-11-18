@@ -63,8 +63,16 @@ class FastWAMPreparedBatch(PreparedBatch):
 
 
 @register_preprocessor("fastwam")
+@register_preprocessor("vpp2")
+@register_preprocessor("internw0_delta")
 class FastWAMPreprocessor(BasePreprocessor):
-    """Collate LeRobot-style samples into upstream FastWAM sample dicts."""
+    """Collate LeRobot-style samples into upstream FastWAM sample dicts.
+
+    Also serves the ``arch`` world models (``vpp2``, ``internw0_delta``): they
+    consume the same pixel-space batch and read the same four config
+    attributes (``tokenizer_max_len``, ``video_dit_config["text_dim"]``,
+    ``model_id``, ``action_horizon``), so a separate collator would be a copy.
+    """
 
     def __init__(self, model_cfg: Any, data_cfg: Any):
         """Initialize preprocessor from typed FastWAMConfig and FastWAMDataConfig."""

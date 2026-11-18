@@ -1,62 +1,191 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""L3 损失规格 ``LossSpec`` / ``WeightRamp``（Lane C）。
+"""L3 loss specs ``LossSpec`` / ``WeightRamp`` (Lane C).
 
-签名以 ``docs/design/mot_layer_interfaces.zh-CN.md`` §5.4 为准，
-``WeightRamp`` 与新交界面 **I4′** 的裁定见总纲 §9 的 11/13 结论。
+The signatures follow ``docs/design/mot_layer_interfaces.zh-CN.md`` §5.4; the
+ruling on ``WeightRamp`` and the new interface **I4′** is the 11/13 conclusion
+in the master plan §9.
 
-损失**条数**逐模型不同（2 / 3 / 5 条），因此是一个列表而不是若干形参 ——
-这正是 OpenWAM-TS 的二元组 forward 筛掉 InternW0-Δ 与 AW-0 的那条约束，
-本层刻意不复制它。
+The **number** of loss terms differs per model (2 / 3 / 5 terms), so this is a
+list rather than a fixed set of parameters. That fixed arity is exactly the
+constraint in OpenWAM-TS's two-tuple forward that ruled out InternW0-Δ and
+AW-0, and this layer deliberately does not copy it.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Protocol
+
+import torch
+from torch import Tensor
 
 from .broadcast import DEFAULT_PER_SAMPLE, BroadcastSpec
 
-__all__ = ["WeightRamp", "LossSpec"]
+__all__ = ["WeightRamp", "LossSpec", "LossObjective", "MeanSquaredError",
+           "CosineDistance"]
+
+
+class LossObjective(Protocol):
+    """What is computed between prediction and target. One method, producing
+    a **per-sample** ``[B]``.
+
+    Why not a ``"mse"`` / ``"cosine"`` string: in the existing code that shows
+    up as three separate ``if`` chains (weighting, logging, backward), so adding
+    an objective means editing three places. As an object it has one
+    implementation site.
+
+    Why it returns ``[B]`` rather than a scalar: besides ``LossSpec.weight_at``
+    there is per-sample weighting (the existing ``training_weight`` in
+    ``scheduler_continuous.py:73-83``), and applying that after the batch mean
+    is not equivalent.
+    """
+
+    def __call__(self, prediction: Tensor, target: Tensor) -> Tensor:
+        """``[B, ...]`` x ``[B, ...]`` -> ``[B]``."""
+        ...
+
+
+def _check_same_shape(prediction: Tensor, target: Tensor, *,
+                      objective: str) -> None:
+    """Prediction and target must have the **same shape**; no broadcasting.
+
+    A head's output shape equals the shape of that stream's raw tensor (see the
+    invariant in ``heads/flow.py``), so same-shape is guaranteed by design. A
+    mismatch means some shape plumbing is wrong on one side, and broadcasting
+    here would silently produce a number instead.
+
+    Args:
+        prediction: Model prediction.
+        target: Regression target.
+        objective: Objective name, used in the error message.
+
+    Raises:
+        ValueError: If the shapes differ, or the rank is below 2.
+    """
+    if prediction.shape != target.shape:
+        raise ValueError(
+            f"{objective}: prediction {tuple(prediction.shape)} and target "
+            f"{tuple(target.shape)} have different shapes. A head's output "
+            "shape must equal that stream's raw tensor shape; a mismatch is "
+            "not covered up by broadcasting"
+        )
+    if prediction.ndim < 2:
+        raise ValueError(
+            f"{objective}: expected at least 2 dims [B, ...], "
+            f"got {tuple(prediction.shape)}"
+        )
+
+
+@dataclass(frozen=True)
+class MeanSquaredError:
+    """The regression objective of flow matching. **12 of the 13 models use
+    it**, so it is the default.
+
+    Means over every axis except batch, giving ``[B]``. It does not sum first
+    and divide later: the element counts of different streams differ by orders
+    of magnitude (video tokens outnumber action tokens by two decimal places),
+    so summing would let tensor size, rather than ``LossSpec.weight``, decide
+    the relative weight of two losses.
+    """
+
+    def __call__(self, prediction: Tensor, target: Tensor) -> Tensor:
+        _check_same_shape(prediction, target, objective="MeanSquaredError")
+        error = (prediction.float() - target.float()).square()
+        return error.flatten(1).mean(dim=1)
+
+
+@dataclass(frozen=True)
+class CosineDistance:
+    """``1 - cos``, taken along the **last dimension**. Used by the
+    self-distillation alignment family.
+
+    The existing ``semantic_future`` of InternW0-Δ is this case
+    (``losses.py:58-72``, computed directly on 3072-dim raw hidden states).
+    Not interchangeable with MSE: it is insensitive to vector norm, MSE is not.
+
+    Attributes:
+        eps: Numerical floor passed to ``cosine_similarity``; must be positive.
+    """
+
+    eps: float = 1e-8
+
+    def __post_init__(self) -> None:
+        if self.eps <= 0:
+            raise ValueError(
+                f"CosineDistance.eps must be positive, got {self.eps}")
+
+    def __call__(self, prediction: Tensor, target: Tensor) -> Tensor:
+        _check_same_shape(prediction, target, objective="CosineDistance")
+        cos = torch.nn.functional.cosine_similarity(
+            prediction.float(), target.float(), dim=-1, eps=self.eps)
+        distance = 1.0 - cos
+        # cos already consumed the last dim: ``[B, D]`` => ``[B]`` (no further
+        # mean needed), ``[B, L, D]`` => ``[B, L]`` (mean over the token axis)
+        if distance.ndim == 1:
+            return distance
+        return distance.flatten(1).mean(dim=1)
 
 
 @dataclass(frozen=True)
 class WeightRamp:
-    """损失权重随训练步数的线性爬升 / 衰减。
+    """Linear ramp-up / decay of a loss weight over training steps.
 
-    为什么它必须进 spec 而不是写在 trainer 里：权重曲线会改变收敛结果，
-    而「这一条 loss 在第几步开始生效」现状散落在训练脚本的 if 里，
-    换一次实验要改代码。进 spec 之后它是配置，I4′ 让 trainer 只读不算。
+    Why it must live in the spec rather than in the trainer: the weight curve
+    changes the converged result, and "at which step does this loss switch on"
+    is today scattered across ``if`` statements in training scripts, so running
+    a different experiment means editing code. In the spec it is configuration,
+    and I4′ lets the trainer only read it, never compute it.
+
+    Attributes:
+        start_step: Step at which the ramp begins.
+        end_step: Step at which the end value is reached; equal to
+            ``start_step`` gives a step function.
+        start_value: Weight at and before ``start_step``.
+        end_value: Weight at and after ``end_step``.
     """
 
-    start_step: int = 0         # [YAML] 开始爬升的步数
-    end_step: int = 0           # [YAML] 爬到终值的步数。== start_step ⇒ 阶跃
+    start_step: int = 0         # [YAML] step where the ramp begins
+    end_step: int = 0           # [YAML] step reaching end value; == start => step
     start_value: float = 1.0    # [YAML]
     end_value: float = 1.0      # [YAML]
 
     def __post_init__(self) -> None:
         if self.start_step < 0 or self.end_step < 0:
             raise ValueError(
-                f"WeightRamp 的步数必须非负，得到 "
+                f"WeightRamp steps must be non-negative, got "
                 f"start_step={self.start_step}, end_step={self.end_step}"
             )
         if self.end_step < self.start_step:
             raise ValueError(
-                f"WeightRamp.end_step({self.end_step}) 不得小于 "
+                f"WeightRamp.end_step({self.end_step}) must not be less than "
                 f"start_step({self.start_step})"
             )
 
     @property
     def is_constant(self) -> bool:
-        """恒定权重。缺省构造即这一档，爬升逻辑整段不执行。"""
+        """Constant weight. Default construction lands here, and the whole ramp
+        computation is then skipped."""
         return self.start_value == self.end_value
 
     def scale(self, step: int) -> float:
-        """第 ``step`` 步的权重。step < start_step ⇒ start_value，
-        step ≥ end_step ⇒ end_value，中间线性插值。
+        """Weight at step ``step``.
+
+        Below ``start_step`` it is ``start_value``, at or above ``end_step`` it
+        is ``end_value``, and linearly interpolated in between.
+
+        Args:
+            step: Global training step; must be non-negative.
+
+        Returns:
+            The weight multiplier for that step.
+
+        Raises:
+            ValueError: If ``step`` is negative.
         """
         if step < 0:
-            raise ValueError(f"step 必须非负，得到 {step}")
+            raise ValueError(f"step must be non-negative, got {step}")
         if self.is_constant:
             return self.start_value
         if step <= self.start_step:
@@ -70,44 +199,71 @@ class WeightRamp:
 
 @dataclass(frozen=True)
 class LossSpec:
-    """一条损失项。``name`` 既是日志键也是 ``metrics`` 字典的键（I4）。
+    """One loss term. ``name`` is both the logging key and the key in the
+    ``metrics`` dict (I4).
 
-    ``stream`` + ``head`` 两者**只许填一个**：损失要么对一条流的输出算
-    （视频流的 flow matching loss），要么对一个输出头算
-    （动作头的 L1）。两个都填是歧义，都不填是死配置。
+    Exactly **one** of ``stream`` and ``head`` may be set: a loss is computed
+    either on the output of one stream (the video stream's flow matching loss)
+    or on one output head (the action head's L1). Setting both is ambiguous;
+    setting neither is a dead configuration.
+
+    Attributes:
+        name: Logging / ``metrics`` key.
+        stream: Stream this loss is computed on, or None.
+        head: Head this loss is computed on, or None.
+        objective: What is computed between prediction and target.
+        weight: Constant weight.
+        ramp: Step-dependent weight; overrides ``weight`` when not None.
+        broadcast: Which label axes the per-sample weighting varies along.
+        enabled: False forces the weight to 0 without removing the term.
     """
 
     name: str
     stream: str | None = None
     head: str | None = None
-    weight: float = 1.0                     # [YAML] 恒定权重
-    ramp: WeightRamp | None = None          # [YAML] 非 None ⇒ 覆盖 weight
+    objective: LossObjective = MeanSquaredError()
+    # What is computed. **Not YAML-overridable**: changing the objective is
+    # changing the training problem (R5). It has a default because 12 of the 13
+    # models use MSE, so writing it once is enough
+    weight: float = 1.0                     # [YAML] constant weight
+    ramp: WeightRamp | None = None          # [YAML] not None => overrides weight
     broadcast: BroadcastSpec = DEFAULT_PER_SAMPLE
-    # broadcast 决定「loss 按哪些轴求均值之前先加权」：
-    # per-frame timestep 的模型要按帧加权，而轴名必须来自标签（I2）
-    enabled: bool = True                    # [YAML] 关掉这条 loss
+    # broadcast decides "along which axes the loss is weighted before it is
+    # averaged": models with a per-frame timestep weight per frame, and the axis
+    # names must come from the layout labels (I2)
+    enabled: bool = True                    # [YAML] switch this loss off
 
     def __post_init__(self) -> None:
         if (self.stream is None) == (self.head is None):
             raise ValueError(
-                f"LossSpec({self.name!r})：stream 与 head 必须恰好填一个，"
-                f"当前 stream={self.stream!r}, head={self.head!r}"
+                f"LossSpec({self.name!r}): exactly one of stream and head must "
+                f"be set, got stream={self.stream!r}, head={self.head!r}"
             )
         if self.weight < 0:
             raise ValueError(
-                f"LossSpec({self.name!r}).weight 必须非负，得到 {self.weight}"
+                f"LossSpec({self.name!r}).weight must be non-negative, "
+                f"got {self.weight}"
             )
 
     @property
     def source(self) -> str:
-        """这条 loss 算在谁头上。供错误消息与 V8 对账使用。"""
+        """Who this loss is computed on. Used in error messages and by V8
+        reconciliation."""
         return self.stream if self.stream is not None else str(self.head)
 
     def weight_at(self, step: int) -> float:
-        """第 ``step`` 步的实际权重。ramp 为 None ⇒ 恒定 weight。
+        """Effective weight at step ``step``. A None ``ramp`` means constant
+        ``weight``.
 
-        ``enabled=False`` ⇒ 0.0，而不是把这条 loss 从列表里摘掉 ——
-        摘掉会让 ``metrics`` 的键集合随配置变化，下游看板就断了。
+        ``enabled=False`` yields 0.0 rather than dropping the term from the
+        list: dropping it would make the key set of ``metrics`` vary with the
+        configuration, which breaks downstream dashboards.
+
+        Args:
+            step: Global training step.
+
+        Returns:
+            The weight to multiply this loss term by.
         """
         if not self.enabled:
             return 0.0

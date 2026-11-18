@@ -1,32 +1,34 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""多流世界模型的五层契约。
+"""The five-layer contract of the multi-stream world model.
 
-层次与 lane 的对应（``docs/design/mot_layer_interfaces.zh-CN.md`` §2）：
+Layers and their owning lane (``docs/design/mot_layer_interfaces.zh-CN.md`` §2):
 
-===========  =========================  ======
-层           模块                       lane
-===========  =========================  ======
-L0 几何      ``geometry`` / ``layout``   A
-L1 可见性    ``visibility/``             A
-L2 流与参数  ``streams/``                B
-L3 监督      ``diffusion/``              C
-L4 输出头    ``heads/``                  C
-配置层       ``spec/``                   —
-装配         ``builder``                 —
-===========  =========================  ======
+==============  =========================  ======
+Layer           Module                     Lane
+==============  =========================  ======
+L0 geometry     ``geometry`` / ``layout``  A
+L1 visibility   ``visibility/``            A
+L2 streams      ``streams/``               B
+L3 supervision  ``diffusion/``             C
+L4 heads        ``heads/``                 C
+config layer    ``spec/``                  -
+assembly        ``builder``                -
+==============  =========================  ======
 
-四个交界面（I1–I4）在 M0 冻结，改动走总纲 §9：
-  - **I1** A→B：``AttentionPlan`` + ``CompiledMask`` 的四个方法；
-  - **I2** A→C：``TokenLayout.labels_of``；
-  - **I3** B→C：``EngineOutput.captured``；
-  - **I4** C→trainer：``forward(batch) -> (loss, metrics)``。
+The four cross-lane interfaces (I1-I4) are frozen at M0; changing one goes
+through the master plan §9 amendment process:
+  - **I1** A to B: ``AttentionPlan`` plus the four ``CompiledMask`` methods;
+  - **I2** A to C: ``TokenLayout.labels_of``;
+  - **I3** B to C: ``EngineOutput.captured``;
+  - **I4** C to trainer: ``forward(batch) -> (loss, metrics)``.
 
-三条硬不变量：
-  - **INV-1** ``AttentionPlan.structural`` 恰为 2 维，不含 batch 维；
-  - **INV-2** 形状静态（CUDA graph 捕获）；
-  - **INV-3** 不新增 state_dict 前缀。
+Three hard invariants:
+  - **INV-1** ``AttentionPlan.structural`` is exactly 2-D, with no batch
+    dimension, so the structural channel stays batch-shared and compilable;
+  - **INV-2** shapes are static, which is what CUDA graph capture requires;
+  - **INV-3** no new state_dict prefixes, so existing checkpoints keep loading.
 """
 
 from __future__ import annotations
