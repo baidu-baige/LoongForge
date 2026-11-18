@@ -55,3 +55,9 @@ class Pi05DataConfig:
 
     # Multi-frame observation sampling indices. None means single-frame (default).
     observation_delta_indices: Optional[List[int]] = None
+
+    # RoboTwin pi0.5 Aloha joint protocol: convert dataset env-space
+    # absolute 14D joint actions into pi-space delta targets — the exact inverse
+    # of the eval decoder ``pi05_aloha_robotwin`` — so train/eval action spaces
+    # match. Off by default (LIBERO / other benchmarks unaffected).
+    use_aloha_pi_delta_actions: bool = False

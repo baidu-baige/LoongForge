@@ -75,7 +75,7 @@ class LiberoAdapter(BaseBenchmarkAdapter):
         self.episodes_per_task = episodes_per_task
         self.resolution = resolution
         self.continuous_gripper = continuous_gripper
-        self.prefer_controller_ee = prefer_controller_ee
+        self.prefer_controller_ee = bool(prefer_controller_ee)
 
     def obs_to_canonical(self, env_obs: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         """Convert a LIBERO obs into a benchmark-neutral canonical dict."""

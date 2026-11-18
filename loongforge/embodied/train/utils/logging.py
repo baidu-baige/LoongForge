@@ -150,7 +150,11 @@ class StageTimers:
         self._start_time.clear()
 
     def get_max_time_string(
-        self, ctx, normalizer: float = 1.0, log_level: int = 0
+        self,
+        ctx,
+        normalizer: float = 1.0,
+        log_level: int = 0,
+        process_group=None,
     ) -> Optional[str]:
         """Render `max time across ranks (ms):` string on rank 0, else None.
 
@@ -159,6 +163,7 @@ class StageTimers:
             normalizer: Divide accumulated times by this (e.g. number of iters).
             log_level: 0 prints only the max across ranks. 1 additionally prints
                 each rank's per-stage time.
+            process_group: Process group dedicated to stage timing collectives.
         """
         names = [n for n in self.ORDER if n in self._elapsed]
         if not names:
@@ -166,8 +171,8 @@ class StageTimers:
 
         # ── Phase 1: collective gather (all ranks must participate) ──────────
         # Timing data is tiny; gather on CPU (gloo) to avoid occupying the GPU
-        # stream and a GPU->host sync. The default process group is created with
-        # backend "cpu:gloo,cuda:nccl", so CPU tensors are routed via gloo.
+        # stream and a GPU->host sync. Use a dedicated group so this collective
+        # cannot interleave with DCP's asynchronous Gloo object collectives.
         local = torch.tensor(
             [self._elapsed[n] for n in names],
             dtype=torch.float,
@@ -178,7 +183,11 @@ class StageTimers:
             # all_gather is a collective op — early return must NOT happen before
             # this point, otherwise non-rank-0 processes would skip it and hang.
             gathered = [torch.zeros_like(local) for _ in range(ctx.world_size)]
-            torch.distributed.all_gather(gathered, local)
+            if process_group is None:
+                raise RuntimeError(
+                    "Stage timing requires a dedicated process group in distributed mode."
+                )
+            torch.distributed.all_gather(gathered, local, group=process_group)
         else:
             # Normalise to a list so rank-0 formatting code is uniform.
             gathered = [local]
@@ -547,13 +556,20 @@ class TrainingLogger:
         self._append_metrics_jsonl(metrics)
 
     def log_stage_times(
-        self, timers: "StageTimers", ctx, normalizer: float = 1.0, log_level: int = 0
+        self,
+        timers: "StageTimers",
+        ctx,
+        normalizer: float = 1.0,
+        log_level: int = 0,
+        process_group=None,
     ):
         """Log per-stage timing in `max time across ranks (ms):` format.
 
         All ranks must call this (all_gather is collective); only rank 0 emits.
         """
-        output_string = timers.get_max_time_string(ctx, normalizer, log_level)
+        output_string = timers.get_max_time_string(
+            ctx, normalizer, log_level, process_group=process_group
+        )
         if output_string is not None:
             logger.info(output_string)
 

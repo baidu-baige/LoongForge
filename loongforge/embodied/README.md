@@ -29,8 +29,8 @@ The subsystem is therefore built on a **torch-native DDP/FSDP** engine with its 
 For the full framework user guide, see [User Manual](../../docs/source/embodied_tutorial/overview.md). Model-specific quick starts:
 
 - [Pi0.5 (pi05)](../../docs/source/embodied_tutorial/quick_start_pi05.md)
-- [GR00T-N1.6](../../docs/source/embodied_tutorial/quick_start_groot_n1_6.md)
-- [GR00T-N1.7](../../docs/source/embodied_tutorial/quick_start_groot_n1_7.md)
+- [GR00T-N1.6](../../docs/source/embodied_tutorial/quick_start_gr00t_n1_6.md)
+- [GR00T-N1.7](../../docs/source/embodied_tutorial/quick_start_gr00t_n1_7.md)
 - [FastWAM](../../docs/source/embodied_tutorial/quick_start_fastwam.md)
 - [DreamZero](../../docs/source/embodied_tutorial/quick_start_dreamzero.md)
 - [Cosmos3](../../docs/source/embodied_tutorial/quick_start_cosmos3.md)
@@ -46,7 +46,7 @@ Training speedups over mainstream open-source baselines. Performance is still un
 | Model | Type | Speedup |
 |---|---|---|
 | DreamZero (DROID Wan2.2-5B Full) | WAM | **4.38×** |
-| Pi0.5 | VLA | **2.80×** |
+| Pi0.5 | VLA | **3.00×** |
 | FastWAM | WAM | **2.61×** |
 | GR00T-N1.6 | VLA | **2.31×** |
 | LingBot-VA | WAM | **2.20×** |
@@ -126,7 +126,7 @@ Resolution flow: `--model-name` routes through `config_map.py` to the model's YA
 `BaseTrainer` fixes the training lifecycle into a template (`setup → training loop → step → forward/backward → finalize`):
 
 - **Common machinery** — optimizer / LR scheduling, gradient clipping & NaN cleanup, checkpoint save & resume, distributed logging, determinism control;
-- **Trainer selection** — standard SFT uses `FinetuneTrainer`; special paradigms (multi-stream, CUDA Graph) subclass it (e.g. `custom/groot_n1_6/`), registered in `trainer_builder.py` and selected with `--trainer-type`;
+- **Trainer selection** — standard SFT uses `FinetuneTrainer`; special paradigms (multi-stream, CUDA Graph) subclass it (e.g. `custom/gr00t_n1_6/`), registered in `trainer_builder.py` and selected with `--trainer-type`;
 - **Distribution** — multiple strategies to choose from: `ddp` (data parallel), `ddp` + `--zero-optimizer` (ZeRO Stage-1, sharded optimizer states), `fsdp` (fully sharded), `hsdp` (hybrid sharded, set `--hsdp-shard-size`).
 
 ### Adding a new model

@@ -3,7 +3,7 @@
 
 """VLDA reuses pi05 camera packing; robot conversion happens in the policy."""
 
-from .groot_n1_7 import _encode_libero_ee_axis_angle
+from .gr00t_n1_7 import _encode_libero_ee_axis_angle
 from .pi05 import Pi05PayloadBuilder
 from .registry import register_payload_builder
 

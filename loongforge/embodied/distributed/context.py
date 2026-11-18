@@ -18,6 +18,7 @@ class DistributedContext:
         self.local_rank: int = 0
         self.world_size: int = 1
         self.device: torch.device = torch.device("cpu")
+        self.stage_timing_group = None
         self._initialized: bool = False
 
     def init(self):
@@ -35,6 +36,11 @@ class DistributedContext:
         dist.init_process_group(backend=self.backend, device_id=self.device)
         self.rank = dist.get_rank()
         self.world_size = dist.get_world_size()
+        try:
+            self.stage_timing_group = dist.new_group(backend="gloo")
+        except Exception:
+            dist.destroy_process_group()
+            raise
         self._initialized = True
 
     @property
@@ -53,8 +59,11 @@ class DistributedContext:
             dist.barrier()
 
     def destroy(self):
-        """Clean up distributed process group."""
+        """Clean up distributed process groups."""
         if self._initialized:
+            if self.stage_timing_group is not None:
+                dist.destroy_process_group(self.stage_timing_group)
+                self.stage_timing_group = None
             dist.destroy_process_group()
             self._initialized = False
 

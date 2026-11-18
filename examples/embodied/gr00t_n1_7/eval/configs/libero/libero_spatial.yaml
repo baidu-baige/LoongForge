@@ -1,0 +1,76 @@
+# Public template: replace every /path/to/... placeholder before use.
+# Machine-specific paths are filled in by the user or injected at runtime by an
+# external launcher; nothing machine-specific is checked in.
+#
+# GR00T-N1.7 x LIBERO libero_spatial task-success -- official parity.
+#   --max_episode_steps=720  -> benchmark.max_steps: 720
+#   --n_action_steps 8       -> server.chunk_execute_steps: 8
+#   no settle steps          -> benchmark.num_steps_wait: 0
+# Embodiment: libero_sim. State layout [x, y, z, axis_angle(3), gripper_qpos(2)].
+# ckpt: /path/to/GR00T-N1.7-LIBERO/libero_spatial
+# backbone: /path/to/Cosmos-Reason2-2B
+
+benchmark:
+  name: libero
+  suite: libero_spatial
+  max_tasks: 0              # 0 = all 10 tasks in the suite
+  episodes_per_task: 20     # 10 tasks x 20 = the official 200 denominator
+  max_steps: 720            # official --max_episode_steps
+  num_steps_wait: 0         # official path has no settle steps
+  continuous_gripper: false # official normalize_gripper_action(binarize=True)
+  control_mode: delta       # GR00T outputs delta EE (pos + axis-angle) + gripper
+  # Explicit, never the runner default: --libero-protocol defaults to legacy,
+  # which reads the OSC controller pose as state and drops libero_10 by ~5 pts
+  # on the same weights. gr00t_official runs one env serially, requires
+  # num_steps_wait 0 / chunk_execute_steps 8 / delta / sign gripper / 256px,
+  # and writes results under <run.output_dir>/gr00t_official/<run-id>/.
+  libero_protocol: gr00t_official
+
+model:
+  backend: loongforge
+  model_type: Gr00tN1d7
+  base_model_path: /path/to/Cosmos-Reason2-2B
+  model_name: /path/to/Cosmos-Reason2-2B
+  state_encoding: libero_ee_axis_angle
+  action_encoding: axis_angle
+  use_flash_attention: true
+  # Inference-only: keep the frozen backbone in bf16 and every head frozen.
+  # Without these the training-side precision policy undoes the bf16 cast
+  # (FlashAttention dtype error in the backbone, Float/BFloat16 mismatch in vlln).
+  backbone_trainable_params_fp32: false
+  tune_projector: false
+  tune_diffusion_model: false
+  tune_vlln: false
+
+server:
+  host: 127.0.0.1
+  port: 13741
+  health_port: 13742
+  python: /path/to/conda/envs/loongforge/bin/python
+  log: /path/to/reports/gr00t_n1_7/libero/libero_spatial/policy_server.log
+  start_timeout_sec: 2400
+  random_init: false
+  ckpt_path: /path/to/GR00T-N1.7-LIBERO/libero_spatial
+  dataset_statistics_path: /path/to/GR00T-N1.7-LIBERO/libero_spatial/statistics.json
+  embodiment_tag: libero_sim
+  chunk_execute_steps: 8    # official --n_action_steps (chunk is 16 long)
+  use_bf16: true
+  loongforge_root: /path/to/LoongForge-VLA
+
+env:
+  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  mujoco_gl: osmesa
+  pyopengl_platform: osmesa
+  ld_library_path: /path/to/nvidia_lib
+
+run:
+  output_dir: /path/to/reports/gr00t_n1_7/libero/libero_spatial
+  seed: 7
+  save_trace: false
+  save_replay: false
+  timestamped_output: false
+
+timeouts:
+  policy_call_ms: 600000
+  per_step_sec: 600
+  per_episode_sec: 3600

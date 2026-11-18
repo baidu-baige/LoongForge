@@ -343,6 +343,53 @@ def build_scheduler(optimizer, training_args):
             milestones=[warmup_steps],
         )
 
+    if style == "cosine_decay_with_warmup":
+        # Warmup starts at 1/(W+1), and cosine decay progress uses the
+        # absolute step min(s, T)/T rather than (s - W)/(T - W).
+        peak_lr = float(optimizer.defaults["lr"])
+        alpha = float(training_args.min_lr) / peak_lr
+        num_warmup_steps = int(training_args.lr_warmup_iters)
+        num_decay_steps = max(int(training_args.lr_decay_iters or training_args.train_iters), 1)
+
+        def cosine_decay_with_warmup_lr_lambda(current_step: int):
+            if current_step < num_warmup_steps:
+                if current_step <= 0:
+                    return 1 / (num_warmup_steps + 1)
+                frac = 1 - current_step / num_warmup_steps
+                return (1 / (num_warmup_steps + 1) - 1) * frac + 1
+            step = min(current_step, num_decay_steps)
+            cosine_decay = 0.5 * (1 + math.cos(math.pi * step / num_decay_steps))
+            return (1 - alpha) * cosine_decay + alpha
+
+        return LambdaLR(optimizer, cosine_decay_with_warmup_lr_lambda)
+
+    if style == "giga_warmup_cosine":
+        # Exact GigaBrain-0.7 WarmupCosineScheduler (ported from the vendored
+        # giga_train.schedulers.WarmupCosineScheduler + BaseScheduler.get_value)
+        # so the shared build_scheduler reproduces giga's LR curve bit-for-bit:
+        #   s == 0          : 1 / (W + 1)
+        #   1 <= s <= W     : s / W                                  (linear warmup)
+        #   W <  s <= D     : f + alpha*(1 - f), f = 0.5(1 + cos(pi*(s-W)/(D-W)))
+        #   s >  D          : alpha                                   (floor)
+        # alpha = min_lr / peak_lr is giga's ``end_value`` multiplier.
+        peak_lr = float(optimizer.defaults["lr"])
+        alpha = float(training_args.min_lr) / peak_lr if peak_lr > 0 else 0.0
+        num_warmup_steps = int(training_args.lr_warmup_iters)
+        num_decay_steps = max(int(training_args.lr_decay_iters or training_args.train_iters), 1)
+
+        def giga_warmup_cosine_lr_lambda(current_step: int):
+            if current_step == 0:
+                return 1.0 / (num_warmup_steps + 1)
+            if current_step <= num_warmup_steps:
+                return current_step / num_warmup_steps
+            if current_step <= num_decay_steps:
+                frac = (current_step - num_warmup_steps) / (num_decay_steps - num_warmup_steps)
+                cos = 0.5 * (1.0 + math.cos(math.pi * frac))
+                return cos + alpha * (1.0 - cos)
+            return alpha
+
+        return LambdaLR(optimizer, giga_warmup_cosine_lr_lambda)
+
     if style in {"cosine_with_min_lr", "cosine_warmup_with_min_lr"} and training_args.custom_lr_lambda:
         peak_lr = float(optimizer.defaults["lr"])
         end_lr = float(training_args.min_lr if training_args.min_lr is not None else peak_lr * 0.1)

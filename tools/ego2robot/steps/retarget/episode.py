@@ -1569,8 +1569,10 @@ def process_episode(ep, zarr_dir, bg_path, state, out_dir,
         # DA3 depth is monocular metric depth in its own scale; align it to the
         # EgoVerse world scale (matching the MuJoCo robot depth) before the
         # occlusion test, otherwise the depth comparison culls robot pixels at
-        # an arbitrary offset.
-        if depth_align:
+        # an arbitrary offset.  The gauss backend is reconstructed in the SLAM
+        # metric frame already, so it skips (and must not be degraded by) the
+        # scale/shift fit.
+        if depth_align and scene_depth_metadata.get("backend", "da3") != "gauss":
             if ep_attrs is None:
                 ep_attrs, _ = config.fallback_episode_attrs(
                     str(Path(zarr_dir) / ep))

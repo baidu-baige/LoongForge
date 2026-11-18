@@ -421,7 +421,10 @@ class BaseTrainer(ABC):
             # ── Per-stage timing log (all ranks call; rank 0 emits) ──
             if enable_detail:
                 self.logger.log_stage_times(
-                    self._stage_timers, self.ctx, log_level=training_args.timing_log_level
+                    self._stage_timers,
+                    self.ctx,
+                    log_level=training_args.timing_log_level,
+                    process_group=self.ctx.stage_timing_group,
                 )
                 self._stage_timers.reset()
 
@@ -653,6 +656,15 @@ class BaseTrainer(ABC):
     def _clean_nan_gradients(self):
         """Replace NaN/Inf gradients with 0."""
         ...
+
+    def _compute_grad_norm(self) -> float:
+        """Return the pre-clip global gradient norm when ``--clip-grad`` is off.
+
+        Default: the model's own gradients. Subclasses that keep their gradients
+        somewhere other than ``self.model`` (e.g. on fp32 masters) override this,
+        because ``self.model``'s gradients may already have been consumed.
+        """
+        return get_grad_norm(self.model)
 
     @abstractmethod
     def _load_pretrained(self, path: str):

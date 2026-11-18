@@ -28,7 +28,7 @@ import logging
 import math
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, Literal
 
 import numpy as np
 import torch
@@ -227,23 +227,6 @@ def tokenize_prompts(
     finally:
         tokenizer.padding_side = original_padding_side
     return {"input_ids": encoded["input_ids"], "attention_mask": encoded["attention_mask"]}
-
-
-def _q99_unnormalize_actions(actions: torch.Tensor, action_stats: Optional[dict]) -> torch.Tensor:
-    """Unnormalize PI05 quantile-normalized actions with dataset action stats."""
-    if action_stats is None:
-        return actions
-    if "q01" not in action_stats or "q99" not in action_stats:
-        raise ValueError(
-            "PI05 is configured for quantile action unnormalization and requires "
-            "dataset_stats['action'].q01 and q99"
-        )
-    q01 = torch.as_tensor(action_stats["q01"], dtype=actions.dtype, device=actions.device)
-    q99 = torch.as_tensor(action_stats["q99"], dtype=actions.dtype, device=actions.device)
-    dim = min(actions.shape[-1], q01.shape[-1])
-    out = actions.clone()
-    out[..., :dim] = (out[..., :dim] + 1.0) / 2.0 * (q99[:dim] - q01[:dim]) + q01[:dim]
-    return out
 
 
 def build_tokenizer(tokenizer_name: str, local_files_only: bool = True):
@@ -922,15 +905,19 @@ class PI05Pytorch(nn.Module):
         """Load pretrained weights from safetensors checkpoint."""
         from pathlib import Path
         from safetensors.torch import load_file
+        from loongforge.embodied.distributed.checkpoint import canonical_state_dict
 
         path = Path(pretrained_path)
         safetensors_file = path / "model.safetensors" if path.is_dir() else path
         load_kwargs = {"device": str(device)} if device is not None else {}
         original_state_dict = load_file(str(safetensors_file), **load_kwargs)
 
-        _PREFIXES = ("model.architecture.pi05_model.", "architecture.pi05_model.")
+        _PREFIXES = ("model.architecture.pi05_model.", "architecture.pi05_model.", "model.")
         fixed = {}
         for key, value in original_state_dict.items():
+            # Older policy checkpoints contain both model.* and its pi05.* alias.
+            if key.startswith("pi05.") and "model." + key[len("pi05."):] in original_state_dict:
+                continue
             new_key = key
             for prefix in _PREFIXES:
                 if new_key.startswith(prefix):
@@ -946,7 +933,8 @@ class PI05Pytorch(nn.Module):
                 fixed["paligemma_with_expert.paligemma.model.language_model.embed_tokens.weight"] = value.clone()
             fixed[new_key] = value
 
-        missing, unexpected = self.load_state_dict(fixed, strict=strict)
+        with canonical_state_dict(self):
+            missing, unexpected = self.load_state_dict(fixed, strict=strict)
         assert not missing, f"Missing keys: {missing[:5]}"
         assert not unexpected, f"Unexpected keys: {unexpected[:5]}"
         return self
@@ -1058,17 +1046,21 @@ class PI05Policy(nn.Module):
         return self.predict_action_chunk(batch, **kwargs)[:, 0]
 
     @torch.no_grad()
-    def predict_action(self, images, instructions, state=None, dataset_stats=None) -> np.ndarray:
+    def predict_action(
+        self, images, instructions, state=None, dataset_stats=None, *,
+        image_normalize_mode="identity", normalization_mode="q99",
+    ) -> np.ndarray:
         """Inference: Euler ODE denoising, returns ndarray (B, action_horizon, max_action_dim)."""
         from loongforge.embodied.data.datasets.pi05.transforms.pi05_transform import StateDiscretizationTransform
         from loongforge.embodied.data.datasets.transforms.utils.builders import convert_stats
         from loongforge.embodied.data.datasets.transforms.utils.image_transform import ImageTransform
+        from loongforge.embodied.data.datasets.transforms.utils.normalizer import Normalizer
 
         device = next(self.parameters()).device
         if not isinstance(images[0], list):
             images = [[img] for img in images]
         B = len(images)
-        image_transform = ImageTransform(apply_to=[], image_size=self._image_size)
+        image_transform = ImageTransform(apply_to=[], image_size=self._image_size, normalize_mode=image_normalize_mode)
         # Use the number of views provided by the eval client so LIBERO (2) and
         # RoboTwin (3) both work without hard-coding a single camera count.
         num_images = max(len(images[0]), 1)
@@ -1093,9 +1085,11 @@ class PI05Policy(nn.Module):
             if state.dim() == 1:
                 state = state.unsqueeze(0)
             state_stats = convert_stats(dataset_stats.get("observation.state")) if dataset_stats else None
+            if normalization_mode in ("identity", "binary"):
+                state_stats = {}
             state_transform = StateDiscretizationTransform(
                 apply_to=["prompt"], state_key="observation.state", task_key="task",
-                num_bins=256, normalization_mode="q99", statistics=state_stats,
+                num_bins=256, normalization_mode=normalization_mode, statistics=state_stats,
             )
             prompts = [state_transform.apply({"observation.state": state[i], "task": instructions[i]})["prompt"]
                        for i in range(B)]
@@ -1108,7 +1102,14 @@ class PI05Policy(nn.Module):
 
         actions = self.model.sample_actions(images_list, img_masks, tokens, masks)
         action_stats = convert_stats(dataset_stats.get("action")) if dataset_stats else None
-        actions = _q99_unnormalize_actions(actions, action_stats)
+        # Preserve stat-free inference when no action statistics are supplied.
+        if action_stats is not None or normalization_mode in ("identity", "binary"):
+            normalizer = Normalizer(mode=normalization_mode, statistics=action_stats or {})
+            normalizer.statistics = {k: v.to(actions.device) for k, v in normalizer.statistics.items()}
+            stat_key = {"q99": "q01", "mean_std": "mean", "min_max": "min", "scale": "min"}.get(normalization_mode)
+            dim = min(actions.shape[-1], normalizer.statistics[stat_key].numel()) if stat_key else self.config.action_dim
+            actions = actions.clone()
+            actions[..., :dim] = normalizer.inverse(actions[..., :dim]).to(actions.dtype)
         return actions.cpu().numpy()
 
     @staticmethod

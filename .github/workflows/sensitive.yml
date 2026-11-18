@@ -20,4 +20,4 @@ jobs:
           python-version: '3.12'
 
       - name: Run sensitive information scan
-        run: python3 ci/sensitive_scan.py --ci-summary
+        run: python3 .github/scripts/sensitive_scan.py --ci-summary

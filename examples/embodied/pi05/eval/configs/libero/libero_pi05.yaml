@@ -1,0 +1,58 @@
+# pi0.5 LIBERO evaluation template.
+# Fill /path/to/... below and run with examples/embodied/pi05/eval/run_libero_eval.sh.
+
+benchmark:
+  name: libero
+  suite: libero_spatial  # libero_spatial | libero_object | libero_goal | libero_10
+  episodes_per_task: 10
+  max_steps: 280         # 280 for libero_spatial; 0 uses suite default (280 / 300 / 520)
+  num_steps_wait: 10
+  continuous_gripper: true
+  prefer_controller_ee: false
+
+model:
+  backend: loongforge
+  model_type: pi05
+  name: loongforge-pi05-libero
+  action_dim: 7
+  state_dim: 8
+  action_horizon: 10
+  max_action_dim: 32
+  max_state_dim: 32
+  compile_model: false
+  eval_image_normalize_mode: siglip
+  eval_normalization_mode: mean_std
+  state_encoding: libero_ee8
+
+server:
+  host: 127.0.0.1
+  port: 61100
+  health_port: 61101
+  python: /path/to/loongforge/bin/python
+  log: /path/to/LoongForge/outputs/eval/libero_pi05/policy_server.log
+  start_timeout_sec: 900
+  ckpt_path: /path/to/pi05_libero_ckpt
+  dataset_statistics_path: /path/to/pi05_libero_ckpt/dataset_statistics.json
+  loongforge_root: /path/to/LoongForge
+  tokenizer_path: /path/to/paligemma-3b-pt-224
+  use_bf16: false
+  chunk_execute_steps: 10
+
+env:
+  eval_root: /path/to/LoongForge/loongforge/embodied/eval
+  libero_config_path: /path/to/libero_config/config.yaml
+  mujoco_gl: egl
+  pyopengl_platform: egl
+  ld_library_path: /path/to/nvidia_lib
+
+run:
+  output_dir: /path/to/LoongForge/outputs/eval/libero_pi05
+  seed: 7
+  save_trace: false
+  save_replay: false
+  timestamped_output: false
+
+timeouts:
+  policy_call_ms: 600000
+  per_step_sec: 600
+  per_episode_sec: 900

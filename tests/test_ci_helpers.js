@@ -5,6 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 
 const { validatePullRequestTitle } = require('../.github/scripts/pr_title');
 const { filterModelsWithBaselines, missingModels } = require('../.github/scripts/ci_model_validation');
@@ -274,6 +275,14 @@ test('release is dispatched manually and builds, regresses, and promotes one imm
     releaseRunnerJob.indexOf('Protect runner-local metadata') <
       releaseRunnerJob.indexOf('actions/checkout@'),
   );
+  for (const job of workflow.split(/\n(?=  [a-z][a-z0-9_]*:\n)/)) {
+    if (!job.includes('runs-on: ${{ fromJSON(vars.CI_RELEASE_RUNNER) }}')) continue;
+    const configuration = job.slice(0, job.indexOf('\n    steps:'));
+    assert.match(
+      configuration,
+      /RUNNER_PRIVATE_LOG_MASKS: \$\{\{ secrets\.RUNNER_PRIVATE_LOG_MASKS \}\}/,
+    );
+  }
   assert.doesNotMatch(workflow, /\/ssd4\//);
   assert.doesNotMatch(workflow, /needs\.build_test_push_internal\.outputs/);
   assert.doesNotMatch(workflow, /baidu-int\.com/);
@@ -342,6 +351,40 @@ test('release is dispatched manually and builds, regresses, and promotes one imm
   assert.doesNotMatch(workflow, /DOCKERHUB_IMAGE.*:latest/);
 });
 
+test('release refuses self-hosted execution without startup masks', () => {
+  const workflow = readWorkflow('release.yml');
+  const step = workflow.match(
+    /- name: Validate runner startup masking\n([\s\S]*?)\n      - id: version/,
+  );
+  assert.ok(step, 'startup mask validation must precede self-hosted execution');
+  assert.match(step[1], /if: steps\.stages\.outputs\.skip_regression_reason != '__dry_run__'/);
+  assert.match(step[1], /RUNNER_PRIVATE_LOG_MASKS: \$\{\{ secrets\.RUNNER_PRIVATE_LOG_MASKS \}\}/);
+  const script = step[1].split('        run: |\n')[1];
+  for (const value of ['', ' \n\t', 'http://proxy.example.invalid:8080\nproxy.example.invalid']) {
+    const result = spawnSync('bash', ['-c', script], {
+      env: { ...process.env, RUNNER_PRIVATE_LOG_MASKS: value },
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, value.trim() ? 0 : 1);
+    assert.doesNotMatch(result.stdout + result.stderr, /proxy\.example\.invalid/);
+  }
+});
+
+test('GPU regression gates and masks self-hosted execution', () => {
+  const workflow = readWorkflow('gpu-regression.yml');
+  assert.match(workflow, /name: Validate runner startup masking/);
+  const jobs = workflow.split(/\n(?=  [a-z][a-z0-9_]*:\n)/);
+  for (const jobName of ['llm_vlm', 'embodied']) {
+    const job = jobs.find((candidate) => candidate.startsWith(`  ${jobName}:`));
+    assert.ok(job, `missing ${jobName} job`);
+    const configuration = job.slice(0, job.indexOf('\n    steps:'));
+    assert.match(
+      configuration,
+      /RUNNER_PRIVATE_LOG_MASKS: \$\{\{ secrets\.RUNNER_PRIVATE_LOG_MASKS \}\}/,
+    );
+  }
+});
+
 test('GPU workflow has an immutable run identity for the watchdog', () => {
   const workflow = readWorkflow('gpu-regression.yml');
   const watchdog = readWorkflow('gpu-watchdog.yml');
@@ -397,5 +440,5 @@ test('doc-links is part of the blocking static checks gate', () => {
   assert.match(docLinks, /ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/);
   assert.match(docLinks, /persist-credentials: false\s+fetch-depth: 0/);
   assert.match(docLinks, /actions\/setup-python@[0-9a-f]{40}/);
-  assert.match(docLinks, /ci\/check_doc_links\.py --changed-since/);
+  assert.match(docLinks, /\.github\/scripts\/check_doc_links\.py --changed-since/);
 });

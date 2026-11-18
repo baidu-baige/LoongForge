@@ -39,6 +39,9 @@ from loongforge.embodied.eval.orchestrator.config import (
 )
 from loongforge.embodied.eval.orchestrator.runners import _common
 from loongforge.embodied.eval.orchestrator.runners._common import StepTimeoutError, alarm_timeout, avg as _avg
+from loongforge.embodied.eval.orchestrator.runners.libero_gr00t_runner import (
+    GROOT_OFFICIAL_PROTOCOL, _run_batch_groot_official,
+)
 from loongforge.embodied.eval.payload_builders import PayloadBuilder
 from loongforge.embodied.eval.protocol import PROTOCOL_VERSION
 from loongforge.embodied.eval.transport import PolicyClient
@@ -506,6 +509,11 @@ def _manifest_protocol(args: argparse.Namespace) -> Dict[str, Any]:
 
 def run_batch(args: argparse.Namespace) -> Dict[str, Any]:
     """Run run_batch."""
+    protocol = getattr(args, "libero_protocol", "legacy")
+    if protocol == GROOT_OFFICIAL_PROTOCOL:
+        return _run_batch_groot_official(args)
+    if protocol != "legacy":
+        raise ValueError(f"Unknown LIBERO protocol: {protocol!r}")
     os.environ.setdefault("MUJOCO_GL", "egl")
     os.environ.setdefault("PYOPENGL_PLATFORM", "egl")
 
@@ -683,9 +691,15 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--task-suite-name", default="libero_goal")
     parser.add_argument("--max-tasks", type=int, default=1, help="<=0 means all tasks in suite")
     parser.add_argument("--episodes-per-task", type=int, default=1)
+    parser.add_argument("--libero-protocol", choices=["legacy", "gr00t_official"], default="legacy")
     parser.add_argument("--num-steps-wait", type=int, default=10)
     parser.add_argument("--max-steps", type=int, default=-1, help="<=0 means suite default")
-    parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=7,
+        help="Global env seed; per-episode seed is seed + task_id*1000 + episode_idx.",
+    )
     parser.add_argument(
         "--env-seed-mode",
         default="per_episode",

@@ -8,8 +8,8 @@
 # defaults, and optional --prepare execution live in cli.py.
 #
 # Both env-var and CLI-flag forms are supported (both handled by cli.py):
-#   chip=a model_names="pi05_ddp groot_n1_6_ddp" bash tests/embodied/run.sh
-#   bash tests/embodied/run.sh --chip a --models pi05_ddp groot_n1_6_ddp --fail_fast
+#   chip=a model_names="pi05_ddp gr00t_n1_6_ddp" bash tests/embodied/run.sh
+#   bash tests/embodied/run.sh --chip a --models pi05_ddp gr00t_n1_6_ddp --fail_fast
 #
 # Calling cli.py directly also works; env.sh will be auto-loaded on first use.
 set -eo pipefail

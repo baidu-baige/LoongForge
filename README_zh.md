@@ -87,6 +87,8 @@
 
 ## 🔥 最新动态
 
+- **[2026/11]** ✨ 新增 **[ERNIE-5.5-Flash-Base](./examples/ernie5.5/)** 的 BF16 预训练与监督微调（SFT）支持。
+- **[2026/10]** 🤖 新增 **[LingBot-VLA-v2](./examples/embodied/lingbot_vla_v2/)** VLA 训练支持，基于新的 tensor_wise 分布式优化器与 Muon；`--optimizer muon` 也可在普通 DDP 下用于任意模型。
 - **[2026/10]** 🤖 推出 **[LoongForge-VLDA](./cookbook/loongforge-vlda/)**，基于 LoongForge 训练的 Vision-Language-Delta-Action 模型：LIBERO **98.5%**，LIBERO-Plus 零样本 **84.5%**，真机实验较 π0.5 提升 **17–18 个百分点**。[[项目主页](https://baidu-baige.github.io/LoongForge/projects/vlda.html)] [[论文](https://arxiv.org/abs/2610.25874)]
 - **[2026/10]** 🦾 开源 **[ego2robot](./tools/ego2robot/)** —— 实现第一人称人类操作视频到双臂机器人训练数据的转换管线，输出 **LeRobot v3.0** 格式，覆盖 **16 种机械臂本体**。
 - **[2026/09]** ✨ 新增 **[GLM-5.3-flash](./examples/glm5_next/)** 训练支持。
@@ -144,6 +146,10 @@
     <td><img align="top" alt="第一人称视角下的人类操作视频" src="./docs/assets/images/demo/ego2robot-human.webp" width="100%"></td>
     <td><img align="top" alt="同一动作被转换到多种机械臂本体上的合成视频" src="./docs/assets/images/demo/ego2robot-robots.webp" width="100%"></td>
   </tr>
+  <tr>
+    <td><img align="top" alt="第一人称视角下的人类操作视频" src="./docs/assets/images/demo/ego2robot-human-2.webp" width="100%"></td>
+    <td><img align="top" alt="同一动作被转换到多种机械臂本体上的合成视频" src="./docs/assets/images/demo/ego2robot-robots-2.webp" width="100%"></td>
+  </tr>
 </table>
 
 ### 训练
@@ -157,8 +163,34 @@
 
 * **统一评测** —— 在 LIBERO / CALVIN / SimplerEnv / RoboTwin / ManiSkill 仿真环境中对训练出的策略做闭环评测；覆盖范围持续扩展中。[[README](./loongforge/embodied/eval)]
 
-> [!NOTE]
-> 敬请期待：基于 LoongForge 训练的模型评测结果即将陆续公布。
+* **评测结果** —— 各模型在 **LIBERO / RoboTwin / SimplerEnv** 上的成功率与对应开源基线持平：
+
+<table width="100%">
+<thead><tr><th align="left" width="170">Model</th><th align="left" width="170">Benchmark</th><th align="left" width="170">Suite</th><th align="left" width="170">Baseline</th><th align="left" width="170">LoongForge</th></tr></thead>
+<tbody>
+<tr><td rowspan="6">Pi0.5</td><td rowspan="5">LIBERO</td><td>Spatial</td><td>97.0%</td><td>99.6%</td></tr>
+<tr><td>Object</td><td>99.0%</td><td>99.6%</td></tr>
+<tr><td>Goal</td><td>98.0%</td><td>98.8%</td></tr>
+<tr><td>Long</td><td>96.0%</td><td>97.0%</td></tr>
+<tr><td>Avg.</td><td>97.50%</td><td>98.75%</td></tr>
+<tr><td>RoboTwin</td><td>Easy</td><td>67.91%</td><td>77.56%</td></tr>
+<tr><td rowspan="7">GR00T N1.7</td><td rowspan="5">LIBERO</td><td>Spatial</td><td>97.65%</td><td>98.0%</td></tr>
+<tr><td>Object</td><td>98.45%</td><td>98.5%</td></tr>
+<tr><td>Goal</td><td>97.50%</td><td>96.5%</td></tr>
+<tr><td>Long</td><td>94.35%</td><td>95.5%</td></tr>
+<tr><td>Avg.</td><td>96.99%</td><td>97.13%</td></tr>
+<tr><td rowspan="2">SimplerEnv</td><td>Bridge</td><td>62.3%</td><td>62.6%</td></tr>
+<tr><td>Fractal</td><td>72.5%</td><td>72.1%</td></tr>
+<tr><td rowspan="5">FastWAM</td><td rowspan="5">LIBERO</td><td>Spatial</td><td>98.2%</td><td>97.0%</td></tr>
+<tr><td>Object</td><td>99.2%</td><td>99.6%</td></tr>
+<tr><td>Goal</td><td>97.8%</td><td>97.2%</td></tr>
+<tr><td>Long</td><td>95.8%</td><td>94.2%</td></tr>
+<tr><td>Avg.</td><td>97.75%</td><td>97.00%</td></tr>
+<tr><td rowspan="3">LingBot-VA</td><td>LIBERO</td><td>Long</td><td>78.8%</td><td>84.6%</td></tr>
+<tr><td rowspan="2">RoboTwin</td><td>Easy</td><td>86.1%</td><td>87.6%</td></tr>
+<tr><td>Hard</td><td>85.1%</td><td>85.7%</td></tr>
+</tbody>
+</table>
 
 <a id="llm-vlm"></a>
 ## 🚀 LLM · VLM · Diffusion
@@ -277,12 +309,13 @@ bash examples/embodied/pi05/run_pi05_ddp_finetune.sh
 <td valign="top">
 <ul>
 <li><a href="examples/embodied/pi05/">Pi0.5</a></li>
-<li><a href="examples/embodied/groot_n1_6/">GR00T-N1.6</a></li>
-<li><a href="examples/embodied/groot_n1_7/">GR00T-N1.7</a></li>
+<li><a href="examples/embodied/gr00t_n1_6/">GR00T-N1.6</a></li>
+<li><a href="examples/embodied/gr00t_n1_7/">GR00T-N1.7</a></li>
 <li><a href="examples/embodied/xvla/">xVLA</a></li>
 <li><a href="examples/embodied/wall_oss_0_5/">Wall-OSS-0.5</a></li>
 <li><a href="examples/embodied/fastwam/">FastWAM</a></li>
 <li><a href="examples/embodied/lingbot_va/">LingBot-VA</a></li>
+<li><a href="examples/embodied/lingbot_vla_v2/">LingBot-VLA-v2</a></li>
 <li><a href="examples/embodied/cosmos3/">Cosmos3</a></li>
 <li><a href="examples/embodied/dreamzero/">DreamZero</a></li>
 <li><a href="cookbook/loongforge-vlda/">LoongForge-VLDA</a></li>
@@ -307,6 +340,7 @@ bash examples/embodied/pi05/run_pi05_ddp_finetune.sh
 <li><a href="examples/glm5/">GLM-5</a></li>
 <li><a href="examples/glm5.2/">GLM-5.2</a></li>
 <li><a href="examples/kimi_k3/">Kimi-K3</a></li>
+<li><a href="examples/ernie5.5/">ERNIE-5.5-Flash</a></li>
 </ul>
 </td>
 <td valign="top">
@@ -362,6 +396,7 @@ https://github.com/user-attachments/assets/8563afca-f79a-4a45-bb4f-36e06c0ccbcb
 <a id="blogs"></a>
 ## 📝 社区相关博客
 
+- [百度&哈工大提出机器人操作新范式VLDA，从预测未来转向学习变化！](https://mp.weixin.qq.com/s/CFiPalRXwskMJLEDx475mA)
 - [VLA 训练如何一步步提速：以 Pi0.5 为例的 3 倍加速实践](https://zhuanlan.zhihu.com/p/2095555587304117777)
 - [百度百舸 LoongForge 团队提出 TAOT：拓扑感知传输破解大规模 MoE 训练端到端加速 1.43 倍](https://mp.weixin.qq.com/s/Op-KpFe5G1Q2IxzIUgm2KA)
 - [加速 GR00T N1.6 具身 VLA 模型训练！LoongForge 开源框架实现三层全链路优化，吞吐提升 2.3 倍、训练周期缩短 56.6%](https://mp.weixin.qq.com/s/lIMsQ0Q5G9KaDKGtrBt-Nw)

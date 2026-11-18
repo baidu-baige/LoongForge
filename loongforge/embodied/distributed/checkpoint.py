@@ -17,13 +17,17 @@ Supports three formats selected via ``--save-format``:
 keep working unchanged.
 """
 
+import concurrent.futures
 import gc
 import json
 import logging
 import os
 import random
 import shutil
+import threading
 from collections.abc import Mapping
+from concurrent.futures import CancelledError, Future, ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import fields, is_dataclass
 from enum import Enum
 from typing import Dict, Optional, Tuple
@@ -65,11 +69,107 @@ _ZERO_OPTIMIZER_DIR = "zero_optimizer"
 _ZERO_OPTIMIZER_METADATA_FILE = f"{_ZERO_OPTIMIZER_DIR}/metadata.json"
 _VALID_FORMATS = ("safetensors", "pt", "dcp", "deepspeed")
 
+# Upper bound (seconds) for draining an in-flight ZeRO optimizer write after a
+# failed DCP save. The write normally completes in seconds; this only guards
+# against a stuck filesystem so the staging error isn't masked by a hang.
+# Overridable via the LOONGFORGE_ZERO_SAVE_DRAIN_TIMEOUT env var (seconds).
+_ZERO_SAVE_DRAIN_TIMEOUT_SECONDS = int(
+    os.environ.get("LOONGFORGE_ZERO_SAVE_DRAIN_TIMEOUT", "600")
+)
+
 # Module-level state for async DCP save. At most one in-flight save at a time;
 # subsequent saves (or shutdown) wait on the previous future before launching a
 # new one to avoid contending CPU-staging buffers and to prevent
 # ``get_latest_checkpoint`` from picking up an incomplete directory.
 _pending_async_save: Optional[dict] = None
+
+
+def build_alias_map(model: nn.Module) -> dict[str, str]:
+    """Map each alias state-dict key to the canonical key holding the same state.
+
+    ``nn.Module.state_dict()`` walks every registration path, so a submodule that
+    is also stored as ``self.alias = self.module`` (or a tied ``Parameter``) is
+    visited once per path. The first DFS path to a module matches
+    ``named_modules()`` and is treated as canonical.
+    """
+    state_dict = model.state_dict(keep_vars=True)
+
+    # Whole-module aliases, mapped by prefix so non-tensor entries such as
+    # TransformerEngine ``_extra_state`` are covered too.
+    prefixes = {}
+    seen = {id(model): ""}
+
+    def visit(module, prefix):
+        for name, child in module._modules.items():
+            if child is None:
+                continue
+            child_prefix = f"{prefix}{name}."
+            if id(child) in seen:
+                prefixes[child_prefix] = seen[id(child)]
+                continue
+            seen[id(child)] = child_prefix
+            visit(child, child_prefix)
+
+    visit(model, "")
+
+    alias_map = {}
+    for key in state_dict:
+        for alias_prefix, canonical_prefix in prefixes.items():
+            if key.startswith(alias_prefix):
+                alias_map[key] = canonical_prefix + key[len(alias_prefix):]
+                break
+
+    # Tied tensors: the same Parameter/buffer object under different modules.
+    # Object identity never merges distinct views that merely share storage.
+    canonical_by_tensor = {}
+    for key, value in state_dict.items():
+        if key in alias_map or not isinstance(value, torch.Tensor):
+            continue
+        canonical = canonical_by_tensor.setdefault(id(value), key)
+        if canonical != key:
+            alias_map[key] = canonical
+
+    # A target may itself pass through an aliased submodule (FastWAM:
+    # ``dit.mixtures.video`` -> ``mot.mixtures.video`` -> ``video_expert``).
+    for alias, canonical in alias_map.items():
+        while canonical in alias_map:
+            canonical = alias_map[canonical]
+        if canonical not in state_dict:
+            raise RuntimeError(f"Alias {alias!r} maps to missing state key {canonical!r}")
+        alias_map[alias] = canonical
+    return alias_map
+
+
+@contextmanager
+def canonical_state_dict(model: nn.Module):
+    """Temporarily expose a canonical-only ``state_dict`` on ``model``.
+
+    Yields the alias map. Pass the unwrapped module; wrappers such as DDP reach
+    it through normal ``state_dict`` recursion and supply the key prefix.
+    """
+    alias_map = build_alias_map(model)
+    if not alias_map:
+        yield alias_map
+        return
+
+    def drop_aliases(module, state_dict, prefix, local_metadata):
+        for alias in alias_map:
+            state_dict.pop(prefix + alias, None)
+
+    def restore_aliases(module, state_dict, prefix, *args):
+        for alias, canonical in alias_map.items():
+            if prefix + canonical in state_dict:
+                state_dict.setdefault(prefix + alias, state_dict[prefix + canonical])
+
+    handles = (
+        model.register_state_dict_post_hook(drop_aliases),
+        model.register_load_state_dict_pre_hook(restore_aliases),
+    )
+    try:
+        yield alias_map
+    finally:
+        for handle in handles:
+            handle.remove()
 
 
 def save_checkpoint(
@@ -83,6 +183,7 @@ def save_checkpoint(
     epoch: int = 0,
     dataloader_state: Optional[Dict] = None,
     model_cfg=None,
+    data_cfg=None,
 ):
     """Save a full checkpoint or a consolidated LoRA adapter checkpoint."""
     # Make sure any previous async save has finalized before we touch a new
@@ -122,17 +223,28 @@ def save_checkpoint(
         "use_lora": use_lora,
     }
 
-    if save_format == "dcp":
-        future = _save_dcp(
-            model, optimizer, scheduler, path, ctx, training_args,
-            dataloader_state, async_save=async_save,
-        )
-    else:
-        future = None
-        _save_legacy(
-            model, optimizer, scheduler, path, ctx, training_args, epoch,
-            dataloader_state, save_format, model_cfg=model_cfg,
-        )
+    # Aliased modules/tensors are written once under their canonical key; DCP
+    # async_save stages its snapshot before returning, so the view can close.
+    with canonical_state_dict(unwrap_model(model)) as alias_map:
+        if alias_map and ctx.is_main:
+            logger.info("Omitting %d aliased state-dict keys from checkpoint", len(alias_map))
+        if save_format == "dcp":
+            future = _save_dcp(
+                model, optimizer, scheduler, path, ctx, training_args,
+                dataloader_state, async_save=async_save,
+            )
+        else:
+            future = None
+            _save_legacy(
+                model, optimizer, scheduler, path, ctx, training_args, epoch,
+                dataloader_state, save_format, model_cfg=model_cfg,
+            )
+
+    # Format-independent: the eval loader needs the data spec next to the weights
+    # for dcp as much as for safetensors/pt. Tiny and synchronous, so an async dcp
+    # save still has it on disk; a failed async commit removes the whole dir.
+    if ctx.is_main and data_cfg is not None and training_args.save_processor_config:
+        _write_processor_config(path, data_cfg)
 
     if future is not None:
         # Defer ``resume_meta.json`` until the async write has flushed —
@@ -189,7 +301,7 @@ def flush_pending_save(
         local_ok = False
         local_err = e
         logger.exception(
-            "Async DCP save failed on rank %d for %s",
+            "Async checkpoint save failed on rank %d for %s",
             pending["rank"], pending["path"],
         )
 
@@ -298,6 +410,25 @@ def maybe_finalize_pending_save(
 def _write_resume_meta(path: str, meta: dict):
     with open(os.path.join(path, "resume_meta.json"), "w") as f:
         json.dump(meta, f, indent=2)
+
+
+def _write_processor_config(path: str, data_cfg) -> None:
+    """Write the eval-time ``processor_config.json`` next to the model weights.
+
+    Mirrors the official Isaac-GR00T checkpoint layout so the eval server can read
+    the image-pipeline spec verbatim (``_load_processor_kwargs`` -> ``processor_kwargs``)
+    instead of re-deriving it. Every field of the training ``data_cfg`` is emitted,
+    so any model's eval loader can recover its data spec from the checkpoint alone;
+    loaders read the keys they need and ignore the rest.
+    """
+    if is_dataclass(data_cfg) or isinstance(data_cfg, Mapping):
+        processor_kwargs = _config_to_json_value(data_cfg)
+    else:
+        processor_kwargs = _config_to_json_value(
+            {k: v for k, v in vars(data_cfg).items() if not k.startswith("_")}
+        )
+    with open(os.path.join(path, "processor_config.json"), "w", encoding="utf-8") as f:
+        json.dump({"processor_kwargs": processor_kwargs}, f, indent=2)
 
 
 def load_pretrained(model: nn.Module, checkpoint_path: str, ctx: DistributedContext) -> nn.Module:
@@ -587,6 +718,39 @@ def _fill_missing_optimizer_state(optim_state_dict: dict) -> tuple[dict, int]:
     return patched, len(missing)
 
 
+def _move_fused_step_to_param_device(optimizer) -> None:
+    """Re-host fused/capturable Adam ``step`` on the parameter's device.
+
+    ``ZeroRedundancyOptimizer.load_state_dict`` copies state to each parameter's
+    device and then forces every 0-dim tensor (notably Adam's ``step``) back to
+    CPU. That contradicts ``torch.optim.Optimizer.load_state_dict``, which keeps
+    ``step`` on the parameter's device for fused/capturable groups, and makes
+    the next fused ``step()`` fail with "state_steps is on cpu".
+    """
+    if _is_zero_optimizer(optimizer):
+        # ``_rank_local_optimizer`` yields the object that actually owns the
+        # state: the inner torch optimizer for a ZeRO shard (including the fp32
+        # master adapter) or the tensor-wise optimizer itself.
+        targets = [
+            _rank_local_optimizer(child)
+            for child in _zero_optimizer_children(optimizer)
+        ]
+    else:
+        targets = [optimizer]
+
+    for target in targets:
+        for group in target.param_groups:
+            if not (group.get("fused") or group.get("capturable")):
+                continue
+            for param in group["params"]:
+                state = target.state.get(param)
+                if not state:
+                    continue
+                step = state.get("step")
+                if torch.is_tensor(step) and step.device != param.device:
+                    state["step"] = step.to(param.device)
+
+
 def _resume_legacy(model, optimizer, scheduler, checkpoint_path, ctx, restore_rng):
     """Legacy resume — load training_state.pt and dispatch optim state via FSDP API."""
     state_file = os.path.join(checkpoint_path, "training_state.pt")
@@ -628,6 +792,7 @@ def _resume_legacy(model, optimizer, scheduler, checkpoint_path, ctx, restore_rn
             )
     else:
         optimizer.load_state_dict(state["optimizer"])
+        _move_fused_step_to_param_device(optimizer)
     if ctx.is_main:
         logger.info("optimizer resumed successfully")
 
@@ -665,9 +830,10 @@ def _save_dcp(
 ):
     """Sharded save: each rank writes its own DCP shard.
 
-    When ``async_save`` is True, returns the future from ``dcp.async_save``;
-    the caller is responsible for waiting on it before the next save or
-    process exit (handled by ``save_checkpoint`` / ``flush_pending_save``).
+    When ``async_save`` is True, returns a future that resolves once the DCP
+    shards — and, for a ZeRO optimizer, the rank-local optimizer state — are
+    durable. The caller is responsible for waiting on it before the next save
+    or process exit (handled by ``save_checkpoint`` / ``flush_pending_save``).
     """
     save_training_state = training_args.save_training_state
     save_local_zero_state = save_training_state and _is_zero_optimizer(optimizer)
@@ -689,20 +855,48 @@ def _save_dcp(
     # Aux files (scheduler / per-rank RNG / per-rank dataloader) are tiny and
     # written synchronously regardless of ``async_save`` — they must be on
     # disk before we return, since training will mutate the RNG and
-    # dataloader state immediately after.
+    # dataloader state immediately after. The rank-local ZeRO optimizer state
+    # is not part of the DCP state dict, so it is written separately; when
+    # ``async_save`` is True that write is also done in the background.
+    zero_future = None
     if save_training_state:
         if ctx.is_main and scheduler is not None:
             torch.save(scheduler.state_dict(), os.path.join(path, "scheduler.pt"))
         _save_aux_per_rank(path, ctx, dataloader_state)
         if save_local_zero_state:
-            _save_zero_optimizer_state(path, optimizer, ctx)
+            zero_future = _save_zero_optimizer_state(
+                path, optimizer, ctx, async_save=async_save
+            )
 
     writer = dcp.FileSystemWriter(dcp_dir)
     if async_save:
         # ``dcp.async_save`` stages a CPU snapshot of ``state`` synchronously,
         # then writes shards in a background thread and returns a future.
         # After return, training is free to modify the live tensors.
-        return dcp.async_save(state, storage_writer=writer)
+        try:
+            dcp_future = dcp.async_save(state, storage_writer=writer)
+        except Exception:
+            # A synchronous failure during DCP staging must not leave the
+            # ZeRO writer racing a doomed save into the step dir. The drain is
+            # bounded so a stuck filesystem can't mask the staging error below.
+            if zero_future is not None:
+                _, not_done = concurrent.futures.wait(
+                    [zero_future], timeout=_ZERO_SAVE_DRAIN_TIMEOUT_SECONDS
+                )
+                if not_done:
+                    logger.warning(
+                        "Timed out after %ds waiting for the background ZeRO "
+                        "optimizer write to drain after a failed DCP save; "
+                        "proceeding to raise the staging error.",
+                        _ZERO_SAVE_DRAIN_TIMEOUT_SECONDS,
+                    )
+            raise
+        if zero_future is None:
+            return dcp_future
+        # Only the "written" side matters for the commit marker. If an async
+        # stager is enabled later, ``staging_completion`` must be kept too.
+        dcp_completion = getattr(dcp_future, "upload_completion", None) or dcp_future
+        return _merge_futures([dcp_completion, zero_future])
 
     dcp.save(state, storage_writer=writer)
     return None
@@ -743,32 +937,35 @@ def _resume_dcp(model, optimizer, scheduler, checkpoint_path, ctx, restore_rng):
     optimizers = [optimizer] if has_optim else []
 
     options = StateDictOptions(full_state_dict=False, cpu_offload=False)
-    model_sd, optim_sd = get_state_dict(model, optimizers=optimizers, options=options)
+    # Canonical load template: also reads legacy checkpoints, whose extra alias
+    # keys are simply not requested; aliases are refilled for the strict load.
+    with canonical_state_dict(unwrap_model(model)):
+        model_sd, optim_sd = get_state_dict(model, optimizers=optimizers, options=options)
 
-    # 1) Model — strict. Load the DCP tensors into the UNWRAPPED module directly.
-    # set_state_dict() mis-handles the DDP "module." prefix for this model's
-    # nesting: torch's _load_model_state_dict feeds the unprefixed DCP keys
-    # straight into DistributedDataParallel.load_state_dict, raising
-    #   "Missing key(s): module.core.* / Unexpected key(s): core.*".
-    # get_state_dict() already returns clean (unwrapped) FQNs, which match the
-    # raw module 1:1, so load there and skip the buggy re-wrap. (DDP replicates
-    # params — full_state_dict=False still yields full tensors per rank.)
-    model_state = {"model": model_sd}
-    try:
-        dcp.load(model_state, storage_reader=dcp.FileSystemReader(dcp_dir))
-    except Exception as exc:
-        # te.Linear contributes `_extra_state` keys that plain nn.Linear does
-        # not, so toggling --fp8 between the saving and resuming run changes the
-        # key set and trips the strict load with an opaque planner error.
-        if _has_te_module(model):
-            raise RuntimeError(
-                "Strict DCP model load failed for an FP8 (te.Linear) model. If "
-                "this checkpoint was saved without --fp8, its key set does not "
-                "match: resume with --fp8 off, or start from "
-                "--pretrained-checkpoint instead of --resume."
-            ) from exc
-        raise
-    unwrap_model(model).load_state_dict(model_state["model"], strict=True)
+        # 1) Model — strict. Load the DCP tensors into the UNWRAPPED module directly.
+        # set_state_dict() mis-handles the DDP "module." prefix for this model's
+        # nesting: torch's _load_model_state_dict feeds the unprefixed DCP keys
+        # straight into DistributedDataParallel.load_state_dict, raising
+        #   "Missing key(s): module.core.* / Unexpected key(s): core.*".
+        # get_state_dict() already returns clean (unwrapped) FQNs, which match the
+        # raw module 1:1, so load there and skip the buggy re-wrap. (DDP replicates
+        # params — full_state_dict=False still yields full tensors per rank.)
+        model_state = {"model": model_sd}
+        try:
+            dcp.load(model_state, storage_reader=dcp.FileSystemReader(dcp_dir))
+        except Exception as exc:
+            # te.Linear contributes `_extra_state` keys that plain nn.Linear does
+            # not, so toggling --fp8 between the saving and resuming run changes the
+            # key set and trips the strict load with an opaque planner error.
+            if _has_te_module(model):
+                raise RuntimeError(
+                    "Strict DCP model load failed for an FP8 (te.Linear) model. If "
+                    "this checkpoint was saved without --fp8, its key set does not "
+                    "match: resume with --fp8 off, or start from "
+                    "--pretrained-checkpoint instead of --resume."
+                ) from exc
+            raise
+        unwrap_model(model).load_state_dict(model_state["model"], strict=True)
     if ctx.is_main:
         logger.info("model resumed via DCP (strict, into unwrapped module)")
 
@@ -974,6 +1171,8 @@ def _get_full_state_dict(
 
 def _is_zero_optimizer(optimizer) -> bool:
     """Check if optimizer is a ZeroRedundancyOptimizer."""
+    if _owns_local_state(optimizer):
+        return True
     from torch.distributed.optim import ZeroRedundancyOptimizer
     return isinstance(optimizer, ZeroRedundancyOptimizer) or getattr(
         optimizer, "_is_multi_dtype_zero_optimizer", False
@@ -992,13 +1191,27 @@ def _zero_optimizer_children(optimizer) -> list:
     """Return the ZeRO optimizers represented by an optimizer wrapper."""
     from torch.distributed.optim import ZeroRedundancyOptimizer
 
-    if isinstance(optimizer, ZeroRedundancyOptimizer):
+    if isinstance(optimizer, ZeroRedundancyOptimizer) or _owns_local_state(optimizer):
         return [optimizer]
     if getattr(optimizer, "_is_multi_dtype_zero_optimizer", False):
         children = optimizer._optimizers
         if all(isinstance(child, ZeroRedundancyOptimizer) for child in children):
             return children
     raise TypeError(f"Unsupported ZeRO optimizer type: {type(optimizer).__name__}")
+
+
+def _owns_local_state(optimizer) -> bool:
+    """Whether the optimizer itself (not a ``.optim``) exposes its rank-local state."""
+    return hasattr(optimizer, "local_checkpoint_state_dict")
+
+
+def _rank_local_optimizer(child):
+    """Return the object that holds a ZeRO child's rank-local state.
+
+    torch's ZeroRedundancyOptimizer keeps it in ``.optim``; the tensor_wise
+    optimizer owns its masters and optimizer state itself.
+    """
+    return child if _owns_local_state(child) else child.optim
 
 
 def _local_optimizer_state_dict(optimizer) -> dict:
@@ -1016,8 +1229,69 @@ def _load_local_optimizer_state_dict(optimizer, state_dict: dict) -> None:
         optimizer.load_state_dict(state_dict)
 
 
-def _save_zero_optimizer_state(path, optimizer, ctx) -> None:
-    """Save each ZeRO rank's local optimizer shard without consolidation."""
+# Module-level single-worker executor for async (non-DCP) torch.save writes.
+# At most one ZeRO save is in flight at a time (enforced by
+# ``_pending_async_save``), so a single worker suffices.
+_async_save_executor: Optional[ThreadPoolExecutor] = None
+
+
+def _submit_async_save(fn, *args) -> Future:
+    """Run a blocking save on the shared background worker."""
+    global _async_save_executor
+    if _async_save_executor is None:
+        _async_save_executor = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="ckpt-async-save"
+        )
+    return _async_save_executor.submit(fn, *args)
+
+
+def _cpu_snapshot(obj):
+    """Copy tensors to CPU so a background ``torch.save`` can't race training.
+
+    Assumes the ZeRO local state holds no aliased tensors: each reference is
+    copied independently, so shared storage would be written twice.
+    """
+    if isinstance(obj, torch.Tensor):
+        return obj.detach().to("cpu", copy=True)
+    if isinstance(obj, Mapping):
+        return {k: _cpu_snapshot(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return type(obj)(_cpu_snapshot(v) for v in obj)
+    return obj
+
+
+def _merge_futures(futures) -> Future:
+    """Resolve only after every input future settles; propagate first error."""
+    merged = Future()
+    progress = {"remaining": len(futures), "error": None}
+    lock = threading.Lock()
+
+    def _on_done(src):
+        # ``Future.exception()`` raises on a cancelled future; inside a done
+        # callback that would be swallowed and ``merged`` would never resolve.
+        err = CancelledError() if src.cancelled() else src.exception()
+        with lock:
+            if err is not None and progress["error"] is None:
+                progress["error"] = err
+            progress["remaining"] -= 1
+            if progress["remaining"] == 0 and not merged.done():
+                if progress["error"] is not None:
+                    merged.set_exception(progress["error"])
+                else:
+                    merged.set_result(None)
+
+    for f in futures:
+        f.add_done_callback(_on_done)
+    return merged
+
+
+def _save_zero_optimizer_state(path, optimizer, ctx, async_save: bool = False):
+    """Save each ZeRO rank's local optimizer shard without consolidation.
+
+    When ``async_save`` is True, the per-rank ``torch.save`` runs on a CPU
+    snapshot in a background thread (mirroring ``dcp.async_save``) and the
+    returned future resolves once the file is durable.
+    """
     state_dir = os.path.join(path, _ZERO_OPTIMIZER_DIR)
     if ctx.is_main:
         os.makedirs(state_dir, exist_ok=True)
@@ -1031,10 +1305,13 @@ def _save_zero_optimizer_state(path, optimizer, ctx) -> None:
         # checkpoint the public options that the next update will consume.
         _copy_param_group_options(child.param_groups, child.optim.param_groups)
         local_state.append(_local_optimizer_state_dict(child.optim))
-    torch.save(
-        local_state,
-        os.path.join(state_dir, f"rank_{ctx.rank}.pt"),
-    )
+
+    rank_path = os.path.join(state_dir, f"rank_{ctx.rank}.pt")
+    future = None
+    if async_save:
+        future = _submit_async_save(torch.save, _cpu_snapshot(local_state), rank_path)
+    else:
+        torch.save(local_state, rank_path)
     ctx.barrier()
 
     if ctx.is_main:
@@ -1053,6 +1330,8 @@ def _save_zero_optimizer_state(path, optimizer, ctx) -> None:
                 indent=2,
             )
     ctx.barrier()
+
+    return future
 
 
 def _load_zero_optimizer_state(checkpoint_path, optimizer, ctx) -> None:
@@ -1096,7 +1375,7 @@ def _load_zero_optimizer_state(checkpoint_path, optimizer, ctx) -> None:
             f"checkpoint={len(local_state)}, current={len(children)}."
         )
     for child, state_dict in zip(children, local_state):
-        _load_local_optimizer_state_dict(child.optim, state_dict)
+        _load_local_optimizer_state_dict(_rank_local_optimizer(child), state_dict)
         _copy_param_group_options(child.optim.param_groups, child.param_groups)
 
 

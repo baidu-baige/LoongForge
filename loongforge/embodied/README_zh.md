@@ -29,8 +29,8 @@
 完整的框架使用说明请参阅 [用户手册](../../docs/source_zh/embodied_tutorial/overview.md)，各模型的快速入门：
 
 - [Pi0.5 (pi05)](../../docs/source_zh/embodied_tutorial/quick_start_pi05.md)
-- [GR00T-N1.6](../../docs/source_zh/embodied_tutorial/quick_start_groot_n1_6.md)
-- [GR00T-N1.7](../../docs/source_zh/embodied_tutorial/quick_start_groot_n1_7.md)
+- [GR00T-N1.6](../../docs/source_zh/embodied_tutorial/quick_start_gr00t_n1_6.md)
+- [GR00T-N1.7](../../docs/source_zh/embodied_tutorial/quick_start_gr00t_n1_7.md)
 - [FastWAM](../../docs/source_zh/embodied_tutorial/quick_start_fastwam.md)
 - [DreamZero](../../docs/source_zh/embodied_tutorial/quick_start_dreamzero.md)
 - [Cosmos3](../../docs/source_zh/embodied_tutorial/quick_start_cosmos3.md)
@@ -46,7 +46,7 @@
 | 模型 | 类型 | 加速比 |
 |---|---|---|
 | DreamZero (DROID Wan2.2-5B Full) | WAM | **4.38×** |
-| Pi0.5 | VLA | **2.80×** |
+| Pi0.5 | VLA | **3.00×** |
 | FastWAM | WAM | **2.61×** |
 | GR00T-N1.6 | VLA | **2.31×** |
 | LingBot-VA | WAM | **2.20×** |
@@ -126,7 +126,7 @@ loongforge/embodied/
 `BaseTrainer` 用模板方法固化训练全生命周期（`setup → 训练循环 → 单步 → 前向/反向 → 收尾`）：
 
 - **通用能力**：优化器 / LR 调度、梯度裁剪与 NaN 清理、checkpoint 保存与续训、分布式日志、确定性控制；
-- **训练器选择**：标准 SFT 用 `FinetuneTrainer`；特殊范式（多流、CUDA Graph）自定义子类（如 `custom/groot_n1_6/`），`trainer_builder.py` 注册、`--trainer-type` 选择；
+- **训练器选择**：标准 SFT 用 `FinetuneTrainer`；特殊范式（多流、CUDA Graph）自定义子类（如 `custom/gr00t_n1_6/`），`trainer_builder.py` 注册、`--trainer-type` 选择；
 - **分布式**：内置多种策略，按需选择——`ddp`（数据并行）、`ddp` + `--zero-optimizer`（ZeRO Stage-1，分片优化器状态）、`fsdp`（全分片）、`hsdp`（混合分片，设 `--hsdp-shard-size`）。
 
 ### 新增一个模型

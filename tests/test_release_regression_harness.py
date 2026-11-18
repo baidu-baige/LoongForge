@@ -57,7 +57,7 @@ def test_plot_output_expands_the_configured_environment(monkeypatch, tmp_path):
 
 
 def test_release_metrics_archive_matches_the_baseline_and_preserves_failures(tmp_path):
-    spec = importlib.util.spec_from_file_location("release_evidence", REPOSITORY_ROOT / "ci/release_evidence.py")
+    spec = importlib.util.spec_from_file_location("release_evidence", REPOSITORY_ROOT / ".github/scripts/release_evidence.py")
     evidence = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(evidence)
     llm_log = tmp_path / "llm.log"

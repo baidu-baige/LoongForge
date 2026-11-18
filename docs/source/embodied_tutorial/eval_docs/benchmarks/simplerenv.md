@@ -37,7 +37,7 @@ X-VLA emits absolute EE poses, but upstream SimplerEnv WidowX only ships delta c
 
 #### 2. GR00T-N1.6 (drawer tasks) — drawer task port
 
-The 2 drawer tasks (`widowx_open_drawer` / `widowx_close_drawer`) use fork-specific env files: ports 3 files from the NVIDIA fork (drawer env class, `small_drawer.urdf`, `bridge_small_drawer.png`), registers the two drawer envs, and exposes `tcp_pose` in the drawer env obs for proprio. Port steps in the [GR00T-N1.6 SimplerEnv guide](../patches/simplerenv/groot_n1_6.md).
+The 2 drawer tasks (`widowx_open_drawer` / `widowx_close_drawer`) use fork-specific env files: ports 3 files from the NVIDIA fork (drawer env class, `small_drawer.urdf`, `bridge_small_drawer.png`), registers the two drawer envs, and exposes `tcp_pose` in the drawer env obs for proprio. Port steps in the [GR00T-N1.6 SimplerEnv guide](../patches/simplerenv/gr00t_n1_6.md).
 
 The benchmark dataset/assets come from the SimplerEnv repo itself; no separate dataset download is needed beyond the environment install.
 
@@ -45,7 +45,7 @@ The benchmark dataset/assets come from the SimplerEnv repo itself; no separate d
 :hidden:
 
 ../patches/simplerenv/xvla
-../patches/simplerenv/groot_n1_6
+../patches/simplerenv/gr00t_n1_6
 ```
 
 ## Step 2: Run evaluation
@@ -59,7 +59,7 @@ cd /path/to/LoongForge-VLA
 examples/embodied/xvla/eval/run_simplerenv_eval.sh
 
 # GR00T-N1.6 (public template)
-bash examples/embodied/groot_n1_6/eval/run_simplerenv_eval.sh
+bash examples/embodied/gr00t_n1_6/eval/run_simplerenv_eval.sh
 ```
 
 Environment variables:
@@ -79,7 +79,7 @@ Key config fields (xvla, see `examples/embodied/xvla/eval/configs/simplerenv/wid
 - `benchmark.max_steps` — `1200` (official horizon)
 - `benchmark.task_name` / `robot_setup` / `scene_name` / `rgb_overlay_path` — switch among the 4 standard Bridge tasks
 - `model.domain_id` — `0` (WidowX)
-- GR00T-N1.6: `benchmark.prepackaged_config: true` (official visual-matching config), `server.chunk_execute_steps: 4` (official `n_action_steps`; replanning every step is unstable for grasping), `model.use_flash_attention: true` (or `false` for sdpa if `flash_attn` is missing). The run script also exports `CUDA_GRAPH_IMPL=local` so the Eagle backbone loads via the repo-local builder (offline, from the processor dir's `config.json`) instead of HF remote code. GR00T runs on the stock upstream delta controller — no env change for the 4 standard tasks (see the [GR00T-N1.6 SimplerEnv guide](../patches/simplerenv/groot_n1_6.md)).
+- GR00T-N1.6: `benchmark.prepackaged_config: true` (official visual-matching config), `server.chunk_execute_steps: 4` (official `n_action_steps`; replanning every step is unstable for grasping), `model.use_flash_attention: true` (or `false` for sdpa if `flash_attn` is missing). The run script also exports `CUDA_GRAPH_IMPL=local` so the Eagle backbone loads via the repo-local builder (offline, from the processor dir's `config.json`) instead of HF remote code. GR00T runs on the stock upstream delta controller — no env change for the 4 standard tasks (see the [GR00T-N1.6 SimplerEnv guide](../patches/simplerenv/gr00t_n1_6.md)).
 
 ## Verification
 

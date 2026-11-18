@@ -17,6 +17,7 @@ from einops import rearrange
 from loongforge.embodied.model.registry import register_model
 
 from .checkpoint import load_sharded_safetensors
+from .features import feature_enabled
 from .modules.flow_match import (
     LingBotVAFlowMatchScheduler,
     get_mesh_id,
@@ -175,22 +176,30 @@ class LingBotVAEmbodiedModel(nn.Module):
         return self._loss(input_dict, self.model(input_dict))
 
     def _prepare_input_dict(self, batch: Dict[str, torch.Tensor]):
-        # Keep model-side stochastic inputs reproducible across launchers by
-        # using the same per-microbatch RNG protocol as the baseline patch.
-        microbatch = getattr(self, "_microbatch_index", 0)
-        self._microbatch_index = microbatch + 1
-        seed = _fixed_rng_seed(microbatch)
-        torch.manual_seed(seed)
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(seed)
-        # Drive every random draw inside _prepare_input_dict/_add_noise through
-        # explicit per-microbatch Generators so the sequence is byte-identical
-        # to the baseline replay regardless of upstream global RNG consumption.
-        cpu_gen = torch.Generator(device="cpu").manual_seed(seed)
+        # LINGBOT_VA_FIXED_MICROBATCH_RNG on: keep model-side stochastic inputs
+        # reproducible across launchers by using the same per-microbatch RNG
+        # protocol as the baseline patch. Off: leave the process-global streams
+        # alone, which is what the unpatched community trainer does, so each rank
+        # draws its own timesteps/noise/chunk/window instead of sharing one draw.
         latent_tensor = batch["latents"]
+        cpu_gen = None
         cuda_gen = None
-        if latent_tensor.is_cuda:
-            cuda_gen = torch.Generator(device=latent_tensor.device).manual_seed(seed)
+        if feature_enabled("LINGBOT_VA_FIXED_MICROBATCH_RNG"):
+            microbatch = getattr(self, "_microbatch_index", 0)
+            self._microbatch_index = microbatch + 1
+            seed = _fixed_rng_seed(microbatch)
+            torch.manual_seed(seed)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(seed)
+            # Drive every random draw inside _prepare_input_dict/_add_noise
+            # through explicit per-microbatch Generators so the sequence is
+            # byte-identical to the baseline replay regardless of upstream global
+            # RNG consumption.
+            cpu_gen = torch.Generator(device="cpu").manual_seed(seed)
+            if latent_tensor.is_cuda:
+                cuda_gen = torch.Generator(
+                    device=latent_tensor.device
+                ).manual_seed(seed)
         latent_dict = self._add_noise(
             batch["latents"],
             self.latent_scheduler,

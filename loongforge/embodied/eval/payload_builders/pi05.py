@@ -11,6 +11,7 @@ and instruction fields, plus the ``unnorm_key`` dataset statistics selector.
 
 from __future__ import annotations
 
+import math
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -61,6 +62,38 @@ def adapt_to_pi_decode_state(state: np.ndarray) -> np.ndarray:
     return out.astype(np.float32)
 
 
+def _quat_to_axisangle_f32(quat_xyzw: np.ndarray) -> np.ndarray:
+    """robosuite ``(x, y, z, w)`` quaternion -> axis-angle, computed in float32.
+
+    Same formula as robosuite ``quat2axisangle`` (no hemisphere canonicalization).
+    Kept in float32 to match the LIBERO pi0.5 eval stack the checkpoints were
+    validated on; the fastwam builder's float64 variant differs at ~1e-7.
+    """
+    quat = np.asarray(quat_xyzw, dtype=np.float32).reshape(-1)[:4].copy()
+    quat[3] = np.clip(quat[3], -1.0, 1.0)
+    den = np.sqrt(1.0 - quat[3] * quat[3])
+    if math.isclose(float(den), 0.0):
+        return np.zeros(3, dtype=np.float32)
+    return (quat[:3] * 2.0 * math.acos(float(quat[3])) / den).astype(np.float32)
+
+
+def encode_libero_state_ee8(state_raw: Dict[str, Any]) -> np.ndarray:
+    """LIBERO proprio -> 8D ``observation.state`` (eef pos3 + axis-angle3 + gripper qpos2).
+
+    Pair with ``benchmark.prefer_controller_ee: false`` so ``eef_pos`` is
+    ``robot0_eef_pos`` (the source the LIBERO datasets were recorded from).
+    """
+    eef_pos = np.asarray(state_raw.get("eef_pos"), dtype=np.float32).reshape(-1)
+    eef_quat = np.asarray(state_raw.get("eef_quat"), dtype=np.float32).reshape(-1)
+    gripper_qpos = np.asarray(state_raw.get("gripper_qpos"), dtype=np.float32).reshape(-1)
+    if eef_pos.size != 3 or eef_quat.size != 4 or gripper_qpos.size != 2:
+        raise ValueError(
+            "pi05 libero_ee8 state requires eef_pos[3], eef_quat[4] and gripper_qpos[2]; "
+            f"got sizes {eef_pos.size}/{eef_quat.size}/{gripper_qpos.size}"
+        )
+    return np.concatenate([eef_pos, _quat_to_axisangle_f32(eef_quat), gripper_qpos]).astype(np.float32)
+
+
 def _pack_images(images_by_cam: Dict[str, Optional[np.ndarray]]) -> List[np.ndarray]:
     """Convert per-camera dict to the ``[primary(+wrist|left|right)]`` list Pi05 expects.
 
@@ -99,7 +132,9 @@ class Pi05PayloadBuilder(PayloadBuilder):
     #   ``""``            — no state kwarg (LIBERO / CALVIN / SimplerEnv default)
     #   ``passthrough``   — send ``canonical["state_raw"]["joint"]`` as-is; used
     #                       for ManiSkill where the adapter emits 8D Panda qpos
-    #   ``aloha_pi``      — RoboTwin: env joint -> pi space (openpi adapt_to_pi)
+    #   ``aloha_pi``      — RoboTwin: env joint -> pi space
+    #   ``libero_ee8``    — LIBERO 8D state: eef pos + axis-angle +
+    #                       gripper qpos (use with prefer_controller_ee: false)
     state_encoding: str = ""
     action_encoding: str = "axis_angle"  # pos(3)+axis_angle(3)+grip(1)
     action_dim: int = 7
@@ -130,6 +165,8 @@ class Pi05PayloadBuilder(PayloadBuilder):
             # RoboTwin openpi adapt_to_pi: env joint -> pi internal space.
             joint = state_raw.get("joint")
             return adapt_to_pi_decode_state(np.asarray(joint, dtype=np.float32)) if joint is not None else None
+        if self.state_encoding == "libero_ee8":
+            return encode_libero_state_ee8(state_raw)
         raise ValueError(f"Unsupported pi05 state_encoding: {self.state_encoding!r}")
 
     def build(self, canonical: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:

@@ -116,6 +116,7 @@ def _validate_extra_model_args(args, config):
 
     if args.enable_fa_within_mla:
         args.attention_backend = AttnBackend.flash
+        args.padding_v_to_qk_dim = True
         print_rank_0(
             "--enable-fa-within-mla is enabled, setting attention backend to FlashAttention",
             args.rank,

@@ -90,6 +90,7 @@ class LanguageModelFamilies(_BaseFamilies):
     MIMO = "mimo"
     GLM = "glm"
     GLM5_NEXT = "glm5_next"
+    ERNIE5_5 = "ernie5_5"
 
 
 class VisionLanguageModelFamilies(_BaseFamilies):
@@ -119,7 +120,7 @@ class CustomModelFamilies(_BaseFamilies):
 class VisionLanguageActionModelFamilies(_BaseFamilies):
     """Vision language action model families"""
     PI05 = "pi05"
-    GROOT_N1_6 = "groot_n1_6"
+    GROOT_N1_6 = "gr00t_n1_6"
 
 
 def get_all_model_families() -> List[str]:

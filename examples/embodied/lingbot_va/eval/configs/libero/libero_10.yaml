@@ -3,6 +3,8 @@
 
 # LingBot-VA LIBERO task-success template (open-source).
 # Verified suite: libero_10 (LIBERO-Long) with a LingBot-VA libero-long posttrain.
+# One-episode smoke test. For the released-number protocol (10 tasks x 50
+# episodes) use libero_10_full.yaml.
 #
 # ckpt_path is a single checkpoint root holding transformer/ plus the frozen
 # vae/ text_encoder/ tokenizer/ subfolders; there is no separate dataset stats

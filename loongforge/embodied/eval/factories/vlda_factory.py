@@ -29,7 +29,7 @@ class VLDAModelFactory:
         path = Path(server_args.ckpt_path)
         directory = path if path.is_dir() else path.parent
         data_cfg = VLDADataConfig()
-        manifest_path = directory / "vlda_config.json"
+        manifest_path = directory / "config.json"
         if manifest_path.is_file():
             with manifest_path.open() as stream:
                 manifest = json.load(stream)

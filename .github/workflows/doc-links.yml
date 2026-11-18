@@ -29,7 +29,7 @@ jobs:
           # checks changed Markdown so it blocks newly introduced broken paths
           # without importing unrelated baseline failures into this PR.
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            python3 ci/check_doc_links.py --changed-since "${{ github.event.pull_request.base.sha }}"
+            python3 .github/scripts/check_doc_links.py --changed-since "${{ github.event.pull_request.base.sha }}"
           else
-            python3 ci/check_doc_links.py --changed-since HEAD
+            python3 .github/scripts/check_doc_links.py --changed-since HEAD
           fi

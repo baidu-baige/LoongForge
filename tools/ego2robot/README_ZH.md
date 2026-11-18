@@ -12,6 +12,7 @@ load (zarr 读入/清洗/重采样)
   -> mask (SAM3 可见人体 + 手部/前臂时序分割)
   -> inpaint (ProPainter 抹掉人手, 得到干净背景)
   [-> depth (Depth Anything 3 场景深度)]        # 可选: run-all --with_depth
+  [-> gauss-recon (DVLT 米制场景深度)]         # 可选: run-all --with_gauss
   -> retarget (目标 morphology 双基座搜索 + morphology-aware IK + 深度遮挡/alpha 合成)
   -> lerobot (LeRobot v3.0 数据集写出, H.264)
   -> validate (健检全绿)
@@ -33,6 +34,8 @@ ego2robot/
 │   ├── hand_mask.py        # Step3 SAM3 人体/手部/前臂时序分割
 │   ├── inpaint.py          # Step4 ProPainter 背景补全
 │   ├── depth_estimate.py   # Step5 DA3 深度估计(可选)
+│   ├── gauss_recon.py      # 可选 DVLT 米制场景深度
+│   ├── gauss/              # DVLT 推理、SLAM 投影与导出
 │   ├── robot_registry.py   # 16 种 morphology 注册与 MJCF/夹爪组合
 │   ├── robot_retarget.py   # Step6 兼容入口和 CLI
 │   ├── retarget/           # Step6 目标、IK、base search、碰撞、渲染模块
@@ -166,36 +169,37 @@ Path B 输出的是 Zarr v3 episode。`left.obs_keypoints` 和
 
 ## 环境要求
 
-- Python **3.10**, CUDA GPU(A800 等; SAM3 推理 / 深度 / 渲染建议 GPU)
+- DVLT 要求 Python **>=3.11**；现有容器为 Python **3.12.3**、Torch **2.8.0a0+5228986c39.nv25.06**（CUDA 12.9）、NumPy **1.26.4**。这是环境实测信息，不是从零安装验证；推理建议 CUDA GPU。
 - 安装依赖和下载模型权重需要访问互联网；无网络环境下需提前离线准备
 
 ### 安装
 
+以 [requirements.txt](requirements.txt) 为依赖清单，但其 NumPy 2.4.6 / Torch 2.5.1 等既有锁版本与运行环境不同，不是已验证的联合安装方案。DVLT 元数据也锁了 NumPy 2.4.4 / Torch 2.5.1。新环境须先隔离解析兼容性，已有环境不要盲目升级 NumPy 2；详见 [安装指南](GAUSS_SETUP_ZH.md)。
+
 ```bash
-# 1) 创建虚拟环境
-python3.10 -m venv ~/.venvs/ego2robot && source ~/.venvs/ego2robot/bin/activate
-pip config set global.index-url https://pypi.org/simple/
-
-# 2) 安装依赖(核心)
-pip install -r requirements.txt   # torch 按需: pip install torch==2.7.1+cu118 -f <镜像>
-
-# SAM3（若 requirements 中的 git 依赖未自动安装）
-git clone https://github.com/facebookresearch/sam3 && pip install -e ./sam3
-
-# 3) DA3(depth 步骤用, 官方库不在 PyPI)
-git clone https://github.com/ByteDance-Seed/depth-anything-3 && pip install -e ./depth-anything-3
+# 在已有兼容环境中单独安装 DVLT 源码，避免其锁版本覆盖环境
+python -m pip install -e /path/to/dvlt-source --no-deps
+python -m pip check
 ```
+
+Gauss 补充依赖为 `accelerate`、`huggingface-hub`、`hydra-core`、`omegaconf`、`open3d`、`zstandard`、`numcodecs`（已加入 requirements）。SAM3 和可选 DA3 源码包按各自上游说明安装；系统需要支持 libx264 的 `ffmpeg` 以及 MuJoCo 渲染库。ProPainter 子进程不隔离 Python 包依赖。历史环境还在仓库外修复过 ProPainter 预发行 Torch 版本解析、补装 `scikit-image/yapf/future`，以及从 openai-clip 源码分发包补齐 SAM3 的 `assets/bpe_simple_vocab_16e6.txt.gz`；迁移时不能假设这些修复自动存在。
 
 ### 模型资产(离线环境按需放置)
 
 | 资产 | 位置(默认) | 说明 |
 |---|---|---|
-| SAM3 权重 `sam3.pt` | `EGO2ROBOT_SAM3_CKPT` 指向 | 人体/手部/前臂时序分割 |
+| SAM3 权重 `sam3.pt` | `--sam3_checkpoint` 或 `EGO2ROBOT_SAM3_CKPT` | [SAM3 官方仓库](https://github.com/facebookresearch/sam3) 的 checkpoint 获取说明；另需源码包和 tokenizer 资源 |
+| DVLT 源码 + `config.json`、`model.safetensors` | 单步 `--checkpoint <dvlt_ckpt>` / 整链 `--gauss_checkpoint <dvlt_ckpt>` | 本地 README 指向 [项目页](https://research.nvidia.com/labs/dvl/projects/dvlt/) 和 [nvidia/dvlt](https://huggingface.co/nvidia/dvlt)；源码单独获取并用 `--no-deps` 安装 |
+| 条件 DINOv2 ViT-B/14 reg4 `.pth` state dict | `--dinov2_weights` / 整链 `--gauss_dinov2_weights` | [DINOv2 官方仓库](https://github.com/facebookresearch/dinov2)；仅 checkpoint 缺少 patch embedding 权重时需要 |
 | `mujoco_menagerie/*` | `EGO2ROBOT_MENAGERIE_DIR` | 基于 menagerie 的 morphology 所需 XML+mesh |
 | `models/jaco`, `models/sawyer_gripper` | 仓库内置 | Jaco 和 Sawyer 的本地夹爪资产 |
 | `models/SO-ARM100/Simulation/SO101` | 仓库内置 | 官方 SO-ARM101 MuJoCo 模型和 mesh 资产 |
-| ProPainter 仓库 + weights | `EGO2ROBOT_PROPAINTER_DIR` | 视频背景补全(inpaint 子进程调用) |
-| DA3-BASE 权重(4 文件) | `EGO2ROBOT_DA3_MODEL_DIR` | depth 步骤 |
+| ProPainter 源码 + `weights/ProPainter.pth`、`weights/raft-things.pth`、`weights/recurrent_flow_completion.pth` | 放在 `EGO2ROBOT_PROPAINTER_DIR` 下 | 三项均必需，inference 脚本使用 [v0.1.0 release](https://github.com/sczhou/ProPainter/releases/tag/v0.1.0) |
+| DA3-BASE `config.json` + `model.safetensors` 及 Python 包 | `depth --model_id` 或 `EGO2ROBOT_DA3_MODEL_DIR` | 仅 depth / `--with_depth` 需要；按 [官方模型清单](https://github.com/ByteDance-Seed/depth-anything-3) 获取 |
+| 可选 Path B：WiLoR `wilor_final.ckpt`、`detector.pt`、MANO `MANO_RIGHT.pkl` | `path-b --wilor_repo`、`--checkpoint`、`--detector`、`--mano_dir` | 另需 WiLoR 源码/依赖及许可允许的 MANO 资产，见前文 Path B |
+| 可选 DynHaMR 源码和 `_DATA` 资源 | `path-b --dynhamr_repo` | 按 Dyn-HaMR README / `scripts/prepare.sh` 准备 HaMeR/BMC/HMP 及独立依赖 |
+
+以上来源依据本地源码/资产说明，本次未联网验证下载可用性，不随仓库分发权重。DVLT 目录必须包含 `config.json` 和 `model.safetensors`；配置中的 `load_patch_embed_weights=false` 不足以证明 tensor 完整。完整清单见 [安装指南](GAUSS_SETUP_ZH.md)。
 
 ### 完整链路一键跑
 
@@ -221,7 +225,7 @@ python cli.py run-all --robot_type xarm7 --base_pullback 0.05 \
 `--trajectory_refine_velocity_weight`、`--trajectory_refine_acceleration_weight`、
 `--trajectory_refine_home_weight` 和 `--trajectory_refine_joint_margin_weight` 调整权重。
 
-`--robot_type` 可选：`panda`、`xarm7`、`arx_l5`、`piper`、`yam`、`fr3`、`ur5e`、`ur10e`、`kinova_gen3`、`sawyer`、`iiwa`、`jaco`、`viperx`、`widowx`、`aloha_agilex`、`so_arm101`。SO-ARM101 使用仓库内置的官方 `new_calib` MuJoCo 模型和 5-DOF 位置优先 IK 配置。每种 morphology 建议使用独立的 `--output_dir`，避免混合不同状态维度。输出目录始终保留步骤编号：`01_load/ ... 04_inpaint/ [05_depth/] 06_retarget/ 07_lerobot/ 08_demo/`。未启用深度时仅省略 `05_depth/`，后续目录名保持不变。
+`--robot_type` 可选：`panda`、`xarm7`、`arx_l5`、`piper`、`yam`、`fr3`、`ur5e`、`ur10e`、`kinova_gen3`、`sawyer`、`iiwa`、`jaco`、`viperx`、`widowx`、`aloha_agilex`、`so_arm101`。SO-ARM101 使用仓库内置的官方 `new_calib` MuJoCo 模型和 5-DOF 位置优先 IK 配置。每种 morphology 建议使用独立的 `--output_dir`，避免混合不同状态维度。输出目录始终保留步骤编号：`01_load/ ... 04_inpaint/ [05_depth/] [05_gauss/] 06_retarget/ 07_lerobot/ 08_demo/`。未启用的深度目录省略，后续目录名保持不变。
 
 在 `depth-aware` 模式下，SO-ARM101 还会从米制场景深度估计静态桌面支撑平面，并约束左右 base 的底面落在该平面上。如果无法获得可靠平面或相机内参，程序会输出回退提示并保留原有的手部锚定高度搜索；其他 morphology 不启用该约束。
 
@@ -283,6 +287,53 @@ python cli.py demo --zarr_dir <zarr> --mask_dir out03 --inpaint_dir out04 --ik_d
 ```bash
 python cli.py run-all --with_depth --robot_type panda --input_dir <egoverse> --output_dir ./out --episodes <ep>
 ```
+
+## Gaussian 场景重建（DVLT，`gauss-recon` / `--with_gauss`）
+
+新增能力包括 DVLT 前馈多视角重建、米制场景深度、可视化与缓存，并接入 retarget 深度遮挡合成。**当前没有 gsplat trainer、Gaussian splatting renderer 或 novel-view synthesis 入口**。缓存用于离线分析和未来扩展。
+
+DVLT 使用原始 Zarr 图像，可能仍含人手；背景视频只用于输出尺寸/裁剪检测。尺度优先由世界系手部关键点拟合，失败或缺失时回退轨迹长度比，再通过 SLAM `obs_head_pose` 反投影及逐帧投影。原始 DVLT 位姿/世界点仍在模型坐标系，相似变换仅作诊断。静态/近静态相机及动态人手可能导致退化、孔洞和错误几何；不保证优于 DA3 或新视角质量。
+
+```bash
+python cli.py gauss-recon --zarr_dir <zarr_root> --state_dir <out>/02_align \
+  --bg_dir <out>/04_inpaint --output_dir <out>/05_gauss \
+  --checkpoint <dvlt_ckpt> --episodes <ep> --sample_fps 1
+
+python cli.py run-all --input_dir <zarr_root> --output_dir <out> --episodes <ep> \
+  --sam3_checkpoint <sam3.pt> --robot_type panda \
+  --with_gauss --gauss_checkpoint <dvlt_ckpt> --scene_backend gauss
+```
+
+除 `--check` 外，单步必须传 `--zarr_dir`、`--state_dir`、`--bg_dir`、`--output_dir`。state/bg 内容缺失时虽会回退 Zarr 帧数/原图尺寸，但参数不可省略，且回退可能影响后续帧数或裁剪对齐。
+
+`--with_depth` 和 `--with_gauss` 可同时生成 `05_depth/`、`05_gauss/`；默认 `--scene_backend auto` 在 Gauss 启用时优先选 Gauss，否则使用已启用的 DA3。显式 `da3` 应搭配 `--with_depth`，显式 `gauss` 应搭配 `--with_gauss`；选择器不启用阶段，当前实现会在 Gauss 未启用而 DA3 启用时回退 DA3。`--skip_depth` 或 `--depth_mode alpha` 禁用两个阶段和深度合成。
+
+| 单步参数 | run-all 对应参数 | 默认值 |
+|---|---|---|
+| `--checkpoint` | `--gauss_checkpoint` | 单步 `nvidia/dvlt`；整链 `None`，建议显式传本地目录 |
+| `--dinov2_weights` | `--gauss_dinov2_weights` | `None`，仅缺 patch embedding 时需要 |
+| `--sample_fps` | `--gauss_sample_fps` | `2.0`（上例为 `1`） |
+| `--fy` | `--gauss_fy` | `None`，DVLT 焦距按输出高度缩放 |
+| `--conf_threshold` | `--gauss_conf_threshold` | `0.2` |
+| `--points_per_frame` | `--gauss_points_per_frame` | `8192` |
+| `--inference_steps` | `--gauss_inference_steps` | `None`，由模型决定 |
+| `--device` | `--device` | `cuda:0` |
+
+单步还支持 `--img_size 504`、`--patch_size 14`、`--hole_fill_iters 6`。整链自动同步焦距到 retarget（`meta.json` 的 `fy_recommended_retarget`，显式 `--gauss_fy` 优先）；分步执行需保持同一焦距。
+
+每集 `<out>/05_gauss/<ep>/` 输出 `scene_depth.npz`（float16 `[N,H,W]`、`unit="meters"`、`backend="gauss"`、`K` 和裁剪元数据）、`<ep>_dvlt.pt`（原始 DVLT/尺度/对齐缓存）、`recon_vis.mp4`（原图与深度对照）、`depth_vis.mp4`、`meta.json`（scale/coverage/fy 等）。
+
+```bash
+python cli.py gauss-recon --help
+python cli.py run-all --help
+python cli.py validate --help
+python cli.py gauss-recon --check --checkpoint <dvlt_ckpt>
+# 仅当对应数据、深度与 IK 产物存在时运行
+python cli.py validate --dataset_dir <out>/07_lerobot \
+  --depth_dir <out>/05_gauss --depth_ik_dir <out>/06_retarget
+```
+
+`--check` 只检查导入、CUDA 状态和 checkpoint 文件列表，不加载模型或验证推理；缺文件可能只打印警告。`validate` 深度项为抽样诊断，缺文件会跳过且使用固定渲染视场，不能证明 Gauss 几何正确；必要时追加 `--skip_loader_check` 并报告跳过 loader。环境、权重来源、NPZ 字段检查及迁移限制见 [GAUSS_SETUP_ZH.md](GAUSS_SETUP_ZH.md)。本次维护不重建已删除的中间产物，历史整链记录不等于此次 smoke/e2e 重跑。
 
 ## 环境变量
 

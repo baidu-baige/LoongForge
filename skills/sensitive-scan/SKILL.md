@@ -12,8 +12,8 @@ description: >-
 
 # Sensitive information scan
 
-Authoritative implementation: `ci/sensitive_scan.py`, rules in
-`ci/sensitive_rules.py`. Always run the script rather than grepping by
+Authoritative implementation: `.github/scripts/sensitive_scan.py`, rules in
+`.github/scripts/sensitive_rules.py`. Always run the script rather than grepping by
 hand — the rules encode findings from prior audits and the allowlist records
 which matches are intentional.
 
@@ -21,20 +21,20 @@ which matches are intentional.
 
 ```bash
 # Tracked + staged files. This is what CI runs on every PR.
-python3 ci/sensitive_scan.py
+python3 .github/scripts/sensitive_scan.py
 
 # Add git metadata: author emails, commit messages, tag names, branch names,
 # and files deleted from the worktree but still present in HEAD.
 # ALWAYS use this before an actual release.
-python3 ci/sensitive_scan.py --history
+python3 .github/scripts/sensitive_scan.py --history
 
 # Machine-readable output (contains every finding, not just the capped preview)
-python3 ci/sensitive_scan.py --format json
+python3 .github/scripts/sensitive_scan.py --format json
 
 # Narrow the scan
-python3 ci/sensitive_scan.py --paths docker/ examples_xpu/
-python3 ci/sensitive_scan.py --rule corp-email --rule internal-domain
-python3 ci/sensitive_scan.py --list-rules
+python3 .github/scripts/sensitive_scan.py --paths docker/ examples_xpu/
+python3 .github/scripts/sensitive_scan.py --rule corp-email --rule internal-domain
+python3 .github/scripts/sensitive_scan.py --list-rules
 ```
 
 Exit codes: `0` clean, `1` blocking findings, `2` scanner could not run.
@@ -95,12 +95,12 @@ BASE_IMAGE=example.internal/base:1  # sensitive-scan: allow[internal-domain]
 `sensitive-scan: allow` with no brackets suppresses every rule on that line.
 
 For a path or a recurring pattern, add an entry to `ALLOWLIST` in
-`ci/sensitive_rules.py`. A `reason` is mandatory — the scanner exits with
+`.github/scripts/sensitive_rules.py`. A `reason` is mandatory — the scanner exits with
 code 2 if one is missing.
 
 ## Extending the rules
 
-Add a dict to `RULES` in `ci/sensitive_rules.py` with `id`, `severity`,
+Add a dict to `RULES` in `.github/scripts/sensitive_rules.py` with `id`, `severity`,
 `title`, `why`, `pattern`, `hint`. Set `"redact": True` for anything that could
 match live credential material so the value is not reprinted in CI logs.
 
@@ -108,7 +108,7 @@ After changing a pattern, verify precision against real code before committing �
 identifier-shaped false positives are the usual failure mode:
 
 ```bash
-python3 ci/sensitive_scan.py --rule <new-rule-id>
+python3 .github/scripts/sensitive_scan.py --rule <new-rule-id>
 ```
 
 ## Scope boundary

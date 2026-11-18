@@ -62,7 +62,7 @@ The LIBERO simulator runs in the benchmark environment; the policy server is lau
 - **Weights**: parentheses show the Hugging Face weight (`org/name`) that achieved the run.
 - **Connectivity only**: the pipeline runs with `random_init: true` and no score — either no domain weights are released, or the benchmark assets block a full run (e.g. xvla CALVIN: the weights are public, but the official online rollout needs the original-format validation dataset).
 - **—**: not supported yet — coming soon.
-- **GR00T-N1.7** additionally needs `transformers 4.57.3` in the policy env, the version Isaac-GR00T declares. The 5.3.0 our own `pyproject.toml` installs silently degrades every benchmark (`libero_10` 46/50 → 11/50, WidowX 85/120 → 35/120). See the [LIBERO](docs/patches/libero/groot_n1_7.md) / [SimplerEnv](docs/patches/simplerenv/groot_n1_7.md) guides.
+- **GR00T-N1.7** additionally needs `transformers 4.57.3` in the policy env, the version Isaac-GR00T declares. The 5.3.0 our own `pyproject.toml` installs silently degrades every benchmark (`libero_10` 46/50 → 11/50, WidowX 85/120 → 35/120). See the [LIBERO](docs/patches/libero/gr00t_n1_7.md) / [SimplerEnv](docs/patches/simplerenv/gr00t_n1_7.md) guides.
 - **Detailed results**: see the per-benchmark [benchmark pages](docs/benchmarks/libero.md).
 
 ## Model Interface

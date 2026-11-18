@@ -1,10 +1,15 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
+import base64
+import hashlib
 import importlib.util
+import io
 import json
 import os
 import subprocess
+import urllib.error
+import urllib.parse
 from pathlib import Path
 
 import pytest
@@ -173,6 +178,13 @@ PROMOTION_SCRIPT = (
     / "self_runner"
     / "promote_to_dockerhub.sh"
 )
+VERIFY_SCRIPT = (
+    Path(__file__).parents[1]
+    / ".github"
+    / "scripts"
+    / "self_runner"
+    / "verify_dockerhub_manifest.py"
+)
 
 
 @pytest.mark.parametrize(
@@ -187,6 +199,7 @@ PROMOTION_SCRIPT = (
         "pull",
         "push",
         "verify",
+        "legacy_manifest",
     ],
 )
 def test_promotion_pulls_tags_pushes_and_verifies_without_exposing_credentials(tmp_path, failure):
@@ -251,7 +264,14 @@ def test_promotion_pulls_tags_pushes_and_verifies_without_exposing_credentials(t
                 '  *"mktemp -d"*) echo /tmp/loongforge-publish-test; exit 0 ;;',
                 '  *"image inspect"*"docker.io/"*) exit 1 ;;',
                 '  *"image inspect"*) printf "sha256:%064d\\n" 1; exit 0 ;;',
+                '  *"python3 - "*)',
+                '    [[ "$input" == *"def verify("* ]] || exit 19',
+                '    [[ "${FAIL_STAGE:-}" != verify ]] || { echo "publisher: remote image content does not match the source" >&2; exit 1; }',
+                '    printf "sha256:%064d\\n" 2; exit 0 ;;',
                 '  *"manifest inspect"*)',
+                '    if [[ "${FAIL_STAGE:-}" == legacy_manifest ]]; then',
+                '      echo "no such manifest: docker.io/loongforge/loongforge:v1" >&2; exit 1',
+                '    fi',
                 '    digest="$(printf "sha256:%064d" 2)"',
                 '    config="$(printf "sha256:%064d" 1)"',
                 '    [[ "${FAIL_STAGE:-}" != verify ]] || config="$(printf "sha256:%064d" 3)"',
@@ -309,7 +329,7 @@ def test_promotion_pulls_tags_pushes_and_verifies_without_exposing_credentials(t
         check=False,
     )
 
-    failed = bool(failure) and not failure.startswith("transient_")
+    failed = bool(failure) and not failure.startswith("transient_") and failure != "legacy_manifest"
     login_failed = failed and "login_" in failure
     assert (result.returncode == 0) == (not failed)
     commands = command_log.read_text(encoding="utf-8")
@@ -346,6 +366,8 @@ def test_promotion_pulls_tags_pushes_and_verifies_without_exposing_credentials(t
     if not failed:
         assert data["registry_digest"] == data["push_digest"]
         assert github_output.read_text() == "verified=true\n"
+        assert "manifest inspect" not in commands
+        assert "python3 - /tmp/loongforge-publish-test" in commands
     else:
         assert not github_output.exists()
 
@@ -370,6 +392,132 @@ def test_promotion_pulls_tags_pushes_and_verifies_without_exposing_credentials(t
     assert (archive / log.name).read_text() == log.read_text()
     assert (archive / report.name).read_text() == report.read_text()
     assert regression.read_text() == '{"status":"passed"}\n'
+
+
+@pytest.mark.parametrize(
+    "scenario",
+    [
+        "success",
+        "oci",
+        "authentication_503",
+        "manifest_404",
+        "manifest_429",
+        "manifest_503",
+        "network",
+        "exhausted",
+        "unauthorized",
+        "forbidden",
+        "content_mismatch",
+        "digest_mismatch",
+        "header_mismatch",
+        "invalid_json",
+        "missing_token",
+        "missing_login",
+    ],
+)
+def test_promotion_registry_verifier(tmp_path, monkeypatch, capsys, scenario):
+    # Exercise the same Python program sent over SSH, without SSH or a registry.
+    spec = importlib.util.spec_from_file_location("verify_dockerhub_manifest", VERIFY_SCRIPT)
+    verifier = importlib.util.module_from_spec(spec)
+    assert spec.loader
+    spec.loader.exec_module(verifier)
+
+    username, password, token = "registry-user", "registry-password", "registry-bearer-secret"
+    auth = base64.b64encode(f"{username}:{password}".encode()).decode()
+    (tmp_path / "config.json").write_text(json.dumps({
+        "auths": {} if scenario == "missing_login" else {"https://index.docker.io/v1/": {"auth": auth}},
+    }))
+    source = "sha256:" + "1" * 64
+    manifest = {
+        "schemaVersion": 2,
+        "mediaType": (
+            "application/vnd.oci.image.manifest.v1+json"
+            if scenario == "oci" else "application/vnd.docker.distribution.manifest.v2+json"
+        ),
+        "config": {"digest": "sha256:" + "3" * 64 if scenario == "content_mismatch" else source},
+    }
+    body = b"{" if scenario == "invalid_json" else json.dumps(manifest).encode()
+    digest = "sha256:" + hashlib.sha256(body).hexdigest()
+    pushed = "sha256:" + "4" * 64 if scenario == "digest_mismatch" else digest
+    calls, sleeps = [], []
+
+    def urlopen(request, *, timeout):
+        assert timeout == 15
+        phase = "authentication" if request.host == "auth.docker.io" else "manifest"
+        calls.append(phase)
+        if phase == "authentication":
+            assert request.get_header("Authorization") == "Basic " + auth
+            assert urllib.parse.parse_qs(urllib.parse.urlsplit(request.full_url).query) == {
+                "service": ["registry.docker.io"],
+                "scope": ["repository:team/image:pull"],
+            }
+        else:
+            assert request.full_url == "https://registry-1.docker.io/v2/team/image/manifests/v1_ci_test"
+            assert request.get_header("Authorization") == "Bearer " + token
+            assert manifest["mediaType"] in request.get_header("Accept")
+
+        code = None
+        if scenario == "unauthorized" and phase == "authentication":
+            code = 401
+        elif scenario == "forbidden" and phase == "manifest":
+            code = 403
+        elif scenario == "exhausted" and phase == "manifest":
+            code = 429
+        elif scenario == f"{phase}_503" and calls.count(phase) == 1:
+            code = 503
+        elif phase == "manifest" and calls.count(phase) == 1:
+            if scenario in {"manifest_404", "manifest_429"}:
+                code = int(scenario.rsplit("_", 1)[1])
+            elif scenario == "network":
+                raise urllib.error.URLError("temporary connection failure")
+        if code:
+            raise urllib.error.HTTPError(
+                request.full_url, code, "sensitive error details", {},
+                io.BytesIO(f"{username}:{password} {token}".encode()),
+            )
+        if phase == "authentication":
+            response = io.BytesIO(json.dumps({} if scenario == "missing_token" else {"token": token}).encode())
+            response.headers = {}
+        else:
+            response = io.BytesIO(body)
+            response.headers = {
+                "Docker-Content-Digest": "sha256:" + "5" * 64 if scenario == "header_mismatch" else digest,
+            }
+        return response
+
+    monkeypatch.setattr(verifier.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(verifier.time, "sleep", sleeps.append)
+    errors = {
+        "exhausted": "manifest failed: HTTP 429",
+        "unauthorized": "authentication failed: HTTP 401",
+        "forbidden": "manifest failed: HTTP 403",
+        "content_mismatch": "content does not match",
+        "digest_mismatch": "tag does not match",
+        "header_mismatch": "tag does not match",
+        "invalid_json": "manifest returned invalid JSON",
+        "missing_token": "authentication returned no token",
+        "missing_login": "requires the promotion's Docker Hub login",
+    }
+    if scenario in errors:
+        with pytest.raises(RuntimeError, match=errors[scenario]):
+            verifier.verify(str(tmp_path), "docker.io/team/image:v1_ci_test", source, pushed)
+    else:
+        assert verifier.verify(str(tmp_path), "docker.io/team/image:v1_ci_test", source, pushed) == digest
+
+    transient = scenario in {
+        "authentication_503", "manifest_404", "manifest_429", "manifest_503", "network",
+    }
+    assert sleeps == ([2, 4, 8] if scenario == "exhausted" else [2] if transient else [])
+    assert calls.count("authentication") == (0 if scenario == "missing_login" else 2 if scenario == "authentication_503" else 1)
+    expected_manifest_calls = (
+        0 if scenario in {"missing_login", "missing_token", "unauthorized"} else
+        4 if scenario == "exhausted" else
+        2 if transient and scenario != "authentication_503" else 1
+    )
+    assert calls.count("manifest") == expected_manifest_calls
+    output = capsys.readouterr()
+    for secret in (username, password, auth, token):
+        assert secret not in output.out + output.err
 
 # --- tests/test_release_image_compatibility.py ---
 MODULE_PATH = Path(__file__).parents[1] / ".github" / "scripts" / "image_policy.py"

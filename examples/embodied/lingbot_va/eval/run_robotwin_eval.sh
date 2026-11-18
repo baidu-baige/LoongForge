@@ -3,14 +3,15 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Public open-source entry: fill /path/to/... in the YAML first.
-# Default (only shipped config): configs/robotwin/adjust_bottle.yaml
-# Optional task/episode knobs: see comments in that YAML.
+# Default: configs/robotwin/robotwin_50tasks.yaml, the full 50-task protocol of
+# the released numbers (Easy; set benchmark.task_config: demo_randomized for Hard).
+# Smoke test: CONFIG=examples/embodied/lingbot_va/eval/configs/robotwin/adjust_bottle.yaml
 
 set -euo pipefail
 
 REPO_ROOT=${REPO_ROOT:-/path/to/LoongForge-VLA}
 EXAMPLE_EVAL_ROOT=${EXAMPLE_EVAL_ROOT:-${REPO_ROOT}/examples/embodied/lingbot_va/eval}
-CONFIG=${CONFIG:-${EXAMPLE_EVAL_ROOT}/configs/robotwin/adjust_bottle.yaml}
+CONFIG=${CONFIG:-${EXAMPLE_EVAL_ROOT}/configs/robotwin/robotwin_50tasks.yaml}
 if [[ "${CONFIG}" != /* ]]; then
   CONFIG=${REPO_ROOT}/${CONFIG}
 fi

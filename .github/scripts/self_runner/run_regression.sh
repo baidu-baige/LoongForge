@@ -98,8 +98,8 @@ cleanup() {
     printf '%s\n' 'artifact: missing raw log' >&2
     status=1
   else
-    python3 "$script_dir/../../../ci/redact_ci_artifact.py" --input "$result_file" --output "$artifact_result" || status=1
-    python3 "$script_dir/../../../ci/redact_ci_artifact.py" --input "$log_file" --output "$artifact_log" || status=1
+    python3 "$script_dir/../redact_ci_artifact.py" --input "$result_file" --output "$artifact_result" || status=1
+    python3 "$script_dir/../redact_ci_artifact.py" --input "$log_file" --output "$artifact_log" || status=1
   fi
   "$script_dir/cleanup.sh" >/dev/null 2>&1 || true
   write_outputs
@@ -162,7 +162,7 @@ if [[ "$suite" == embodied ]]; then
   # runs off this runner, so the newest run directory is this container's.
   newest_results="$(ls -1t "$LOONGFORGE_HOST_OUTPUT_ROOT"/embodied/run_*/results.json 2>/dev/null | head -1 || true)"
   if [[ -n "$newest_results" && -f "$newest_results" ]]; then
-    if python3 "$script_dir/../../../ci/redact_ci_artifact.py" \
+    if python3 "$script_dir/../redact_ci_artifact.py" \
         --input "$newest_results" --output "$artifact_dir/suite-results.json"; then
       suite_results_copied=true
     fi
@@ -176,7 +176,7 @@ if [[ "$suite" == embodied ]]; then
       model_name="$(basename "$(dirname "$train_log")")"
       train_tail_tmp="$artifact_dir/.train-${model_name}.$$"
       if tail -c 65536 "$train_log" >"$train_tail_tmp" 2>/dev/null; then
-        python3 "$script_dir/../../../ci/redact_ci_artifact.py" \
+        python3 "$script_dir/../redact_ci_artifact.py" \
           --input "$train_tail_tmp" \
           --output "$artifact_dir/train-${model_name}.log.tail" || true
       fi

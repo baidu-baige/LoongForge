@@ -240,6 +240,13 @@ class McoreCheckpoint(AbstractCheckpoint):
                         m_layer_id = cur_layer_id
                         layer_prefix = None
                         name_prefix = None
+                    if layer_id >= num_layers and cargs.get("mtp_shared_last_layer", False):
+                        for c_name in MTP_NAMES:
+                            self.m_base.common_to_mcore(
+                                c_name, c_ckpt, m_dict, t_name, layer_id, m_layer_id,
+                                layer_prefix=layer_prefix, ep_id=ep_id, clear_source=clear_source,
+                            )
+                        continue
                     for c_name in BASE_NAMES:
                         if layer_id >= num_layers and c_name in HC_NAMES:
                             continue
@@ -541,6 +548,14 @@ class McoreCheckpoint(AbstractCheckpoint):
                         layer_prefix = None
                         m_layer_id = cur_layer_id
                         name_prefix = None
+
+                    if layer_id >= num_layers and cargs.get("mtp_shared_last_layer", False):
+                        for c_name in MTP_NAMES:
+                            self.m_base.mcore_to_common(
+                                c_name, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id,
+                                layer_prefix=layer_prefix,
+                            )
+                        continue
 
                     for c_name in BASE_NAMES:
                         self.m_base.mcore_to_common(c_name, c_ckpt, self.m_dict, t_name, layer_id, m_layer_id,

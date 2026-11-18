@@ -166,6 +166,7 @@ CONFIG_MAPPING = {
     "benchmark.max_tasks": "max_tasks",
     "benchmark.task_ids": "task_ids",
     "benchmark.episodes_per_task": "episodes_per_task",
+    "benchmark.libero_protocol": "libero_protocol",
     "benchmark.num_steps_wait": "num_steps_wait",
     # Env seeding granularity: per_episode (legacy default) re-creates and re-seeds the env
     # for every episode; per_task reuses ONE env seeded with run.seed across all trials,

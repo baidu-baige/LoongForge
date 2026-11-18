@@ -12,6 +12,7 @@ load (read/clean/resample zarr data)
   -> mask (SAM3 temporal segmentation of visible body, hands, and forearms)
   -> inpaint (ProPainter removes hands to produce a clean background)
   [-> depth (Depth Anything 3 scene depth)]        # optional: run-all --with_depth
+  [-> gauss-recon (DVLT metric scene depth)]       # optional: run-all --with_gauss
   -> retarget (dual-base search + morphology-aware IK + depth-aware/alpha compositing)
   -> lerobot (write LeRobot v3.0 dataset, H.264)
   -> validate (health checks)
@@ -33,6 +34,8 @@ ego2robot/
 │   ├── hand_mask.py        # Step 3 SAM3 body/hand/forearm temporal segmentation
 │   ├── inpaint.py          # Step 4 ProPainter background completion
 │   ├── depth_estimate.py   # Step 5 optional DA3 depth estimation
+│   ├── gauss_recon.py      # Optional DVLT metric scene depth
+│   ├── gauss/              # DVLT inference, SLAM projection and export
 │   ├── robot_registry.py   # Registry of 16 morphologies and MJCF/gripper combinations
 │   ├── robot_retarget.py   # Step 6 compatibility facade and CLI entry point
 │   ├── retarget/            # Step 6 target, IK, base-search, collision, and render modules
@@ -171,36 +174,37 @@ robot/background composite is written to
 
 ## Requirements
 
-- Python **3.10**, CUDA GPU (an A800 or similar; GPU is recommended for SAM3 inference, depth, and rendering)
+- DVLT requires Python **>=3.11**. The existing container uses Python **3.12.3**, Torch **2.8.0a0+5228986c39.nv25.06** (CUDA 12.9), and NumPy **1.26.4**; this is an observed runtime, not a verified clean-install recipe. A CUDA GPU is recommended for inference.
 - Internet access is required to install dependencies and download model weights; in offline environments, prepare them separately
 
 ### Installation
 
+Use [requirements.txt](requirements.txt) as a dependency inventory, not as a verified combined SAM3/ProPainter/DVLT lock. Its existing NumPy 2.4.6 / Torch 2.5.1 pins differ from the working runtime; DVLT's own metadata pins NumPy 2.4.4 / Torch 2.5.1. Resolve compatibility in an isolated environment before installation, and preserve a working environment rather than blindly upgrading to NumPy 2. See [the setup guide](GAUSS_SETUP_ZH.md) for the observed environment and migration caveats.
+
 ```bash
-# 1) Create a virtual environment
-python3.10 -m venv ~/.venvs/ego2robot && source ~/.venvs/ego2robot/bin/activate
-pip config set global.index-url https://pypi.org/simple/
-
-# 2) Install dependencies (core)
-pip install -r requirements.txt   # Install torch as needed: pip install torch==2.7.1+cu118 -f <mirror>
-
-# SAM3 (if the git dependency in requirements is not installed automatically)
-git clone https://github.com/facebookresearch/sam3 && pip install -e ./sam3
-
-# 3) DA3 (needed by the depth step; the official package is not on PyPI)
-git clone https://github.com/ByteDance-Seed/depth-anything-3 && pip install -e ./depth-anything-3
+# In an already compatible environment, install the separate DVLT source
+python -m pip install -e /path/to/dvlt-source --no-deps
+python -m pip check
 ```
+
+Gauss additionally needs `accelerate`, `huggingface-hub`, `hydra-core`, `omegaconf`, `open3d`, `zstandard`, and `numcodecs` (now listed in requirements). SAM3 and optional DA3 require their own source packages; follow their upstream installation instructions. System `ffmpeg` with libx264 and the MuJoCo rendering libraries are also required. A ProPainter subprocess does not isolate package dependencies. Historical local fixes included ProPainter prerelease Torch-version parsing and missing `scikit-image`/`yapf`/`future`, plus SAM3's missing `assets/bpe_simple_vocab_16e6.txt.gz` copied from the openai-clip source distribution; these fixes are outside this repository.
 
 ### Model Assets (Place as Needed in Offline Environments)
 
 | Asset | Default location | Description |
 |---|---|---|
-| SAM3 weights `sam3.pt` | Set `EGO2ROBOT_SAM3_CKPT` | Temporal segmentation of body, hands, and forearms |
+| SAM3 weights `sam3.pt` | `--sam3_checkpoint` or `EGO2ROBOT_SAM3_CKPT` | [SAM3 upstream](https://github.com/facebookresearch/sam3): follow its checkpoint access instructions; also install the source package/tokenizer assets |
+| DVLT source + `config.json`, `model.safetensors` | `--checkpoint <dvlt_ckpt>` / run-all `--gauss_checkpoint <dvlt_ckpt>` | Local DVLT README links to the [project](https://research.nvidia.com/labs/dvl/projects/dvlt/) and [nvidia/dvlt](https://huggingface.co/nvidia/dvlt); obtain source separately and install with `--no-deps` |
+| Conditional DINOv2 ViT-B/14 reg4 `.pth` state dict | `--dinov2_weights` / run-all `--gauss_dinov2_weights` | [DINOv2 upstream](https://github.com/facebookresearch/dinov2); only needed when the DVLT checkpoint lacks patch embedding weights |
 | `mujoco_menagerie/*` | `EGO2ROBOT_MENAGERIE_DIR` | XML and mesh assets for the menagerie-backed morphologies |
 | `models/jaco`, `models/sawyer_gripper` | Included in this repository | Local Jaco and Sawyer gripper assets |
 | `models/SO-ARM100/Simulation/SO101` | Included in this repository | Official SO-ARM101 MuJoCo model and mesh assets |
-| ProPainter repository and weights | `EGO2ROBOT_PROPAINTER_DIR` | Video background completion (called as an inpaint subprocess) |
-| DA3-BASE weights (4 files) | `EGO2ROBOT_DA3_MODEL_DIR` | Depth step weights |
+| ProPainter source + `weights/ProPainter.pth`, `weights/raft-things.pth`, `weights/recurrent_flow_completion.pth` | Under `EGO2ROBOT_PROPAINTER_DIR` | All three files are required; the inference script uses the [v0.1.0 release](https://github.com/sczhou/ProPainter/releases/tag/v0.1.0) |
+| DA3-BASE `config.json` + `model.safetensors` and Python package | `depth --model_id` or `EGO2ROBOT_DA3_MODEL_DIR` | Only for DA3 depth / `--with_depth`; follow the [official model list](https://github.com/ByteDance-Seed/depth-anything-3) |
+| Optional Path B: WiLoR `wilor_final.ckpt`, `detector.pt`, MANO `MANO_RIGHT.pkl` | `path-b --wilor_repo`, `--checkpoint`, `--detector`, `--mano_dir` | Separate WiLoR source/dependencies and licensed MANO assets; see Path B above |
+| Optional DynHaMR source and `_DATA` resources | `path-b --dynhamr_repo` | Follow Dyn-HaMR README / `scripts/prepare.sh` for HaMeR/BMC/HMP assets and its own dependencies |
+
+Sources above are taken from local source/asset documentation; download availability was not tested during this maintenance. No weights are bundled. The DVLT directory must contain `config.json` and `model.safetensors`; `load_patch_embed_weights=false` alone does not prove tensor completeness. See [the setup guide](GAUSS_SETUP_ZH.md) for the complete asset checklist.
 
 ### Run the Full Pipeline
 
@@ -220,7 +224,7 @@ python cli.py run-all --robot_type xarm7 --base_pullback 0.05 \
   --sam3_checkpoint /path/sam3.pt
 ```
 
-Available `--robot_type` values are: `panda`, `xarm7`, `arx_l5`, `piper`, `yam`, `fr3`, `ur5e`, `ur10e`, `kinova_gen3`, `sawyer`, `iiwa`, `jaco`, `viperx`, `widowx`, `aloha_agilex`, and `so_arm101`. SO-ARM101 uses the repository's official `new_calib` MuJoCo model and a 5-DOF position-priority IK configuration. Use a separate `--output_dir` for each morphology to avoid mixing different state dimensions. Output directories always keep their step numbers: `01_load/ ... 04_inpaint/ [05_depth/] 06_retarget/ 07_lerobot/ 08_demo/`. When depth is disabled, `05_depth/` is omitted and the later directory names remain unchanged.
+Available `--robot_type` values are: `panda`, `xarm7`, `arx_l5`, `piper`, `yam`, `fr3`, `ur5e`, `ur10e`, `kinova_gen3`, `sawyer`, `iiwa`, `jaco`, `viperx`, `widowx`, `aloha_agilex`, and `so_arm101`. SO-ARM101 uses the repository's official `new_calib` MuJoCo model and a 5-DOF position-priority IK configuration. Use a separate `--output_dir` for each morphology to avoid mixing different state dimensions. Output directories always keep their step numbers: `01_load/ ... 04_inpaint/ [05_depth/] [05_gauss/] 06_retarget/ 07_lerobot/ 08_demo/`. Optional depth directories are omitted when disabled; later directory names remain unchanged.
 
 In `depth-aware` mode, SO-ARM101 also estimates a static tabletop support plane from metric scene depth and constrains both base soles to that plane. If a reliable plane or camera intrinsics are unavailable, it reports the fallback and retains the previous hand-anchored height search. Other morphologies do not use this constraint.
 
@@ -277,6 +281,53 @@ python cli.py demo --zarr_dir <zarr> --mask_dir out03 --inpaint_dir out04 --ik_d
 ```bash
 python cli.py run-all --with_depth --robot_type panda --input_dir <egoverse> --output_dir ./out --episodes <ep>
 ```
+
+## Gaussian Scene Reconstruction with DVLT
+
+`gauss-recon` / `run-all --with_gauss` adds DVLT feed-forward reconstruction, metric scene depth, visualization and caching for retarget depth-aware compositing. **There is no gsplat trainer, Gaussian splatting renderer, or novel-view synthesis entry point.** Raw caches support offline analysis and future extensions.
+
+DVLT reads raw Zarr images, which may still contain hands; the inpainted background is used only to determine output size/cropping. Scale is fitted from world-frame hand keypoints, falling back to a trajectory-length ratio when unavailable or unsuccessful. Depth is unprojected through SLAM `obs_head_pose` and reprojected per frame. Raw DVLT poses/world points remain in the model coordinate frame; pose similarity registration is diagnostic. Static or near-static cameras and moving hands can produce degenerate scale, holes and incorrect geometry; this is not a guarantee of better depth than DA3 or usable novel views.
+
+```bash
+python cli.py gauss-recon --zarr_dir <zarr_root> --state_dir <out>/02_align \
+  --bg_dir <out>/04_inpaint --output_dir <out>/05_gauss \
+  --checkpoint <dvlt_ckpt> --episodes <ep> --sample_fps 1
+
+python cli.py run-all --input_dir <zarr_root> --output_dir <out> --episodes <ep> \
+  --sam3_checkpoint <sam3.pt> --robot_type panda \
+  --with_gauss --gauss_checkpoint <dvlt_ckpt> --scene_backend gauss
+```
+
+Except for `--check`, all four arguments `--zarr_dir`, `--state_dir`, `--bg_dir`, and `--output_dir` are required. Missing state/background files fall back to the Zarr frame count/source image size; this does not make the arguments optional or guarantee downstream frame/crop alignment.
+
+`--with_depth` and `--with_gauss` can both run, writing `05_depth/` and `05_gauss/`. Default `--scene_backend auto` prefers enabled Gauss, otherwise enabled DA3. Pair explicit `da3` with `--with_depth`, and explicit `gauss` with `--with_gauss`; the selector does not enable stages. The current implementation still falls back to enabled DA3 if Gauss is disabled, even with selector `gauss`. `--skip_depth` or `--depth_mode alpha` disables both stages and depth compositing.
+
+| Standalone option | run-all option | Default |
+|---|---|---|
+| `--checkpoint` | `--gauss_checkpoint` | Standalone `nvidia/dvlt`; pipeline `None`, provide a local directory explicitly |
+| `--dinov2_weights` | `--gauss_dinov2_weights` | `None`, only for missing patch embedding weights |
+| `--sample_fps` | `--gauss_sample_fps` | `2.0` (standalone example uses `1`) |
+| `--fy` | `--gauss_fy` | `None`, DVLT focal length scaled to output height |
+| `--conf_threshold` | `--gauss_conf_threshold` | `0.2` |
+| `--points_per_frame` | `--gauss_points_per_frame` | `8192` |
+| `--inference_steps` | `--gauss_inference_steps` | `None`, model choice |
+| `--device` | `--device` | `cuda:0` |
+
+Standalone also exposes `--img_size 504`, `--patch_size 14`, and `--hole_fill_iters 6`. The pipeline synchronizes focal length with retarget using `meta.json`'s `fy_recommended_retarget`, unless `--gauss_fy` is explicit. Keep focal lengths consistent when running steps separately.
+
+Each `<out>/05_gauss/<ep>/` contains `scene_depth.npz` (float16 `[N,H,W]`, `unit="meters"`, `backend="gauss"`, `K` and crop metadata), `<ep>_dvlt.pt` (raw DVLT/scale/alignment cache), `recon_vis.mp4` (original RGB versus depth), `depth_vis.mp4`, and `meta.json` (scale/coverage/focal lengths).
+
+```bash
+python cli.py gauss-recon --help
+python cli.py run-all --help
+python cli.py validate --help
+python cli.py gauss-recon --check --checkpoint <dvlt_ckpt>
+# Only when dataset, scene depth and IK artifacts exist
+python cli.py validate --dataset_dir <out>/07_lerobot \
+  --depth_dir <out>/05_gauss --depth_ik_dir <out>/06_retarget
+```
+
+`--check` checks imports, CUDA status and checkpoint filenames; it does not load model tensors or test inference, and missing files may only produce warnings. Depth validation is a sampled diagnostic with fixed rendering field of view and skips missing files; it does not certify Gauss geometry. Add `--skip_loader_check` only when appropriate and record that the LeRobot loader was skipped. See [the setup guide](GAUSS_SETUP_ZH.md) for installation, asset sources and NPZ field checks. This documentation maintenance does not regenerate deleted intermediates; historical end-to-end results are not a new smoke/e2e run.
 
 ## Environment Variables
 

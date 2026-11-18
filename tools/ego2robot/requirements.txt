@@ -5,11 +5,9 @@
 #   - The full environment includes many indirect dependencies such as
 #     nvidia-*-cu12 and torch. They are installed with torch/mujoco and are not
 #     listed individually here.
-#   - opencv-python-headless conflicts by package name with the opencv-python
-#     dependency used by ProPainter. They run in separate processes (inpaint.py
-#     calls ProPainter's inference_propainter.py via subprocess), so they do not
-#     import cv2 in the same process and need not coexist in one pip environment.
-#     See "Known Limitations and Migration Notes" in README.md.
+#   - opencv-python-headless and opencv-python both provide cv2. ProPainter's
+#     subprocess does not itself isolate Python dependencies; use compatible
+#     OpenCV/NumPy versions. See GAUSS_SETUP_ZH.md for runtime caveats.
 #   - On first use, robot_descriptions downloads mujoco_menagerie to
 #     MENAGERIE_DIR. For offline use, download the cache in advance and point
 #     EGO2ROBOT_MENAGERIE_DIR to it.
@@ -51,6 +49,20 @@ safetensors==0.8.0
 # - da3 backend: official Depth Anything 3 weights and package (not on PyPI;
 #   install separately):
 #   git clone https://github.com/ByteDance-Seed/depth-anything-3 && pip install -e .
+
+# DVLT/Gauss inference and Zarr shard decoding (Step 5g)
+# Install the DVLT source separately: pip install -e <dvlt_source> --no-deps
+# Prepare config.json + model.safetensors separately; DINOv2 is needed only
+# when patch embedding weights are missing. System ffmpeg is also required.
+# Existing pins above are NOT a verified combined SAM3/ProPainter/DVLT lock;
+# see GAUSS_SETUP_ZH.md before installing into a working environment.
+accelerate
+huggingface-hub
+hydra-core
+omegaconf
+open3d
+zstandard
+numcodecs
 
 # Panda dual-arm IK and MuJoCo rendering (retarget)
 mujoco==3.11.0

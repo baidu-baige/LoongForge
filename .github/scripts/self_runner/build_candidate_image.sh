@@ -158,7 +158,7 @@ if [[ "$release_mode" == false ]]; then
 fi
 
 redact_build_output() {
-  python3 "$script_dir/../../../ci/redact_ci_artifact.py" --stream >&2
+  python3 "$script_dir/../redact_ci_artifact.py" --stream >&2
 }
 
 if ! DOCKER_BUILDKIT=1 "$docker_bin" build "${build_args[@]}" \

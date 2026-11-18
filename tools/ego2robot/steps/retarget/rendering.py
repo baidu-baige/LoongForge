@@ -199,6 +199,10 @@ def load_scene_depth(path):
             "width": int(z["width"]) if "width" in z else depth.shape[2],
             "crop_top": int(z["crop_top"]) if "crop_top" in z else 0,
             "crop_bottom": int(z["crop_bottom"]) if "crop_bottom" in z else 0,
+            # "gauss" marks reconstituted metric depth (SLAM frame, no
+            # scale/shift alignment needed); absent ("da3") keeps the legacy
+            # monocular alignment path.
+            "backend": str(z["backend"]) if "backend" in z else "da3",
         }
     if depth.ndim != 3:
         raise ValueError(f"scene depth must have shape (N,H,W), got {depth.shape}")
