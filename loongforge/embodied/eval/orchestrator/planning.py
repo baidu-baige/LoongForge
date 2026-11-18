@@ -134,9 +134,15 @@ def plan_libero(config: Dict[str, Any], total_workers: int) -> List[Shard]:
                         "id": f"{suite}/task={task}/eps={offset}-{offset + count - 1}",
                         "overrides": {"benchmark": patch},
                         "expected": count,
+                        "_schedule_group": suite,
+                        "_estimated_cost": int(
+                            patch.get("max_steps")
+                            or benchmark.get("max_steps")
+                            or {"libero_10": 700}.get(suite, 400)
+                        ),
                     }
                 )
-    return shards
+    return _order_shards(shards, config)
 
 
 def plan_episode_indexed(config: Dict[str, Any], total_workers: int) -> List[Shard]:
@@ -192,6 +198,43 @@ def _interleave(per_task: List[List[Shard]]) -> List[Shard]:
     return out
 
 
+def _order_shards(shards: List[Shard], config: Dict[str, Any]) -> List[Shard]:
+    """Apply the benchmark-independent dispatch order to prepared shards."""
+    order = str(_benchmark(config).get("plan_order") or "task").strip().lower()
+    groups: Dict[str, List[Shard]] = {}
+    for shard in shards:
+        group = str(shard.get("_schedule_group") or shard["id"])
+        groups.setdefault(group, []).append(shard)
+    per_group = list(groups.values())
+    if order == "task":
+        ordered = [shard for group in per_group for shard in group]
+    elif order == "interleave":
+        ordered = _interleave(per_group)
+    elif order in ("lpt", "lpt_long"):
+        per_group.sort(
+            key=lambda group: -max(float(item.get("_estimated_cost", 0)) for item in group)
+        )
+        if order == "lpt":
+            ordered = _interleave(per_group)
+        else:
+            threshold = int(_benchmark(config).get("long_task_steps") or 0)
+            long_groups = [
+                group for group in per_group
+                if max(float(item.get("_estimated_cost", 0)) for item in group) >= threshold
+            ]
+            short_groups = [group for group in per_group if group not in long_groups]
+            ordered = _interleave(long_groups) + _interleave(short_groups)
+    else:
+        raise ValueError(
+            "benchmark.plan_order must be one of ['task', 'interleave', 'lpt', 'lpt_long'], "
+            f"got {order!r}"
+        )
+    for shard in ordered:
+        shard.pop("_schedule_group", None)
+        shard.pop("_estimated_cost", None)
+    return ordered
+
+
 def robotwin_tasks(config: Dict[str, Any]) -> List[str]:
     """Resolve the task list for a RoboTwin run.
 
@@ -243,6 +286,7 @@ def plan_robotwin(config: Dict[str, Any], total_workers: int) -> List[Shard]:
     # own residue class of the candidate seed space (start+i, stride=k) and writes
     # a part file; a merge step joins the parts afterwards.
     scan_shards = int(benchmark.get("offline_expert_check_scan_shards") or 1)
+    limits = _robotwin_step_limits(config)
     # k=1 is the non-sharded case of the same scheme: one shard, stride 1.
     if benchmark.get("offline_expert_check_scan"):
         per_task = []
@@ -263,6 +307,8 @@ def plan_robotwin(config: Dict[str, Any], total_workers: int) -> List[Shard]:
                             }
                         },
                         "expected": per_shard,
+                        "_schedule_group": task,
+                        "_estimated_cost": limits.get(task, 0),
                     }
                     for i in range(scan_shards)
                 ]
@@ -273,7 +319,6 @@ def plan_robotwin(config: Dict[str, Any], total_workers: int) -> List[Shard]:
         # tail short instead of paying it on every task.
         long_steps = int(benchmark.get("long_task_steps") or 0)
         long_chunk = int(benchmark.get("long_task_episodes_per_chunk") or 0)
-        limits = _robotwin_step_limits(config)
         per_task = []
         for task in tasks:
             chunk = chunk_override
@@ -308,45 +353,14 @@ def plan_robotwin(config: Dict[str, Any], total_workers: int) -> List[Shard]:
                             }
                         },
                         "expected": count,
+                        "_schedule_group": task,
+                        "_estimated_cost": limits.get(task, 0),
                     }
                     for seed, count in ranges
                 ]
             )
 
-    # Dispatch is a FIFO queue, so the order below decides which tasks a wave
-    # runs together. "task" (default) keeps the historical task-major order;
-    # "interleave" mixes tasks in every wave; "lpt" starts the longest tasks
-    # first (then interleaves) to shrink the makespan; "lpt_long" additionally
-    # keeps every shard of the long tasks ahead of all short work, which is what
-    # bounds the tail (see ``long_task_steps``).
-    order = str(benchmark.get("plan_order") or "task").strip().lower()
-    if order == "task":
-        return [shard for items in per_task for shard in items]
-    if order == "interleave":
-        return _interleave(per_task)
-    if order in ("lpt", "lpt_long"):
-        limits = _robotwin_step_limits(config)
-        long_steps = int(benchmark.get("long_task_steps") or 0)
-
-        def _is_long(items: List[Shard]) -> bool:
-            name = items[0]["overrides"]["benchmark"]["task_name"]
-            return long_steps > 0 and limits.get(name, 0) >= long_steps
-
-        # Longest task first, then round-robin so a wave still mixes tasks.
-        per_task.sort(key=lambda items: -limits.get(items[0]["overrides"]["benchmark"]["task_name"], 0))
-        # Each task's own shards run longest-first as well (same seed range, so
-        # order only affects scheduling, not coverage).
-        if order == "lpt":
-            return _interleave(per_task)
-        # "lpt_long": two round-robins -- long tasks first, everyone else after.
-        # Round-robin (not task-major) inside each group so a wave never loads a
-        # single GPU with several shards of the same heavy scene.
-        head = _interleave([items for items in per_task if _is_long(items)])
-        tail = _interleave([items for items in per_task if not _is_long(items)])
-        return head + tail
-    raise ValueError(
-        f"benchmark.plan_order must be one of ['task', 'interleave', 'lpt', 'lpt_long'], got {order!r}"
-    )
+    return _order_shards([shard for items in per_task for shard in items], config)
 
 
 def plan_calvin(config: Dict[str, Any], total_workers: int) -> List[Shard]:

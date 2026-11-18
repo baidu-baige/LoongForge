@@ -158,6 +158,28 @@ def test_plan_libero_applies_suite_overrides() -> None:
     assert "max_steps" not in by_suite["libero_goal"]  # inherited from the base config
 
 
+def test_plan_libero_lpt_fronts_long_suite() -> None:
+    """The shared orderer uses suite cost metadata for LIBERO too."""
+    config: dict = {
+        "benchmark": {
+            "name": "libero",
+            "suites": ["libero_spatial", "libero_10", "libero_goal"],
+            "task_ids": [0],
+            "episodes_per_task": 2,
+            "episodes_per_chunk": 1,
+            "plan_order": "lpt",
+            "suite_overrides": {
+                "libero_spatial": {"max_steps": 400},
+                "libero_10": {"max_steps": 700},
+                "libero_goal": {"max_steps": 400},
+            },
+        }
+    }
+    shards = plan_libero(config, 1)
+    assert shards[0]["overrides"]["benchmark"]["suite"] == "libero_10"
+    assert shards[-1]["overrides"]["benchmark"]["suite"] != "libero_10"
+
+
 def test_plan_episode_indexed_is_one_episode_per_shard() -> None:
     """SimplerEnv / ManiSkill run a single episode per invocation."""
     config: dict = {
