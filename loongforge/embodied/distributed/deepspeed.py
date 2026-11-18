@@ -16,12 +16,31 @@ from copy import deepcopy
 from pathlib import Path
 
 import torch
+import torch.distributed as dist
 from packaging.version import Version
 
 logger = logging.getLogger(__name__)
 
 _DEEPSPEED_META_FILE = "resume_meta.json"
 _DEEPSPEED_STATE_DIR = "deepspeed"
+
+
+def resolve_deepspeed_export_format(training_args) -> str | None:
+    """Resolve the optional final single-file export format.
+
+    DeepSpeed always owns its resumable checkpoint layout.  This separate
+    export setting controls only the model-only artifact written beside that
+    layout after training.  ``auto`` deliberately follows the existing
+    ``--save-format`` choice so current launchers get a predictable filename.
+    """
+    requested = training_args.deepspeed_export_format
+    if requested == "auto":
+        requested = training_args.save_format
+    if requested == "none" or requested == "dcp":
+        return None
+    if requested not in {"safetensors", "pt"}:
+        raise ValueError(f"Unsupported DeepSpeed export format: {requested}")
+    return requested
 
 
 def is_deepspeed_engine(model) -> bool:
@@ -190,6 +209,99 @@ def save_deepspeed_checkpoint(
         os.replace(temp_meta_path, meta_path)
     ctx.barrier()
     return path
+
+
+def export_deepspeed_checkpoint(
+    checkpoint_path: str,
+    export_format: str,
+    ctx,
+) -> str:
+    """Export a DeepSpeed checkpoint as one model-only file on rank 0.
+
+    The DeepSpeed optimizer/model shards remain available for exact resume.
+    The exported state dict is consolidated through DeepSpeed's official
+    ZeRO-2/3 converter and contains FP32 model weights, independent of the
+    engine's BF16/FP16 compute dtype.
+    """
+    if export_format not in {"safetensors", "pt"}:
+        raise ValueError(f"Unsupported DeepSpeed export format: {export_format}")
+
+    checkpoint = Path(checkpoint_path)
+    state_dir = checkpoint / _DEEPSPEED_STATE_DIR
+    meta_path = checkpoint / _DEEPSPEED_META_FILE
+    output_name = "model.safetensors" if export_format == "safetensors" else "pytorch_model.pt"
+    output_path = checkpoint / output_name
+    temporary_path = checkpoint / f".{output_name}.tmp"
+    local_ok = True
+
+    if ctx.is_main:
+        try:
+            with meta_path.open(encoding="utf-8") as handle:
+                meta = json.load(handle)
+            tag = f"global_step{int(meta['completed_steps'])}"
+
+            from deepspeed.utils.zero_to_fp32 import (
+                get_fp32_state_dict_from_zero_checkpoint,
+            )
+
+            state_dict = get_fp32_state_dict_from_zero_checkpoint(
+                str(state_dir), tag=tag
+            )
+            if not isinstance(state_dict, dict) or not state_dict:
+                raise RuntimeError(
+                    f"DeepSpeed converter returned no model weights for {state_dir}/{tag}"
+                )
+            clean_state = {}
+            for key, value in state_dict.items():
+                if not isinstance(value, torch.Tensor):
+                    raise TypeError(
+                        f"DeepSpeed converter returned a non-tensor for model key {key!r}"
+                    )
+                clean_state[key] = value.contiguous()
+
+            if export_format == "safetensors":
+                from safetensors.torch import save_file
+
+                save_file(
+                    clean_state,
+                    str(temporary_path),
+                    metadata={
+                        "source": "deepspeed",
+                        "completed_steps": str(meta["completed_steps"]),
+                    },
+                )
+            else:
+                torch.save(clean_state, temporary_path)
+            os.replace(temporary_path, output_path)
+            logger.info(
+                "Exported consolidated DeepSpeed model (%s): %s",
+                export_format,
+                output_path,
+            )
+        except Exception:
+            local_ok = False
+            logger.exception(
+                "Failed to export consolidated DeepSpeed model from %s",
+                checkpoint,
+            )
+            try:
+                temporary_path.unlink()
+            except FileNotFoundError:
+                pass
+
+    # Rank 0 performs the CPU-heavy merge. Every rank still participates so a
+    # failed export cannot leave the process group waiting forever.
+    status = torch.tensor(
+        [1 if local_ok else 0], dtype=torch.int, device=ctx.device
+    )
+    if ctx.is_distributed:
+        dist.broadcast(status, src=0)
+    ctx.barrier()
+    if int(status.item()) != 1:
+        raise RuntimeError(
+            f"Consolidated DeepSpeed export failed for {checkpoint}"
+        )
+    return str(output_path)
 
 
 def resume_deepspeed_checkpoint(engine, checkpoint_path: str, ctx):

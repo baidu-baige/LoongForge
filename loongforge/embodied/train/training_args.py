@@ -894,6 +894,15 @@ class _CheckpointArgs:
                     "distributed checkpoint (dcp).",
         },
     )
+    deepspeed_export_format: str = field(
+        default="auto",
+        metadata={
+            "choices": ["auto", "none", "safetensors", "pt"],
+            "help": "Final single-file model export for DeepSpeed checkpoints: "
+                    "auto follows --save-format (dcp disables export), none "
+                    "disables export, or choose safetensors/pt explicitly.",
+        },
+    )
     save_training_state: bool = field(
         default=True,
         metadata={

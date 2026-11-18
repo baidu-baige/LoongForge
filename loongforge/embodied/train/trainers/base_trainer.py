@@ -875,8 +875,37 @@ class BaseTrainer(ABC):
         # Final checkpoint — skip when checkpoint saves are disabled or when
         # the last loop iteration already saved at this exact step.
         save_interval = self.training_args.save_interval
+        final_checkpoint_path = None
         if save_interval and self.completed_steps % save_interval != 0:
-            self._save_checkpoint()
+            final_checkpoint_path = self._save_checkpoint()
+
+        if self.training_args.distributed_strategy == "deepspeed":
+            from loongforge.embodied.distributed.deepspeed import (
+                export_deepspeed_checkpoint,
+                resolve_deepspeed_export_format,
+            )
+
+            export_format = resolve_deepspeed_export_format(self.training_args)
+            if export_format is not None:
+                # A zero save interval disables periodic checkpoints, but a
+                # requested final export still needs one complete DeepSpeed
+                # shard set as its source.
+                if final_checkpoint_path is None:
+                    candidate = os.path.join(
+                        self.checkpoint_dir, f"steps_{self.completed_steps}"
+                    )
+                    if not (
+                        os.path.isfile(os.path.join(candidate, "resume_meta.json"))
+                        and os.path.isdir(os.path.join(candidate, "deepspeed"))
+                    ):
+                        final_checkpoint_path = self._save_checkpoint()
+                    else:
+                        final_checkpoint_path = candidate
+                export_deepspeed_checkpoint(
+                    final_checkpoint_path,
+                    export_format,
+                    self.ctx,
+                )
 
         # Wait for any in-flight async DCP save before tearing down the
         # process group / NCCL — otherwise the background writer may race

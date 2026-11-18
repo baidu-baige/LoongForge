@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import math
 import os
 from pathlib import Path
 from typing import Any
@@ -493,26 +492,6 @@ class _VPP2JointModel(VPP2):
     @classmethod
     def from_pretrained(cls, cfg):
         return VPP2Model.from_pretrained.__func__(cls, cfg)
-
-    def build_lr_scheduler(self, optimizer, training_args):
-        """Keep the released joint recipe's 80k cosine decay and 100k tail.
-
-        The two parameter groups use the same multiplier, preserving their LR
-        ratio. Stopping early must not shorten either decay phase.
-        """
-        warmup = training_args.lr_warmup_iters
-
-        def lr_multiplier(step):
-            step = max(int(step), 0)
-            if step > 80000:
-                progress = min(max((step - 80000) / 20000, 0.0), 1.0)
-                return 0.001 + (0.01 - 0.001) * (1 + math.cos(math.pi * progress)) / 2
-            if warmup > 0 and step < warmup:
-                return float(step + 1) / float(warmup)
-            progress = (step - warmup) / (80000 - warmup)
-            return 0.01 + (1.0 - 0.01) * 0.5 * (1.0 + math.cos(math.pi * progress))
-
-        return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_multiplier)
 
     def set_frozen_modules_to_eval_mode(self):
         for module in (self.vae, self.clip_encoder, self.text_encoder):
