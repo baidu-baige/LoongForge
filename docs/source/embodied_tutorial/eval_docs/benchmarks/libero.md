@@ -98,3 +98,122 @@ Caveat on the GR00T-N1.6 LIBERO numbers: the shipped configs do not set
 `server.chunk_execute_steps`, so the whole 16-step chunk is executed open-loop,
 whereas the official GR00T LIBERO client uses `--n_action_steps 8`. The numbers
 above are therefore not strictly the official protocol.
+
+## Parallel evaluation
+
+The parallel entry point runs one inference service per GPU plus `N` sim workers per GPU
+behind a global queue. Add `servers` and `pools` to the YAML; the LIBERO client is
+unchanged. Background and the shared configuration reference:
+[Parallel evaluation](../parallel_eval.md).
+
+```bash
+examples/embodied/pi05/eval/run_libero_eval_parallel.sh
+```
+
+Start from `configs/libero/libero_pi05_parallel.yaml`. LIBERO-specific notes:
+
+- LIBERO is a **CPU-sim family**, so its worker pool is `pools.cpu_sim.n_sims_per_server`
+  (a `pools.gpu_sim` block is ignored and `N` falls back to 1 — the coordinator warns).
+- `benchmark.return_action_chunk` defaults to `true` on this branch: the client owns the
+  action chunk, which needs one request per chunk instead of one per environment step.
+  It was validated against the legacy server-cache path over 80 episodes (no success
+  flips, 79/80 identical step counts, ~9.8× fewer requests). Set
+  `benchmark.return_action_chunk: false` in the YAML to restore the per-step path: the
+  `--no-return-action-chunk` flag only exists on the single-process runner, and the
+  parallel entry point accepts `--config` only.
+- `benchmark.env_seed_mode: per_task` binds a scene to "seed + reset count in this
+  process", so a task must stay in one worker. Episode-level sharding under `per_task`
+  requires scene snapshots (`benchmark.scene_snapshot_dir`); otherwise keep the default
+  `per_episode`.
+- `server.chunk_execute_steps` selects how many actions of a chunk are executed before
+  re-planning (the reference runs use 10).
+
+## Scene snapshots
+
+Under `per_task` seeding the scene an episode sees depends on how many resets already ran
+in that process, so one task cannot be split across workers. A scene snapshot is the RNG
+state captured just before each reset; replaying it lets any episode run in any worker
+again. Generate them once per `(suite, seed, episodes_per_task)` and point
+`benchmark.scene_snapshot_dir` at the directory.
+
+```bash
+# one task
+python -m loongforge.embodied.eval.orchestrator.scene_snapshots \
+    --suite libero_10 --task 3 --seed 7 --episodes 50 --out /path/to/snapshots
+
+# every task of one suite, 10 at a time
+python -m loongforge.embodied.eval.orchestrator.scene_snapshots \
+    --suite libero_10 --seed 7 --episodes 50 --out /path/to/snapshots --jobs 10
+
+# every suite in one directory (each task is an independent process)
+python -m loongforge.embodied.eval.orchestrator.scene_snapshots \
+    --suites libero_10,libero_object,libero_goal,libero_spatial \
+    --seed 7 --episodes 50 --out /path/to/snapshots --jobs 40
+```
+
+Cost and constraints:
+
+- ~90–105 s per task (create the env + `episodes` resets + write ~300 KB). One suite of
+  10 tasks is ~15 min serially; 40 tasks is ~1 h serially and **~4 min at `--jobs 40`** on a
+  128-core machine (measured: 40 tasks x 50 snapshots in 245 s). The work is pure CPU and the tasks are independent.
+- **All suites share one directory**: file names carry the suite
+  (`{suite}__task{k}__seed{seed}.pkl`), so a four-suite parallel run can point
+  `scene_snapshot_dir` at the parent directory.
+- `--seed` must equal the run's `run.seed` (the template uses `7`): under `per_task`
+  seeding every episode of a task reuses that one seed, and the snapshots are looked up
+  by file name, so a mismatch is a missing file (the runner now says so).
+- `--episodes` must be **>= `benchmark.episodes_per_task`**, otherwise the runner raises
+  `scene snapshot ... has N states but episode_idx=...`. Generation reads every file back
+  and exits non-zero on a length mismatch, so the failure surfaces before the run.
+- Files carry `SNAPSHOT_VERSION`; a mismatch is rejected at load time. Regenerate after
+  upgrading if the format changes, and after changing the benchmark assets or reset logic
+  (snapshots are tied to the version that produced them).
+
+The generator prints one `[i/N]` line per task plus a final `written / failed` summary; a
+failed task does not stop the others and makes the exit code non-zero.
+
+## Calibration results
+
+Reference environment: 8×A800-80GB, one inference service per GPU, FastWAM epilogue
+(`chunk_execute_steps=10`), 512 concurrent clients at `N=64`. These numbers come from
+`calibrate.py` (steady-state throughput on a fixed episode mix), not from a full run:
+
+| N (sims per service) | 16 | 24 | 48 | 80 |
+|---|---|---|---|---|
+| steady capacity (eps/min) | 70.7 | 77.8 | 81.8 | 81.9 |
+
+The curve plateaus around `N≈48` on this machine: beyond that, extra sims mostly add
+memory and CPU contention. Capacity is a property of the model, the benchmark and the
+machine — re-measure with `calibrate.py`, and note that the server-side batcher changes
+the request cadence and therefore the knee. Steady-state capacity is not directly
+comparable with the wall-clock figures below, which also include ramp-up and drain.
+
+## Measured speedup
+
+Full-suite comparison against the official evaluation script (FastWAM, 2000 episodes,
+8 GPUs, `per_task` + scene snapshots, `chunk_execute_steps=10`, `episodes_per_chunk=4`,
+`skip_intra_chunk_obs=true`, batching on, `N=24` → 192 slots):
+
+| Measurement | Wall | Speedup vs official |
+|---|---|---|
+| Official script (8-card equivalent) | 173.7 min | 1.0× |
+| Parallel evaluation, worker phase | 13.2 min (791 s) | 13.2× |
+| Parallel evaluation, end-to-end | **16.3 min** (979 s) | **10.6×** |
+
+End-to-end is the number to quote: 979 s from coordinator start to the last record, of
+which 791 s are the worker phase and 187 s are loading the eight services and waiting for
+health. Fixed start-up cost matters in proportion to the run: the same ~190 s is 19% of a
+16 min run but ~6% of a 1.8 h RoboTwin run, so short runs are visibly depressed by I/O,
+model loading and process start-up while full-scale runs are barely affected. Compare
+configurations at the same scale, and prefer end-to-end when comparing across benchmarks.
+
+The render skip is the largest lever in that pair of runs, but note the comparison is not
+controlled: turning it off also changed `N` from 24 to 48, so the two effects are not
+separated here. Re-measure at fixed `N` before quoting the split.
+
+`episodes_per_chunk` matters too, but not monotonically — with the render skip on,
+`episodes_per_chunk=8` takes 14.6 min (877 s) versus 13.2 min at `4`; without the skip,
+`episodes_per_chunk=1` takes 43.6 min. Numbers are for this checkpoint and protocol; the
+aggregate success rate is aligned within binomial noise (96.80% vs 97.00% reference,
+1,936/2,000 vs 1,940/2,000).
+

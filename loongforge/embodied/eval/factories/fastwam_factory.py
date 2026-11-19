@@ -157,7 +157,7 @@ class FastWAMModelFactory:
 
         def _predict_action_wrapper(images, instructions, state=None, dataset_stats=None, **kwargs):
             result = _orig_predict_action(
-                images, instructions, state=state, dataset_stats=dataset_stats
+                images, instructions, state=state, dataset_stats=dataset_stats, **kwargs
             )
             # predict_action returns [B, H, 7]; index 0 is batch, not horizon.
             if _chunk_execute_steps > 0 and getattr(result, "ndim", 0) >= 2:
@@ -183,6 +183,10 @@ class FastWAMModelFactory:
             "num_camera_views": 3 if model_cfg.camera_layout == "robotwin_t" else 2,
             "state_dim": model_cfg.proprio_dim,
             "chunk_execute_steps": _chunk_execute_steps if _chunk_execute_steps > 0 else None,
+            # The first-frame path is batch-general (per-row seeds included);
+            # the joint/IDM paths still require batch=1.
+            "supports_batching": model_cfg.action_infer_mode == "first_frame",
+            "noise_seed": model_cfg.noise_seed,
             "dataset_statistics_path": server_args.dataset_statistics_path,
             "tokenizer_path": server_args.tokenizer_path or os.environ.get("TOKENIZER_PATH", ""),
         }

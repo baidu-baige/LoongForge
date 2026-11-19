@@ -20,25 +20,13 @@ from loongforge.embodied.eval.orchestrator.runners import libero_runner
 from loongforge.embodied.eval.orchestrator.runners._common import guard_output_dir
 from loongforge.embodied.eval.metrics import repro_metadata
 from loongforge.embodied.eval.orchestrator.config import apply_config, expand_sweep, load_config
+from loongforge.embodied.eval.orchestrator.planning import benchmark_family as _benchmark_family
 from loongforge.embodied.eval.orchestrator.server_manager import (
     ManagedServer,
     apply_runtime_env,
     build_argparser as build_server_argparser,
     ensure_libero_config,
 )
-
-
-def _benchmark_family(config: Dict[str, Any]) -> str:
-    """Run _benchmark_family."""
-    benchmark = config.get("benchmark") or {}
-    if not isinstance(benchmark, dict):
-        raise ValueError("benchmark section must be a mapping")
-    name = str(benchmark.get("name") or "").lower()
-    if name == "libero" or name.startswith("libero_"):
-        return "libero"
-    if name in {"calvin", "simplerenv", "robotwin", "maniskill"}:
-        return name
-    raise ValueError(f"Unsupported benchmark.name: {benchmark.get('name')!r}")
 
 
 def _timestamped_run_config(config: Dict[str, Any]) -> Dict[str, Any]:
@@ -237,6 +225,16 @@ def _run_robotwin_once(config: Dict[str, Any], config_path: str = "") -> Dict[st
     if not args.task_name:
         raise ValueError("task name must be set by benchmark.task_name in YAML")
 
+    if bool(server_cfg.get("disabled")):
+        # Offline expert-check scan: the worker never builds a client, so no
+        # policy server (and no model load) is needed at all.
+        returncode = robotwin_runner.run_evaluation(args)
+        result = {"benchmark": "robotwin", "returncode": int(returncode), "output_dir": args.output_dir}
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        if returncode != 0:
+            raise SystemExit(returncode)
+        return result
+
     server = ManagedServer(_server_args(config, config_path))
     try:
         server.start()
@@ -299,6 +297,29 @@ def main() -> None:
     args = build_argparser().parse_args()
     config_path = str(pathlib.Path(args.config).resolve())
     config = load_config(config_path)
+    # A config carrying ``coordinator`` / ``servers`` / ``pools`` is a multi-server
+    # run -- one command starts the servers, the workers, and the aggregation.
+    # Test key presence, not truthiness: ``coordinator: {}`` (placement taken from
+    # ``servers``/``pools``) is a valid coordinated config.
+    if any(key in config for key in ("coordinator", "servers", "pools")):
+        from loongforge.embodied.eval.orchestrator.coordinator import run as run_coordinated
+
+        result = run_coordinated(config, config_path)
+        bench_cfg = config.get("benchmark")
+        if isinstance(bench_cfg, dict) and bench_cfg.get("offline_expert_check_scan"):
+            # Sharded offline expert-check scans leave <task>.part<i>.pkl files;
+            # join them into the <task>.pkl the consume path reads.
+            from loongforge.embodied.eval.orchestrator.runners import robotwin_runner
+
+            robotwin_runner.merge_offline_expert_check_scan(config)
+        print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+        incomplete = not (result.get("validation") or {}).get("ok", True)
+        if incomplete or result.get("servers_given_up"):
+            # Coverage still incomplete after the repair rounds, or a server that could
+            # not be brought back: signal it so a pipeline does not read the partial
+            # score as a success.
+            sys.exit(2)
+        return
     results = []
     for sweep_config in expand_sweep(config):
         effective = _timestamped_run_config(sweep_config)

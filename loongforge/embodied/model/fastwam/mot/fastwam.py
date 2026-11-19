@@ -289,23 +289,28 @@ class FastWAM(torch.nn.Module):
         tile_size=(30, 52),
         tile_stride=(15, 26),
     ):
-        """Encode a single conditioning image into VAE latent space."""
+        """Encode one or more conditioning images into VAE latent space."""
         if input_image.ndim == 3:
             input_image = input_image.unsqueeze(0)
-        if input_image.ndim != 4 or input_image.shape[0] != 1 or input_image.shape[1] != 3:
+        if input_image.ndim != 4 or input_image.shape[1] != 3:
             raise ValueError(
-                f"`input_image` must have shape [1,3,H,W] or [3,H,W], got {tuple(input_image.shape)}"
+                f"`input_image` must have shape [B,3,H,W] or [3,H,W], got {tuple(input_image.shape)}"
             )
-        image = input_image.to(device=self.device)[0].unsqueeze(1)
+        images = [
+            input_image[index].to(device=self.device).unsqueeze(1)
+            for index in range(input_image.shape[0])
+        ]
         z = self.vae.encode(
-            [image],
+            images,
             device=self.device,
             tiled=tiled,
             tile_size=tile_size,
             tile_stride=tile_stride,
         )
-        if isinstance(z, list):
-            z = z[0].unsqueeze(0)
+        if isinstance(z, (list, tuple)):
+            z = torch.stack(
+                [item if item.ndim == 5 else item.unsqueeze(0) for item in z], dim=0
+            )
         return z
 
     def _decode_latents(self, latents, tiled=False, tile_size=(30, 52), tile_stride=(15, 26)):
@@ -988,11 +993,16 @@ class FastWAM(torch.nn.Module):
         text_cfg_scale: float = 1.0,
         num_inference_steps: int = 20,
         sigma_shift: Optional[float] = None,
-        seed: Optional[int] = None,
+        seed: Optional[Union[int, Sequence[int]]] = None,
         rand_device: str = "cpu",
         tiled: bool = False,
     ) -> dict[str, Any]:
-        """Infer action tokens from an image and prompt/context."""
+        """Infer action tokens from an image and prompt/context.
+
+        ``seed`` may be an int (broadcast to every batch row) or a sequence of
+        per-row seeds. Per-row seeds make batch=K bit-identical to K batch=1
+        calls, which is the T-06 correctness contract for batching.
+        """
         self.eval()
         if str(getattr(self.video_expert, "video_attention_mask_mode", "")) != "first_frame_causal":
             raise ValueError(
@@ -1001,10 +1011,11 @@ class FastWAM(torch.nn.Module):
 
         if input_image.ndim == 3:
             input_image = input_image.unsqueeze(0)
-        if input_image.ndim != 4 or input_image.shape[0] != 1 or input_image.shape[1] != 3:
+        if input_image.ndim != 4 or input_image.shape[1] != 3:
             raise ValueError(
-                f"`input_image` must have shape [1,3,H,W] or [3,H,W], got {tuple(input_image.shape)}"
+                f"`input_image` must have shape [B,3,H,W] or [3,H,W], got {tuple(input_image.shape)}"
             )
+        batch_size = int(input_image.shape[0])
         _, _, height, width = input_image.shape
         if height % 16 != 0 or width % 16 != 0:
             raise ValueError(
@@ -1015,20 +1026,21 @@ class FastWAM(torch.nn.Module):
                 raise ValueError("`proprio` was provided but `proprio_dim=None` so `proprio_encoder` is disabled.")
             if proprio.ndim == 1:
                 proprio = proprio.unsqueeze(0)
-            elif proprio.ndim == 2 and proprio.shape[0] == 1:
-                pass
-            else:
-                raise ValueError(f"`proprio` must be [D] or [1,D], got shape {tuple(proprio.shape)}")
+            if proprio.ndim != 2:
+                raise ValueError(f"`proprio` must be [D] or [B,D], got shape {tuple(proprio.shape)}")
             if proprio.shape[1] != self.proprio_dim:
                 raise ValueError(f"`proprio` last dim must be {self.proprio_dim}, got {proprio.shape[1]}")
+            if proprio.shape[0] != batch_size:
+                raise ValueError(
+                    f"`proprio` batch {proprio.shape[0]} must match input_image batch {batch_size}"
+                )
             proprio = proprio.to(device=self.device, dtype=self.torch_dtype)
 
-        generator = None if seed is None else torch.Generator(device=rand_device).manual_seed(seed)
-        latents_action = torch.randn(
-            (1, action_horizon, self.action_expert.action_dim),
-            generator=generator,
-            device=rand_device,
-            dtype=torch.float32,
+        latents_action = self._action_noise(
+            seed=seed,
+            batch_size=batch_size,
+            action_horizon=action_horizon,
+            rand_device=rand_device,
         ).to(device=self.device, dtype=self.torch_dtype)
 
         input_image = input_image.to(device=self.device, dtype=self.torch_dtype)
@@ -1043,6 +1055,13 @@ class FastWAM(torch.nn.Module):
             raise ValueError("Either `prompt` or both `context/context_mask` must be provided.")
 
         if use_prompt:
+            if isinstance(prompt, str):
+                if batch_size > 1:
+                    prompt = [prompt] * batch_size
+            elif len(prompt) != batch_size:
+                raise ValueError(
+                    f"`prompt` has {len(prompt)} entries but input_image batch is {batch_size}"
+                )
             context, context_mask = self.encode_prompt(prompt)
         else:
             if context is None or context_mask is None:
@@ -1055,6 +1074,10 @@ class FastWAM(torch.nn.Module):
                 raise ValueError(
                     "`context/context_mask` must be [B,L,D]/[B,L], got "
                     f"{tuple(context.shape)} and {tuple(context_mask.shape)}"
+                )
+            if context.shape[0] != batch_size:
+                raise ValueError(
+                    f"`context` batch {context.shape[0]} must match input_image batch {batch_size}"
                 )
             context = context.to(device=self.device, dtype=self.torch_dtype, non_blocking=True)
             context_mask = context_mask.to(device=self.device, dtype=torch.bool, non_blocking=True)
@@ -1119,8 +1142,48 @@ class FastWAM(torch.nn.Module):
             latents_action = self.infer_action_scheduler.step(pred_action, step_delta_action, latents_action)
 
         return {
-            "action": latents_action[0].detach().to(device="cpu", dtype=torch.float32),
+            "action": latents_action.detach().to(device="cpu", dtype=torch.float32),
         }
+
+    def _action_noise(
+        self,
+        *,
+        seed: Optional[Union[int, Sequence[int]]],
+        batch_size: int,
+        action_horizon: int,
+        rand_device: str,
+    ) -> torch.Tensor:
+        """Build initial action noise, optionally with one seed per batch row.
+
+        A sequence gives row ``i`` its own generator, so batch=K with seeds
+        ``[s0..s_{K-1}]`` produces exactly the same noise rows as K separate
+        batch=1 calls. An int is broadcast to every row.
+        """
+        shape = (1, action_horizon, self.action_expert.action_dim)
+        if seed is None:
+            return torch.randn(
+                (batch_size, action_horizon, self.action_expert.action_dim),
+                device=rand_device,
+                dtype=torch.float32,
+            )
+        if isinstance(seed, (list, tuple)):
+            seeds = list(seed)
+            if len(seeds) != batch_size:
+                raise ValueError(
+                    f"per-row seed count {len(seeds)} must match batch size {batch_size}"
+                )
+        else:
+            seeds = [seed] * batch_size
+        rows = [
+            torch.randn(
+                shape,
+                generator=torch.Generator(device=rand_device).manual_seed(int(row_seed)),
+                device=rand_device,
+                dtype=torch.float32,
+            )
+            for row_seed in seeds
+        ]
+        return torch.cat(rows, dim=0)
 
     @torch.no_grad()
     def infer(

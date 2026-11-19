@@ -32,6 +32,7 @@ Every benchmark drives the same four-stage chain: `Adapter.obs_to_canonical` →
 | [Model integration](eval_docs/model_integration.md) | code contributors | New-model integration checklist + `predict_action` contract + development notes |
 | [Evaluation protocol](eval_docs/eval_protocol.md) | code contributors | Architecture, components, data protocol, PolicyClient interface |
 | [Benchmark environments](eval_docs/benchmark_envs.md) | eval users | Verified per-benchmark env version records (install per the official benchmark homepages) |
+| [Parallel evaluation](eval_docs/parallel_eval.md) | eval users | Multi-GPU orchestration: config reference, chunk execution, N calibration, result-alignment caveats |
 
 ## Quick Start
 
@@ -48,6 +49,8 @@ The example below runs LIBERO with pi05:
     ```
 
 The LIBERO simulator runs in the benchmark environment; the policy server is launched from the YAML `server.python` field, pointing at the LoongForge environment. Other models/benchmarks: the [user guide](eval_docs/user_guide.md) and the [benchmark pages](eval_docs/benchmarks/index.md).
+
+To run several sim workers per GPU behind a global queue, add `servers:` and `pools:` to the YAML and use the parallel entry (`examples/embodied/pi05/eval/run_*_eval_parallel.sh`). Configuration, chunk switches, N calibration and result-alignment caveats: [Parallel evaluation](eval_docs/parallel_eval.md).
 
 ## Supported Matrix
 
@@ -71,6 +74,7 @@ LoongForge model servers share a `predict_action(images, instructions, state=Non
 :hidden:
 
 eval_docs/user_guide
+eval_docs/parallel_eval
 eval_docs/model_integration
 eval_docs/eval_protocol
 eval_docs/benchmark_envs

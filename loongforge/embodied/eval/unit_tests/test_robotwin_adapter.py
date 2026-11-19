@@ -381,3 +381,918 @@ def test_build_robotwin_records_fallback_without_log() -> None:
     assert records[0]["success"] == 0
     assert records[0]["success_rate"] == pytest.approx(0.0)
     assert records[0]["seed"] == 100001
+
+
+def test_worker_script_skips_unstable_seeds(tmp_path: pathlib.Path) -> None:
+    """The worker copy handles UnStableError in the eval loop, not just expert_check."""
+    from loongforge.embodied.eval.orchestrator.runners import robotwin_runner
+
+    robotwin = tmp_path / "RoboTwin"
+    (robotwin / "script").mkdir(parents=True)
+    source = (
+        "import sys\n"
+        'sys.path.append("./description/utils")\n'
+        "def eval_policy():\n"
+        "    while succ_seed < test_num:\n"
+        "        TASK_ENV.setup_demo(now_ep_num=now_id, seed=now_seed, is_test=True, **args)\n"
+        "        TASK_ENV.set_instruction(instruction=instruction)\n"
+        "        now_seed += 1\n"
+    )
+    (robotwin / "script" / "eval_policy.py").write_text(source, encoding="utf-8")
+
+    args = argparse.Namespace(
+        worker_local_files=True,
+        robotwin_path=str(robotwin),
+        output_dir=str(tmp_path / "out"),
+        ckpt_setting="test",
+        step_limit_override=None,
+        start_seed_override=None,
+        test_num_override=None,
+        disable_expert_check=False,
+        disable_eval_video_log=False,
+        seed_stride=8,
+    )
+    script = robotwin_runner._worker_eval_script(args)
+    text = script.read_text(encoding="utf-8")
+    assert "except UnStableError" in text
+    assert "succ_seed -= 1" in text  # undo the pre-setup increment
+    # A skip replaces only its slot, one full round later; the rest keep st_seed + j.
+    assert "now_seed = st_seed + succ_seed + _vla_round * 8" in text
+    assert "            _vla_round += 1\n" in text
+    assert "        now_seed += 1\n" in text  # loop tail untouched (overridden at the head)
+    assert "continue" in text
+
+
+# Same branch structure as the official eval loop: three skip branches and a
+# loop-tail advance, plus a policy-phase setup_demo for the UnStableError patch.
+_SLOT_SEED_LOOP = (
+    "import sys\n"
+    'sys.path.append("./description/utils")\n'
+    "class UnStableError(Exception):\n"
+    "    pass\n"
+    "def eval_policy(TASK_ENV, st_seed, test_num, args, expert_check=True):\n"
+    "    now_id = 0\n"
+    "    succ_seed = 0\n"
+    "    suc_test_seed_list = []\n"
+    "    now_seed = st_seed\n"
+    "    while succ_seed < test_num:\n"
+    '        render_freq = args["render_freq"]\n'
+    "        if expert_check:\n"
+    "            try:\n"
+    "                TASK_ENV.setup_demo(now_ep_num=now_id, seed=now_seed, is_test=True, **args)\n"
+    "            except UnStableError as e:\n"
+    "                now_seed += 1\n"
+    '                args["render_freq"] = render_freq\n'
+    "                continue\n"
+    "            except Exception as e:\n"
+    "                now_seed += 1\n"
+    '                args["render_freq"] = render_freq\n'
+    '                print("error occurs !")\n'
+    "                continue\n"
+    "        if (not expert_check) or TASK_ENV.check_success():\n"
+    "            succ_seed += 1\n"
+    "            suc_test_seed_list.append(now_seed)\n"
+    "        else:\n"
+    "            now_seed += 1\n"
+    '            args["render_freq"] = render_freq\n'
+    "            continue\n"
+    "\n"
+    "        TASK_ENV.setup_demo(now_ep_num=now_id, seed=now_seed, is_test=True, **args)\n"
+    "        TASK_ENV.ran.append(now_seed)\n"
+    "        now_seed += 1\n"
+    "    return now_seed, 0\n"
+)
+
+
+class _SlotSeedEnv:
+    """Fake TASK_ENV: raises for unstable seeds, the expert fails on ``unsolved``."""
+
+    def __init__(self, unstable: set, unsolved: set) -> None:
+        self.unstable, self.unsolved, self.ran, self._seed = unstable, unsolved, [], None
+
+    def setup_demo(self, seed, **_):
+        self._seed = seed
+        if seed in self.unstable:
+            raise _SlotSeedEnv.Unstable
+
+    def check_success(self):
+        return self._seed not in self.unsolved
+
+    def close_env(self):
+        pass
+
+
+@pytest.mark.parametrize("expert_check", [True, False])
+def test_online_shards_keep_official_seeds_and_replace_only_skipped_slots(
+    tmp_path: pathlib.Path, expert_check: bool
+) -> None:
+    """Sharded online walk: slot j runs st_seed + j, a skip moves only that slot by +stride."""
+    from loongforge.embodied.eval.orchestrator.planning import plan_robotwin
+    from loongforge.embodied.eval.orchestrator.runners import robotwin_runner
+
+    robotwin = tmp_path / "RoboTwin"
+    (robotwin / "script").mkdir(parents=True)
+    (robotwin / "script" / "eval_policy.py").write_text(_SLOT_SEED_LOOP, encoding="utf-8")
+    config: dict = {
+        "benchmark": {"name": "robotwin", "task_name": "adjust_bottle", "task_config": "demo_clean", "episodes_per_task": 100}
+    }
+    shards = plan_robotwin(config, 4)  # chunk 7, 15 blocks, stride 105
+
+    def run(unstable: set, unsolved: set = frozenset()) -> dict:
+        ran = {}
+        for shard in shards:
+            patch = shard["overrides"]["benchmark"]
+            args = argparse.Namespace(
+                worker_local_files=True, robotwin_path=str(robotwin),
+                output_dir=str(tmp_path / f"out_{patch['start_seed']}"), ckpt_setting="t",
+                step_limit_override=None, start_seed_override=None, test_num_override=None,
+                disable_expert_check=False, disable_eval_video_log=True,
+                seed_stride=patch["seed_stride"],
+            )
+            namespace: dict = {}
+            exec(robotwin_runner._worker_eval_script(args).read_text(encoding="utf-8"), namespace)
+            _SlotSeedEnv.Unstable = namespace["UnStableError"]
+            env = _SlotSeedEnv(unstable, set(unsolved))
+            namespace["eval_policy"](env, patch["start_seed"], patch["test_num"], {"render_freq": 0}, expert_check)
+            ran[patch["start_seed"]] = env.ran
+        return ran
+
+    clean = run(set())
+    assert clean[0] == [0, 1, 2, 3, 4, 5, 6]
+    assert sorted(s for seeds in clean.values() for s in seeds) == list(range(100))
+
+    # seed 3 unstable, and its first replacement (108) too: only slot 3 moves.
+    # Without the expert pass the expert verdict is not consulted, so 50 stays.
+    stale = run({3, 108, 11}, unsolved={50} if expert_check else set())
+    assert stale[0] == [0, 1, 2, 213, 4, 5, 6]
+    assert stale[7] == [7, 8, 9, 10, 116, 12, 13]
+    every = [s for seeds in stale.values() for s in seeds]
+    assert len(every) == len(set(every)) == 100
+    replaced = {3, 11, 50} if expert_check else {3, 11}
+    assert set(range(100)) - set(every) == replaced
+
+def test_crashed_run_without_result_is_not_a_fake_episode() -> None:
+    """An official crash before any episode must not become a 100-step failure row."""
+    from loongforge.embodied.eval.orchestrator.runners import robotwin_runner
+
+    args = argparse.Namespace(
+        task_name="adjust_bottle",
+        task_config="demo_clean",
+        ckpt_setting="test",
+        max_steps=100,
+        seed=0,
+        start_seed_override=100003,
+    )
+    records = robotwin_runner._build_robotwin_records(
+        args,
+        returncode=1,
+        artifacts={},
+        episode_time_sec=54.0,
+        result_txt=None,
+        log_text="UnStableError: Objects is unstable in seed(100003)",
+    )
+    assert records == []
+
+
+def test_shard_test_num_wins_over_episodes_per_task() -> None:
+    """A coordinator shard sets test_num; the run-wide episodes_per_task must not override it."""
+    from loongforge.embodied.eval.orchestrator.runners import robotwin_runner
+
+    args = robotwin_runner.build_argparser().parse_args([])
+    config = {
+        "benchmark": {"task_name": "adjust_bottle", "episodes_per_task": 8, "test_num": 1},
+        "server": {},
+    }
+    args = robotwin_runner._apply_config(args, config)
+    assert args.test_num_override == 1
+
+
+def test_apply_config_maps_chunk_flags() -> None:
+    """benchmark.return_action_chunk must reach the bridge; it was previously dropped."""
+    from loongforge.embodied.eval.orchestrator.runners import robotwin_runner
+
+    args = robotwin_runner.build_argparser().parse_args([])
+    config = {
+        "benchmark": {
+            "return_action_chunk": True,
+            "disable_action_cache": True,
+            "chunk_execute_steps": 24,
+        },
+        "server": {},
+    }
+    args = robotwin_runner._apply_config(args, config)
+    assert args.return_action_chunk is True
+    assert args.disable_action_cache is True
+    assert args.chunk_execute_steps == 24
+
+
+def test_chunk_rows_are_consumed_in_order() -> None:
+    """The bridge holds the client-owned chunk and advances one row per env step."""
+    from loongforge.embodied.eval.bridges.robotwin_policy import ModelClient
+
+    model = object.__new__(ModelClient)
+    model._chunk = np.arange(6, dtype=np.float32).reshape(3, 2)
+    model._chunk_cursor = 0
+    model._chunk_len = 3
+    assert model._take_chunk_row().tolist() == [[0.0, 1.0]]
+    assert model._take_chunk_row().tolist() == [[2.0, 3.0]]
+    assert model._take_chunk_row().tolist() == [[4.0, 5.0]]
+    assert model._chunk_cursor == 3
+
+
+def test_deploy_policy_records_chunk_depth(tmp_path: pathlib.Path) -> None:
+    """The bridge can only execute 24 steps if the deploy file carries the depth."""
+    import yaml
+
+    from loongforge.embodied.eval.orchestrator.runners import robotwin_runner
+
+    args = robotwin_runner.build_argparser().parse_args([])
+    args.robotwin_path = "/workspace/RoboTwin"
+    args.output_dir = str(tmp_path)
+    args.task_name = "adjust_bottle"
+    args.task_config = "demo_clean"
+    args.policy_ckpt_path = "/tmp/ckpt"
+    args.return_action_chunk = True
+    args.chunk_execute_steps = 24
+
+    path = tmp_path / "deploy_policy.yml"
+    robotwin_runner._write_deploy_policy(args, path)
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert data["return_action_chunk"] is True
+    assert data["chunk_execute_steps"] == 24
+
+
+def test_needs_obs_follows_the_buffered_chunk() -> None:
+    """Only steps that will hit the server need a rendered frame."""
+    # ModelClient.__init__ dials the policy server, so exercise the predicate
+    # on a bare instance: it only reads the chunk cursor and the cache mode.
+    chunked = ModelClient.__new__(ModelClient)
+    chunked.return_action_chunk = True
+    chunked._chunk = None
+    chunked._chunk_cursor = 0
+    chunked._chunk_len = 0
+    assert chunked.needs_obs() is True  # nothing buffered yet
+
+    chunked._chunk = np.zeros((4, 14), dtype=np.float32)
+    chunked._chunk_cursor = 1
+    chunked._chunk_len = 4
+    assert chunked.needs_obs() is False  # replaying a buffered row
+
+    chunked._chunk_cursor = 4
+    assert chunked.needs_obs() is True  # chunk exhausted -> request
+
+    server_cache = ModelClient.__new__(ModelClient)
+    server_cache.return_action_chunk = False
+    server_cache._chunk = np.zeros((4, 14), dtype=np.float32)
+    server_cache._chunk_cursor = 1
+    server_cache._chunk_len = 4
+    assert server_cache.needs_obs() is True  # one request per step
+
+
+def test_worker_script_skips_intra_chunk_render(tmp_path: pathlib.Path) -> None:
+    """The opt-in switch replaces get_obs() with a proprio-only observation."""
+    from loongforge.embodied.eval.orchestrator.runners import robotwin_runner
+
+    robotwin = tmp_path / "RoboTwin"
+    (robotwin / "script").mkdir(parents=True)
+    source = (
+        "import numpy as np\n"
+        "def eval_policy(task_name, TASK_ENV, args, model):\n"
+        "        while TASK_ENV.take_action_cnt < TASK_ENV.step_lim:\n"
+        "            observation = TASK_ENV.get_obs()\n"
+        "            eval_func(TASK_ENV, model, observation)\n"
+    )
+    (robotwin / "script" / "eval_policy.py").write_text(source, encoding="utf-8")
+
+    def run(skip: bool) -> str:
+        args = argparse.Namespace(
+            worker_local_files=True,
+            robotwin_path=str(robotwin),
+            output_dir=str(tmp_path / f"out_{skip}"),
+            ckpt_setting="test",
+            step_limit_override=None,
+            start_seed_override=None,
+            test_num_override=None,
+            disable_expert_check=False,
+            disable_eval_video_log=False,
+            seed_stride=1,
+            skip_intra_chunk_obs=skip,
+        )
+        return robotwin_runner._worker_eval_script(args).read_text(encoding="utf-8")
+
+    enabled = run(True)
+    assert "model.needs_obs()" in enabled
+    assert "_vla_proprio_observation(TASK_ENV)" in enabled
+    assert "def _vla_proprio_observation(TASK_ENV):" in enabled
+
+    disabled = run(False)
+    assert "needs_obs" not in disabled
+    assert "observation = TASK_ENV.get_obs()" in disabled
+
+
+def test_worker_script_early_stop_patch(tmp_path: pathlib.Path) -> None:
+    """The opt-in switch injects the check_stable early-stop + instrumentation."""
+    from loongforge.embodied.eval.orchestrator.runners import robotwin_runner
+
+    robotwin = tmp_path / "RoboTwin"
+    (robotwin / "script").mkdir(parents=True)
+    source = (
+        "import numpy as np\n"
+        "def eval_policy(task_name, TASK_ENV, args, model):\n"
+        "        pass\n"
+    )
+    (robotwin / "script" / "eval_policy.py").write_text(source, encoding="utf-8")
+
+    def run(enabled: bool) -> str:
+        args = argparse.Namespace(
+            worker_local_files=True,
+            robotwin_path=str(robotwin),
+            output_dir=str(tmp_path / f"out_{enabled}"),
+            ckpt_setting="test",
+            step_limit_override=None,
+            start_seed_override=None,
+            test_num_override=None,
+            disable_expert_check=False,
+            disable_eval_video_log=False,
+            seed_stride=1,
+            skip_intra_chunk_obs=False,
+            settle_early_stop=enabled,
+        )
+        return robotwin_runner._worker_eval_script(args).read_text(encoding="utf-8")
+
+    enabled = run(True)
+    assert "check_stable early-stop" in enabled
+    assert "settled_at_step" in enabled  # instrumentation
+    assert "_WINDOW, _CAP, _EPS" in enabled
+    assert "_BT._init_task_env_, _BT.check_stable = _patched_init, _patched_check" in enabled
+    # Regression: _poses/_settled_at are instance helpers; every call must pass
+    # self or check_stable raises on the first window (seen as repeated
+    # "error occurs !" with no instrumentation / stuck workers).
+    import re
+    assert "for _p, _q in zip(_poses(self), ref):" in enabled
+    assert "_ref = _poses(self)" in enabled
+    assert not re.search(r"(?<!self\.)_poses\(\)", enabled)
+    assert "_drift = _settled_at(self, _ref)" in enabled
+
+    disabled = run(False)
+    assert "check_stable early-stop" not in disabled
+    assert "settled_at_step" not in disabled
+
+
+def test_worker_script_offline_expert_check_modes(tmp_path: pathlib.Path) -> None:
+    """Seed-cache scan/consume rewrite only the worker script, never RoboTwin."""
+    from loongforge.embodied.eval.orchestrator.runners import robotwin_runner
+
+    robotwin = tmp_path / "RoboTwin"
+    (robotwin / "script").mkdir(parents=True)
+    source = (
+        "import numpy as np\n"
+        "def main(x):\n"
+        "    model = get_model(usr_args)\n"
+        '    TASK_ENV = class_decorator(args["task_name"])\n'
+        "def eval_policy(task_name, TASK_ENV, args, model, st_seed, test_num=1):\n"
+        "    expert_check = True\n"
+        "    while succ_seed < test_num:\n"
+        '        render_freq = args["render_freq"]\n'
+        "        TASK_ENV.setup_demo(now_ep_num=now_id, seed=now_seed, is_test=True, **args)\n"
+        '        episode_info_list = [episode_info["info"]]\n'
+    )
+    (robotwin / "script" / "eval_policy.py").write_text(source, encoding="utf-8")
+
+    def gen(**kw) -> str:
+        fields = dict(
+            worker_local_files=True,
+            robotwin_path=str(robotwin),
+            output_dir=str(tmp_path / f"out_{abs(hash(str(kw)))}"),
+            ckpt_setting="t",
+            step_limit_override=None,
+            start_seed_override=None,
+            test_num_override=None,
+            disable_expert_check=False,
+            disable_eval_video_log=True,
+            seed_stride=1,
+            skip_intra_chunk_obs=False,
+            settle_early_stop=False,
+            task_name="adjust_bottle",
+        )
+        fields.update(kw)
+        args = argparse.Namespace(**fields)
+        return robotwin_runner._worker_eval_script(args).read_text(encoding="utf-8")
+
+    # A sharded plan passes seed_stride > 1, which rewrites `now_seed += 1`.
+    # Doing that before the consume patch made its anchor miss, so the handler
+    # was silently never injected and a stale seed fell back to the wrapper's
+    # skip path (an endless seed walk instead of a resume).
+    strided = gen(offline_expert_check=str(tmp_path / "cache"), seed_stride=100)
+    assert "CACHE STALE" in strided
+    assert "_admitted" in strided
+
+    # --disable-expert-check without a cache: the shim references
+    # _S_CURRENT_ATTRS, which only the cache header defines. Without this the
+    # first setup_demo raises NameError and the unit silently produces nothing.
+    no_cache = gen(disable_expert_check=True)
+    assert "_S_CURRENT_ATTRS = {}" in no_cache
+    assert no_cache.index("_S_CURRENT_ATTRS = {}") < no_cache.index("_vla_fill_attrs(")
+
+    scan = gen(offline_expert_check_scan=str(tmp_path / "cache"))
+    assert "_S_SCAN_DIR" in scan
+    assert "offline_expert_check scan: expert pass only" in scan  # get_model skipped
+    assert "_s_dump_scan(" in scan
+    assert "expert_check = False" not in scan
+
+    consume = gen(offline_expert_check=str(tmp_path / "cache"))
+    assert "_S_CACHE_PATH" in consume
+    assert "expert_check = False" in consume
+    assert "now_seed = _S_SEEDS[_idx]" in consume
+    assert "_idx = _S_OFFSET + succ_seed" in consume
+    assert "cache exhausted" in consume
+    assert "CACHE STALE" in consume
+    # No expert pre-pass -> play_once() never runs -> the shim must seed the
+    # check_success() state instead of patching the RoboTwin source.
+    assert "_vla_fill_attrs" in consume
+    assert "TASK_ENV.setup_demo = _vla_setup_with_attrs" in consume
+    # ... and drop the previous episode's state before rebuilding the scene.
+    assert "_vla_clear_attrs(TASK_ENV)" in consume
+    assert consume.index("_vla_clear_attrs(TASK_ENV)") < consume.index("_ret = _vla_orig_setup(*_a, **_k)")
+
+    # Consume mode uses the explicit cache index, not start_seed (which stays a
+    # seed value); a leftover start_seed=100000 must not shift the index.
+    consume_offset = gen(
+        offline_expert_check=str(tmp_path / "cache"),
+        start_seed_override=100000,
+        offline_expert_check_offset=4,
+    )
+    assert "    _S_OFFSET = 4\n" in consume_offset
+    assert "_S_OFFSET = 100000" not in consume_offset
+
+    plain = gen()
+    assert "_S_SCAN_DIR" not in plain and "_S_CACHE_PATH" not in plain
+    assert "_vla_fill_attrs" not in scan and "_vla_fill_attrs" not in plain
+
+    # Every generated worker script must at least be syntactically valid.
+    for label, src in (("scan", scan), ("consume", consume), ("plain", plain)):
+        compile(src, f"<{label}>", "exec")
+
+
+def test_worker_script_uses_the_task_episode_count_for_instructions(tmp_path: pathlib.Path) -> None:
+    """A 25-episode unit must draw from the same instruction list as a 100-episode task."""
+    from loongforge.embodied.eval.orchestrator.runners import robotwin_runner
+
+    robotwin = tmp_path / "RoboTwin"
+    (robotwin / "script").mkdir(parents=True)
+    source = (
+        "def main(x):\n"
+        '    TASK_ENV = class_decorator(args["task_name"])\n'
+        "def eval_policy(task_name, TASK_ENV, args, model, st_seed, test_num=1):\n"
+        '    results = generate_episode_descriptions(args["task_name"], episode_info_list, test_num)\n'
+    )
+    (robotwin / "script" / "eval_policy.py").write_text(source, encoding="utf-8")
+
+    def gen(**kw) -> str:
+        fields = dict(
+            worker_local_files=True,
+            robotwin_path=str(robotwin),
+            output_dir=str(tmp_path / f"out_{abs(hash(str(kw)))}"),
+            ckpt_setting="t",
+            step_limit_override=None,
+            start_seed_override=None,
+            test_num_override=25,
+            disable_expert_check=False,
+            disable_eval_video_log=True,
+            seed_stride=1,
+            skip_intra_chunk_obs=False,
+            settle_early_stop=False,
+            task_name="place_dual_shoes",
+        )
+        fields.update(kw)
+        text = robotwin_runner._worker_eval_script(argparse.Namespace(**fields)).read_text(encoding="utf-8")
+        compile(text, "<generated>", "exec")
+        return text
+
+    assert "episode_info_list, 100)" in gen(episodes_per_task=100)
+    assert "episode_info_list, 100)" in gen(test_num_override=100, episodes_per_task=100)
+    # No task-level count available -> keep the unit's own test_num.
+    assert "episode_info_list, 25)" in gen()
+
+
+def test_cached_play_once_attrs_win_over_derivation() -> None:
+    """Offline consume must apply the values the scan captured, not re-derive them."""
+    from loongforge.embodied.eval.orchestrator.runners.robotwin_runner import fill_missing_task_attrs
+
+    class _Pose:
+        q = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        p = [0.2, 0.0, 0.5]
+
+    class _Actor:
+        def get_pose(self):
+            return _Pose()
+
+    class _Env:
+        laptop = _Actor()
+        object = _Actor()
+
+    # The cached value disagrees with the re-derived one: the cache must win.
+    env = _Env()
+    fill_missing_task_attrs(
+        env, "open_laptop", cached={"arm_tag": "right"}, arm_tag_factory=str, face_prod=lambda *_: 1.0
+    )
+    assert env.arm_tag == "right"
+
+    env = _Env()
+    fill_missing_task_attrs(
+        env, "put_object_cabinet", cached={"arm_tag": "left", "origin_z": 0.9},
+        arm_tag_factory=str, face_prod=lambda *_: 1.0,
+    )
+    assert (env.arm_tag, env.origin_z) == ("left", 0.9)
+
+    # A stale value from the previous episode must not shadow the cache: the
+    # worker clears the attrs before setup_demo, then the cache is re-applied.
+    env = _Env()
+    env.arm_tag = "right"
+    env.origin_z = 0.1
+    fill_missing_task_attrs(
+        env, "put_object_cabinet", cached={"arm_tag": "left", "origin_z": 0.9},
+        arm_tag_factory=str, face_prod=lambda *_: 1.0,
+    )
+    assert (env.arm_tag, env.origin_z) == ("left", 0.9)
+
+
+def test_clear_episode_task_attrs_drops_previous_episode_state() -> None:
+    """Episode 2+ reuses the task env; play_once attrs must not leak across."""
+    from loongforge.embodied.eval.orchestrator.runners.robotwin_runner import clear_episode_task_attrs
+
+    class _Env:
+        pass
+
+    env = _Env()
+    env.arm_tag = "left"
+    env.origin_z = 0.5
+    clear_episode_task_attrs(env)
+    assert not hasattr(env, "arm_tag")
+    assert not hasattr(env, "origin_z")
+    # Idempotent: a fresh env has nothing to clear.
+    clear_episode_task_attrs(env)
+
+
+def test_worker_script_carries_play_once_attrs_through_the_cache(tmp_path: pathlib.Path) -> None:
+    """Scan records play_once attrs; consume applies them for each cached seed."""
+    from loongforge.embodied.eval.orchestrator.runners import robotwin_runner
+
+    robotwin = tmp_path / "RoboTwin"
+    (robotwin / "script").mkdir(parents=True)
+    source = (
+        "def main(x):\n"
+        '    TASK_ENV = class_decorator(args["task_name"])\n'
+        "def eval_policy(task_name, TASK_ENV, args, model, st_seed, test_num=1):\n"
+        "    expert_check = True\n"
+        "    while succ_seed < test_num:\n"
+        '        render_freq = args["render_freq"]\n'
+        "        try:\n"
+        "            TASK_ENV.setup_demo(now_ep_num=now_id, seed=now_seed, is_test=True, **args)\n"
+        "        except UnStableError:\n"
+        "            TASK_ENV.close_env()\n"
+        # The skip-the-seed tail the UnStableError wrapper adds on a real script.
+        "            succ_seed -= 1\n"
+        "            if suc_test_seed_list:\n"
+        "                suc_test_seed_list.pop()\n"
+        "            now_seed += 1\n"
+        '            args["render_freq"] = render_freq\n'
+        "            continue\n"
+        '        episode_info_list = [episode_info["info"]]\n'
+    )
+    (robotwin / "script" / "eval_policy.py").write_text(source, encoding="utf-8")
+
+    def gen(**kw) -> str:
+        fields = dict(
+            worker_local_files=True, robotwin_path=str(robotwin),
+            output_dir=str(tmp_path / f"o{abs(hash(str(kw)))}"), ckpt_setting="t",
+            step_limit_override=None, start_seed_override=None, test_num_override=5,
+            disable_expert_check=False, disable_eval_video_log=True, seed_stride=1,
+            skip_intra_chunk_obs=False, settle_early_stop=False, task_name="open_laptop",
+        )
+        fields.update(kw)
+        text = robotwin_runner._worker_eval_script(argparse.Namespace(**fields)).read_text(encoding="utf-8")
+        compile(text, "<generated>", "exec")
+        return text
+
+    scan = gen(offline_expert_check_scan=str(tmp_path / "cache"))
+    assert "_s_task_attrs(TASK_ENV)" in scan
+    assert "'attrs':" in scan
+
+    consume = gen(offline_expert_check=str(tmp_path / "cache"))
+    assert "_S_CURRENT_ATTRS.update(_S_ATTRS.get(str(now_seed), {}))" in consume
+    assert "_vla_fill_attrs(TASK_ENV, _vla_task_name, _S_CURRENT_ATTRS)" in consume
+    # A stale cached seed falls back to the official flow on a replacement seed
+    # instead of aborting the unit.
+    assert "CACHE STALE" in consume
+    assert "_vla_replacement_seeds(_S_SEEDS, _S_OFFSET, test_num, now_seed, attempt=_S_ATTEMPT)" in consume
+    assert "_S_ATTEMPT = 0" in consume
+    # The slot id travels with each episode so a skipped one does not shift the
+    # indices the repair round reasons about.
+    assert "[offline-expert-check] SLOT %d seed %d" in consume
+    assert "REPLACED seed" in consume
+    assert "_S_REPLACED.append(_admitted)" in consume
+    # The loop head re-reads now_seed from the cache array, so the admitted seed
+    # must be pinned there; otherwise the replacement is silently discarded.
+    assert "_S_SEEDS[_S_OFFSET + succ_seed - 1] = _admitted" in consume
+    # Two stale episodes in one unit must not pick the same replacement.
+    assert "if int(_cand) in _S_REPLACED:" in consume
+    assert "succ_seed -= 1" in consume
+    # Any failure while probing a candidate (unstable scene, failed plan, missing
+    # target pose) must reject it, not kill the unit.
+    assert "candidate %d rejected: %s" in consume
+    assert "except Exception as _e:" in consume
+    assert "expert rejected the candidate seed" in consume
+    assert "'expert-unsolved'" in consume
+    assert "_fail_streak += 1" in consume
+    assert "_fail_streak >= 3" in consume
+    assert "isinstance(_e, UnStableError) else 0" not in consume
+    # Three failures mean different things before and after the first good episode:
+    # an unproven process is broken (exit), a process that already ran episodes
+    # just hit a bad seed (skip it, keep the rest of the chunk).
+    assert "if succ_seed > 1:" in consume
+    assert "skipping this episode" in consume
+    assert consume.count("raise SystemExit(3)") == 1
+    assert consume.index("raise SystemExit(3)") > consume.index("skipping this episode")
+
+
+def test_replacement_seed_candidates_stay_outside_the_plan() -> None:
+    """seed+1 collides with another shard; candidates must not be planned seeds."""
+    from loongforge.embodied.eval.orchestrator.runners.robotwin_runner import replacement_seed_candidates
+
+    # Sparse cache: 100 stable seeds out of ~120 candidates.
+    planned = [s for s in range(100000, 100130) if s % 7 != 0][:100]
+    assert 100027 in planned, "fixture must contain the stale seed used in the logs"
+
+    cands = replacement_seed_candidates(planned, offset=0, per_unit=10, stale_seed=100027)
+    assert cands, "expected candidates"
+    assert not (set(cands) & set(planned)), "a replacement must not be a planned seed"
+    assert cands[0] > max(planned)
+
+    # Two shards that go stale must not converge on the same replacement.
+    a = replacement_seed_candidates(planned, offset=0, per_unit=10, stale_seed=100027)
+    b = replacement_seed_candidates(planned, offset=10, per_unit=10, stale_seed=100031)
+    assert not (set(a) & set(b))
+
+    # No cache at all: just walk up from the stale seed.
+    assert replacement_seed_candidates([], offset=0, per_unit=10, stale_seed=5)[:2] == [6, 7]
+
+    # The walk is bounded: a process that cannot build the scene must give up
+    # quickly instead of trying every candidate.
+    assert len(replacement_seed_candidates(planned, 0, 10, 100027)) <= 12
+
+
+def test_replacement_seed_candidates_advance_with_the_attempt() -> None:
+    """A re-launched slot must try seeds an earlier launch did not burn.
+
+    Without the attempt offset every retry recomputed the same three candidates
+    and failed identically (three episodes lost in the randomized full run).
+    """
+    from loongforge.embodied.eval.orchestrator.runners.robotwin_runner import replacement_seed_candidates
+
+    planned = [s for s in range(100000, 100130) if s % 7 != 0][:100]
+    first = replacement_seed_candidates(planned, offset=72, per_unit=1, stale_seed=100193)
+    second = replacement_seed_candidates(planned, offset=72, per_unit=1, stale_seed=100193, attempt=1)
+    third = replacement_seed_candidates(planned, offset=72, per_unit=1, stale_seed=100193, attempt=2)
+    assert first and second and third
+    assert not (set(first) & set(second))
+    assert not (set(first) & set(third))
+    assert not (set(second) & set(third))
+    # The shift is a whole block: a new attempt starts past the previous one.
+    assert second[0] > first[-1]
+    assert third[0] > second[-1]
+    assert not (set(first) & set(planned))
+
+
+def test_parse_official_log_keeps_the_slot_after_a_skip() -> None:
+    """A skipped episode must not shift every later episode by one.
+
+    The full randomized run lost slot 2 of a shard to three failed candidates;
+    the records then ran 0..8, the repair round targeted slot 9, and the next
+    round re-ran the whole shard.
+    """
+    from loongforge.embodied.eval.orchestrator.runners.robotwin_runner import (
+        _parse_official_episode_outcomes,
+    )
+
+    log = "\n".join([
+        "[offline-expert-check] SLOT 0 seed 100006",
+        "Success rate: 1/10 => 10.0%, current seed: 100006",
+        "[offline-expert-check] SLOT 1 seed 100007",
+        "Success rate: 2/10 => 20.0%, current seed: 100007",
+        "[offline-expert-check] CACHE STALE: cached seed 100013 is unstable here",
+        "[offline-expert-check] skipping this episode: 3 candidate(s) failed, "
+        "but 2 episode(s) already ran in this process",
+        "[offline-expert-check] SLOT 3 seed 100016",
+        "Success rate: 3/10 => 30.0%, current seed: 100016",
+    ])
+    episodes = _parse_official_episode_outcomes(log)
+    assert [e["episode_idx"] for e in episodes] == [0, 1, 3]
+    assert [e["seed"] for e in episodes] == [100006, 100007, 100016]
+
+
+def test_parse_official_log_without_slot_markers_keeps_record_order() -> None:
+    """Scan mode and logs from older runs carry no SLOT line."""
+    from loongforge.embodied.eval.orchestrator.runners.robotwin_runner import (
+        _parse_official_episode_outcomes,
+    )
+
+    log = "\n".join([
+        "Success rate: 1/2 => 50.0%, current seed: 7",
+        "Success rate: 2/2 => 100.0%, current seed: 8",
+    ])
+    assert [e["episode_idx"] for e in _parse_official_episode_outcomes(log)] == [0, 1]
+
+
+def test_parse_official_log_uses_the_last_slot_before_the_result() -> None:
+    """A replacement re-enters the same slot; the retry's slot wins."""
+    from loongforge.embodied.eval.orchestrator.runners.robotwin_runner import (
+        _parse_official_episode_outcomes,
+    )
+
+    log = "\n".join([
+        "[offline-expert-check] SLOT 4 seed 100020",
+        "[offline-expert-check] CACHE STALE: cached seed 100020 is unstable here",
+        "[offline-expert-check] SLOT 4 seed 100367",
+        "Success rate: 5/10 => 50.0%, current seed: 100367",
+    ])
+    episodes = _parse_official_episode_outcomes(log)
+    assert [e["episode_idx"] for e in episodes] == [4]
+    assert episodes[0]["seed"] == 100367
+
+
+def test_fill_missing_task_attrs_mirrors_play_once() -> None:
+    """Offline consume skips play_once(); the shim must set what it would have."""
+    from loongforge.embodied.eval.orchestrator.runners.robotwin_runner import fill_missing_task_attrs
+
+    class _Pose:
+        q = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        p = [0.2, 0.0, 0.5]
+
+    class _Actor:
+        def get_pose(self):
+            return _Pose()
+
+    class _Env:
+        laptop = _Actor()
+        object = _Actor()
+
+    def _arm(value):
+        return value
+
+    def _face(*_args):
+        return 1.0
+
+    env = _Env()
+    fill_missing_task_attrs(env, "open_laptop", arm_tag_factory=_arm, face_prod=_face)
+    assert env.arm_tag == "left"  # face_prod > 0 -> left
+
+    env = _Env()
+    fill_missing_task_attrs(env, "place_object_scale", arm_tag_factory=_arm, face_prod=_face)
+    assert env.arm_tag == "right"  # object x > 0
+
+    env = _Env()
+    fill_missing_task_attrs(env, "put_object_cabinet", arm_tag_factory=_arm, face_prod=_face)
+    assert env.arm_tag == "right"
+    assert env.origin_z == 0.5
+
+    # play_once() already ran -> the existing values win.
+    env = _Env()
+    env.arm_tag = "left"
+    env.origin_z = 0.9
+    fill_missing_task_attrs(env, "put_object_cabinet", arm_tag_factory=_arm, face_prod=_face)
+    assert (env.arm_tag, env.origin_z) == ("left", 0.9)
+
+    # Every other task is a no-op.
+    env = _Env()
+    fill_missing_task_attrs(env, "adjust_bottle", arm_tag_factory=_arm, face_prod=_face)
+    assert not hasattr(env, "arm_tag")
+
+
+def test_deploy_policy_can_disable_step_trace(tmp_path: pathlib.Path) -> None:
+    """run.write_trace=false drops trace_path, skipping ~5% per-step CPU."""
+    from loongforge.embodied.eval.orchestrator.runners import robotwin_runner
+
+    def write(**kw) -> str:
+        fields = dict(
+            policy_ckpt_path="/ckpt",
+            task_name="adjust_bottle",
+            task_config="demo_clean",
+            ckpt_setting="t",
+            seed=0,
+            instruction_type="unseen",
+            host="127.0.0.1",
+            port=1,
+            unnorm_key=None,
+            action_mode="abs",
+            no_action_reorder=False,
+            max_steps=400,
+            control_hz=10,
+            disable_action_cache=False,
+            return_action_chunk=True,
+            skip_intra_chunk_obs=True,
+            chunk_execute_steps=30,
+            action_bridge="pi05_aloha_14d",
+            domain_id=None,
+            disable_eval_video_log=True,
+            output_dir=str(tmp_path),
+        )
+        fields.update(kw)
+        path = tmp_path / f"deploy_{kw.get('write_trace', 'default')}.yml"
+        robotwin_runner._write_deploy_policy(argparse.Namespace(**fields), path)
+        return path.read_text(encoding="utf-8")
+
+    assert "trace_path:" in write()  # default keeps tracing
+    assert "trace_path:" in write(write_trace=True)
+    assert "trace_path" not in write(write_trace=False)
+
+
+def test_trace_recording_is_skipped_without_a_path() -> None:
+    """No trace_path -> the bridge must not build per-step records."""
+    from loongforge.embodied.eval.bridges.robotwin_policy import ModelClient
+
+    client = ModelClient.__new__(ModelClient)
+    client.trace_path = None
+    client.trace_records = []
+    client.episode_id = "ep"
+    client.action_bridge = "pi05_aloha_14d"
+    client._record_trace(1, "go", np.zeros(14), np.zeros(14), np.zeros(14), {"data": {}})
+    assert client.trace_records == []
+
+
+def test_official_step_limit_lookup(tmp_path: pathlib.Path) -> None:
+    """use_official_step_limits keeps per-task horizons from RoboTwin's YAML."""
+    from loongforge.embodied.eval.orchestrator.runners import robotwin_runner
+
+    config_dir = tmp_path / "task_config"
+    config_dir.mkdir()
+    (config_dir / "_eval_step_limit.yml").write_text(
+        "adjust_bottle: 400\nopen_microwave: 1700\n", encoding="utf-8"
+    )
+    args = argparse.Namespace(task_name="open_microwave", robotwin_path=str(tmp_path))
+    assert robotwin_runner._official_step_limit(args) == 1700
+
+    args.task_name = "not_a_task"
+    assert robotwin_runner._official_step_limit(args) is None
+
+    args.robotwin_path = str(tmp_path / "missing")
+    args.task_name = "open_microwave"
+    assert robotwin_runner._official_step_limit(args) is None
+
+
+def test_records_use_trace_length_for_early_success(tmp_path: pathlib.Path) -> None:
+    """`steps` must be the executed count, not the horizon cap."""
+    from loongforge.embodied.eval.orchestrator.runners import robotwin_runner
+
+    trace = tmp_path / "trace.json"
+    trace.write_text(json.dumps({"steps": [{"step": i} for i in range(37)]}), encoding="utf-8")
+    args = argparse.Namespace(
+        task_name="adjust_bottle",
+        task_config="demo_clean",
+        ckpt_setting="test",
+        max_steps=400,
+        seed=0,
+        start_seed_override=None,
+    )
+    records = robotwin_runner._build_robotwin_records(
+        args,
+        returncode=0,
+        artifacts={"trace_path": str(trace)},
+        episode_time_sec=10.0,
+        result_txt=None,
+        log_text="",
+    )
+    assert len(records) == 1
+    assert records[0]["steps"] == 37
+
+def test_merge_offline_expert_check_parts(tmp_path: pathlib.Path) -> None:
+    """Parts from residue-class scans merge, dedupe, sort and truncate."""
+    import pickle
+
+    from loongforge.embodied.eval.orchestrator.runners import robotwin_runner
+
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    parts = {
+        0: [1000, 1004],
+        1: [1001, 1005],
+        2: [1002, 1006],
+        3: [1003],
+    }
+    for i, seeds in parts.items():
+        data = {
+            "schema": 1, "task": "adjust_bottle", "task_config": "demo_clean",
+            "n": len(seeds), "seeds": seeds,
+            "episode_info": {str(s): {"{A}": f"obj{s}"} for s in seeds},
+        }
+        (cache / f"adjust_bottle.part{i}.pkl").write_bytes(pickle.dumps(data))
+
+    merged = robotwin_runner.merge_offline_expert_check_scan(
+        {"benchmark": {"offline_expert_check_scan": str(cache),
+                       "offline_expert_check_scan_shards": 4,
+                       "episodes_per_task": 6}}
+    )
+    assert merged == {"adjust_bottle": 6}
+    out = pickle.loads((cache / "adjust_bottle.pkl").read_bytes())
+    assert out["seeds"] == [1000, 1001, 1002, 1003, 1004, 1005]
+    assert out["episode_info"]["1005"] == {"{A}": "obj1005"}

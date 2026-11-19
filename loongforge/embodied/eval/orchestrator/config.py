@@ -11,6 +11,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 from loongforge.embodied.eval.payload_builders import PayloadBuilder, build_payload_builder
 
@@ -154,6 +155,7 @@ CONFIG_MAPPING = {
     "server.kill_after_healthcheck": "kill_server_after_healthcheck",
     "server.stop_after_healthcheck": "stop_server_after_healthcheck",
     "server.python": "server_python",
+    "server.external_url": "external_url",
     "env.eval_root": "eval_root",
     "env.loongforge_root": "loongforge_root",
     "env.dataset_statistics_path": "dataset_statistics_path",
@@ -167,11 +169,18 @@ CONFIG_MAPPING = {
     "benchmark.task_ids": "task_ids",
     "benchmark.episodes_per_task": "episodes_per_task",
     "benchmark.libero_protocol": "libero_protocol",
+    "benchmark.episode_offset": "episode_offset",
     "benchmark.num_steps_wait": "num_steps_wait",
     # Env seeding granularity: per_episode (legacy default) re-creates and re-seeds the env
     # for every episode; per_task reuses ONE env seeded with run.seed across all trials,
     # which is what the official FastWAM eval does (see docs §4.8).
     "benchmark.env_seed_mode": "env_seed_mode",
+    # per_task + episode-level sharding: restore each episode's pre-reset RNG state.
+    "benchmark.scene_snapshot_dir": "scene_snapshot_dir",
+    # False -> legacy server-side chunk cache (one request per env step).
+    "benchmark.return_action_chunk": "return_action_chunk",
+    # Skip camera renders inside a client-owned chunk (obs is never read there).
+    "benchmark.skip_intra_chunk_obs": "skip_intra_chunk_obs",
     "benchmark.max_steps": "max_steps",
     "benchmark.continuous_gripper": "continuous_gripper",
     # False -> proprio reads obs['robot0_eef_pos']/quat (official FastWAM
@@ -192,6 +201,7 @@ CONFIG_MAPPING = {
     # action decoder key is non-identity — capability matching drives this).
     "benchmark.control_mode": "control_mode",
     "server.chunk_execute_steps": "chunk_execute_steps",
+    "server.connect_timeout_sec": "server_connect_timeout_sec",
     "benchmark.dataset_path": "dataset_path",
     "benchmark.calvin_config_path": "calvin_config_path",
     "benchmark.eval_sequences_path": "eval_sequences_path",
@@ -214,12 +224,25 @@ CONFIG_MAPPING = {
 }
 
 
+def parse_external_url(url: str) -> tuple[str, int]:
+    """Parse ``ws://host:port`` (or ``host:port``) into ``(host, port)``."""
+    parsed = urlparse(url if "://" in url else f"ws://{url}")
+    if not parsed.hostname or not parsed.port:
+        raise ValueError(f"external_url must be host:port or scheme://host:port, got {url!r}")
+    return parsed.hostname, int(parsed.port)
+
+
 def apply_config(args: Any, config: Dict[str, Any]) -> Any:
     """Run apply_config."""
     for source, target in CONFIG_MAPPING.items():
         value = _get_nested(config, source)
         if value is not None:
             setattr(args, target, value)
+    # External-server mode: the client connects to a shared server, so host/port
+    # are derived from external_url rather than from the (unused) local server.
+    external_url = getattr(args, "external_url", "")
+    if external_url:
+        args.host, args.port = parse_external_url(external_url)
     return args
 
 
