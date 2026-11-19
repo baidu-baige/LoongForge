@@ -1,0 +1,198 @@
+diff --git a/dyn-hamr/confs/config.yaml b/dyn-hamr/confs/config.yaml
+index f15b4ff..658ad3b 100644
+--- a/dyn-hamr/confs/config.yaml
++++ b/dyn-hamr/confs/config.yaml
+@@ -1,5 +1,5 @@
+ defaults:
+-  - data: HOT3D
++  - data: video_driod
+   - optim
+   - _self_
+
+diff --git a/dyn-hamr/data/dataset.py b/dyn-hamr/data/dataset.py
+--- a/dyn-hamr/data/dataset.py
++++ b/dyn-hamr/data/dataset.py
+@@ -32,6 +32,13 @@
+ MAX_NUM_TRACKS = 12
+ MIN_TRACK_LEN = 60
+ MIN_KEYP_CONF = 0.4
++
++
++def keypoints_visible(path, min_conf=MIN_KEYP_CONF):
++    """A placeholder JSON with zero confidence is not an observation."""
++    keypoints = read_keypoints(path)
++    return bool(np.any(np.isfinite(keypoints).all(axis=1) &
++                       (keypoints[:, 2] >= min_conf)))
+
+
+ def get_dataset_from_cfg(cfg):
+@@ -132,7 +139,7 @@
+                 for tid in track_ids
+             ]
+             track_lens = [
+-                len(list(filter(os.path.isfile, paths))) for paths in track_paths
++                sum(keypoints_visible(p, MIN_KEYP_CONF) for p in paths) for paths in track_paths
+             ]
+             print("raw TRACK IDS and LENGTHS", track_ids, track_lens)
+             track_ids = [
+@@ -157,7 +164,7 @@
+         self.track_vis_masks = []
+         for pred_dir in self.track_dirs:
+             kp_paths = [f"{pred_dir}/{x}_keypoints.json" for x in self.img_names]
+-            has_kp = [os.path.isfile(x) for x in kp_paths]
++            has_kp = [keypoints_visible(x, MIN_KEYP_CONF) for x in kp_paths]
+
+             # keep track of which frames this track is visible in
+             vis_mask = np.array(has_kp)
+@@ -168,8 +175,9 @@
+                 eidx = max(eidx, ei)
+             self.track_vis_masks.append(vis_mask)
+
+-        eidx = max(eidx + 1, 0)
+-        sidx = min(sidx, eidx)
++        # Preserve the input video timeline, including unobserved ends.
++        # Visibility and confidence mask losses without shifting frame IDs.
++        sidx, eidx = 0, self.num_imgs
+         print("START", sidx, "END", eidx)
+         self.start_idx = sidx
+         self.end_idx = eidx
+@@ -227,16 +235,18 @@
+                 f"{self.track_dirs[i]}/{x}_keypoints.json" for x in self.sel_img_names
+             ]
+             # (T, J, 3) (x, y, conf) - with interpolation for missing frames
+-            joints2d_data = load_keypoints_with_interp(kp_paths, interp=interp_input)
++            # Interpolate MANO initialization only, never 2D observations.
++            joints2d_data = load_keypoints_with_interp(kp_paths, interp=False)
+             # print('joints2d_data: ', joints2d_data.shape)
+             # print('joints2d_data[:, :, [2]]: ', np.unique(joints2d_data[:, :, [2]]))
+             # raise ValueError
+             # Discard bad ViTPose detections
+-            joints2d_data[:, :, 2] = 1.0
++            # Keep missing and low-confidence observations out of the loss.
++            joints2d_data[~np.isfinite(joints2d_data).all(axis=2)] = 0
++            joints2d_data[np.asarray(vis_mask) <= 0] = 0
+             joints2d_data[
+                 np.repeat(joints2d_data[:, :, [2]] < MIN_KEYP_CONF, 3, axis=2)
+             ] = 0
+-            # Set all confidence values to 1.0 for optimization
+             data_out["joints2d"].append(joints2d_data)
+
+             # load single image mano predictions
+@@ -353,7 +363,7 @@
+         sidx, eidx = self.sidx, self.eidx
+         img_w, img_h = self.img_size
+         fpath = os.path.join(self.cam_dir, "cameras.npz")
+-        if os.path.isfile(fpath) and not self.is_static:
++        if os.path.isfile(fpath):
+             Logger.log(f"Loading cameras from {fpath}...")
+             cam_R, cam_t, intrins, width, height = load_cameras_npz(fpath, self.seq_len)
+             scale = img_w / width
+@@ -363,9 +373,10 @@
+             #             self.cam_R = torch.einsum("ij,...jk->...ik", R0, cam_R[sidx:eidx])
+             #             self.cam_t = t0 + torch.einsum("ij,...j->...i", R0, cam_t[sidx:eidx])
+ #             t0 = -cam_t[sidx:eidx].mean(dim=0) + torch.randn(3) * 0.1
+-            t0 = -cam_t[sidx:sidx+1] + torch.randn(3) * 0.1
+             self.cam_R = cam_R[sidx:eidx]
+-            self.cam_t = cam_t[sidx:eidx] - t0
++            # The supplied camera file defines the world gauge. Preserve it
++            # for moving cameras too; adding a random offset breaks export.
++            self.cam_t = cam_t[sidx:eidx]
+         else:
+             # raise ValueError
+             Logger.log(f"WARNING: {fpath} does not exist, using static cameras...")
+diff --git a/dyn-hamr/optim/base_scene.py b/dyn-hamr/optim/base_scene.py
+index 185baef..0fa75ef 100644
+--- a/dyn-hamr/optim/base_scene.py
++++ b/dyn-hamr/optim/base_scene.py
+@@ -15,7 +15,6 @@ from util.tensor import move_to, detach_all
+
+ # from .helpers import estimate_initial_trans
+ from .params import CameraParams
+-import mano
+
+ J_HAND = len(MANO_JOINTS) - 1  # no root
+
+@@ -97,12 +96,19 @@ class BaseSceneModel(nn.Module):
+         R_w2c, t_w2c = cam_data["cam_R"], cam_data["cam_t"]
+         R_c2w = R_w2c.transpose(-1, -2)
+         t_c2w = -torch.einsum("tij,tj->ti", R_c2w, t_w2c)
++        # run_mano mirrors the entire left hand (including translation) in
++        # world x. Transform in that canonical frame using S R S and S t.
++        is_right = obs_data["is_right"]
++        mirror = torch.ones(B, T, 3, device=device)
++        mirror[..., 0] = torch.where(is_right > 0.5, 1.0, -1.0)
++        canonical_R = R_c2w[None] * mirror[..., :, None] * mirror[..., None, :]
++        canonical_t = mirror * t_c2w[None]
+
+         if self.use_init and "init_root_orient" in obs_data:
+             init_rot = obs_data["init_root_orient"]  # (B, T, 3)
+             init_rot_mat = angle_axis_to_rotation_matrix(init_rot)
+             print(R_c2w.shape, init_rot_mat.shape)
+-            init_rot_mat = torch.einsum("tij,btjk->btik", R_c2w, init_rot_mat)
++            init_rot_mat = torch.einsum("btij,btjk->btik", canonical_R, init_rot_mat)
+             init_rot = rotation_matrix_to_angle_axis(init_rot_mat)
+         else:
+             raise ValueError
+@@ -117,11 +123,11 @@ class BaseSceneModel(nn.Module):
+             # must offset by the root location before applying camera to world transform
+             is_right = obs_data["is_right"]
+             pred_data = self.pred_mano(init_trans, init_rot, init_pose, is_right, init_betas)
+-            root_loc = pred_data["joints3d"][..., 0, :]  # (B, T, 3)
++            root_loc = mirror * pred_data["joints3d"][..., 0, :]  # canonical wrist
+             init_trans = obs_data["init_trans"]  # (B, T, 3)
+             init_trans = (
+-                torch.einsum("tij,btj->bti", R_c2w, init_trans + root_loc)
+-                + t_c2w[None]
++                torch.einsum("btij,btj->bti", canonical_R, init_trans + root_loc)
++                + canonical_t
+                 - root_loc
+             )
+         else:
+diff --git a/dyn-hamr/optim/losses.py b/dyn-hamr/optim/losses.py
+index 5e07631..97240a2 100644
+--- a/dyn-hamr/optim/losses.py
++++ b/dyn-hamr/optim/losses.py
+@@ -370,7 +370,9 @@ class RootLoss(StageLoss):
+         self.joints2d_loss = Joints2DLoss(ignore_op_joints, joints2d_sigma)
+         self.points3d_loss = Points3DLoss(use_chamfer, robust_loss, robust_tuning_const)
+         self.inter_penetration_loss = GeneralContactLoss(faces)
+-        self.bio_loss = BMCLoss(lambda_bl=1, lambda_rb=1, lambda_a=1)
++        # The official default disables this optional loss. Do not require
++        # dataset-derived BMC assets until the loss is actually requested.
++        self.bio_loss = None
+
+     def forward(self, observed_data, pred_data, valid_mask=None):
+         """
+@@ -397,6 +399,8 @@ class RootLoss(StageLoss):
+             and self.loss_weights["bio"] > 0.0
+         ):
+             # print('biobiobiobiobiobiobiobiobiobiobiobio')
++            if self.bio_loss is None:
++                self.bio_loss = BMCLoss(lambda_bl=1, lambda_rb=1, lambda_a=1)
+             cur_loss, _ = self.bio_loss.compute_loss(
+                 pred_data["joints3d"], valid_mask
+             )
+diff --git a/dyn-hamr/run_opt.py b/dyn-hamr/run_opt.py
+index 8362b5c..d858bd4 100644
+--- a/dyn-hamr/run_opt.py
++++ b/dyn-hamr/run_opt.py
+@@ -48,10 +48,6 @@ sys.path.append('src/human_body_prior')
+ sys.path.append('HMP/')
+ # print(sys.path)
+ # print(torch.cuda.memory_summary())
+-from HMP.fitting import run_prior
+-
+-from human_body_prior.tools.model_loader import load_model
+-from human_body_prior.models.vposer_model import VPoser
+
+ def set_seed(seed=42):
+     """
+@@ -163,6 +159,8 @@ def run_opt(cfg, dataset, out_dir, device):
+
+     # HMP
+     if cfg.run_prior and not os.path.exists(os.path.join(out_dir, 'prior')):
++        from HMP.fitting import run_prior
++
+         run_prior(cfg, dataset, out_dir, device, ['smooth_fit'], \
+         obs_data, hand_model, cfg, cfg.data, os.path.join(out_dir, 'prior'))
+     d = time.time()

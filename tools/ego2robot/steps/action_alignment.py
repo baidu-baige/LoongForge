@@ -250,6 +250,8 @@ def process_episode(
         # Preserve metadata for Step 7 (LeRobot dataset writing).
         "episode_path": str(data.get("episode_path", npz_path)),
         "annotations": str(data.get("annotations", "[]")),
+        **{key: data[key] for key in data.files
+           if key in ("source_frame_indices", "frame_valid") or key.startswith("path_b_")},
     }
 
     return result
@@ -305,6 +307,8 @@ def run(args):
             smoothed=np.array(result["smoothed"]),
             episode_path=result["episode_path"],
             annotations=result["annotations"],
+            **{key: value for key, value in result.items()
+               if key in ("source_frame_indices", "frame_valid") or key.startswith("path_b_")},
         )
         results.append({
             "name": ep_name,

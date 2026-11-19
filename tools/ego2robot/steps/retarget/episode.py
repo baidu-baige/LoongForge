@@ -94,15 +94,45 @@ DEPTH_ALIGN_TOL_GAIN = 1.5
 
 # ============ Data loading ============
 
-def load_episode_world(zarr_dir, ep, n_frames):
-    """Read world-frame head and bimanual keypoints for the first N valid frames. Returns:
-        head(N,7), left_kp(N,63), right_kp(N,63)
+def load_episode_world(zarr_dir, ep, n_frames, *, return_camera_valid=False):
+    """Read the first N world-frame poses without dropping timeline entries.
+
+    Optionally return the camera validity mask as a fourth array.
     """
     z = zarr.open_group(str(Path(zarr_dir) / ep), mode="r")
-    head = np.array(z["obs_head_pose"][:n_frames])
-    lk = np.array(z["left.obs_keypoints"][:n_frames])
-    rk = np.array(z["right.obs_keypoints"][:n_frames])
+    head = np.array(z["obs_head_pose"][:n_frames], dtype=float)
+    lk = np.array(z["left.obs_keypoints"][:n_frames], dtype=float)
+    rk = np.array(z["right.obs_keypoints"][:n_frames], dtype=float)
+    camera_valid = np.isfinite(head).all(axis=1) & (
+        np.linalg.norm(head[:, 3:7], axis=1) > 1e-8)
+    if "path_b_camera_pose_valid" in z:
+        camera_valid &= np.asarray(z["path_b_camera_pose_valid"][:n_frames], dtype=bool)
+    head[~camera_valid] = np.nan
+    lk[~camera_valid] = np.nan
+    rk[~camera_valid] = np.nan
+    if return_camera_valid:
+        return head, lk, rk, camera_valid
     return head, lk, rk
+
+
+def prepare_camera_poses(head, camera_valid):
+    """Fill camera gaps for array plumbing while keeping observations invalid.
+
+    Base statistics must use only ``camera_valid`` entries. Filled poses are
+    placeholders for target interpolation; invalid frames are never rendered.
+    """
+    valid_indices = np.flatnonzero(camera_valid)
+    if not len(valid_indices):
+        raise ValueError("episode contains no valid camera poses")
+    head = np.asarray(head, dtype=float).copy()
+    indices = np.arange(len(head))
+    right = np.searchsorted(valid_indices, indices).clip(0, len(valid_indices) - 1)
+    left = (right - 1).clip(0)
+    nearest = np.where(
+        np.abs(indices - valid_indices[left]) <= np.abs(indices - valid_indices[right]),
+        valid_indices[left], valid_indices[right])
+    head[~camera_valid] = head[nearest[~camera_valid]]
+    return head
 
 
 def load_episode_keypoints_2d(zarr_dir, ep, n_frames):
@@ -145,6 +175,12 @@ def load_human_hand_masks(mask_dir, ep, n_frames, dilation_px=8):
 
 def head_forward_flat(head_seq):
     """Project the human gaze onto the horizontal plane to obtain robot yaw."""
+    head_seq = np.asarray(head_seq)
+    valid = np.isfinite(head_seq).all(axis=1) & (
+        np.linalg.norm(head_seq[:, 3:7], axis=1) > 1e-8)
+    head_seq = head_seq[valid]
+    if not len(head_seq):
+        raise ValueError("cannot estimate gaze without valid camera poses")
     def q2m(q):
         R = np.zeros(9)
         mujoco.mju_quat2Mat(R, np.asarray(q, dtype=float))
@@ -532,9 +568,15 @@ def process_episode(ep, zarr_dir, bg_path, state, out_dir,
         raise ValueError(
             "depth_transition_width must be finite and non-negative")
     N = len(state)
-    head, left_kp, right_kp = load_episode_world(zarr_dir, ep, N)
+    head, left_kp, right_kp, camera_valid = load_episode_world(
+        zarr_dir, ep, N, return_camera_valid=True)
+    observed_head = head
+    head = prepare_camera_poses(head, camera_valid)
     left_kp2d, right_kp2d = load_episode_keypoints_2d(
         zarr_dir, ep, N)
+    for keypoints in (left_kp2d, right_kp2d):
+        if keypoints is not None:
+            keypoints[~camera_valid] = np.nan
     assert len(head) == N, f"head has {len(head)} frames, state {N}"
     scene_depth = None
     scene_depth_metadata = None
@@ -648,9 +690,10 @@ def process_episode(ep, zarr_dir, bg_path, state, out_dir,
 
     # 2. Nominal camera-facing frame; the paper search varies translation and
     # orientation around it independently for both arms.
-    fwd = head_forward_flat(head)
+    valid_head = head[camera_valid]
+    fwd = head_forward_flat(valid_head)
     _, nominal_R_base = base_frame(fwd)
-    camera_pos = np.mean(head[:, :3], axis=0)
+    camera_pos = np.mean(valid_head[:, :3], axis=0)
     # Reuse the single-arm model for base_search and later IK; the dual-arm model is for rendering only.
     arm_ids, arm_qadr, arm_vadr = name_to_dof(single, spec.arm_joints)
     ee_ref_single = resolve_ee_ref(single, spec)
@@ -706,7 +749,7 @@ def process_episode(ep, zarr_dir, bg_path, state, out_dir,
                 print(f"    [{ep}] scene support fallback: camera intrinsics unavailable")
             else:
                 support_surface = estimate_scene_support_surface(
-                    scene_depth, head, K,
+                    scene_depth, observed_head, K,
                     np.concatenate([p for p, active in ((left_p, has_left),
                                                          (right_p, has_right)) if active]),
                     spec.reach)
@@ -827,7 +870,7 @@ def process_episode(ep, zarr_dir, bg_path, state, out_dir,
         if pull_norm < 1e-8:
             raise ValueError("cannot apply base_pullback: head viewing direction has no horizontal component")
         pull = pull_dir / pull_norm * base_pullback
-        head_pts = head[:, :3]
+        head_pts = valid_head[:, :3]
         before = min(
             np.linalg.norm(head_pts - left_base_pos, axis=1).min(),
             np.linalg.norm(head_pts - right_base_pos, axis=1).min(),
@@ -1665,6 +1708,18 @@ def process_episode(ep, zarr_dir, bg_path, state, out_dir,
     cross_arm_penetration = np.zeros(N, dtype=np.float32)
 
     for t in range(Nrender):
+        if not camera_valid[t]:
+            # Preserve video timing without compositing a robot from a camera
+            # pose that was never localized.
+            blank = np.zeros_like(bg_frames[t])
+            w_final.write(bg_frames[t])
+            w_mask.write(blank)
+            for writer in w_wrist.values():
+                writer.write(blank)
+            if w_debug is not None:
+                w_debug.write(np.hstack([bg_frames[t], bg_frames[t]]))
+            depth_visibility_ratio[t] = 0.0
+            continue
         data.qpos[:] = qpos_all[t]
         set_ego_camera(data, head[t])
         # First update the robot frames from qpos, then place the mocap wrist
@@ -1772,6 +1827,8 @@ def process_episode(ep, zarr_dir, bg_path, state, out_dir,
         qpos_all[:, l_qadr], qpos_all[:, lf_qadr],
         qpos_all[:, r_qadr], qpos_all[:, rf_qadr],
     ], axis=1).astype(np.float32)
+    ik_position_ok[~camera_valid] = False
+    ik_pose_ok[~camera_valid] = False
     support_metadata = {}
     if spec.scene_support_surface:
         support_metadata = {
@@ -1791,6 +1848,7 @@ def process_episode(ep, zarr_dir, bg_path, state, out_dir,
         }
     np.savez_compressed(str(out_dir / f"{ep}_ik.npz"),
                         qpos=qpos_all, state=state_qpos,
+                        camera_pose_valid=camera_valid,
                         robot_type=np.asarray(spec.name),
                         state_names=np.asarray([
                             f"left_{n}" for n in spec.state_names
@@ -1904,6 +1962,7 @@ def process_episode(ep, zarr_dir, bg_path, state, out_dir,
                         **support_metadata)
     np.savez_compressed(str(out_dir / f"{ep}_quality.npz"),
                         hand_detected=hand_detected,
+                        camera_pose_valid=camera_valid,
                         rendered=rendered,
                         robot_pixel_count=robot_pixel_count,
                         robot_mask_ratio=robot_mask_ratio,

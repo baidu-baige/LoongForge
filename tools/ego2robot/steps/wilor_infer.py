@@ -230,28 +230,9 @@ def run(args):
                     scaled_focal[j] * pts_wilor[:, 1] /
                     np.maximum(pts_wilor[:, 2], 1e-6) + img_size[j, 1] / 2.0,
                 ], axis=1).astype(np.float32)
-                # Re-solve translation for the MuJoCo image focal length. A
-                # uniform metric scale cannot correct a focal-length mismatch;
-                # matching the 2D extent gives a stable, visible hand depth.
-                render_focal = float(max(img_size[j, 0], img_size[j, 1]))
-                extent3d = np.ptp(kp_j, axis=0)
-                extent2d = np.ptp(desired_2d, axis=0)
-                z_candidates = [
-                    render_focal * float(extent3d[0]) /
-                    max(float(extent2d[0]), 1.0),
-                    render_focal * float(extent3d[1]) /
-                    max(float(extent2d[1]), 1.0),
-                ]
-                z_target = float(np.clip(np.median(z_candidates), 0.25, 2.0))
-                desired_center = desired_2d.mean(axis=0)
-                kp_center = kp_j.mean(axis=0)
-                trans_j = np.asarray([
-                    (desired_center[0] - img_size[j, 0] / 2.0) * z_target /
-                    render_focal - kp_center[0],
-                    (desired_center[1] - img_size[j, 1] / 2.0) * z_target /
-                    render_focal - kp_center[1],
-                    z_target,
-                ], dtype=np.float32)
+                # Keep the model-camera prediction intact. Path B estimates
+                # its camera from RGB and fits the rigid hand pose there;
+                # rendering focal lengths must never clip metric depth here.
                 kp_j += trans_j[None, :]
                 all_kp.append(kp_j)
                 all_right.append(right[j])
