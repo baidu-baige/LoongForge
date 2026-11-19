@@ -58,7 +58,7 @@ model:
   diffusion:
     action: {shift: 5.0}
 
-  losses: {video_flow: {weight: 1.0}, action_flow: {weight: 1.0}}
+  heads: {video_flow: {weight: 1.0}, action_flow: {weight: 1.0}}
 
   inference_steps: 10
   proprio_dim: 8

@@ -619,7 +619,7 @@ class WorldModelSpec:
 
 
 _SECTION_KEYS: tuple[str, ...] = (
-    "geometry", "streams", "diffusion", "losses",
+    "geometry", "streams", "diffusion", "heads",
     "attention_backend", "attention_block_size",
 )
 """The config fields ``build_world_model_spec`` reads, besides ``model_type``.
@@ -629,8 +629,8 @@ R5). A per-model config subclass adds only *provider keyword arguments* on top,
 which is what ``provider_kwargs()`` returns.
 """
 
-_LOSS_KNOBS: frozenset[str] = frozenset({"weight", "warmup_steps", "enabled"})
-"""Keys a YAML ``losses.<name>:`` block may carry.
+_HEAD_KNOBS: frozenset[str] = frozenset({"weight", "warmup_steps", "enabled"})
+"""Keys a YAML ``heads.<name>:`` block may carry.
 
 All three land on the ``LossSpec`` that consumes the named output head.
 ``WorldModel.compute_losses`` rejects non-default ``HeadSpec.weight`` values
@@ -660,7 +660,7 @@ def _plain(value: Any) -> dict[str, Any]:
     if not isinstance(value, Mapping):
         raise TypeError(
             f"a config section must be a mapping, got "
-            f"{type(value).__name__}; geometry / streams / diffusion / losses "
+            f"{type(value).__name__}; geometry / streams / diffusion / heads "
             "are all key: value structures"
         )
     return dict(value)
@@ -705,7 +705,7 @@ def _flatten_per_stream(section: str, body: dict[str, Any],
 
 
 def _reweight(loss: LossSpec, knobs: Mapping[str, Any]) -> LossSpec:
-    """Apply one ``losses.<name>:`` block to the ``LossSpec`` that consumes it.
+    """Apply one ``heads.<name>:`` block to the ``LossSpec`` that consumes it.
 
     ``weight`` and ``warmup_steps`` are two views of the same number, so they
     are resolved together: with a warmup the effective weight lives in
@@ -721,13 +721,13 @@ def _reweight(loss: LossSpec, knobs: Mapping[str, Any]) -> LossSpec:
         A new ``LossSpec``; ``loss`` itself when the block is empty.
 
     Raises:
-        ValueError: The block carries a key outside ``_LOSS_KNOBS``.
+        ValueError: The block carries a key outside ``_HEAD_KNOBS``.
     """
-    stray = sorted(set(knobs) - _LOSS_KNOBS)
+    stray = sorted(set(knobs) - _HEAD_KNOBS)
     if stray:
         raise ValueError(
-            f"losses.{loss.head} got unknown keys {stray}; "
-            f"the writable ones are {sorted(_LOSS_KNOBS)}"
+            f"heads.{loss.head} got unknown keys {stray}; "
+            f"the writable ones are {sorted(_HEAD_KNOBS)}"
         )
     ramp = loss.ramp
     weight = float(knobs.get("weight",
@@ -746,9 +746,9 @@ def _reweight(loss: LossSpec, knobs: Mapping[str, Any]) -> LossSpec:
     return out
 
 
-def _apply_loss_overrides(spec: WorldModelSpec,
-                 loss_overrides: dict[str, Any]) -> WorldModelSpec:
-    """Rewrite the loss table from the ``losses:`` section.
+def _apply_heads(spec: WorldModelSpec,
+                 heads: dict[str, Any]) -> WorldModelSpec:
+    """Rewrite the loss table from the ``heads:`` section.
 
     This one override is safe *after* the provider has run, unlike the
     geometry: no provider derives anything from a loss weight, so replacing the
@@ -756,7 +756,7 @@ def _apply_loss_overrides(spec: WorldModelSpec,
 
     Args:
         spec: The provider's output.
-        loss_overrides: ``{head_name: {knob: value}}``, already plain.
+        heads: ``{head_name: {knob: value}}``, already plain.
 
     Returns:
         ``spec`` when the section is empty, otherwise a copy whose
@@ -767,19 +767,19 @@ def _apply_loss_overrides(spec: WorldModelSpec,
             terms that do exist, because the usual cause is naming the head
             (``video_flow``) where the loss happens to use another name.
     """
-    if not loss_overrides:
+    if not heads:
         return spec
     known = {loss.head: loss.name for loss in spec.diffusion.losses
              if loss.head is not None}
-    stray = sorted(set(loss_overrides) - set(known))
+    stray = sorted(set(heads) - set(known))
     if stray:
         raise ValueError(
-            f"{stray} in the losses section is consumed by no loss term; "
+            f"{stray} in the heads section is consumed by no loss term; "
             f"the current head to loss term mapping is {known}"
         )
     losses = tuple(
-        _reweight(loss, _plain(loss_overrides[loss.head]))
-        if loss.head in loss_overrides else loss
+        _reweight(loss, _plain(heads[loss.head]))
+        if loss.head in heads else loss
         for loss in spec.diffusion.losses
     )
     return replace(spec, diffusion=replace(spec.diffusion, losses=losses))
@@ -892,10 +892,9 @@ def build_world_model_spec(config: Any) -> WorldModelSpec:
             f"provider(model_type={model_type!r}) returned "
             f"{type(spec).__name__}, it must return a WorldModelSpec"
         )
-    spec = _apply_loss_overrides(spec, _plain(getattr(config, "losses", None)))
+    spec = _apply_heads(spec, _plain(getattr(config, "heads", None)))
     return _apply_backend(spec, getattr(config, "attention_backend", None),
                           getattr(config, "attention_block_size", None))
-
 
 
 

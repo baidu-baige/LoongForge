@@ -47,7 +47,7 @@ class WorldModelConfig:
         diffusion: ``{stream: {knob: value}}``, same flattening. Today the only
             knob is ``shift``; a stream whose distribution has no scalar (vpp2's
             constant video timestep) simply has no entry.
-        losses: ``{head_name: {weight|warmup_steps|enabled}}``, keyed by
+        heads: ``{head_name: {weight|warmup_steps|enabled}}``, keyed by
             output-head name and applied to the loss term that consumes that
             head after the provider has run.
         attention_backend: ``dense`` / ``flex`` / ``sdpa`` / ``flash``, or
@@ -68,7 +68,7 @@ class WorldModelConfig:
     geometry: Dict[str, Any] = field(default_factory=dict)
     streams: Dict[str, Any] = field(default_factory=dict)
     diffusion: Dict[str, Any] = field(default_factory=dict)
-    losses: Dict[str, Any] = field(default_factory=dict)
+    heads: Dict[str, Any] = field(default_factory=dict)
     attention_backend: Optional[str] = None
     attention_block_size: Optional[int] = None
 
