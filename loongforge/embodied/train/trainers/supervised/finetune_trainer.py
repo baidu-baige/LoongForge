@@ -279,11 +279,10 @@ class FinetuneTrainer(BaseTrainer):
     def _handle_resume(self, path: str, step: int, epoch: int):
         """Resume model weights from a discovered checkpoint.
 
-        For ``dcp`` checkpoints, weight loading is deferred until after
-        ``wrap_model`` (handled by ``resume_training_state``), since DCP needs
-        the FSDP-sharded DTensor layout to know how to reshard. Calling
-        ``load_pretrained`` here would also fail because there is no
-        consolidated single-file model in a DCP checkpoint dir.
+        For ``dcp`` and DeepSpeed checkpoints, weight loading is deferred until
+        after distributed wrapping, since the backend-specific loader needs its
+        sharded layout. Calling ``load_pretrained`` here would also fail because
+        there is no consolidated single-file model in a resumable checkpoint dir.
         """
         if is_lora_adapter_checkpoint(path):
             if not self.training_args.use_lora:
@@ -310,16 +309,24 @@ class FinetuneTrainer(BaseTrainer):
             self.logger.log_resume(step)
             return
 
-        fmt = detect_checkpoint_format(path)
-        if fmt in {"dcp", "deepspeed"}:
+        if self.training_args.distributed_strategy == "deepspeed":
             if self.ctx.is_main:
                 logger.info(
-                    "resume: detected %s checkpoint at %s — deferring weight "
-                    "load until after wrap_model.",
-                    fmt, path,
+                    "resume: DeepSpeed checkpoint at %s — deferring weight "
+                    "load until after engine initialization.",
+                    path,
                 )
         else:
-            load_pretrained(self.model, path, self.ctx)
+            fmt = detect_checkpoint_format(path)
+            if fmt == "dcp":
+                if self.ctx.is_main:
+                    logger.info(
+                        "resume: detected DCP checkpoint at %s — deferring weight "
+                        "load until after wrap_model.",
+                        path,
+                    )
+            else:
+                load_pretrained(self.model, path, self.ctx)
         self.completed_steps = step
         self.current_epoch = epoch
         self.logger.log_resume(step)

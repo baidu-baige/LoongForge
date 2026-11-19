@@ -67,7 +67,7 @@ _ADAPTER_CONFIG_FILE = "adapter_config.json"
 _ADAPTER_META_FILE = "adapter_meta.json"
 _ZERO_OPTIMIZER_DIR = "zero_optimizer"
 _ZERO_OPTIMIZER_METADATA_FILE = f"{_ZERO_OPTIMIZER_DIR}/metadata.json"
-_VALID_FORMATS = ("safetensors", "pt", "dcp", "deepspeed")
+_VALID_FORMATS = ("safetensors", "pt", "dcp")
 
 # Upper bound (seconds) for draining an in-flight ZeRO optimizer write after a
 # failed DCP save. The write normally completes in seconds; this only guards
@@ -558,7 +558,7 @@ def restore_rank_rng_state(rng_per_rank, ctx: DistributedContext, source: str = 
 def detect_checkpoint_format(path: str) -> str:
     """Identify checkpoint format by metadata, falling back to directory sniff.
 
-    Returns one of ``"safetensors"``, ``"pt"``, ``"dcp"``, or ``"deepspeed"``.
+    Returns one of ``"safetensors"``, ``"pt"``, or ``"dcp"``.
     """
     meta_path = os.path.join(path, "resume_meta.json")
     if os.path.exists(meta_path):
