@@ -3,6 +3,8 @@
 
 """Contract regressions for the official Dyn-HaMR / Path B bridge."""
 
+import contextlib
+import io
 import json
 import tempfile
 import unittest
@@ -13,7 +15,8 @@ import cv2
 import numpy as np
 
 from steps import dynhamr_official as bridge
-from steps import path_b
+from steps import hand_camera, path_b
+from tests.test_path_b_geometry import hand_shape
 
 
 def prediction_fields():
@@ -28,6 +31,70 @@ def prediction_fields():
 
 
 class DynhamrBridgeContracts(unittest.TestCase):
+    def test_sparse_offline_predictions_complete_static_path_b(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            points = np.tile(hand_shape() + [0., 0., .7], (12, 1, 1))
+            camera = hand_camera.assumed_camera(64, 48)
+            keypoints_2d = hand_camera.project(points, hand_camera.camera_matrix(camera))
+            np.savez(root / "source.npz", pred_keypoints_3d=points,
+                     keypoints_2d=keypoints_2d, frame=np.arange(12),
+                     right=np.ones(12), score=np.full(12, .9))
+            args = path_b.build_arg_parser().parse_args([
+                "--video", "unused.mp4", "--output_dir", str(root / "out"),
+                "--predictions", str(root / "source.npz"),
+                "--camera_motion", "static", "--camera_estimator", "assumed"])
+            frames = [np.zeros((48, 64, 3), np.uint8)] * 12
+            with patch.object(path_b, "read_video", return_value=(frames, 30.)), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                path_b.process_video(args)
+            self.assertTrue((root / "out/video_000/zarr.json").is_file())
+            with np.load(root / "out/video_000_wilor_raw.npz") as cached:
+                self.assertIn("keypoints_2d", cached)
+                self.assertNotIn("hand_pose", cached)
+
+    def test_sparse_offline_predictions_cache_roundtrip(self):
+        for fields in ((), ("keypoints_2d",), ("keypoints_2d", "betas")):
+            with self.subTest(fields=fields), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                full = prediction_fields()
+                required = ("pred_keypoints_3d", "right", "frame", "score")
+                raw = {key: full[key] for key in (*required, *fields)}
+                np.savez(root / "source.npz", **raw)
+                detections = path_b.collect_predictions(root / "source.npz")
+                path_b.save_rich_predictions(root / "cache.npz", detections)
+                restored = path_b.collect_predictions(root / "cache.npz")
+                with np.load(root / "cache.npz") as cached:
+                    self.assertEqual(set(cached.files), set(raw))
+                    for key, value in raw.items():
+                        np.testing.assert_array_equal(cached[key], value)
+                for before, after in zip(detections, restored):
+                    np.testing.assert_array_equal(after["keypoints"], before["keypoints"])
+                    self.assertEqual(after["frame"], before["frame"])
+
+    def test_mixed_optional_fields_do_not_break_cache(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            np.savez(root / "source.npz", **prediction_fields())
+            predictions = path_b.collect_predictions(root / "source.npz")
+            del predictions[1]["_wilor_extra"]["hand_pose"]
+            path_b.save_rich_predictions(root / "cache.npz", predictions)
+            with np.load(root / "cache.npz") as cached:
+                self.assertNotIn("hand_pose", cached)
+                self.assertIn("keypoints_2d", cached)
+                self.assertIn("betas", cached)
+
+    def test_official_optimizer_rejects_incomplete_mano_with_clear_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            file = Path(tmp) / "source.npz"
+            fields = prediction_fields()
+            del fields["hand_pose"]
+            np.savez(file, **fields)
+            predictions = path_b.collect_predictions(file)
+            with self.assertRaisesRegex(RuntimeError, "requires WiLoR MANO parameters"):
+                path_b.apply_official_dynhamr(
+                    predictions, "video.mp4", "repo", "mano", Path(tmp), "-1", True)
+
     def test_rich_offline_predictions_keep_mano_and_2d(self):
         with tempfile.TemporaryDirectory() as tmp:
             file = Path(tmp) / 'predictions.npz'

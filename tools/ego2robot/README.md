@@ -225,6 +225,10 @@ flags and scale. Zarr stores `path_b_camera_pose_valid` and
 `path_b_camera_pose_observed`, which survive `load` / `align`.
 Finite poses at invalid frames are used only as internal optimizer placeholders;
 their observation confidence is zero and exported poses remain NaN.
+Retarget computes base placement from valid camera frames. Unlocalized frames
+keep their timeline entries, produce background-only output with blank robot
+views, and stay invalid in the IK/quality `camera_pose_valid` arrays. Episodes
+without any valid camera pose fail explicitly.
 `<episode>_wilor_raw.npz` preserves WiLoR output for reruns.
 The old DA3-BASE camera backend remains removed. DA3Metric-Large is available
 through `--metric_depth_backend da3_metric` for metric scale estimation and
@@ -284,13 +288,26 @@ zero 2D confidence. Export uses the correct MANO mean-pose convention and keeps
 the optimized camera-frame translation instead of restoring WiLoR wrists.
 
 For upstream revision `fa9cd74`, apply the compatibility patch to defer optional
-HMP/BMC dependencies, remove an unused `mano` import, and honor supplied static
-camera calibration:
+HMP/BMC dependencies, remove an unused `mano` import, honor supplied camera
+calibration, and preserve missing-observation confidence and visibility. MANO
+initialization may be interpolated; missing 2D observations stay excluded from
+the optimization loss. The loader retains unobserved video boundaries so the
+optimizer and exported predictions keep the original frame indices:
 
 ```bash
 git -C <DynHaMR_dir> apply <ego2robot_dir>/steps/dynhamr_compat.patch
 python -m pip install tensorboard loguru torchgeometry==0.1.2 gdown
 ```
+
+The loader integration tests read pristine `fa9cd74` sources from an existing
+checkout and apply the patch in a temporary directory. From `tools/ego2robot`:
+
+```bash
+EGO2ROBOT_DYNHAMR_REPO=<DynHaMR_dir> python -m unittest tests.test_dynhamr_loader -v
+```
+
+These tests require the CPU runtime (`torch`, `imageio`, OpenCV, NumPy, SciPy),
+but no model assets. They skip when the checkout variable is unset.
 
 WiLoR initialization avoids rerunning HaMeR or SLAM. HMP motion prior is disabled
 by default and the default BMC loss weight is zero; enabling those optional
@@ -301,6 +318,9 @@ Use `--dynhamr_gpu -1` for CPU optimization without changing WiLoR's device.
 Inputs, optimizer logs, and official results are retained in
 `<output_dir>/<episode>_dynhamr/`. Offline `--predictions` preserves WiLoR's 2D
 and MANO parameters and can rerun the official optimizer from cached predictions.
+Offline predictions containing only 3D/2D keypoints also work without Dyn-HaMR;
+the raw cache stores the optional fields present for every detection. Official
+Dyn-HaMR requires all MANO initialization fields.
 
 The official WiLoR runtime also needs its Python dependencies (`ultralytics`,
 `smplx`, `pytorch-lightning`, `yacs`, and `scikit-image`). Set `--mano_dir` to

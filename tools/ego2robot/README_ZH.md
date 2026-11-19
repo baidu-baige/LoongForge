@@ -209,6 +209,9 @@ Zarr 关键点和 `obs_head_pose` 一致使用；优化时固定相机尺度。
 Zarr 中的 `path_b_camera_pose_valid`、`path_b_camera_pose_observed` 会传递到
 `load` / `align`。无效帧的有限相机值仅供优化器内部占位，对应观测置信度为零，
 对外导出的相机位姿保持 NaN；
+retarget 只用有效相机帧计算基座位置和朝向。未定位帧保留时间轴，输出原背景和
+空白机器人视图，并在 IK/质量文件的 `camera_pose_valid` 中标为无效；
+整段没有有效相机位姿时会明确报错。
 `<episode>_wilor_raw.npz` 保存原始 WiLoR 预测供重放。
 旧的 DA3-BASE 相机后端仍已移除。DA3Metric-Large 只通过
 `--metric_depth_backend da3_metric` 参与米制尺度估计及可选手部平移校正，
@@ -261,12 +264,24 @@ bridge 会自动准备完整视频帧、左右手 track JSON、相机和 shot �
 
 官方 `fa9cd74` 版本需要以下兼容补丁，以延迟加载默认未启用的 HMP/BMC
 资源、去掉未使用的 `mano` 导入、修正缺失的默认数据配置，并让固定相机
-读取提供的标定文件：
+读取提供的标定文件。补丁还会保留缺失观测的零置信度和不可见标记；
+MANO 初始化可以插值，但缺失的 2D 观测不会参与优化损失。加载器保留片头和片尾
+没有观测的帧，使优化结果与原视频保持相同的帧号：
 
 ```bash
 git -C <DynHaMR_dir> apply <ego2robot_dir>/steps/dynhamr_compat.patch
 python -m pip install tensorboard loguru torchgeometry==0.1.2 gdown
 ```
+
+加载器集成测试从已有仓库读取原始 `fa9cd74` 源码，在临时目录中应用补丁，
+不会修改该仓库。在 `tools/ego2robot` 目录运行：
+
+```bash
+EGO2ROBOT_DYNHAMR_REPO=<DynHaMR_dir> python -m unittest tests.test_dynhamr_loader -v
+```
+
+测试需要 CPU 运行依赖（`torch`、`imageio`、OpenCV、NumPy、SciPy），无需模型
+资源；未设置仓库环境变量时会跳过这些集成测试。
 
 使用 WiLoR 初始化时不需要重复运行 HaMeR 或 SLAM。默认未启用 HMP motion
 prior，BMC 的默认损失权重为零；要开启这些可选阶段，仍需按官方 README
@@ -277,6 +292,8 @@ prior，BMC 的默认损失权重为零；要开启这些可选阶段，仍需�
 优化日志、输入帧/JSON 和官方结果保存在
 `<output_dir>/<episode>_dynhamr/`，便于回读验证。`--predictions` 也会保留
 WiLoR NPZ 中的 2D 和 MANO 参数，可从已有完整预测重跑官方优化器。
+未启用 Dyn-HaMR 时，也支持只有 3D/2D 关键点的离线预测；原始缓存只保存每条
+检测都具有的可选字段。官方 Dyn-HaMR 仍要求完整的 MANO 初始化参数。
 
 官方 WiLoR 运行还需要 `ultralytics`、`smplx`、`pytorch-lightning`、`yacs`、
 `scikit-image` 等依赖。将 `--mano_dir` 指向 MANO 项目的 `models` 目录

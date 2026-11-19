@@ -10,10 +10,75 @@ index f15b4ff..658ad3b 100644
    - _self_
 
 diff --git a/dyn-hamr/data/dataset.py b/dyn-hamr/data/dataset.py
-index f849529..253e4a7 100644
 --- a/dyn-hamr/data/dataset.py
 +++ b/dyn-hamr/data/dataset.py
-@@ -353,7 +353,7 @@ class CameraData(object):
+@@ -32,6 +32,13 @@
+ MAX_NUM_TRACKS = 12
+ MIN_TRACK_LEN = 60
+ MIN_KEYP_CONF = 0.4
++
++
++def keypoints_visible(path, min_conf=MIN_KEYP_CONF):
++    """A placeholder JSON with zero confidence is not an observation."""
++    keypoints = read_keypoints(path)
++    return bool(np.any(np.isfinite(keypoints).all(axis=1) &
++                       (keypoints[:, 2] >= min_conf)))
+
+
+ def get_dataset_from_cfg(cfg):
+@@ -132,7 +139,7 @@
+                 for tid in track_ids
+             ]
+             track_lens = [
+-                len(list(filter(os.path.isfile, paths))) for paths in track_paths
++                sum(keypoints_visible(p, MIN_KEYP_CONF) for p in paths) for paths in track_paths
+             ]
+             print("raw TRACK IDS and LENGTHS", track_ids, track_lens)
+             track_ids = [
+@@ -157,7 +164,7 @@
+         self.track_vis_masks = []
+         for pred_dir in self.track_dirs:
+             kp_paths = [f"{pred_dir}/{x}_keypoints.json" for x in self.img_names]
+-            has_kp = [os.path.isfile(x) for x in kp_paths]
++            has_kp = [keypoints_visible(x, MIN_KEYP_CONF) for x in kp_paths]
+
+             # keep track of which frames this track is visible in
+             vis_mask = np.array(has_kp)
+@@ -168,8 +175,9 @@
+                 eidx = max(eidx, ei)
+             self.track_vis_masks.append(vis_mask)
+
+-        eidx = max(eidx + 1, 0)
+-        sidx = min(sidx, eidx)
++        # Preserve the input video timeline, including unobserved ends.
++        # Visibility and confidence mask losses without shifting frame IDs.
++        sidx, eidx = 0, self.num_imgs
+         print("START", sidx, "END", eidx)
+         self.start_idx = sidx
+         self.end_idx = eidx
+@@ -227,16 +235,18 @@
+                 f"{self.track_dirs[i]}/{x}_keypoints.json" for x in self.sel_img_names
+             ]
+             # (T, J, 3) (x, y, conf) - with interpolation for missing frames
+-            joints2d_data = load_keypoints_with_interp(kp_paths, interp=interp_input)
++            # Interpolate MANO initialization only, never 2D observations.
++            joints2d_data = load_keypoints_with_interp(kp_paths, interp=False)
+             # print('joints2d_data: ', joints2d_data.shape)
+             # print('joints2d_data[:, :, [2]]: ', np.unique(joints2d_data[:, :, [2]]))
+             # raise ValueError
+             # Discard bad ViTPose detections
+-            joints2d_data[:, :, 2] = 1.0
++            # Keep missing and low-confidence observations out of the loss.
++            joints2d_data[~np.isfinite(joints2d_data).all(axis=2)] = 0
++            joints2d_data[np.asarray(vis_mask) <= 0] = 0
+             joints2d_data[
+                 np.repeat(joints2d_data[:, :, [2]] < MIN_KEYP_CONF, 3, axis=2)
+             ] = 0
+-            # Set all confidence values to 1.0 for optimization
+             data_out["joints2d"].append(joints2d_data)
+
+             # load single image mano predictions
+@@ -353,7 +363,7 @@
          sidx, eidx = self.sidx, self.eidx
          img_w, img_h = self.img_size
          fpath = os.path.join(self.cam_dir, "cameras.npz")
@@ -22,7 +87,7 @@ index f849529..253e4a7 100644
              Logger.log(f"Loading cameras from {fpath}...")
              cam_R, cam_t, intrins, width, height = load_cameras_npz(fpath, self.seq_len)
              scale = img_w / width
-@@ -363,9 +363,10 @@ class CameraData(object):
+@@ -363,9 +373,10 @@
              #             self.cam_R = torch.einsum("ij,...jk->...ik", R0, cam_R[sidx:eidx])
              #             self.cam_t = t0 + torch.einsum("ij,...j->...i", R0, cam_t[sidx:eidx])
  #             t0 = -cam_t[sidx:eidx].mean(dim=0) + torch.randn(3) * 0.1

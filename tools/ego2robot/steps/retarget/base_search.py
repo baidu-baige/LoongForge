@@ -119,9 +119,14 @@ def estimate_scene_support_surface(scene_depth, head_seq, K, targets_p_world,
     if n_frames == 0 or len(targets) == 0:
         return None
 
-    frame_ids = np.unique(np.linspace(
-        0, n_frames - 1, min(n_frames, SUPPORT_SURFACE_MAX_FRAMES),
-        dtype=int))
+    valid_frames = np.flatnonzero(
+        np.isfinite(head_seq[:n_frames, :7]).all(axis=1) &
+        (np.linalg.norm(head_seq[:n_frames, 3:7], axis=1) > 1e-8))
+    if not len(valid_frames):
+        return None
+    frame_ids = valid_frames[np.unique(np.linspace(
+        0, len(valid_frames) - 1,
+        min(len(valid_frames), SUPPORT_SURFACE_MAX_FRAMES), dtype=int))]
     h, w = depth.shape[1:]
     rows = np.arange(0, h, SUPPORT_SURFACE_PIXEL_STRIDE, dtype=int)
     cols = np.arange(0, w, SUPPORT_SURFACE_PIXEL_STRIDE, dtype=int)

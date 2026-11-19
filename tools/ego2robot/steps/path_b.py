@@ -186,8 +186,11 @@ def collect_predictions(root: Path):
 def save_rich_predictions(path, predictions):
     """Persist the unmodified video model output for controlled reruns."""
     extras = [item.get("_wilor_extra") for item in predictions]
-    if not all(extra is not None for extra in extras):
+    if not predictions:
         return
+    optional = ("keypoints_2d", "hand_pose", "global_orient", "betas", "cam_trans")
+    common = [key for key in optional if all(
+        extra is not None and key in extra for extra in extras)]
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(
         path, pred_keypoints_3d=np.stack([x["keypoints"] for x in predictions]),
@@ -195,7 +198,7 @@ def save_rich_predictions(path, predictions):
         frame=np.asarray([x["frame"] for x in predictions]),
         score=np.asarray([x["score"] for x in predictions]),
         **{key: np.asarray([extra[key] for extra in extras])
-           for key in ("keypoints_2d", "hand_pose", "global_orient", "betas", "cam_trans")})
+           for key in common})
 
 
 def run_wilor(frames, checkpoint: str, wilor_repo: str | None, detector: str | None,
@@ -292,7 +295,9 @@ def apply_official_dynhamr(predictions, video: str, repo: str, mano_dir: str,
                            camera_trajectory=None):
     """Refine both observed hands with the official Dyn-HaMR optimizer."""
     extras = [x.get("_wilor_extra") for x in predictions]
-    if not extras or any(x is None for x in extras):
+    required = ("keypoints_2d", "hand_pose", "global_orient", "betas", "cam_trans")
+    if not extras or any(x is None or any(key not in x for key in required)
+                         for x in extras):
         raise RuntimeError(
             "official Dyn-HaMR requires WiLoR MANO parameters; run Path B "
             "from video with --dynhamr_repo instead of --predictions"
@@ -304,7 +309,7 @@ def apply_official_dynhamr(predictions, video: str, repo: str, mano_dir: str,
                         frame=np.asarray([x["frame"] for x in predictions]),
                         score=np.asarray([x["score"] for x in predictions]),
                         **{k: np.asarray([x[k] for x in extras], np.float32)
-                           for k in ("keypoints_2d", "hand_pose", "global_orient", "betas", "cam_trans")})
+                           for k in required})
     dyn_output = Path(output_dir) if output_dir is not None else work_dir / "dynhamr_output"
     cmd = [sys.executable, str(Path(__file__).with_name("dynhamr_official.py")),
            "--repo", repo, "--video", video, "--output", str(dyn_output),
