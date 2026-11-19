@@ -21,6 +21,7 @@ This directory contains the CI/CD workflows for LoongForge.
 | `gpu-regression.yml` | Workflow dispatch | Run exact-SHA baseline regression for one model suite |
 | `gpu-invalidate.yml` | PR synchronize | Cancel stale suite GPU work after a new commit |
 | `gpu-watchdog.yml` | GPU workflow completion | Finalize a check if cancellation bypasses normal cleanup |
+| `pytorch-compatibility.yml` | Weekly schedule + workflow dispatch | Test the wheel on the two newest stable PyTorch CPU series |
 | `release.yml` | Workflow dispatch | Build, regress, and publish the operator-selected release image |
 
 Pull requests run `static-checks.yml` automatically. Its manual dispatch is diagnostic:
@@ -28,6 +29,19 @@ PR-only checks skip where appropriate and the final job is named
 `manual-static-checks`, so it cannot satisfy the required PR `static-checks` check.
 Operational workflows such as `submodule-sync.yml` may retain their own
 dispatch inputs.
+
+## PyTorch Compatibility
+
+The weekly workflow selects the latest patch in each of the two newest stable
+PyTorch series with compatible wheels in PyTorch's CPU index for Ubuntu x86-64
+and Python 3.12. Use `torch-versions` on manual runs to reproduce a specific
+version or pair. Each matrix job logs the installed Python and PyTorch versions,
+installs the LoongForge wheel, and tests it outside the source tree.
+
+The checks cover package import, CLI installation, and DreamZero's flow
+scheduler, action encoder, and Wan text encoder with synthetic inputs. Use the
+GPU regression workflow for CUDA kernels, the full training CLI, and model
+training on the repository's pinned NVIDIA image.
 
 ## GPU Regression
 
