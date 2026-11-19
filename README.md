@@ -481,9 +481,31 @@ If you find LoongForge-VLDA helpful, please consider citing our paper:
 }
 ```
 
+## 🚀 Releases and Maintenance
+
+LoongForge releases on demand using immutable `vX.Y.Z` tags and
+`vX.Y.Z-rc.N` for release candidates. Maintainers check the package version
+against the tag and review validation results, compatibility documentation,
+and release notes. The manually dispatched release workflow builds and validates
+the Docker image. A successful formal run with all stages enabled publishes the
+versioned image and creates a GitHub Release. See the
+[release workflow guide](.github/workflows/README.md#releases) and
+[release notes](https://github.com/baidu-baige/LoongForge/releases).
+
+LoongForge commits to at least 12 months of active maintenance and to validating
+its Python package against the latest patch release in each of the two newest
+stable PyTorch release series. Maintainers use GitHub issues and pull requests
+to triage regressions and coordinate fixes.
+
+GitHub CI runs CPU checks and can run NVIDIA GPU regressions. Kunlun XPU support
+remains available, with automated XPU validation pending because CI has no XPU
+runner. See [project governance](GOVERNANCE.md) and the
+[security policy](SECURITY.md).
+
 ## 🤝 Contributing
 
 We warmly welcome community contributions — bug reports, feature proposals, and PRs alike. Please read our [Contributing Guidelines](./CONTRIBUTING.md) before submitting.
+Participation is covered by the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 Thanks to all our contributors:
 
@@ -508,4 +530,5 @@ We also thank the [LINUX DO](https://linux.do/) community for providing a welcom
 
 ## 📄 License
 
-LoongForge is released under the [Apache License 2.0](./LICENSE); some files derive from third-party projects — see their file headers.
+LoongForge is released under the [Apache License 2.0](./LICENSE). For derived
+files, see their headers and the [third-party notices](THIRD_PARTY_NOTICES.md).

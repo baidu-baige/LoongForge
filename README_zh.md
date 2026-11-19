@@ -480,9 +480,24 @@ LoongForge/
 }
 ```
 
+## 🚀 发布与维护
+
+LoongForge 按需发布。正式版使用不可变的 `vX.Y.Z` 标签，候选版使用 `vX.Y.Z-rc.N`。
+维护者核对 Python 包版本和标签，并审阅验证结果、兼容性文档和发布说明。
+发布工作流由维护者手动触发，负责构建和验证 Docker 镜像。正式发布的各阶段全部启用且成功后，
+工作流发布版本化镜像并创建 GitHub Release。详见[发布流程](.github/workflows/README.md#releases)
+和[发布记录](https://github.com/baidu-baige/LoongForge/releases)。
+
+LoongForge 承诺持续维护至少 12 个月，并用 PyTorch 最新两个稳定版本系列各自的最新补丁版本
+验证 LoongForge Python 包。维护者通过 GitHub Issue 和 Pull Request 跟进回归问题并协调修复。
+
+GitHub CI 执行 CPU 检查，并可运行 NVIDIA GPU 回归测试。项目继续支持昆仑芯 XPU。
+当前 CI 没有 XPU Runner，因此尚未覆盖 XPU 自动验证。详见[治理文档](GOVERNANCE.md)和[安全策略](SECURITY.md)。
+
 ## 🤝 参与贡献
 
 我们非常欢迎社区贡献 —— 无论是 Bug 报告、功能提案还是 PR。在提交前请阅读 [贡献指南](./CONTRIBUTING.md)。
+参与项目时请遵守[行为准则](CODE_OF_CONDUCT.md)。
 
 非常感谢 LoongForge 的所有贡献者：
 
@@ -507,4 +522,4 @@ LoongForge 的成长离不开开源社区。其 Megatron 后端以 NVIDIA 的 [M
 
 ## 📄 开源协议
 
-LoongForge 基于 [Apache License 2.0](./LICENSE) 发布；部分文件改编自第三方项目，详见各文件头部。
+LoongForge 基于 [Apache License 2.0](./LICENSE) 发布。改编自第三方项目的文件请参考各文件头部和[第三方声明](THIRD_PARTY_NOTICES.md)。

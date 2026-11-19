@@ -1,11 +1,17 @@
 # Contribute
 👍🎉 First off, thanks for taking the time to contribute! 🎉👍
 
-Please check out the [Apache Code of Conduct](https://www.apache.org/foundation/policies/conduct.html) first.
+Before participating, please read the [LoongForge Code of Conduct](CODE_OF_CONDUCT.md).
 
 We welcome community contributors to LoongForge. Feel free to share your ideas or submit code—help us make LoongForge even better!
 
 Before getting started, please read the following open-source contribution guidelines and adhere to the relevant agreements.
+
+Project ownership and decisions are described in [GOVERNANCE.md](GOVERNANCE.md).
+Please use the private process in [SECURITY.md](SECURITY.md) for vulnerability
+reports and preserve the notices described in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) when working with upstream
+code.
 
 ## How to Contribute
 We welcome and encourage contributions from the community. Whether it's fixing bugs, adding new features, improving documentation, or sharing ideas, all contributions help make LoongForge better.

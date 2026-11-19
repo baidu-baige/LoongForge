@@ -213,8 +213,9 @@ Configure branch protection to require the PR job named `static-checks`. A manua
 dispatch ends in `manual-static-checks` and is intended only for diagnostics; it must
 not satisfy the PR requirement.
 
-Create the `baidu-baige/loongforge-maintainers` Team before activating the
-`.github/CODEOWNERS` rule. The repository should use a `master-protection`
+Ensure the `baidu-baige/loongforge-team` GitHub team has write access to the
+repository so GitHub can request its review through `.github/CODEOWNERS`.
+The repository should use a `master-protection`
 Ruleset requiring one non-author Code Owner approval, resolved conversations,
 an up-to-date branch, and the `static-checks` check. Use a separate
 `release-tag-protection` Ruleset for immutable `v*` tags.
