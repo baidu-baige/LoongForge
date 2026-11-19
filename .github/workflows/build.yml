@@ -34,13 +34,16 @@ jobs:
           set -euo pipefail
           python -m pip install --no-deps dist/*.whl
 
-      - name: Import smoke
+      - name: Installed wheel import and CLI smoke
         shell: bash
         run: |
           set -euo pipefail
           smoke_dir="$(mktemp -d)"
           cd "$smoke_dir"
           python -c "import loongforge; print(loongforge.__file__)"
+          LoongForge --help
+          version="$(python -c 'from importlib.metadata import version; print(version("LoongForge"))')"
+          test "$(LoongForge --version)" = "LoongForge $version"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

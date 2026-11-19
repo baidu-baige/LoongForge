@@ -245,7 +245,7 @@ Documentation = "https://baidu-baige.github.io/LoongForge/"
 Changelog = "CHANGELOG.md"
 
 [project.scripts]
-LoongForge = "loongforge.train:main"
+LoongForge = "loongforge.cli:main"
 
 [dependency-groups]
 test = [
