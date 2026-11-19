@@ -200,14 +200,32 @@ this repository with permission to write contents.
 ## First activation
 
 Enable the `ok-to-test`, `gpu-regression`, `gpu-invalidate`, and
-`gpu-watchdog` workflows on the default branch, then verify a
-maintainer-dispatched run on each labeled suite
-runner. Confirm that the PR `gpu-regression` check progresses through queued, optional
+`gpu-watchdog` workflows on the default branch. After the NVIDIA A-card runner
+and model artifacts are provisioned, set `CI_ENABLE_LLM_VLM=true`. On a reviewed
+PR, a maintainer can exercise the existing LLM, VLM, and Embodied/VLA baselines
+with these separate requests:
+
+```text
+/ok-to-test --suite llm_vlm --model deepseek_v2_lite,qwen2.5_vl_7b
+/ok-to-test --suite embodied --model pi05_ddp
+```
+
+Confirm that each suite job executes successfully and collect the run URL and
+tested SHA. Check the `llm_vlm` job itself for VLM evidence. Its default model,
+`deepseek_v2_lite`, exercises the LLM path, and a successful `embodied` run covers
+its own suite.
+
+Confirm that the PR `gpu-regression` check progresses through queued, optional
 candidate build, regression, and final status. Push a second commit while a GPU
 run is active and confirm that the old check becomes cancelled and the runner's
 targeted cleanup removes its regression container and candidate image where
 possible. Cancellation cleanup is best-effort and must not globally prune the
 shared BuildKit cache.
+
+Kunlun XPU remains a supported backend. CI verification is pending a Kunlun XPU
+runner with the vendor PyTorch runtime, drivers, and model artifacts. Once
+provisioned, collect a successful representative-model run with its SHA and
+the actual Python, PyTorch, driver, and backend dependency versions.
 
 Configure branch protection to require the PR job named `static-checks`. A manual
 dispatch ends in `manual-static-checks` and is intended only for diagnostics; it must
