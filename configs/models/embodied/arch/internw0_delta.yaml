@@ -12,7 +12,8 @@
 #
 # As with vpp2, nothing below names the model (identity is ``--model-name``) and
 # nothing below changes topology: the five heads, the extra visibility rules and
-# the per-frame timestep shape are Python code in
+# the per-frame timestep shape are defined by Python providers, primarily
+# ``model/arch/spec/providers/internw0_delta/spec.py`` and shared helpers in
 # ``model/arch/spec/providers/dual_stream_wan.py``.
 
 model:

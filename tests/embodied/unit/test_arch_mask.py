@@ -61,7 +61,7 @@ def layout(total: int = TOTAL) -> TokenLayout:
     return TokenLayout(
         segments=(SegmentRange("video", 0, VIDEO),
                   SegmentRange("action", VIDEO, total)),
-        labels={"stream": stream, "frame": frame})
+        labels={"stream_id": stream, "frame": frame})
 
 
 def plan(**extra) -> AttentionPlan:
@@ -306,7 +306,7 @@ def test_scenario_rejects_auto_backend():
 
 
 def test_supports_negotiation_table():
-    """``CompiledMask.supports`` grades each backend EXACT/DEGRADED/UNSUPPORTED.
+    """``CompiledMask.negotiate_capability`` grades each backend EXACT/DEGRADED/UNSUPPORTED.
 
     The grading is what lets the engine pick a backend without trying it:
     dense, sdpa and blocked flex are exact; flex without a block size or with a
@@ -316,7 +316,8 @@ def test_supports_negotiation_table():
     vis = same_stream() | stream_edge("video", "action")
 
     def cap(**kwargs) -> Capability:
-        return CompiledMask.supports(vis, Scenario(phase="train", **kwargs))
+        return CompiledMask.negotiate_capability(
+            vis, Scenario(phase="train", **kwargs))
 
     assert cap(backend="dense") is Capability.EXACT
     assert cap(backend="sdpa") is Capability.EXACT
@@ -329,7 +330,7 @@ def test_supports_negotiation_table():
     # varlen errs on the strict side: an expression with a cross-stream edge is
     # reported unsupported
     assert cap(backend="varlen") is Capability.UNSUPPORTED
-    assert CompiledMask.supports(
+    assert CompiledMask.negotiate_capability(
         same_stream(), Scenario(phase="train",
                                 backend="varlen")) is Capability.EXACT
     assert cap(backend="flash") is Capability.UNSUPPORTED

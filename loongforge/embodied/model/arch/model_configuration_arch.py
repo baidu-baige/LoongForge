@@ -4,7 +4,7 @@
 """Typed YAML configs for the ``arch`` world models.
 
 One base class plus one tiny subclass per model. The base holds everything that
-is shared: the six spec sections ``build_world_model`` reads, and the runtime
+is shared: the six spec sections ``build_world_model_spec`` reads, and the runtime
 fields that are not part of the spec at all (dtype, encoder repo id, text
 context length).
 
@@ -29,7 +29,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, fields
 from typing import Any, Dict, Optional
 
-from .spec.world import WorldModelSpec, build_world_model
+from .spec.world import WorldModelSpec, build_world_model_spec
 
 
 @dataclass(frozen=True)
@@ -47,8 +47,9 @@ class WorldModelConfig:
         diffusion: ``{stream: {knob: value}}``, same flattening. Today the only
             knob is ``shift``; a stream whose distribution has no scalar (vpp2's
             constant video timestep) simply has no entry.
-        heads: ``{head: {weight|warmup_steps|enabled}}``, applied to the loss
-            term that consumes the head after the provider has run.
+        heads: ``{head_name: {weight|warmup_steps|enabled}}``, keyed by
+            output-head name and applied to the loss term that consumes that
+            head after the provider has run.
         attention_backend: ``dense`` / ``flex`` / ``sdpa`` / ``flash``, or
             ``None`` to keep the provider's choice.
         attention_block_size: Block size for ``flex``, which is the only backend
@@ -108,7 +109,7 @@ class WorldModelConfig:
         # while guaranteeing the lookup never sees an empty table.
         from .spec import providers as _providers  # noqa: F401
 
-        return build_world_model(self)
+        return build_world_model_spec(self)
 
     @property
     def action_horizon(self) -> int:
@@ -137,7 +138,7 @@ class Vpp2Config(WorldModelConfig):
     """``--model-name vpp2``.
 
     Attributes:
-        visible_video_frames: How many leading video frames the action stream
+        video_prefix_frames: How many leading video frames the action stream
             may attend to. Shapes a visibility rule, hence a provider argument
             and not a section key.
         inference_steps: Denoising steps for the action stream at eval time.
@@ -147,7 +148,7 @@ class Vpp2Config(WorldModelConfig):
     """
 
     model_type: str = "vpp2"
-    visible_video_frames: Optional[int] = None
+    video_prefix_frames: Optional[int] = None
     inference_steps: Optional[int] = None
     proprio_dim: Optional[int] = None
 

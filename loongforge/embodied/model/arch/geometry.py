@@ -218,7 +218,7 @@ class GeometrySpec:
 
     @property
     def padded_seq_len(self) -> int:
-        """Length rounded up to ``align_to``; padded slots get pad=True.
+        """Length rounded up to ``align_to``; padded slots get is_padding=True.
 
         This is the **single source of static shape** (master plan INV-2):
         CUDA graph capture requires the sequence length to be identical across
@@ -246,10 +246,10 @@ class GeometrySpec:
               frame  [L] int   which latent frame the token belongs to
               row    [L] int   patch row index (used by spatial-locality rules)
               col    [L] int   patch column index
-              pad    [L] bool  whether the slot exists only for alignment
+              is_padding [L] bool  whether the slot exists only for alignment
 
-        Note that stream / chunk / noise_level are **not** produced here: the
-        stream label is attached by each stream, chunk is attached by the
+        Note that stream_id / chunk / noise_level are **not** produced here: the
+        stream_id label is attached by each stream, chunk is attached by the
         action stream using ``num_chunks``, and noise_level is attached by the
         L3 noising scheme. The geometry layer only supplies the **number** of
         chunks; it does not map chunks onto tokens.
@@ -269,4 +269,4 @@ class GeometrySpec:
         row[:real] = (index // w) % h
         col[:real] = index % w
         pad[:real] = False
-        return {"frame": frame, "row": row, "col": col, "pad": pad}
+        return {"frame": frame, "row": row, "col": col, "is_padding": pad}

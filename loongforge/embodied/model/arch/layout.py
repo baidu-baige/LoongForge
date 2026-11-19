@@ -83,10 +83,10 @@ class TokenLayout:
 
     Attributes:
         segments: Segments in **actual concat order**, same order as
-            ``AttentionGroup.members`` (C8 checks this).
+            ``AttentionGroup.streams`` (C8 checks this).
         labels: Label name to a [total] tensor, **batch independent**.
-            frame / row / col / pad come from L0's
-            ``GeometrySpec.build_labels()``; stream is appended by each stream
+            frame / row / col / is_padding come from L0's
+            ``GeometrySpec.build_labels()``; stream_id is appended by each stream
             via ``with_labels``; chunk is attached by the action stream, and
             noise_level by L3 when it adds noise. Batch-dependent validity
             travels on the other channel (``AttentionPlan.key_valid``).
@@ -229,7 +229,7 @@ class TokenLayout:
         This is step 2 of ``WorldModel.__init__``.
 
         Only ``.name`` is read from ``streams``, and their order *is* the
-        concat order (same order as ``AttentionGroup.members`` -- exactly what
+        concat order (same order as ``AttentionGroup.streams`` -- exactly what
         C8 checks).
 
         ``token_counts`` gives the per-stream token count. When omitted the
@@ -241,14 +241,14 @@ class TokenLayout:
         diverge.
 
         Labels attached here:
-          stream  [total] long  segment index, the position in ``stream_names``
+          stream_id  [total] long  numeric segment index, the position in ``stream_names``
           frame   [total] long  video tokens take the geometric frame index;
                                 action tokens take
                                 ``step // action_video_freq_ratio``, i.e. the
                                 latent frame they align to
           row/col [total] long  video tokens take the geometric patch row and
                                 column; action tokens get -1
-          pad     [total] bool  video tokens take the geometric alignment pad
+          is_padding [total] bool  video tokens take the geometric alignment padding
                                 flag; action tokens get False
           chunk   [total] long  chunk index of action tokens; video tokens -1
 
@@ -386,7 +386,7 @@ def _build_joint_labels(geometry: GeometrySpec,
     frame[sl] = geo["frame"]
     row[sl] = geo["row"]
     col[sl] = geo["col"]
-    pad[sl] = geo["pad"]
+    pad[sl] = geo["is_padding"]
 
     ratio = geometry.action_video_freq_ratio
     for seg in segments[1:]:
@@ -399,5 +399,5 @@ def _build_joint_labels(geometry: GeometrySpec,
         aligned = step // ratio
         chunk[seg.start:seg.stop] = aligned
         frame[seg.start:seg.stop] = aligned
-    return {"stream": stream, "frame": frame, "row": row, "col": col,
-            "pad": pad, "chunk": chunk}
+    return {"stream_id": stream, "frame": frame, "row": row, "col": col,
+            "is_padding": pad, "chunk": chunk}

@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""``WorldModelSpec``, its construction-time checks, and ``build_world_model``.
+"""``WorldModelSpec``, its construction-time checks, and ``build_world_model_spec``.
 
 Signatures follow ``docs/design/mot_spec_config.zh-CN.md`` §3.2 / §3.8.
 
@@ -36,13 +36,13 @@ from ..streams.spec import StreamSpec
 from ..visibility.combine import Visibility
 from .core import get_provider
 
-__all__ = ["WorldModelSpec", "build_world_model"]
+__all__ = ["WorldModelSpec", "build_world_model_spec"]
 
 _KNOWN_BACKENDS = frozenset({"dense", "flex", "sdpa", "flash"})
 """Known attention backends.
 
-``_validate_visibility_layer`` validates against this set until
-``CompiledMask.supports`` ships (Lane A, milestone S4).
+``_validate_visibility_layer`` validates against this set. The full
+``CompiledMask.negotiate_capability`` negotiation is not wired here yet.
 """
 
 
@@ -50,9 +50,10 @@ _KNOWN_BACKENDS = frozenset({"dense", "flex", "sdpa", "flash"})
 class WorldModelSpec:
     """Complete declaration of one world model.
 
-    The return type of a provider and the only input of ``WorldModel``.
+    The return type of a provider and the model-declaration input consumed by
+    ``WorldModel``. Runtime construction also receives the engine and token layout.
 
-    ``groups`` is a **tuple of attention groups**, not a flat list of streams:
+    ``attention_groups`` is a **tuple of attention groups**, not a flat list of streams:
     in EWAM the VL stream and the video stream do not share one joint
     attention, and that fact has to be visible in the type. A monolithic model
     is one group holding one stream (N=1 degenerates, it is not a special
@@ -61,7 +62,7 @@ class WorldModelSpec:
     Attributes:
         model_type: Provider registry key for this model.
         geometry: Token geometry shared by all streams.
-        groups: Attention groups; each group is one joint attention.
+        attention_groups: Attention groups; each group is one joint attention.
         diffusion: Timestep schedule and loss table.
         heads: Output head declarations.
         conditions: Condition declarations (channel concat, cross-attention,
@@ -69,7 +70,7 @@ class WorldModelSpec:
         visibility: Keyed by **stream name**, the visibility on that stream's
             query side. A missing key means fully bidirectional
             (``structural=None``), which is what monolithic models and the
-            existing motus code do.
+            existing Motus code do.
         attention_backend: Concrete backend resolved from YAML; ``"auto"`` is
             rejected by the L1 check.
         attention_block_size: Only meaningful for ``backend="flex"``; it must
@@ -78,7 +79,7 @@ class WorldModelSpec:
 
     model_type: str
     geometry: GeometrySpec
-    groups: tuple[AttentionGroup, ...]
+    attention_groups: tuple[AttentionGroup, ...]
     diffusion: DiffusionSpec
     heads: tuple[HeadSpec, ...] = ()
     conditions: tuple[ConditionSpec, ...] = ()
@@ -107,7 +108,7 @@ class WorldModelSpec:
             A stable ordering, which is what optimizer parameter grouping
             relies on.
         """
-        return tuple(spec for group in self.groups for spec in group.members)
+        return tuple(spec for group in self.attention_groups for spec in group.streams)
 
     @property
     def stream_names(self) -> tuple[str, ...]:
@@ -125,20 +126,20 @@ class WorldModelSpec:
     def group_of(self, stream: str) -> AttentionGroup:
         """Find the attention group holding ``stream``.
 
-        A stream never spans two groups: ``_check_stream_identity`` makes
+        A stream never spans two attention groups: ``_check_stream_identity`` makes
         stream names globally unique.
 
         Args:
             stream: Stream name.
 
         Returns:
-            The group whose members include ``stream``.
+            The group whose streams include ``stream``.
 
         Raises:
             KeyError: No stream by that name; the message lists the existing
                 names.
         """
-        for group in self.groups:
+        for group in self.attention_groups:
             if stream in group.stream_names:
                 return group
         raise KeyError(
@@ -269,7 +270,7 @@ class WorldModelSpec:
     # the numbered check in the design doc.
 
     def _validate_stream_layer(self) -> None:
-        """L2: stream identity, groups, joint widths, routes and conditions."""
+        """L2: stream identity, attention groups, joint widths, routes and conditions."""
         self._check_stream_identity()
         self._check_layer_mapping()
         self._check_joint_head_dim()
@@ -285,12 +286,12 @@ class WorldModelSpec:
         and an optimizer grouping key. Those three share one namespace.
 
         Raises:
-            ValueError: ``groups`` is empty, a name is the empty string, or
+            ValueError: ``attention_groups`` is empty, a name is the empty string, or
                 two streams share a name.
         """
-        if not self.groups:
+        if not self.attention_groups:
             raise ValueError(
-                f"WorldModelSpec({self.model_type!r}).groups must not be "
+                f"WorldModelSpec({self.model_type!r}).attention_groups must not be "
                 f"empty (L2/V1)"
             )
         names = [spec.name for spec in self.streams]
@@ -309,7 +310,7 @@ class WorldModelSpec:
     def _check_layer_mapping(self) -> None:
         """Every stream's layer mapping resolves under its group's depth.
 
-        ``resolve_layer_index_map`` already asserts that the number of
+        ``resolve_layer_index_map`` already validates that the number of
         resolved participating layers equals the stream's ``num_layers``, so
         calling it once per stream covers the boundary conditions of the
         STRIDED and AT_LAYERS mapping modes.
@@ -318,15 +319,15 @@ class WorldModelSpec:
             ValueError: A stream's layer mapping cannot be resolved against
                 its group's joint layer count.
         """
-        for group in self.groups:
-            for spec in group.members:
+        for group in self.attention_groups:
+            for spec in group.streams:
                 spec.resolve_layer_index_map(group.num_layers)
 
     def _check_joint_head_dim(self) -> None:
-        """Joint members share one ``head_dim``.
+        """Joint streams share one ``head_dim``.
 
-        ``num_heads`` and the residual width may differ between members; only
-        ``head_dim`` has to match, because the members' queries and keys meet
+        ``num_heads`` and the residual width may differ between streams; only
+        ``head_dim`` has to match, because the streams' queries and keys meet
         in one attention.
 
         ``AttentionGroup.__post_init__`` checks this already. Re-checking here
@@ -335,10 +336,10 @@ class WorldModelSpec:
         ``model_type`` in the error message.
 
         Raises:
-            ValueError: Members of one group disagree on ``head_dim``.
+            ValueError: Streams in one group disagree on ``head_dim``.
         """
-        for group in self.groups:
-            head_dims = {spec.name: spec.head_dim for spec in group.members}
+        for group in self.attention_groups:
+            head_dims = {spec.name: spec.head_dim for spec in group.streams}
             if len(set(head_dims.values())) != 1:
                 raise ValueError(
                     f"model {self.model_type!r}: attention group "
@@ -363,7 +364,7 @@ class WorldModelSpec:
             ValueError: A ``src_layers`` or ``dst_layers`` entry is >= that
                 stream's ``num_layers``.
         """
-        for group in self.groups:
+        for group in self.attention_groups:
             for route in group.routes:
                 src_spec = group.spec_of(route.src)
                 dst_spec = group.spec_of(route.dst)
@@ -576,11 +577,11 @@ class WorldModelSpec:
         """L1: the backend is known, and ``flex`` carries a block size.
 
         The full form of this check is the three-way negotiation
-        ``CompiledMask.supports(vis, scenario)``, run once for training and
-        once for inference. That belongs to Lane A and ships with S4. Until
-        then it degrades to the two single-field checks in this method. What
-        degrades is the **strictness**, not the timing: the check still happens
-        at construction time rather than raising once inference starts.
+        ``CompiledMask.negotiate_capability(vis, scenario)``, run once for training and
+        once for inference. The capability method exists, but this constructor
+        currently performs only the two backend field checks. What is reduced
+        is the **strictness**, not the timing: these checks still happen at
+        construction time rather than raising once inference starts.
 
         Raises:
             ValueError: ``attention_backend`` is ``"auto"`` or unknown,
@@ -621,7 +622,7 @@ _SECTION_KEYS: tuple[str, ...] = (
     "geometry", "streams", "diffusion", "heads",
     "attention_backend", "attention_block_size",
 )
-"""The config fields ``build_world_model`` reads, besides ``model_type``.
+"""The config fields ``build_world_model_spec`` reads, besides ``model_type``.
 
 Every arch model shares these; nothing here names a model or a topology (rule
 R5). A per-model config subclass adds only *provider keyword arguments* on top,
@@ -631,10 +632,9 @@ which is what ``provider_kwargs()`` returns.
 _HEAD_KNOBS: frozenset[str] = frozenset({"weight", "warmup_steps", "enabled"})
 """Keys a YAML ``heads.<name>:`` block may carry.
 
-All three land on the ``LossSpec`` that consumes the head, never on the
-``HeadSpec``: weight ownership is defined in exactly one place, and a head that
-also carried a weight would let two numbers disagree silently (``WorldModel``
-has a matching check that a weight has a single owner).
+All three land on the ``LossSpec`` that consumes the named output head.
+``WorldModel.compute_losses`` rejects non-default ``HeadSpec.weight`` values
+so that supervision weights have a single owner.
 """
 
 
@@ -827,7 +827,7 @@ def _apply_backend(spec: WorldModelSpec, backend: str | None,
                    attention_block_size=block_size)
 
 
-def build_world_model(config: Any) -> WorldModelSpec:
+def build_world_model_spec(config: Any) -> WorldModelSpec:
     """Turn one model config into a ``WorldModelSpec``.
 
     The four steps are ordered and the order is load-bearing:
@@ -895,9 +895,6 @@ def build_world_model(config: Any) -> WorldModelSpec:
     spec = _apply_heads(spec, _plain(getattr(config, "heads", None)))
     return _apply_backend(spec, getattr(config, "attention_backend", None),
                           getattr(config, "attention_block_size", None))
-
-
-
 
 
 

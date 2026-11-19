@@ -121,7 +121,7 @@ def resolve_geometry(model_type: str, defaults: dict[str, Any],
 def reject_config(model_type: str, config: Any) -> None:
     """Reject a positional config object.
 
-    ``build_world_model`` translates the YAML sections into *keyword arguments*
+    ``build_world_model_spec`` translates the YAML sections into *keyword arguments*
     and never hands the config object itself to a provider: a provider that can
     read the config would be free to pull topology out of YAML, which is
     exactly what R5 forbids. The parameter itself is kept so that the mistake
@@ -131,7 +131,7 @@ def reject_config(model_type: str, config: Any) -> None:
     if config is not None:
         raise NotImplementedError(
             f"provider({model_type!r}) got a config object as a positional "
-            "argument. Applying config belongs to build_world_model: it "
+            "argument. Applying config belongs to build_world_model_spec: it "
             "translates the five YAML sections into keyword arguments "
             "(geometry= / <stream>_<scalar>= / <stream>_shift= / subclass "
             "fields), and a provider never sees the config object itself (R5)"

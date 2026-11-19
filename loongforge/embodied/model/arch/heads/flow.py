@@ -84,45 +84,46 @@ class _HeadBase(nn.Module):
         """
         return self.spec.output_width
 
-    def _check_timestep(self, timestep: Tensor | None) -> Tensor | None:
-        """``needs_timestep`` and the timestep actually received must agree.
+    def _check_timestep_embedding(self, timestep_embedding: Tensor | None) -> Tensor | None:
+        """``needs_timestep_embedding`` and the embedding actually received must agree.
 
         What arrives is the timestep **embedding** -- the ``[B, residual_width]``
         tensor that the source stream's ``prepare`` stored into
-        ``extras["t_embed"]`` -- not the scalar in ``[0, 1]``. The ``t`` of the
+        ``extras["timestep_embedding"]`` -- not the scalar in ``[0, 1]``. The ``t`` of the
         existing ``Head.forward(x, t)`` is that embedding too
         (``wan_video_dit.py:289-298`` adds it straight onto ``modulation``).
         The two have different widths, and mixing them up broadcasts to a wrong
         shape at the addition instead of raising.
 
         Args:
-            timestep: The timestep embedding, or None.
+            timestep_embedding: The timestep embedding, or None.
 
         Returns:
-            ``timestep`` unchanged.
+            ``timestep_embedding`` unchanged.
 
         Raises:
-            ValueError: If presence or shape disagrees with ``needs_timestep``.
+            ValueError: If presence or shape disagrees with ``needs_timestep_embedding``.
         """
-        if self.spec.needs_timestep:
-            if timestep is None:
+        if self.spec.needs_timestep_embedding:
+            if timestep_embedding is None:
                 raise ValueError(
-                    f"head {self.spec.name!r} has needs_timestep=True, "
+                    f"head {self.spec.name!r} has needs_timestep_embedding=True, "
                     "but forward received no timestep embedding"
                 )
-            if timestep.ndim != 2 or timestep.shape[-1] != self.input_width:
+            if (timestep_embedding.ndim != 2
+                    or timestep_embedding.shape[-1] != self.input_width):
                 raise ValueError(
                     f"head {self.spec.name!r} consumes the timestep "
                     f"**embedding** [B, {self.input_width}] (the source "
-                    f"stream's extras['t_embed']), got "
-                    f"{tuple(timestep.shape)}"
+                    f"stream's extras['timestep_embedding']), got "
+                    f"{tuple(timestep_embedding.shape)}"
                 )
-        elif timestep is not None:
+        elif timestep_embedding is not None:
             raise ValueError(
-                f"head {self.spec.name!r} has needs_timestep=False, but got a "
+                f"head {self.spec.name!r} has needs_timestep_embedding=False, but got a "
                 "timestep; it has no modulation slot to consume it"
             )
-        return timestep
+        return timestep_embedding
 
     def _check_hidden(self, hidden: Tensor) -> Tensor:
         if hidden.ndim != 3 or hidden.shape[-1] != self.input_width:
@@ -155,10 +156,10 @@ class IdentityHead(_HeadBase):
                 f"{self.input_width}, got {spec.output_width}"
             )
 
-    def forward(self, hidden: Tensor, *, timestep: Tensor | None = None,
+    def forward(self, hidden: Tensor, *, timestep_embedding: Tensor | None = None,
                 conditions: Mapping[str, Any] | None = None) -> Tensor:
         del conditions
-        self._check_timestep(timestep)
+        self._check_timestep_embedding(timestep_embedding)
         return self._check_hidden(hidden)
 
 
@@ -177,10 +178,10 @@ class LinearHead(_HeadBase):
         super().__init__(spec=spec, geometry=geometry, world=world)
         self.head = nn.Linear(self.input_width, spec.output_width)
 
-    def forward(self, hidden: Tensor, *, timestep: Tensor | None = None,
+    def forward(self, hidden: Tensor, *, timestep_embedding: Tensor | None = None,
                 conditions: Mapping[str, Any] | None = None) -> Tensor:
         del conditions
-        self._check_timestep(timestep)
+        self._check_timestep_embedding(timestep_embedding)
         return self.head(self._check_hidden(hidden))
 
 
@@ -200,10 +201,10 @@ class NormLinearHead(_HeadBase):
         self.norm = nn.LayerNorm(self.input_width, eps=eps)
         self.head = nn.Linear(self.input_width, spec.output_width)
 
-    def forward(self, hidden: Tensor, *, timestep: Tensor | None = None,
+    def forward(self, hidden: Tensor, *, timestep_embedding: Tensor | None = None,
                 conditions: Mapping[str, Any] | None = None) -> Tensor:
         del conditions
-        self._check_timestep(timestep)
+        self._check_timestep_embedding(timestep_embedding)
         return self.head(self.norm(self._check_hidden(hidden)))
 
 
@@ -245,14 +246,14 @@ class PatchFlowHead(_HeadBase):
             torch.randn(1, slots.width, self.input_width)
             / self.input_width ** 0.5)
 
-    def forward(self, hidden: Tensor, *, timestep: Tensor | None = None,
+    def forward(self, hidden: Tensor, *, timestep_embedding: Tensor | None = None,
                 conditions: Mapping[str, Any] | None = None) -> Tensor:
         del conditions
-        embed = self._check_timestep(timestep)
-        assert embed is not None            # guaranteed by needs_timestep=True
+        timestep_embedding = self._check_timestep_embedding(timestep_embedding)
+        assert timestep_embedding is not None            # guaranteed by needs_timestep_embedding=True
         self._check_hidden(hidden)
         slots = self.spec.modulation_slots.unpack(
-            self.modulation + embed.unsqueeze(1), slot_axis=1)
+            self.modulation + timestep_embedding.unsqueeze(1), slot_axis=1)
         tokens = self.head(modulate(self.norm(hidden),
                                     slots["shift_out"].unsqueeze(1),
                                     slots["scale_out"].unsqueeze(1)))

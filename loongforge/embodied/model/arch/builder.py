@@ -144,10 +144,10 @@ def query_in_stream(name: str) -> Visibility:
                 f"query_in_stream: layout has no stream {name!r}; existing "
                 f"streams {list(names)}"
             )
-        if not q.has("stream"):  # A single-stream layout has no stream label
+        if not q.has("stream_id"):  # A single-stream layout has no stream label
             return torch.ones((q.layout.total, k.layout.total),
                               dtype=torch.bool)
-        return (q.get("stream") == names.index(name)).expand(
+        return (q.get("stream_id") == names.index(name)).expand(
             q.layout.total, k.layout.total)
 
     return rule
@@ -282,7 +282,7 @@ class WorldModel(nn.Module):
         self.plans: dict[int, AttentionPlan] = {
             index: AttentionPlan.from_visibility(
                 self._group_visibility(group), layout)
-            for index, group in enumerate(spec.groups)
+            for index, group in enumerate(spec.attention_groups)
         }
 
         # 3. Build the heads and derive the capture requests. The requests come
@@ -297,7 +297,7 @@ class WorldModel(nn.Module):
         # 4. Layer index maps. Resolved once at construction, looked up during
         #    forward.
         self.layer_index_maps: dict[str, dict[int, int]] = {}
-        for group in spec.groups:
+        for group in spec.attention_groups:
             self.layer_index_maps.update(group.layer_index_maps())
 
     def _group_visibility(self, group: AttentionGroup) -> Visibility | None:
@@ -308,7 +308,7 @@ class WorldModel(nn.Module):
 
         The keys of ``spec.visibility`` are **stream names** and the values are
         that stream's query-side rule; see ``join_stream_visibility`` for how
-        they combine. Only declarations of this group's members are taken --
+        they combine. Only declarations of this group's streams are taken --
         streams of other groups are not in this group's ``[total, total]``.
         """
         return join_stream_visibility({
@@ -357,7 +357,7 @@ class WorldModel(nn.Module):
         runtime = self.add_noise(batch, timesteps)                  # 3
         inputs = self.stream_inputs(runtime)                        # 4
         merged = EngineOutput(states={}, captured={})               # 5
-        for group in self.spec.groups:
+        for group in self.spec.attention_groups:
             partial = self.run_group(group, inputs, conditions, runtime)
             merged.states.update(partial.states)
             merged.captured.update(partial.captured)
@@ -410,10 +410,10 @@ class WorldModel(nn.Module):
             if not stream.needs_timestep:
                 continue
             raw = self._raw_tensor(batch, stream)
-            sampler = self.spec.diffusion.sampler_for(stream.name)
+            timestep_sampler = self.spec.diffusion.sampler_for(stream.name)
             axis_sizes = tuple(int(self.layout.labels_of(axis).max()) + 1
-                               for axis in sampler.broadcast.axes)
-            out[stream.name] = sampler.sample(
+                               for axis in timestep_sampler.broadcast.axes)
+            out[stream.name] = timestep_sampler.sample(
                 int(raw.shape[0]), device=raw.device,
                 dtype=raw.dtype if raw.is_floating_point() else torch.float32,
                 axis_sizes=axis_sizes)
@@ -444,11 +444,11 @@ class WorldModel(nn.Module):
         for stream in self.spec.streams:
             if stream.name not in timesteps:
                 continue
-            sampler = self.spec.diffusion.sampler_for(stream.name)
-            if not sampler.broadcast.is_per_sample:
+            timestep_sampler = self.spec.diffusion.sampler_for(stream.name)
+            if not timestep_sampler.broadcast.is_per_sample:
                 raise NotImplementedError(
                     f"stream {stream.name!r} samples its timestep per axis "
-                    f"{sampler.broadcast.axes}, while the default add_noise "
+                    f"{timestep_sampler.broadcast.axes}, while the default add_noise "
                     "only spreads [B] into [B, 1, ...]. Per-axis noising "
                     "first needs the map `label axis -> which dim of the raw "
                     "tensor` (it is per-modality); until then, override this "
@@ -511,12 +511,12 @@ class WorldModel(nn.Module):
 
         Delegates to ``self.engine.run``.
 
-        Only this group's members are passed in ``captures``: streams of other
+        Only this group's streams are passed in ``captures``: streams of other
         groups are not participants of this run, and passing them would be
         rejected by the engine as unknown stream names (that check is correct,
         do not work around it).
         """
-        index = self.spec.groups.index(group)
+        index = self.spec.attention_groups.index(group)
         captures = {name: layers for name, layers in self.captures.items()
                     if name in group.stream_names}
         return self.engine.run(
@@ -534,7 +534,7 @@ class WorldModel(nn.Module):
 
         The timestep a head consumes is the **embedded**
         ``[B, residual_width]`` (from the source stream's
-        ``StreamState.extras["t_embed"]``), not the scalar in [0, 1]: a head's
+        ``StreamState.extras["timestep_embedding"]``), not the scalar in [0, 1]: a head's
         modulation shares one set of ``ModulationSlots`` with the in-stream
         modulation, and those slots take the embedding as input. Passing the
         scalar would pass the shape check by broadcasting and get every number
@@ -550,20 +550,20 @@ class WorldModel(nn.Module):
         out: dict[str, Tensor] = {}
         for head in self.spec.heads:
             hidden = head.source.resolve(output)
-            embed: Tensor | None = None
-            if head.needs_timestep:
+            timestep_embedding: Tensor | None = None
+            if head.needs_timestep_embedding:
                 extras = output.require(head.source_stream).extras
-                if "t_embed" not in extras:
+                if "timestep_embedding" not in extras:
                     raise KeyError(
-                        f"head {head.name!r} declares needs_timestep=True, "
+                        f"head {head.name!r} declares needs_timestep_embedding=True, "
                         f"but source stream {head.source_stream!r} has no "
-                        f"'t_embed' in StreamState.extras; present: "
+                        f"'timestep_embedding' in StreamState.extras; present: "
                         f"{sorted(extras)}. Head modulation consumes the "
                         "embedded [B, residual_width], not the scalar in "
                         "[0, 1]"
                     )
-                embed = extras["t_embed"]
-            out[head.name] = self.heads[head.name](hidden, timestep=embed,
+                timestep_embedding = extras["timestep_embedding"]
+            out[head.name] = self.heads[head.name](hidden, timestep_embedding=timestep_embedding,
                                                    conditions=None)
         return out
 
@@ -661,10 +661,11 @@ class WorldModel(nn.Module):
 
     @torch.no_grad()
     def sample(self, batch: Mapping[str, Any]) -> dict[str, Tensor]:
-        """The three inference steps.
+        """Target three-step inference orchestration.
 
-        1. build the initial ``Trajectory``; 2. iterate per ``SteppingGate``;
-        3. run the output heads.
+        The intended flow is: 1. build the initial ``Trajectory``; 2. iterate
+        per ``SteppingGate``; 3. run the output heads. The orchestration is
+        not implemented yet.
 
         **Differing per-stream step counts land in step 2**:
         ``Trajectory.active_streams(gate)`` decides who moves on a given step.
@@ -675,7 +676,8 @@ class WorldModel(nn.Module):
         if not diffusion.is_iterative:
             raise NotImplementedError(
                 f"model {self.spec.model_type!r} has a DiffusionSpec with no "
-                "gate/sampler (a single-step feed-forward model); the "
+                "sampling_gate/solver (a single-step feed-forward "
+                "model); the "
                 "single-step inference path belongs to the assembly layer "
                 "and is not implemented yet"
             )

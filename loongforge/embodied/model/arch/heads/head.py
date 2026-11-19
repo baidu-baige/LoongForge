@@ -22,7 +22,7 @@ __all__ = ["OutputHead"]
 
 
 class OutputHead(Protocol):
-    """One output head. Two members: compute the output, declare its width.
+    """One output head. Two responsibilities: compute the output, declare its width.
 
     ``forward``'s ``conditions`` is a read-only mapping, there for heads that
     need conditions (action heads usually want state / proprio). Heads that do
@@ -31,13 +31,13 @@ class OutputHead(Protocol):
     """
 
     def forward(self, hidden: Tensor, *,
-                timestep: Tensor | None = None,
+                timestep_embedding: Tensor | None = None,
                 conditions: Mapping[str, Any] | None = None) -> Tensor:
         """Map a hidden state to an output.
 
         Args:
             hidden: Hidden state taken from the source stream.
-            timestep: Non-None only when the head modulates on its own (the
+            timestep_embedding: Non-None only when the head modulates on its own (the
                 action head's two-slot modulation, see
                 ``streams.spec.HEAD_SLOTS``).
             conditions: Read-only condition mapping; heads may ignore it.

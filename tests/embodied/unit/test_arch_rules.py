@@ -44,7 +44,7 @@ def test_same_stream_truth_table():
     It is the base term every other rule is intersected with, so its block
     diagonal shape is what makes varlen attention expressible.
     """
-    layout = layout_with(stream=long_(0, 0, 0, 1, 1, 1))
+    layout = layout_with(stream_id=long_(0, 0, 0, 1, 1, 1))
     out = same_stream().evaluate(layout)
     assert out[0].tolist() == [True, True, True, False, False, False]
     assert out[3].tolist() == [False, False, False, True, True, True]
@@ -56,7 +56,7 @@ def test_stream_edge_is_directed():
     The reverse edge is not implied: "the VL stream is read-only" is expressed
     exactly by having an in-edge and no out-edge.
     """
-    layout = layout_with(stream=long_(0, 0, 0, 1, 1, 1))
+    layout = layout_with(stream_id=long_(0, 0, 0, 1, 1, 1))
     out = stream_edge("video", "action").evaluate(layout)
     # Action query rows can see video key columns
     assert out[3].tolist() == [True, True, True, False, False, False]
@@ -67,7 +67,7 @@ def test_stream_edge_is_directed():
 
 def test_stream_edge_unknown_name_raises():
     """A stream name absent from the layout raises instead of matching nothing."""
-    layout = layout_with(stream=long_(0, 0, 0, 1, 1, 1))
+    layout = layout_with(stream_id=long_(0, 0, 0, 1, 1, 1))
     with pytest.raises(KeyError, match="layout has no stream"):
         stream_edge("video", "typo").evaluate(layout)
 
@@ -147,7 +147,7 @@ def test_same_sample_isolates_packed_samples():
     Without it, packing two trajectories into one sequence would let one
     attend to the other, which is invisible in the loss.
     """
-    layout = layout_with(sample=long_(0, 0, 1, 1, 2, 2))
+    layout = layout_with(sample_id=long_(0, 0, 1, 1, 2, 2))
     out = same_sample().evaluate(layout)
     assert out[0].tolist() == [True, True, False, False, False, False]
     assert out[5].tolist() == [False, False, False, False, True, True]

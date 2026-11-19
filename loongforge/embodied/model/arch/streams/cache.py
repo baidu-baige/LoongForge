@@ -8,7 +8,7 @@ Signatures follow ``docs/design/mot_layer_interfaces.zh-CN.md`` §4.6.
 Neither of the first two models uses a KV cache, so this module declares the
 signatures and implements nothing. It exists so that "does inference need a
 cache" can be negotiated at construction time, through
-``Scenario.has_kv_cache`` in ``CompiledMask.supports``, instead of
+``Scenario.has_kv_cache`` in ``CompiledMask.negotiate_capability``, instead of
 discovering at inference time that the question cannot be expressed.
 """
 

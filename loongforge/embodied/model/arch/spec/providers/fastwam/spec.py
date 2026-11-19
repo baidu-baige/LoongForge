@@ -172,7 +172,7 @@ def _fastwam(config: Any = None, *,
         action_impl=Spec(ActionStream),
         **scalars,
     )
-    group = AttentionGroup(members=(video, action),
+    group = AttentionGroup(streams=(video, action),
                            num_layers=video.num_layers)
 
     # Geometry from ``configs/models/embodied/fastwam.yaml``:
@@ -218,9 +218,9 @@ def _fastwam(config: Any = None, *,
         # (``mot/fastwam.py:982``) calls ``mot.prefill_video_cache``
         # (``:1081``) once, then each step calls only
         # ``forward_action_with_video_cache`` (``:774`` / ``:1106``).
-        gate=UniformSteps(num_steps=inference_steps,
+        sampling_gate=UniformSteps(num_steps=inference_steps,
                           skip=frozenset({"video"})),
-        sampler=EulerSampler(),
+        solver=EulerSampler(),
         # Two levels = first latent frame clean, the rest noisy
         # (``wan/dit.py:645``).
         noise_levels=(0.0, 1.0),
@@ -238,11 +238,11 @@ def _fastwam(config: Any = None, *,
                  impl=Spec(build_flow_head, {"form": "patch_flow"}),
                  source=HiddenStateRef(stream="video"),
                  output_width=geometry.latent_channels,
-                 needs_timestep=True),
+                 needs_timestep_embedding=True),
         # ``Linear(hidden_dim, action_dim)`` at
         # ``model/fastwam/action/dit.py:132`` gives 7 (``action_dim: 7``,
         # ``fastwam.yaml:12``). A bare Linear with no modulation, so
-        # ``needs_timestep=False``, unlike the video head's ``Head``
+        # ``needs_timestep_embedding=False``, unlike the video head's ``Head``
         # (``wan/dit.py:487-508``) which carries a ``(1, 2, dim)`` modulation.
         HeadSpec(name="action_flow",
                  impl=Spec(build_flow_head, {"form": "linear"}),
@@ -253,7 +253,7 @@ def _fastwam(config: Any = None, *,
     return WorldModelSpec(
         model_type="fastwam",
         geometry=geometry,
-        groups=(group,),
+        attention_groups=(group,),
         diffusion=diffusion,
         heads=heads,
         # Same shape as vpp2: one text cross-attention slot per layer, fed to

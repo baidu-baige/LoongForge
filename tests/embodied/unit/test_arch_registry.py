@@ -23,10 +23,10 @@ TOTAL = 6
 
 
 def layout() -> TokenLayout:
-    """Six tokens: four video then two action, with a stream label."""
+    """Six tokens: four video then two action, with a stream_id label."""
     return TokenLayout(
         segments=(SegmentRange("video", 0, 4), SegmentRange("action", 4, 6)),
-        labels={"stream": torch.tensor([0, 0, 0, 0, 1, 1])})
+        labels={"stream_id": torch.tensor([0, 0, 0, 0, 1, 1])})
 
 
 def test_registry_rejects_duplicate_names():

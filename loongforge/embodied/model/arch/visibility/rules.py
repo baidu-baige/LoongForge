@@ -46,7 +46,7 @@ def _always(q: LabelView, k: LabelView) -> Tensor:
 
 
 def _stream_code(view: LabelView, name: str, *, rule: str) -> int:
-    """Stream name to its code in the ``stream`` label.
+    """Stream name to its code in the ``stream_id`` label.
 
     Args:
         view: Label view whose layout defines the stream order.
@@ -69,7 +69,7 @@ def _stream_code(view: LabelView, name: str, *, rule: str) -> int:
 
 
 def same_stream() -> Visibility:
-    """Reads stream. Tokens inside the same stream can see each other.
+    """Reads ``stream_id``. Tokens inside the same stream can see each other.
 
     **Always True for a single-stream model**, so the whole visibility can then
     be omitted (interfaces §2.3).
@@ -80,15 +80,15 @@ def same_stream() -> Visibility:
 
     @from_predicate("same_stream()")
     def rule(q: LabelView, k: LabelView) -> Tensor:
-        if not q.has("stream"):
+        if not q.has("stream_id"):
             return _always(q, k)
-        return q.get("stream") == k.get("stream")
+        return q.get("stream_id") == k.get("stream_id")
 
     return rule
 
 
 def stream_edge(src: str, dst: str) -> Visibility:
-    """Reads stream. Directed cross-stream edge: ``dst`` queries see ``src`` keys.
+    """Reads ``stream_id``. Directed cross-stream edge: ``dst`` queries see ``src`` keys.
 
     Directedness is the point: ``stream_edge("video", "action")`` does not imply
     the reverse edge. "The VL stream is read-only" is expressed as "has incoming
@@ -109,11 +109,11 @@ def stream_edge(src: str, dst: str) -> Visibility:
 
     @from_predicate(f"stream_edge({src!r}, {dst!r})")
     def rule(q: LabelView, k: LabelView) -> Tensor:
-        if not q.has("stream"):
+        if not q.has("stream_id"):
             return _always(q, k)
         src_code = _stream_code(k, src, rule="stream_edge")
         dst_code = _stream_code(q, dst, rule="stream_edge")
-        return (q.get("stream") == dst_code) & (k.get("stream") == src_code)
+        return (q.get("stream_id") == dst_code) & (k.get("stream_id") == src_code)
 
     return rule
 
@@ -242,9 +242,9 @@ def noise_gate(threshold: int) -> Visibility:
 
 
 def same_sample() -> Visibility:
-    """Reads sample. Sample isolation for packed variable-length streams.
+    """Reads ``sample_id``. Sample isolation for packed variable-length streams.
 
-    No first-batch model uses it, so it can wait. The ``sample`` label is
+    No first-batch model uses it, so it can wait. The ``sample_id`` label is
     **independent of** the batch dimension: a packed stream concatenates several
     samples into one sequence, so "which sample" becomes a property of the token
     rather than a tensor dimension. Models without that label, meaning every
@@ -256,9 +256,9 @@ def same_sample() -> Visibility:
 
     @from_predicate("same_sample()")
     def rule(q: LabelView, k: LabelView) -> Tensor:
-        if not q.has("sample"):
+        if not q.has("sample_id"):
             return _always(q, k)
-        return q.get("sample") == k.get("sample")
+        return q.get("sample_id") == k.get("sample_id")
 
     return rule
 

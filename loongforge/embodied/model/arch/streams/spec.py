@@ -195,7 +195,7 @@ class StreamSpec:
         residual_width: [YAML] Residual stream width, i.e. the block's input
             and output width.
         num_heads: [YAML] Number of attention heads.
-        head_dim: [YAML] Per-head width. Must be equal across joint members
+        head_dim: [YAML] Per-head width. Must be equal across joint streams
             (validator V3).
         num_layers: [YAML] Layer count of this stream alone, independent of
             the joint layer count.

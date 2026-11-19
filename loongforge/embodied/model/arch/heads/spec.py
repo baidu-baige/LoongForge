@@ -37,8 +37,8 @@ class HeadSpec:
     # The head's own modulation slots. The two slots (shift_out / scale_out) are
     # the action-head setting. A slot table may not be empty (see
     # ModulationSlots.__post_init__), so "this head does not modulate" is
-    # expressed by needs_timestep=False, not by handing over an empty table
-    needs_timestep: bool = False        # Whether the head modulates on timestep
+    # expressed by needs_timestep_embedding=False, not by handing over an empty table
+    needs_timestep_embedding: bool = False        # Whether the head modulates on timestep
     weight: float = 1.0                 # [YAML] **the only YAML-overridable field**
 
     def __post_init__(self) -> None:

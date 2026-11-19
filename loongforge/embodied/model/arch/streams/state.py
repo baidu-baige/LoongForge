@@ -61,7 +61,7 @@ class QKV:
         if self.q.shape[-1] != self.k.shape[-1]:
             raise ValueError(
                 f"QKV: q head_dim {self.q.shape[-1]} != k head_dim "
-                f"{self.k.shape[-1]} (V3 requires joint members to share "
+                f"{self.k.shape[-1]} (V3 requires joint streams to share "
                 "head_dim)"
             )
 

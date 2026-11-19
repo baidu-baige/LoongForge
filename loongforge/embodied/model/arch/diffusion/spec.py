@@ -41,21 +41,21 @@ class DiffusionSpec:
             mapping at construction time.
         losses: The loss terms, with unique ``name`` values.
         schedule: The forward noising process; rectified flow by default.
-        gate: Which stream steps when during iterative sampling, or None.
-        sampler: The per-step update rule, or None.
+        sampling_gate: Which stream steps when during iterative sampling, or None.
+        solver: The per-step numerical update rule, or None.
         noise_levels: Discrete noise levels, if any.
     """
 
     timesteps: Mapping[str, TimestepSampler]
     losses: tuple[LossSpec, ...]
     schedule: NoiseSchedule = field(default_factory=RectifiedFlow)
-    gate: SteppingGate | None = None        # None => no iterative sampling
-    sampler: Sampler | None = None          # None => same as above
+    sampling_gate: SteppingGate | None = None        # None => no iterative sampling
+    solver: Sampler | None = None                   # None => same as above
     noise_levels: tuple[float, ...] = ()
     # Discrete noise levels. Non-empty => visibility.rules.noise_gate is usable.
     # They must be **discrete levels** rather than a continuous sigma: a
     # continuous value would make the structural mask per-sample (INV-1).
-    # This is the subject of the 12/04 gate
+    # Full capability negotiation is tracked as a separate implementation item.
 
     def __post_init__(self) -> None:
         if not self.losses:
@@ -67,10 +67,10 @@ class DiffusionSpec:
         if len(set(names)) != len(names):
             raise ValueError(
                 f"DiffusionSpec.losses has duplicate names: {names}")
-        if (self.gate is None) != (self.sampler is None):
+        if (self.sampling_gate is None) != (self.solver is None):
             raise ValueError(
-                "DiffusionSpec.gate and sampler must both be given or both be "
-                f"omitted: got gate={self.gate!r}, sampler={self.sampler!r}"
+                "DiffusionSpec.sampling_gate and solver must both be given or both be "
+                f"omitted: got sampling_gate={self.sampling_gate!r}, solver={self.solver!r}"
             )
         if len(set(self.noise_levels)) != len(self.noise_levels):
             raise ValueError(
@@ -91,7 +91,7 @@ class DiffusionSpec:
     def is_iterative(self) -> bool:
         """Whether iterative sampling is used. False means single-step
         feed-forward (a distilled model)."""
-        return self.gate is not None
+        return self.sampling_gate is not None
 
     @property
     def supports_noise_gate(self) -> bool:
