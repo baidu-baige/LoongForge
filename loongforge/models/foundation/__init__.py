@@ -18,6 +18,7 @@ from .llama import LLaMAConfig, LLaMAModel
 from .internlm import InternLMModel, InternLMConfig
 
 from .ernie4_5_vl import ErnieMoeModel, ErnieMoeConfig
+from .ernie5_5 import Ernie55Config, Ernie55Model
 from .glm import GlmConfig, GlmModelWithMTP
 from .glm5_next import Glm5NextConfig, Glm5NextModel
 # The config name should not be the same as the huggingface config name
@@ -36,3 +37,4 @@ AutoModel.register(MimoConfig, MimoModelWithMTP)
 AutoModel.register(MinimaxConfig, MinimaxModelWithMTP)
 AutoModel.register(LLaMAConfig, LLaMAModel)
 AutoModel.register(ErnieMoeConfig, ErnieMoeModel)
+AutoModel.register(Ernie55Config, Ernie55Model)

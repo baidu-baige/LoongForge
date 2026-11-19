@@ -40,6 +40,11 @@ yacs
 scikit-image
 pyrender
 chumpy
+# Path B RGB camera calibration and fixed-intrinsics CPU reconstruction.
+# Install GeoCalib/UniDepth from a separate ViPE checkout (see README).
+kornia
+pycolmap>=4.2,<5
+einops
 
 # Depth Anything estimation (Step 5, standalone step / run-all --with_depth)
 # - transformers backend: V2 Metric / V3 standard HF weights (AutoModelForDepthEstimation)

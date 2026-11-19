@@ -1,0 +1,111 @@
+# FastWAM RoboTwin parallel-evaluation template (one inference service per GPU,
+# N sim workers per GPU, global queue). Fill /path/to/... below and run with
+# examples/embodied/fastwam/eval/run_robotwin_eval_parallel.sh.
+#
+# The evaluation protocol is the official one and is NOT changed by the
+# acceleration: 3-cam 384x320 T layout, 14D absolute joint actions, z-score
+# stats from the checkpoint, replan 24, official per-task step limits,
+# demo_clean. What changes is how the episodes are driven: one service per GPU,
+# N sims per service, no per-episode expert rollout (offline seed cache), and no
+# camera render inside a chunk.
+#
+# Optional expert-cache path (skips the per-episode expert rollout):
+#   1) scan once with benchmark.offline_expert_check_scan: /path/to/seeds
+#   2) set benchmark.offline_expert_check: /path/to/seeds here
+
+benchmark:
+  name: robotwin
+  tasks: all
+  task_config: demo_clean
+  start_seed: 100000
+  episodes_per_task: 100
+  episodes_per_chunk: 10
+  disable_expert_check: false
+  action_bridge: fastwam_joint14
+  use_official_step_limits: true
+  plan_order: lpt_long
+  long_task_steps: 1200
+  long_task_episodes_per_chunk: 4
+  sim_cpu_threads: 1
+  return_action_chunk: true
+  skip_intra_chunk_obs: true
+  chunk_execute_steps: 24
+  # offline_expert_check: /path/to/seeds
+
+model:
+  backend: loongforge
+  model_type: fastwam
+  name: fastwam-robotwin
+  backbone_variant: wan22_5b
+  dtype: bfloat16
+  variant: uncond
+  load_text_encoder: true
+  skip_dit_load_from_pretrain: true
+  action_dit_pretrained_path: null
+  redirect_common_files: false
+  action_dim: 14
+  action_horizon: 32
+  proprio_dim: 14
+  action_infer_mode: first_frame
+  num_inference_steps: 10
+  sigma_shift: 5.0
+  num_video_frames: 9
+  camera_layout: robotwin_t
+  norm_mode: z-score
+  model_id: Wan-AI/Wan2.2-TI2V-5B
+  tokenizer_model_id: /path/to/Wan2.2-TI2V-5B
+
+server:
+  host: 127.0.0.1
+  port: 12600
+  health_port: 12601
+  python: /path/to/loongforge_vla/bin/python
+  log: /path/to/fastwam_robotwin/policy_server.log
+  start_timeout_sec: 1800
+  ckpt_path: /path/to/robotwin_uncond_3cam_384.pt
+  dataset_statistics_path: /path/to/robotwin_uncond_3cam_384_dataset_stats.json
+  loongforge_root: /path/to/LoongForge-VLA
+  tokenizer_path: /path/to/Wan2.2-TI2V-5B/google/umt5-xxl
+  use_bf16: true
+  chunk_execute_steps: 0    # 0 -> official robotwin 24
+  batching:
+    max_batch_size: 8      # measured 2.8x throughput vs batch 1 on the reference machine
+    max_wait_ms: 5
+
+servers:
+  - gpus: [0, 1, 2, 3, 4, 5, 6, 7]
+
+pools:
+  gpu_sim:
+    n_sims_per_server: 8   # 10 measures at ~81 GB/card; 8 leaves ~24 GB
+    placement: co_locate
+
+# Fail-fast budget: N x per-sim + model must fit in one card. The numbers are
+# measured peaks (model 24.6 GB, ~5.8 GB per sim including scene-build spikes).
+resources:
+  gpu_sim:
+    vram_total_mb: 81920
+    vram_per_sim_mb: 5800
+    vram_model_mb: 24600
+
+env:
+  eval_root: /path/to/LoongForge-VLA/loongforge/embodied/eval
+  loongforge_root: /path/to/LoongForge-VLA
+  robotwin_root: /path/to/RoboTwin
+  robotwin_python: /path/to/robotwin/bin/python
+
+run:
+  output_dir: /path/to/LoongForge-VLA/loongforge/embodied/eval/reports/fastwam/robotwin/parallel
+  seed: 0
+  ckpt_setting: loongforge_fastwam_robotwin
+  worker_local_files: true
+  disable_eval_video_log: true
+  keep_config: true
+  timestamped_output: false
+  write_trace: false
+  unit_timeout_sec: 2400   # slowest measured unit is ~29 min; the default is chunk x per_episode_sec (hours)
+
+timeouts:
+  policy_call_ms: 600000
+  per_step_sec: 600
+  per_episode_sec: 7200

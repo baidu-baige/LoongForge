@@ -87,6 +87,7 @@
 
 ## 🔥 最新动态
 
+- **[2026/11]** ✨ 新增 **[ERNIE-5.5-Flash-Base](./examples/ernie5.5/)** 的 BF16 预训练与监督微调（SFT）支持。
 - **[2026/10]** 🤖 新增 **[LingBot-VLA-v2](./examples/embodied/lingbot_vla_v2/)** VLA 训练支持，基于新的 tensor_wise 分布式优化器与 Muon；`--optimizer muon` 也可在普通 DDP 下用于任意模型。
 - **[2026/10]** 🤖 推出 **[LoongForge-VLDA](./cookbook/loongforge-vlda/)**，基于 LoongForge 训练的 Vision-Language-Delta-Action 模型：LIBERO **98.5%**，LIBERO-Plus 零样本 **84.5%**，真机实验较 π0.5 提升 **17–18 个百分点**。[[项目主页](https://baidu-baige.github.io/LoongForge/projects/vlda.html)] [[论文](https://arxiv.org/abs/2610.25874)]
 - **[2026/10]** 🦾 开源 **[ego2robot](./tools/ego2robot/)** —— 实现第一人称人类操作视频到双臂机器人训练数据的转换管线，输出 **LeRobot v3.0** 格式，覆盖 **16 种机械臂本体**。
@@ -339,6 +340,7 @@ bash examples/embodied/pi05/run_pi05_ddp_finetune.sh
 <li><a href="examples/glm5/">GLM-5</a></li>
 <li><a href="examples/glm5.2/">GLM-5.2</a></li>
 <li><a href="examples/kimi_k3/">Kimi-K3</a></li>
+<li><a href="examples/ernie5.5/">ERNIE-5.5-Flash</a></li>
 </ul>
 </td>
 <td valign="top">

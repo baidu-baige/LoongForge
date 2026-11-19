@@ -17,7 +17,8 @@ import signal
 import stat
 import sys
 from contextlib import contextmanager
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 
@@ -132,6 +133,190 @@ def resolve_min_episodes(args: argparse.Namespace) -> int:
     if configured > 0:
         return configured
     return int(getattr(args, "episodes_per_task", 0) or 0)
+# --------------------------------------------------------------------------- #
+# Client-side action chunks (T-14: 10 requests -> 1)
+# --------------------------------------------------------------------------- #
+class ChunkConsumer:
+    """Hold one action chunk client-side and serve its actions step by step.
+
+    The server returns a whole chunk when ``return_action_chunk=True``. Keeping
+    it in the runner removes the per-step RPC (and its full observation
+    payload); the model still sees exactly the same requests as before, so the
+    executed actions are unchanged.
+
+    ``disable_action_cache`` models are closed-loop within a chunk: the runner
+    asks for a fresh request every env step and consumes only the first action.
+    """
+
+    def __init__(self) -> None:
+        self.requests = 0
+        self.local_steps = 0
+        self._chunk: Optional[np.ndarray] = None
+        self._index = 0
+
+    def reset(self) -> None:
+        """Drop the current chunk (call at episode start / after client.reset)."""
+        self._chunk = None
+        self._index = 0
+        self.requests = 0
+        self.local_steps = 0
+
+    def needs_request(self, disable_action_cache: bool = False) -> bool:
+        """Return True when the runner must issue a new inference request."""
+        return (
+            disable_action_cache
+            or self._chunk is None
+            or self._index >= self._chunk.shape[0]
+        )
+
+    def load(self, chunk: Any, limit: Optional[int] = None) -> None:
+        """Install a freshly returned chunk and reset the cursor."""
+        actions = np.asarray(chunk, dtype=np.float32)
+        if actions.ndim == 1:
+            actions = actions.reshape(1, -1)
+        if limit is not None and int(limit) > 0:
+            actions = actions[: int(limit)]
+        self._chunk = actions
+        self._index = 0
+        self.requests += 1
+
+    def next_action(self, disable_action_cache: bool = False) -> np.ndarray:
+        """Return the next action as ``[1, action_dim]``.
+
+        ``disable_action_cache`` requests are single-step by construction: the
+        cursor is invalidated so the next call triggers a new request.
+        """
+        if self._chunk is None or self._index >= self._chunk.shape[0]:
+            raise RuntimeError("ChunkConsumer.next_action() called without a loaded chunk")
+        action = self._chunk[self._index : self._index + 1]
+        if disable_action_cache:
+            self._index = self._chunk.shape[0]
+        else:
+            self._index += 1
+            self.local_steps += 1
+        return action
+
+
+@dataclass(frozen=True)
+class PolicyStep:
+    """One env step's action plus the inference request that produced it."""
+
+    action: np.ndarray
+    issued_request: bool
+    request_step: Optional[int]
+    request_id: Optional[str]
+    inference_latency_ms: Optional[float]
+    e2e_latency_ms: Optional[float]
+    #: The full array returned by the server on this request (``None`` on cache
+    #: hits). Action-ensemble loops need the whole chunk, not just the slice.
+    raw_actions: Optional[np.ndarray] = None
+
+
+class EpisodePolicyStepper:
+    """Own the client-side request cadence for one episode.
+
+    Runners call :meth:`next_action` once per env step and supply a
+    ``request_fn(request_step)`` that issues one RPC and returns
+    ``(data, e2e_latency_ms)``, where ``data`` is ``response["data"]`` and the
+    latency covers the RPC only (not local payload assembly, matching the
+    metric recorded before this helper existed). The stepper decides whether
+    that step needs a fresh inference (chunk exhausted, or
+    ``disable_action_cache``), buffers the returned action chunk, and hands
+    back one action per step.
+
+    This is the single place where "when to request / how to buffer" lives, so
+    every benchmark runner gets the T-14 client-owned chunk path instead of
+    only LIBERO. With ``return_action_chunk=False`` the server returns one
+    action per call, so the chunk is exhausted every step and the cadence is
+    identical to a plain per-step request loop.
+
+    Two opt-outs must be respected by callers:
+
+    * ``disable_action_cache`` models are closed-loop within a chunk — a new
+      request is issued every env step and only the first action is used.
+    * action-ensemble / streaming loops need a fresh prediction per step, so
+      they pass ``chunk_steps=1``.
+    """
+
+    def __init__(
+        self,
+        *,
+        chunk_steps: int = 0,
+        return_action_chunk: bool = False,
+        disable_action_cache: bool = False,
+        payload_builder: Any = None,
+    ) -> None:
+        self.chunk_steps = max(0, int(chunk_steps or 0))
+        self.return_action_chunk = bool(return_action_chunk)
+        self.disable_action_cache = bool(disable_action_cache)
+        self.payload_builder = payload_builder
+        self._consumer = ChunkConsumer()
+        self._request_step = 0
+        self._last_request_id: Optional[str] = None
+
+    @property
+    def requests(self) -> int:
+        """Number of inference requests issued in the current episode."""
+        return self._consumer.requests
+
+    @property
+    def local_steps(self) -> int:
+        """Number of env steps served from a buffered chunk."""
+        return self._consumer.local_steps
+
+    @property
+    def request_step(self) -> int:
+        """Index of the next request (0-based, reset by ``begin_episode``)."""
+        return self._request_step
+
+    def begin_episode(self) -> None:
+        """Drop the current chunk and per-episode counters."""
+        self._consumer.reset()
+        self._request_step = 0
+        self._last_request_id = None
+
+    def next_action(
+        self, request_fn: Callable[[int], tuple[Dict[str, Any], float]]
+    ) -> PolicyStep:
+        """Return the action for this env step, requesting when required.
+
+        ``request_fn`` receives the 0-based request index (this is what LIBERO's
+        payload uses as ``episode_step``; for chunked runs it advances once per
+        chunk, not once per env step) and returns ``(data, e2e_latency_ms)``.
+        """
+        issued_request = self._consumer.needs_request(self.disable_action_cache)
+        request_step: Optional[int] = None
+        inference_latency_ms: Optional[float] = None
+        e2e_latency_ms: Optional[float] = None
+        raw_actions: Optional[np.ndarray] = None
+        if issued_request:
+            data, e2e_latency_ms = request_fn(self._request_step)
+            if self.payload_builder is not None:
+                self.payload_builder.update_from_response(data)
+            inference_latency_ms = data.get("inference_latency_ms")
+            self._last_request_id = data.get("request_id")
+            raw_actions = np.asarray(data["actions"], dtype=np.float32)
+            if raw_actions.ndim == 1:
+                raw_actions = raw_actions.reshape(1, -1)
+            self._consumer.load(
+                raw_actions,
+                limit=1 if self.disable_action_cache else self.chunk_steps,
+            )
+            request_step = self._request_step
+            self._request_step += 1
+
+        action = self._consumer.next_action(self.disable_action_cache)
+        return PolicyStep(
+            action=action,
+            issued_request=issued_request,
+            request_step=request_step,
+            # Keep the owning request id on cache hits: the trace records which
+            # request produced the chunk that this action came from.
+            request_id=self._last_request_id,
+            inference_latency_ms=inference_latency_ms,
+            e2e_latency_ms=e2e_latency_ms if issued_request else 0.0,
+            raw_actions=raw_actions,
+        )
 
 
 # --------------------------------------------------------------------------- #

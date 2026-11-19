@@ -46,6 +46,7 @@ from mcore_checkpoint_convert.huggingface.mxfp4_dequant import (
     progress_print,
 )
 from mcore_checkpoint_convert.kimi_k3 import normalize_kimi_k3_state_dict
+from mcore_checkpoint_convert.ernie5_5 import convert_ernie55_hf_tensors
 
 logging.basicConfig(level=logging.INFO)
 
@@ -82,6 +83,9 @@ def _add_dequant_weight_key(weight_map, dequant_weight_keys, weight_key, args=No
 def _add_hf_weight_file(weight_map, filenames, weight_key, args=None, dequant_weight_keys=None):
     if weight_key in weight_map:
         filenames.add(weight_map[weight_key])
+        scale_key = weight_key + "_scale_inv"
+        if scale_key in weight_map:
+            filenames.add(weight_map[scale_key])
     if not _hf_dequantize_int4_enabled(args):
         return
     _add_dequant_weight_key(weight_map, dequant_weight_keys, weight_key, args=args)
@@ -150,7 +154,7 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mt
 
 
 
-    if (num_layers - 1) in layer_ids:
+    if (ori_num_layers - 1) in layer_ids or (num_layers - 1) in layer_ids:
         for c_name in LAST_LAYER_NAMES:
             if c_name in name_map:
                 if name_map[c_name] is None:
@@ -295,6 +299,11 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
         self.h_base = HuggingfaceBase(c_config, args)
         self.h_moe = HuggingfaceMoe(c_config, args)
         self.state_dict = {}
+        self.module = c_config.get("module", {})
+        if self.module.get("model_type") == "ernie5_5":
+            if args.tensor_model_parallel_size != 1 or args.expert_tensor_parallel_size not in (None, 1):
+                raise ValueError("ERNIE 5.5 checkpoint conversion requires TP=1 and ETP=1.")
+        self.hf_config = None
 
     @staticmethod
     def check_done_files(save_path, layer_dict, expert_dict=None):
@@ -362,6 +371,13 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
             )
             transformer = mtp_transformer if layer_id >= num_layers else None
             layer_prefix = mtp_layer_prefix if layer_id >= num_layers else None
+            if layer_id >= num_layers and cargs.get("mtp_shared_last_layer", False):
+                for c_name in MTP_NAMES:
+                    self.h_base.common_to_hf(
+                        c_name, c_ckpt, self.state_dict, layer_id=layer_id,
+                        hf_layer_id=hf_layer_id, transformer=transformer, layer_prefix=layer_prefix,
+                    )
+                continue
             for c_name in BASE_NAMES:
                 self.h_base.common_to_hf(c_name, c_ckpt, self.state_dict, layer_id=layer_id,
                                          hf_layer_id=hf_layer_id, transformer=transformer, layer_prefix=layer_prefix)
@@ -430,6 +446,9 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
             if merged:
                 logging.info("merged %d GLM-5.3 hc alpha triplets into fused hc_*_scale", merged)
 
+        if self.module.get("model_type") == "ernie5_5":
+            convert_ernie55_hf_tensors(self.state_dict, self.module, hargs, to_hf=True)
+
         if save_file:
             self.save_ckpt_file(save_path, p, ep_ids, self.state_dict)
         else:
@@ -495,6 +514,13 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
             hf_layer_id = mtp_layer_id if (layer_id >= num_layers and mtp_layer_id is not None) else layer_id
             transformer = mtp_transformer if layer_id >= num_layers else None
             layer_prefix = mtp_layer_prefix if layer_id >= num_layers else None
+            if layer_id >= num_layers and cargs.get("mtp_shared_last_layer", False):
+                for c_name in MTP_NAMES:
+                    self.h_base.hf_to_common(
+                        c_name, c_ckpt, self.state_dict, layer_id=layer_id,
+                        hf_layer_id=hf_layer_id, transformer=transformer, layer_prefix=layer_prefix,
+                    )
+                continue
             for c_name in BASE_NAMES:
                 self.h_base.hf_to_common(c_name, c_ckpt, self.state_dict, layer_id=layer_id,
                                          hf_layer_id=hf_layer_id, transformer=transformer, layer_prefix=layer_prefix)
@@ -620,6 +646,9 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
 
     def load(self, load_path, load_safe=False, c_config=None, layer_ids=[], expert_ids=None, mtp_num_layers=0):
         """ load ckpt """
+        if self.module.get("model_type") == "ernie5_5":
+            with open(os.path.join(load_path, "config.json")) as stream:
+                self.hf_config = json.load(stream)
         dequant_weight_keys = None
         if load_safe:
             from safetensors.torch import load_file
@@ -680,6 +709,8 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
         # EP filter must run before the dequant hooks so per-rank memory and
         # dequant work scale with 1/EP.
         self._drop_unowned_expert_tensors(c_config, expert_ids)
+        if self.module.get("model_type") == "ernie5_5":
+            convert_ernie55_hf_tensors(self.state_dict, self.module, self.hf_config)
 
         # K3 names MXFP4 pairs as ``weight_packed``/``weight_scale``. Rename
         # them before dequantization so the shared path can consume the pair.

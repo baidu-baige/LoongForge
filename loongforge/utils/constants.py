@@ -90,6 +90,7 @@ class LanguageModelFamilies(_BaseFamilies):
     MIMO = "mimo"
     GLM = "glm"
     GLM5_NEXT = "glm5_next"
+    ERNIE5_5 = "ernie5_5"
 
 
 class VisionLanguageModelFamilies(_BaseFamilies):

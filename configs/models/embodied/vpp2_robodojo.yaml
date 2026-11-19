@@ -1,0 +1,208 @@
+model:
+  model_id: ${oc.env:VPP2_WAN_ROOT}
+  action_dit_pretrained_path: ${oc.env:VPP2_ACTION_INIT}
+  tokenizer_model_id: ${oc.env:VPP2_WAN_ROOT}/google/umt5-xxl
+  tokenizer_max_len: 128
+  load_text_encoder: false
+  load_clip_encoder: true
+  mot_checkpoint_mixed_attn: true
+  action_chunk_size: 1
+  action_visible_video_frames: 5
+  proprio_dim: 16
+  video_dit_config:
+    model_type: i2v
+    patch_size:
+    - 1
+    - 2
+    - 2
+    text_len: 128
+    in_dim: 36
+    dim: 5120
+    hidden_dim: 5120
+    ffn_dim: 13824
+    freq_dim: 256
+    text_dim: 4096
+    out_dim: 16
+    num_heads: 40
+    attn_head_dim: 128
+    num_layers: 40
+    eps: 1.0e-06
+    qk_norm: true
+    cross_attn_norm: true
+    use_gradient_checkpointing: true
+    video_attention_mask_mode: bidirectional
+  action_dit_config:
+    action_dim: 16
+    hidden_dim: 1024
+    ffn_dim: 4096
+    num_layers: 40
+    num_heads: 40
+    attn_head_dim: 128
+    text_dim: 4096
+    freq_dim: 256
+    eps: 1.0e-06
+    use_gradient_checkpointing: true
+  video_scheduler:
+    train_sampling_strategy: pure_noise
+    train_shift: 5.0
+    infer_shift: 3.0
+    num_train_timesteps: 1000
+    beta_alpha: 7.0
+    beta_beta: 1.0
+  action_scheduler:
+    train_shift: 3.0
+    infer_shift: 3.0
+    num_train_timesteps: 1000
+  loss:
+    lambda_video: 1.0
+    lambda_action: 1.0
+  model_type: vpp2
+  training_stage: joint
+  video_checkpoint_path: ${oc.env:VPP2_VIDEO_INIT}
+  init_on_meta: false
+  initialization_seed: 100008
+  disable_train_autocast: true
+  action_dim: 16
+  action_horizon: 32
+  action_only_first_frame_fast_path: false
+data:
+  pipeline:
+    _target_: loongforge.embodied.data.datasets.vpp2.critical_phase.CriticalPhaseVideoEventDataset
+    metadata_path: ${oc.env:VPP2_PREPARED}/train.csv
+    video_root: ${oc.env:VPP2_MEDIA_ROOT}
+    balance_column: task_name
+    shape_meta:
+      images:
+      - key: image
+        raw_shape:
+        - 3
+        - 480
+        - 880
+        shape:
+        - 3
+        - 480
+        - 880
+      action:
+      - key: default
+        raw_shape: 16
+        shape: 16
+      state:
+      - key: default
+        raw_shape: 16
+        shape: 16
+    num_frames: 65
+    action_horizon: 32
+    global_sample_stride: 1
+    action_video_freq_ratio: 4
+    video_size:
+    - 240
+    - 416
+    video_resize_mode: direct
+    val_set_proportion: 0.0
+    is_training_set: true
+    seed: 100008
+    skip_padding_as_possible: false
+    max_padding_retry: 10
+    processor:
+      _target_: loongforge.embodied.data.datasets.vpp2.transforms.vpp2_processor.VPP2Processor
+      shape_meta:
+        images:
+        - key: image
+          raw_shape:
+          - 3
+          - 480
+          - 880
+          shape:
+          - 3
+          - 480
+          - 880
+        action:
+        - key: default
+          raw_shape: 16
+          shape: 16
+        state:
+        - key: default
+          raw_shape: 16
+          shape: 16
+      num_obs_steps: 65
+      num_output_cameras: 1
+      action_output_dim: 16
+      proprio_output_dim: 16
+      action_state_transforms: null
+      use_stepwise_action_norm: false
+      norm_default_mode: z-score
+      norm_exception_mode: null
+      action_state_merger:
+        _target_: loongforge.embodied.data.datasets.vpp2.transforms.vpp2_processor.ConcatLeftAlign
+      train_transforms:
+      - _target_: loongforge.embodied.data.datasets.vpp2.transforms.image.ToTensor
+      val_transforms:
+      - _target_: loongforge.embodied.data.datasets.vpp2.transforms.image.ToTensor
+      num_image_obs_steps: 17
+    pretrained_norm_stats: ${oc.env:VPP2_PREPARED}/dataset_stats.json
+    use_relative_action: false
+    video_path_column: video_path
+    parquet_path_column: parquet_path
+    instruction_column: training_prompt
+    fallback_instruction_column: high_level_instruction
+    action_column: action
+    proprio_column: observation.state
+    trim_start_column: trim_start
+    trim_end_column: trim_end
+    context_len: 128
+    text_embedding_cache_dir: null
+    text_embedding_cache_tag: wan21i2v14b480p
+    allow_missing_text_embeddings: false
+    decode_only_first_video_frame: false
+    balance_weight_overrides:
+      build_tower: 3.0
+      cover_blocks: 3.0
+      fasten_screws: 3.0
+      fill_pen_holder: 3.0
+      fold_clothes: 3.0
+      hang_mugs: 3.0
+      insert_tubes: 3.0
+      make_kong: 3.0
+      make_toast: 3.0
+      match_and_pick_from_conveyor: 3.0
+      pack_objects_into_box: 3.0
+      plug_in_charger: 3.0
+      pour_balls_into_vase: 3.0
+      pour_liquid_into_cup: 3.0
+      put_bottles_into_dustbin: 3.0
+      sort_nesting_dolls_by_size: 3.0
+      stack_blocks: 3.0
+      stack_bowls: 3.0
+      store_laptop_and_headphones: 3.0
+      press_by_number: 3.0
+      swap_blocks: 3.0
+      sweep_blocks: 3.0
+      swap_T: 3.0
+    condition_history_frames: 8
+    condition_history_stride: 25
+    condition_history_stride_choices:
+    - 21
+    - 23
+    - 25
+    - 27
+    - 29
+    condition_history_stride_probs:
+    - 0.07
+    - 0.07
+    - 0.72
+    - 0.07
+    - 0.07
+    condition_history_jitter_probability: 0.1
+    condition_history_jitter_max_native_steps: 1
+    condition_history_jitter_oldest_frame: true
+    condition_include_episode_first: true
+    condition_history_target_prefix: true
+    decode_sampled_video_frames: true
+    critical_phase_index: ${oc.env:VPP2_PREPARED}/critical_index
+    critical_phase_mode: core_score
+    critical_phase_weight: 1.0
+    critical_phase_mixture: 0.5
+    critical_phase_max_density_ratio: 3.0
+    critical_phase_prefix: 8
+    critical_phase_allow_unreviewed: false
+    text_embedding_path_column: text_embedding_path

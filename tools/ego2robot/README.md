@@ -84,12 +84,168 @@ python cli.py path-b \
   --checkpoint <WiLoR_checkpoint> \
   --detector <WiLoR_detector> \
   --mano_dir <MANO_models_dir> \
+  --geocalib_repo <DynHaMR_dir>/third-party/vipe \
+  --geocalib_weights <GeoCalib_pinhole_checkpoint> \
+  --unidepth_repo <DynHaMR_dir>/third-party/vipe \
+  --unidepth_model <UniDepthV2_checkpoint_directory> \
   --output_dir out_path_b --episode demo_000
 ```
 
 The command writes `out_path_b/demo_000/`, an EgoVerse-like Zarr episode
-containing video frames, left/right MANO 21-point tracks, synthetic fixed-camera
-head pose, and camera intrinsics. Feed that directory to the existing pipeline:
+containing video frames, left/right MANO 21-point tracks, estimated moving-camera
+poses, and intrinsics estimated from video. RGB video is the only data
+input; test Zarr intrinsics, head poses and hand annotations are never read.
+The default GeoCalib estimator jointly fits a pinhole camera from 8 RGB frames,
+then PnP fits the predicted hand shape to WiLoR's own predicted 2D under that
+camera. Hand initialization, Dyn-HaMR and Zarr export use the same hand K.
+The default path does not apply an image-width focal prior. The legacy guard
+can be reproduced explicitly with `--camera_focal_prior_max_deviation 0.35`
+and `--camera_focal_prior_ratio 0.4`; it is a heuristic and does not replace
+physical camera calibration. The experimental
+`--camera_self_calibration --camera_focal_prior_max_deviation -1` option
+proposes a shared focal length from masked video geometry, fits it on two
+temporal blocks, validates it on a disjoint third block, and falls back to
+GeoCalib when the evidence is weak. Once accepted, the same K is used for
+hand PnP, camera motion and metric depth conversion.
+Use the GeoCalib module bundled in ViPE (`vipe/priors/geocalib`) and install
+`kornia`. `--geocalib_weights` accepts a local checkpoint; the default `pinhole`
+downloads official weights. Missing estimator dependencies fail explicitly.
+An explicit `--camera_estimator assumed` enables an uncalibrated fallback and
+marks its provenance in the output.
+
+Camera motion defaults to `--camera_motion colmap`. This offline reconstruction
+uses CPU SIFT/sequential matching, incremental SfM and bundle adjustment with
+K fixed within each candidate. WiLoR hand hulls and their temporal neighborhood
+mask dynamic hand features. Background map points are tracked into the other
+video frames with forward/backward optical flow and robust PnP.
+Unlocalized endpoints and long gaps are marked invalid. Their exported camera
+poses and hand observations are NaN, with explicit validity arrays; short
+internal gaps may be interpolated. Insufficient overall coverage fails explicitly.
+
+The explicit `--pose_intrinsics_policy video_consistency` reconstructs both the
+original and protected K when the legacy focal guard triggers. Candidates are compared
+against model depth at identical background SIFT pixels in shared registered
+views. The protected K must improve depth agreement by at least 10% while
+preserving camera coverage and registration, and passing a reprojection gate.
+Version 2 requires a median of 60 common reliable points (P10 at least 30),
+median coverage of 6/12 spatial cells, support in 75% of shared sampled views
+spanning 60% of the sampled interval, and depth improvement in 60% of views.
+Total sparse point counts are retained as diagnostics; shared observation
+support determines map adequacy. Uncertain comparisons retain the original K. DA3Metric
+network outputs are reused with each candidate's focal conversion. The selected
+K drives camera PnP, metric scale and camera NPZ export; candidate scores,
+failures and selected intrinsics are recorded in `camera_metadata.json`.
+This policy has development-set regression results, without independent test
+validation. Explicit `--pose_intrinsics_policy fixed` retains the original
+intrinsics policy. The image-width prior is heuristic, and candidate selection
+never reads test Zarr data.
+If the protected K cannot initialize enough views at an 8-degree triangulation
+angle, it retries the same background matches at 4 and 2 degrees, preserving
+the registration threshold, fixed intrinsics and explicit invalid-frame masks.
+
+Install `pycolmap>=4.2,<5` and prepare UniDepthV2 small weights, for example:
+
+```bash
+python -c 'from huggingface_hub import snapshot_download; snapshot_download("lpiccinelli/unidepth-v2-vits14", local_dir="/path/to/UniDepthV2-ViTS14", allow_patterns=["config.json", "model.safetensors"])'
+```
+
+`--unidepth_repo` points to ViPE or its vendored UniDepth directory.
+UniDepth receives each candidate's K. Robust depth ratios at static COLMAP
+background points estimate one sequence scale; no source calibration, source
+head poses or source hand annotations are read. This is a learned estimate
+of metric scale, with its uncertainty recorded, rather than physical calibration.
+
+DA3Metric-Large can be selected as an alternative metric-depth backend. It
+recovers the shared scale of the COLMAP translation; GeoCalib still supplies
+intrinsics and COLMAP still estimates camera motion. Install the official
+Depth Anything 3 package from its checkout and download the
+`depth-anything/DA3METRIC-LARGE` checkpoint, then run:
+
+```bash
+python -m pip install -e /path/to/depth-anything-3 --no-deps
+python cli.py path-b \
+  --video /path/to/video.mp4 \
+  --wilor_repo /path/to/WiLoR \
+  --checkpoint <WiLoR_checkpoint> \
+  --detector <WiLoR_detector> \
+  --mano_dir <MANO_models_dir> \
+  --geocalib_repo <DynHaMR_dir>/third-party/vipe \
+  --geocalib_weights <GeoCalib_pinhole_checkpoint> \
+  --camera_motion colmap \
+  --metric_depth_backend da3_metric \
+  --da3_repo /path/to/depth-anything-3 \
+  --da3_metric_model /path/to/DA3Metric-Large \
+  --output_dir out_path_b --episode demo_000
+```
+
+The DA3Metric checkpoint outputs canonical metric depth. Path B applies the
+official focal-length conversion at the network resolution, restores the depth
+map to the video resolution, and estimates one robust scale from static
+COLMAP points. `--da3_repo` is optional when the package is already installed.
+`--da3_metric_process_res` controls the DA3 processing resolution and defaults
+to 504. Keep `--metric_depth_backend unidepth` for the UniDepthV2 baseline.
+
+Experimental `--hand_depth_alignment` also uses this video depth model to
+correct hand translation before temporal refinement. It samples depth patches
+at the wrist and MCP joints, backprojects with hand K and takes a robust median
+translation while preserving relative hand geometry. Corrections are rejected
+for insufficient depth, joint disagreement, excessive translation or degraded
+2D reprojection. In COLMAP mode the already loaded depth model is reused; the
+hand depth map is inferred with hand K independently of motion K. Static mode
+also requires a metric-depth checkpoint when this option is enabled.
+
+```bash
+# Add to the preceding path-b command for a controlled ablation:
+--hand_depth_alignment \
+--hand_depth_patch_size 7 \
+--hand_depth_max_mad 0.03 \
+--hand_depth_max_delta 0.15
+```
+
+This option defaults to off. The source implementation's five-video development
+ablation did not show an overall accuracy improvement, so it remains experimental
+after migration. `--hand_depth_stride` defaults to 1 (every
+observed frame); larger values leave skipped predictions unchanged.
+`hand_depth_alignment` in Zarr attributes and camera metadata records accepted
+counts, rejection reasons and correction statistics. Model failures propagate
+as errors. All thresholds use inference outputs only; source Zarr is read
+solely by the separate evaluator after predictions are frozen.
+
+The output camera trajectory is c2w relative to the first localized video frame
+(`camera_reference_frame_index`, normally 0).
+Dyn-HaMR, world-frame smoothing, exported joints and `obs_head_pose` share it,
+with camera scale fixed during optimization. `--camera_motion static` explicitly
+selects the stationary-camera assumption and needs no depth model unless
+hand depth alignment is enabled.
+`--pose_stride` (3), `--pose_max_keyframes` (300), `--pose_depth_samples` (8),
+`--pose_threads` (4) and `--pose_mask_margin` (25 pixels) control reconstruction.
+`<episode>_camera_work/` retains the sparse map, database and quality metadata.
+`<episode>_camera.npz` stores c2w, native-scale c2w, metric depth, observation
+flags and scale. Zarr stores `path_b_camera_pose_valid` and
+`path_b_camera_pose_observed`, which survive `load` / `align`.
+Finite poses at invalid frames are used only as internal optimizer placeholders;
+their observation confidence is zero and exported poses remain NaN.
+Retarget computes base placement from valid camera frames. Unlocalized frames
+keep their timeline entries, produce background-only output with blank robot
+views, and stay invalid in the IK/quality `camera_pose_valid` arrays. Episodes
+without any valid camera pose fail explicitly.
+`<episode>_wilor_raw.npz` preserves WiLoR output for reruns.
+The old DA3-BASE camera backend remains removed. DA3Metric-Large is available
+through `--metric_depth_backend da3_metric` for metric scale estimation and
+optional hand translation correction;
+it does not provide the Path B camera pose.
+
+WiLoR 2D is a model self-projection, not independent supervision. Predicted MANO
+scale and monocular pose ambiguity still limit metric accuracy.
+`--camera_fit translation` provides a translation-only ablation.
+`--camera_fit pnp_ransac` is an explicit robust PnP ablation for occasional
+outlier 2D joints; the default remains `pnp` because the robust variant did not
+show a stable improvement in the current frozen-video replay.
+`--max_gap` fills only internal gaps of at most 5 frames by default. Long gaps
+split smoothing segments. Missing EE/wrist/2D/3D fields stay invalid and each
+hand exports confidence/observed arrays. The loader retains the Path B video
+timeline and exports `frame_valid` and `source_frame_indices`.
+Feed that directory to the existing pipeline:
 
 ```bash
 python cli.py run-all --input_dir out_path_b --output_dir out_demo \
@@ -119,15 +275,52 @@ python cli.py path-b \
   --detector <WiLoR_detector> \
   --mano_dir <MANO_models_dir> \
   --dynhamr_repo <DynHaMR_dir> \
+  --geocalib_weights <GeoCalib_pinhole_checkpoint> \
+  --unidepth_model <UniDepthV2_checkpoint_directory> \
   --dynhamr_gpu 0 \
   --output_dir path_b_dynhamr --episode source_000
 ```
 
-The bridge prepares the official video/track/camera layout, runs
-`dyn-hamr/run_opt.py` with a static-camera fallback, and converts the final
-MANO parameters back to `dynhamr_predictions.npz`. The Dyn-HaMR checkout still
-needs its own `_DATA` assets and dependencies; run its `scripts/prepare.sh`
-and follow its README for HaMeR/BMC/HMP resources.
+The bridge prepares the full video/track/camera layout and runs the official
+Root/Smooth optimization with iteration limits of 50/300 and upstream early
+stopping. Both observed hands are optimized together. Missing observations keep
+zero 2D confidence. Export uses the correct MANO mean-pose convention and keeps
+the optimized camera-frame translation instead of restoring WiLoR wrists.
+
+For upstream revision `fa9cd74`, apply the compatibility patch to defer optional
+HMP/BMC dependencies, remove an unused `mano` import, honor supplied camera
+calibration, and preserve missing-observation confidence and visibility. MANO
+initialization may be interpolated; missing 2D observations stay excluded from
+the optimization loss. The loader retains unobserved video boundaries so the
+optimizer and exported predictions keep the original frame indices:
+
+```bash
+git -C <DynHaMR_dir> apply <ego2robot_dir>/steps/dynhamr_compat.patch
+python -m pip install tensorboard loguru torchgeometry==0.1.2 gdown
+```
+
+The loader integration tests read pristine `fa9cd74` sources from an existing
+checkout and apply the patch in a temporary directory. From `tools/ego2robot`:
+
+```bash
+EGO2ROBOT_DYNHAMR_REPO=<DynHaMR_dir> python -m unittest tests.test_dynhamr_loader -v
+```
+
+These tests require the CPU runtime (`torch`, `imageio`, OpenCV, NumPy, SciPy),
+but no model assets. They skip when the checkout variable is unset.
+
+WiLoR initialization avoids rerunning HaMeR or SLAM. HMP motion prior is disabled
+by default and the default BMC loss weight is zero; enabling those optional
+stages requires their official assets and dependencies. Intrinsics come from
+video estimation. The default COLMAP mode supplies estimated moving-camera
+poses to the optimizer; explicit static mode assumes a stationary camera.
+Use `--dynhamr_gpu -1` for CPU optimization without changing WiLoR's device.
+Inputs, optimizer logs, and official results are retained in
+`<output_dir>/<episode>_dynhamr/`. Offline `--predictions` preserves WiLoR's 2D
+and MANO parameters and can rerun the official optimizer from cached predictions.
+Offline predictions containing only 3D/2D keypoints also work without Dyn-HaMR;
+the raw cache stores the optional fields present for every detection. Official
+Dyn-HaMR requires all MANO initialization fields.
 
 The official WiLoR runtime also needs its Python dependencies (`ultralytics`,
 `smplx`, `pytorch-lightning`, `yacs`, and `scikit-image`). Set `--mano_dir` to
@@ -151,6 +344,8 @@ python cli.py path-b \
   --detector <WiLoR_detector> \
   --mano_dir <MANO_models_dir> \
   --dynhamr_repo <DynHaMR_dir> \
+  --geocalib_weights <GeoCalib_pinhole_checkpoint> \
+  --unidepth_model <UniDepthV2_checkpoint_directory> \
   --dynhamr_gpu 0
 
 # 2) Zarr -> masks/inpaint -> retarget -> LeRobot -> demo
@@ -165,8 +360,8 @@ python cli.py run-all \
 ```
 
 The Path-B episode is a Zarr v3 group. Its `left.obs_keypoints` and
-`right.obs_keypoints` arrays are 21-point MANO tracks in the synthetic camera
-world frame; `images.front_1` stores the original JPEG frames. The downstream
+`right.obs_keypoints` arrays are 21-point MANO tracks in the reconstructed camera
+world frame (camera frame in static mode); `images.front_1` stores the original JPEG frames. The downstream
 loader converts this group to the numbered pipeline directories. The final
 robot/background composite is written to
 `06_retarget/<episode>_robot_on_bg.mp4`, and the 3x3 demo is written to
@@ -201,8 +396,9 @@ Gauss additionally needs `accelerate`, `huggingface-hub`, `hydra-core`, `omegaco
 | `models/SO-ARM100/Simulation/SO101` | Included in this repository | Official SO-ARM101 MuJoCo model and mesh assets |
 | ProPainter source + `weights/ProPainter.pth`, `weights/raft-things.pth`, `weights/recurrent_flow_completion.pth` | Under `EGO2ROBOT_PROPAINTER_DIR` | All three files are required; the inference script uses the [v0.1.0 release](https://github.com/sczhou/ProPainter/releases/tag/v0.1.0) |
 | DA3-BASE `config.json` + `model.safetensors` and Python package | `depth --model_id` or `EGO2ROBOT_DA3_MODEL_DIR` | Only for DA3 depth / `--with_depth`; follow the [official model list](https://github.com/ByteDance-Seed/depth-anything-3) |
+| DA3Metric-Large `config.json` + `model.safetensors` and official package | `path-b --da3_metric_model`, `--da3_repo` | Optional Path B metric-scale backend; use `--metric_depth_backend da3_metric` |
 | Optional Path B: WiLoR `wilor_final.ckpt`, `detector.pt`, MANO `MANO_RIGHT.pkl` | `path-b --wilor_repo`, `--checkpoint`, `--detector`, `--mano_dir` | Separate WiLoR source/dependencies and licensed MANO assets; see Path B above |
-| Optional DynHaMR source and `_DATA` resources | `path-b --dynhamr_repo` | Follow Dyn-HaMR README / `scripts/prepare.sh` for HaMeR/BMC/HMP assets and its own dependencies |
+| Optional DynHaMR source and MANO resources | `path-b --dynhamr_repo` | WiLoR-initialized Root/Smooth reuses existing MANO assets; follow the Dyn-HaMR README for weights and dependencies of other optional stages |
 
 Sources above are taken from local source/asset documentation; download availability was not tested during this maintenance. No weights are bundled. The DVLT directory must contain `config.json` and `model.safetensors`; `load_patch_embed_weights=false` alone does not prove tensor completeness. See [the setup guide](GAUSS_SETUP_ZH.md) for the complete asset checklist.
 

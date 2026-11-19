@@ -7,6 +7,7 @@ Implements online saving of model to HF checkpoint format based on tools/mcore_b
 """
 import os
 import sys
+import json
 from typing import Optional
 import shutil
 
@@ -406,6 +407,16 @@ def save_hf_checkpoint_online(
             pp_size,
             original_hf_path=getattr(args, "pretrained_checkpoint", None) or args.load,
         )
+        if c_config.get("module", {}).get("model_type") == "ernie5_5":
+            config_path = os.path.join(save_hf_path, "config.json")
+            with open(config_path) as stream:
+                hf_config = json.load(stream)
+            hf_config.pop("quantization_config", None)
+            hf_config["mqa_latent_rope_adjacent_pairing"] = c_config.get_args("huggingface")[
+                "mqa_latent_rope_adjacent_pairing"
+            ]
+            with open(config_path, "w") as stream:
+                json.dump(hf_config, stream, indent=2)
 
     print_rank_0("="*80)
     print_rank_0("HF checkpoint saved successfully!")

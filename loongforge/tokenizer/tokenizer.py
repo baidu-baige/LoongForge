@@ -4,6 +4,7 @@
 """Loongforge Tokenizer"""
 
 from typing import TYPE_CHECKING, Optional
+from transformers import PretrainedConfig
 
 from megatron.core.datasets.megatron_tokenizer import MegatronLegacyTokenizer
 
@@ -87,12 +88,17 @@ def build_tokenizer(
             args.hf_tokenizer_path is not None
         ), "HFTokenizer requires a tokenizer name or path."
 
+        tokenizer_kwargs = {}
+        if args.model_family == constants.LanguageModelFamilies.ERNIE5_5:
+            # The fast tokenizer is self-contained; Transformers lacks the ERNIE HF model config.
+            tokenizer_kwargs["config"] = PretrainedConfig()
         tokenizer = AutoTokenizerFromHF(
             name_or_path=args.hf_tokenizer_path,
             use_fast_tokenizer=args.use_fast_tokenizer,
             padding_side=args.padding_side,
             model_max_length=args.seq_length,
             split_special_tokens=args.split_special_tokens,
+            **tokenizer_kwargs,
         )
 
         if args.additional_special_tokens is not None:

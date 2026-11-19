@@ -173,9 +173,12 @@ class FinetuneTrainer(BaseTrainer):
                 self._step_loss_spiked = True
                 loss = loss * 0.0
 
-            # Gradient sync is gated by the caller's _grad_sync_ctx, so the
-            # all-reduce happens once per optimizer step.
-            loss.backward()
+            # DeepSpeed owns partitioned-gradient reduction and BF16 master
+            # gradients; DDP/FSDP use the native autograd path.
+            if self.training_args.distributed_strategy == "deepspeed":
+                self.model.backward(loss, scale_wrt_gas=False)
+            else:
+                loss.backward()
 
         # Print-only losses (summed across micro-steps).
         for key, value in log_loss_dict.items():
@@ -256,6 +259,11 @@ class FinetuneTrainer(BaseTrainer):
 
     def _clean_nan_gradients(self):
         """Replace NaN/Inf gradients with 0."""
+        if self.training_args.distributed_strategy == "deepspeed":
+            raise RuntimeError(
+                "NaN gradient cleanup cannot safely rewrite ZeRO-2 partitions. "
+                "Use DeepSpeed overflow handling or disable the host-side check."
+            )
         clean_nan_gradients(self.model)
 
     def _load_pretrained(self, path: str):
@@ -271,11 +279,10 @@ class FinetuneTrainer(BaseTrainer):
     def _handle_resume(self, path: str, step: int, epoch: int):
         """Resume model weights from a discovered checkpoint.
 
-        For ``dcp`` checkpoints, weight loading is deferred until after
-        ``wrap_model`` (handled by ``resume_training_state``), since DCP needs
-        the FSDP-sharded DTensor layout to know how to reshard. Calling
-        ``load_pretrained`` here would also fail because there is no
-        consolidated single-file model in a DCP checkpoint dir.
+        For ``dcp`` and DeepSpeed checkpoints, weight loading is deferred until
+        after distributed wrapping, since the backend-specific loader needs its
+        sharded layout. Calling ``load_pretrained`` here would also fail because
+        there is no consolidated single-file model in a resumable checkpoint dir.
         """
         if is_lora_adapter_checkpoint(path):
             if not self.training_args.use_lora:
@@ -302,15 +309,24 @@ class FinetuneTrainer(BaseTrainer):
             self.logger.log_resume(step)
             return
 
-        fmt = detect_checkpoint_format(path)
-        if fmt == "dcp":
+        if self.training_args.distributed_strategy == "deepspeed":
             if self.ctx.is_main:
                 logger.info(
-                    "resume: detected DCP checkpoint at %s — deferring weight "
-                    "load until after wrap_model.", path,
+                    "resume: DeepSpeed checkpoint at %s — deferring weight "
+                    "load until after engine initialization.",
+                    path,
                 )
         else:
-            load_pretrained(self.model, path, self.ctx)
+            fmt = detect_checkpoint_format(path)
+            if fmt == "dcp":
+                if self.ctx.is_main:
+                    logger.info(
+                        "resume: detected DCP checkpoint at %s — deferring weight "
+                        "load until after wrap_model.",
+                        path,
+                    )
+            else:
+                load_pretrained(self.model, path, self.ctx)
         self.completed_steps = step
         self.current_epoch = epoch
         self.logger.log_resume(step)
@@ -338,6 +354,20 @@ class FinetuneTrainer(BaseTrainer):
                 self.logger.log_freeze_not_found(dot_path, resolved_prefix, missing_attr)
 
     def _save_checkpoint(self):
+        if self.training_args.distributed_strategy == "deepspeed":
+            from loongforge.embodied.distributed.deepspeed import (
+                save_deepspeed_checkpoint,
+            )
+
+            return save_deepspeed_checkpoint(
+                self.model,
+                checkpoint_dir=self.checkpoint_dir,
+                step=self.completed_steps,
+                epoch=self.current_epoch,
+                dataloader_state=self._get_dataloader_state(),
+                ctx=self.ctx,
+            )
+            return
         save_checkpoint(
             self.model, self.optimizer, self.lr_scheduler,
             self.completed_steps, self.checkpoint_dir, self.ctx, self.training_args,
@@ -346,6 +376,7 @@ class FinetuneTrainer(BaseTrainer):
             model_cfg=self.model_cfg,
             data_cfg=self.data_cfg,
         )
+        return None
 
     # ═══════════════════════════════════════════════
     # Data / state — per-loader epoch + one-shot RNG restore
