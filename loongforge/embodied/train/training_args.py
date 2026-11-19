@@ -928,6 +928,15 @@ class _CheckpointArgs:
                     "distributed checkpoint (dcp).",
         },
     )
+    deepspeed_export_format: str = field(
+        default="auto",
+        metadata={
+            "choices": ["auto", "none", "safetensors", "pt"],
+            "help": "Final single-file model export for DeepSpeed checkpoints: "
+                    "auto follows --save-format (dcp disables export), none "
+                    "disables export, or choose safetensors/pt explicitly.",
+        },
+    )
     save_training_state: bool = field(
         default=True,
         metadata={
@@ -1374,7 +1383,7 @@ class _FP8Args:
     )
 @dataclass(frozen=True)
 class _DistributedArgs:
-    """Parallelism strategy (FSDP/DDP), dtype, ZeRO, and meta-device init."""
+    """Parallelism strategy (FSDP/DDP/DeepSpeed), dtype, ZeRO, and meta init."""
 
     init_on_meta: bool = field(
         default=False,
@@ -1386,9 +1395,17 @@ class _DistributedArgs:
     distributed_strategy: str = field(
         default="fsdp",
         metadata={
-            "choices": ["ddp", "fsdp"],
-            "help": "Parallelism strategy: DDP (replicate) or FSDP2 "
-                    "(fully sharded).",
+            "choices": ["ddp", "fsdp", "deepspeed"],
+            "help": "Parallelism strategy: DDP (replicate), FSDP2 "
+                    "(fully sharded), or DeepSpeed (configured by "
+                    "--deepspeed-config).",
+        },
+    )
+    deepspeed_config: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "DeepSpeed JSON configuration path. Required when "
+                    "--distributed-strategy=deepspeed.",
         },
     )
     hsdp_shard_size: Optional[int] = field(
