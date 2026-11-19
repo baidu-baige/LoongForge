@@ -676,7 +676,7 @@ class WorldModel(nn.Module):
         if not diffusion.is_iterative:
             raise NotImplementedError(
                 f"model {self.spec.model_type!r} has a DiffusionSpec with no "
-                "sampling_gate/inference_solver (a single-step feed-forward "
+                "sampling_gate/solver (a single-step feed-forward "
                 "model); the "
                 "single-step inference path belongs to the assembly layer "
                 "and is not implemented yet"

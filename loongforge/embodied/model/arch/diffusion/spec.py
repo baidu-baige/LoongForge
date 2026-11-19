@@ -42,7 +42,7 @@ class DiffusionSpec:
         losses: The loss terms, with unique ``name`` values.
         schedule: The forward noising process; rectified flow by default.
         sampling_gate: Which stream steps when during iterative sampling, or None.
-        inference_solver: The per-step update rule, or None.
+        solver: The per-step numerical update rule, or None.
         noise_levels: Discrete noise levels, if any.
     """
 
@@ -50,7 +50,7 @@ class DiffusionSpec:
     losses: tuple[LossSpec, ...]
     schedule: NoiseSchedule = field(default_factory=RectifiedFlow)
     sampling_gate: SteppingGate | None = None        # None => no iterative sampling
-    inference_solver: Sampler | None = None          # None => same as above
+    solver: Sampler | None = None                   # None => same as above
     noise_levels: tuple[float, ...] = ()
     # Discrete noise levels. Non-empty => visibility.rules.noise_gate is usable.
     # They must be **discrete levels** rather than a continuous sigma: a
@@ -67,10 +67,10 @@ class DiffusionSpec:
         if len(set(names)) != len(names):
             raise ValueError(
                 f"DiffusionSpec.losses has duplicate names: {names}")
-        if (self.sampling_gate is None) != (self.inference_solver is None):
+        if (self.sampling_gate is None) != (self.solver is None):
             raise ValueError(
-                "DiffusionSpec.sampling_gate and inference_solver must both be given or both be "
-                f"omitted: got sampling_gate={self.sampling_gate!r}, inference_solver={self.inference_solver!r}"
+                "DiffusionSpec.sampling_gate and solver must both be given or both be "
+                f"omitted: got sampling_gate={self.sampling_gate!r}, solver={self.solver!r}"
             )
         if len(set(self.noise_levels)) != len(self.noise_levels):
             raise ValueError(

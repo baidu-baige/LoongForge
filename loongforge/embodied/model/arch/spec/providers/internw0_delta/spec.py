@@ -295,7 +295,7 @@ def _internw0_delta(config: Any = None, *,
         schedule=RectifiedFlow(),
         sampling_gate=UniformSteps(num_steps=inference_steps,
                           skip=frozenset({"video"})),
-        inference_solver=EulerSampler(),
+        solver=EulerSampler(),
         # Declare the clean and noisy levels used by the visibility rules.
         # The training path still has to attach the corresponding labels to
         # individual tokens.

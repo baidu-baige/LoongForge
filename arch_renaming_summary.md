@@ -32,12 +32,12 @@
 | 对象位置 | 原名称 | 新名称 | 重命名理由 |
 | --- | --- | --- | --- |
 | `DiffusionSpec` 字段 | `gate` | `sampling_gate` | 表达推理采样过程中“哪个 stream 在当前步骤推进”的控制策略。增加限定词，避免与网络内部的 modulation gate 混淆。 |
-| `DiffusionSpec` 字段 | `sampler` | `inference_solver` | 对象负责推理时每一步的状态更新，例如 Euler 更新。与训练中抽取 timestep 的 `TimestepSampler` 区分，避免两种职责共用 sampler 名称。 |
+| `DiffusionSpec` 字段 | `sampler` | `solver` | 对象负责每一步的数值更新，例如 Euler 更新。与抽取 timestep 的 `TimestepSampler` 区分，同时避免将数值求解器的用途限定为推理。 |
 | `WorldModel.sample_timesteps()`、`add_noise()` 局部变量 | `sampler` | `timestep_sampler` | 明确变量抽样的对象是训练时间步，便于理解其 `broadcast` 和 `sample()` 调用。 |
 
 主要位置为 `diffusion/spec.py`、`builder.py` 及三个 provider 的 `spec.py`。
 
-`sampling_gate` 与 `inference_solver` 必须同时提供或同时省略的校验保持不变。本提交没有实现新的推理采样循环；`WorldModel.sample()` 原有的未实现边界仍然保留。
+`sampling_gate` 与 `solver` 必须同时提供或同时省略的校验保持不变。本提交没有实现新的推理采样循环；`WorldModel.sample()` 原有的未实现边界仍然保留。
 
 ## 3. 时间步标量与时间步嵌入
 

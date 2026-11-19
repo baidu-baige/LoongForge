@@ -220,7 +220,7 @@ def _fastwam(config: Any = None, *,
         # ``forward_action_with_video_cache`` (``:774`` / ``:1106``).
         sampling_gate=UniformSteps(num_steps=inference_steps,
                           skip=frozenset({"video"})),
-        inference_solver=EulerSampler(),
+        solver=EulerSampler(),
         # Two levels = first latent frame clean, the rest noisy
         # (``wan/dit.py:645``).
         noise_levels=(0.0, 1.0),

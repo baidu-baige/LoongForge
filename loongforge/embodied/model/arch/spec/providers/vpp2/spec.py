@@ -280,7 +280,7 @@ def _vpp2(config: Any = None, *,
         # (``train_action.yaml:224``, same value as ``policy/VPP2/deploy.yml:21``).
         sampling_gate=UniformSteps(num_steps=inference_steps,
                           skip=frozenset({"video"})),
-        inference_solver=EulerSampler(),
+        solver=EulerSampler(),
         # Two levels: clean (condition frames) and noisy. A non-empty tuple is
         # what makes the ``noise_gate`` rule usable, which the second rule in
         # ``_vpp2_visibility`` below depends on.
