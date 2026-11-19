@@ -106,7 +106,7 @@ model:
       weight: 1.0
 ```
 
-`WorldModelSpec.heads`、`WorldModel.heads` 和 `HeadSpec` 保留原名称，因为它们确实描述或保存输出 head。此次回滚未修改 `HeadSpec` 或运行时损失计算；有效监督权重继续从 `LossSpec` 读取。当前版本存在 `HeadSpec` 未定义 `weight`、运行时代码与测试仍引用该字段的不一致，见第 9 节。
+`WorldModelSpec.heads`、`WorldModel.heads` 和 `HeadSpec` 保留原名称，因为它们确实描述或保存输出 head。损失配置回滚后，进一步恢复了此前遗漏的 `HeadSpec.weight` 字段及负值校验，与重命名前的接口一致；有效监督权重继续从 `LossSpec` 读取，运行时损失计算未修改。
 
 ## 7. VPP2 视频前缀参数
 
@@ -129,7 +129,7 @@ model:
 | `ArchWorldModel.from_pretrained()` | 保留现有构造入口，没有改为 `from_config()`。 |
 | `DiffusionSpec.sampler_for()` | 保留方法名；其调用方仅把局部变量改成 `timestep_sampler`。 |
 | provider 的 `action_width` 参数 | 仍与 `GeometrySpec.action_dim` 区分，未机械统一参数名。 |
-| `HeadSpec` | 本次损失配置回滚未修改该类；当前 `weight` 字段与消费者不一致，见第 9 节。 |
+| `HeadSpec.weight` | 恢复原有默认值 `1.0` 及负值校验；运行时继续拒绝非默认 head 权重，监督权重由 `LossSpec` 管理。 |
 | `vpp2_to_arch` | 表示 legacy VPP2 checkpoint 的转换来源，保持原名称。 |
 | `test_arch_registry.py` 等测试文件名 | 文件名保留，相关测试仅同步新的字段或标签名称。 |
 | `vpp2` 模型/provider 入口 | PR #345 时仍叫 `vpp2`，后续 `arch_vpp2` 入口隔离不在本次汇总范围内。 |
@@ -138,6 +138,12 @@ model:
 
 注释调整主要解释 spec 构造与运行时组装的职责、标量时间步与嵌入的区别、能力协商和推理尚未接入的部分，以及 InternW0-Delta 现有表示限制。它们没有实现新的模型能力。
 
-此前报告的 **363 passed、4 skipped** 是历史结果，不代表当前版本通过测试。损失配置名称回滚后，在 `zhangqiu_pro6000` 中运行 `test_arch_gate.py` 和 `test_arch_world_model.py`，结果为 **27 passed、14 failed**。失败涉及提交 `8dc46b9` 已存在的 `HeadSpec.weight` 不一致：类未定义该字段，但运行时校验及测试仍引用它。本次回滚未修改相关类或计算逻辑。
+损失配置名称回滚后的首次定向测试发现 `HeadSpec.weight` 定义遗漏。恢复重命名前已有的字段和负值校验后，在 `zhangqiu_pro6000` 中重新运行完整 arch 单元测试：
 
-`heads` 的 weight、warmup、enabled 配置覆盖直接验证通过，`git diff --check` 通过。这些检查不能替代真实 VPP2 的同权重前向、梯度及端到端训练等价性验证。
+```bash
+pytest -q tests/embodied/unit/test_arch*.py
+```
+
+当前结果为 **363 passed、4 skipped、0 failed**。4 个跳过项来自仅适用于 InternW0-Delta 的中间层 head 和 track_align 场景，其他模型按既有测试判断跳过。本次没有修改测试或增加跳过项。
+
+`heads` 的 weight、warmup、enabled 配置覆盖，以及默认 head 权重和负值拒绝直接验证通过，`git diff --check` 通过。这些检查不能替代真实 VPP2 的同权重前向、梯度及端到端训练等价性验证。
