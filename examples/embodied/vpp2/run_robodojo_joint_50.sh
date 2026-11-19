@@ -71,7 +71,7 @@ DISTRIBUTED_ARGS=(
 # ── Paths ─────────────────────────────────────────────────────
 DATASET_PATH=${DATASET_PATH:-"$VPP2_PREPARED/train.csv"}
 OUTPUT_DIR=${OUTPUT_DIR:-"$LOONGFORGE_PATH/outputs/vpp2_robodojo_zero2/$(date +%Y%m%d_%H%M%S_%N)"}
-DEEPSPEED_CONFIG=${DEEPSPEED_CONFIG:-"$SCRIPT_DIR/robodojo_zero2_cpu.json"}
+DEEPSPEED_CONFIG=${DEEPSPEED_CONFIG:-"$SCRIPT_DIR/deepspeed_robodojo_zero2.json"}
 
 # ── Training defaults ─────────────────────────────────────────
 TRAIN_ITERS=${TRAIN_ITERS:-50}

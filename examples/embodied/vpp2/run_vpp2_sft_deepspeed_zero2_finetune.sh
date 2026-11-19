@@ -54,7 +54,7 @@ export VPP2_VIDEO_CHECKPOINT=${VPP2_VIDEO_CHECKPOINT:-"$VPP2_ASSETS_ROOT/libero_
 export VPP2_DATASET_ROOT=${VPP2_DATASET_ROOT:-"$VPP2_ASSETS_ROOT/libero_subset"}
 DATASET_PATH=${DATASET_PATH:-"$VPP2_DATASET_ROOT/libero_spatial_no_noops_lerobot,$VPP2_DATASET_ROOT/libero_object_no_noops_lerobot,$VPP2_DATASET_ROOT/libero_goal_no_noops_lerobot,$VPP2_DATASET_ROOT/libero_10_no_noops_lerobot"}
 export OUTPUT_DIR=${OUTPUT_DIR:-"$LOONGFORGE_PATH/outputs/vpp2_deepspeed_zero2/$(date +%Y%m%d_%H%M%S_%N)"}
-DEEPSPEED_CONFIG=${DEEPSPEED_CONFIG:-"$LOONGFORGE_PATH/examples/embodied/vpp2/zero2_bf16.json"}
+DEEPSPEED_CONFIG=${DEEPSPEED_CONFIG:-"$LOONGFORGE_PATH/examples/embodied/vpp2/deepspeed_libero_zero2.json"}
 
 # ── Training defaults ─────────────────────────────────────────
 export TRAIN_ITERS=${TRAIN_ITERS:-50}
