@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""``vpp2`` provider: the ``dual_stream_wan`` family with an i2v
+"""``arch_vpp2`` provider: the ``dual_stream_wan`` family with an i2v
 video stream.
 
 Follows ``docs/design/mot_spec_model_matrix.zh-CN.md`` §4.3 / §4.4. The
@@ -110,7 +110,7 @@ def _vpp2_visibility(visible_video_frames: int) -> dict[str, Visibility]:
     }
 
 
-@register_provider("vpp2")
+@register_provider("arch_vpp2")
 def _vpp2(config: Any = None, *,
           geometry: Mapping[str, Any] | None = None,
           visible_video_frames: int = 3,
@@ -119,7 +119,7 @@ def _vpp2(config: Any = None, *,
           action_width: int = 7,
           proprio_dim: int = 8,
           **stream_scalars: Any) -> WorldModelSpec:
-    """Build the VPP2 spec; this is what ``--model-name vpp2`` resolves to.
+    """Build the VPP2 spec; this is what ``--model-name arch_vpp2`` resolves to.
 
     **Differences from the code examples in §4.3 / §4.4.** The examples are
     illustrative; the authority is ``mot_layer_interfaces.zh-CN.md`` plus the
@@ -186,10 +186,10 @@ def _vpp2(config: Any = None, *,
         ValueError: A stream scalar or geometry key is unknown, or one of
             V1-V9 fails.
     """
-    reject_config("vpp2", config)
+    reject_config("arch_vpp2", config)
 
     # 1. Stream scalars. An unconsumed key raises; spec_config §3.8 rule 3.
-    scalars = resolve_scalars("vpp2", _VPP2_STREAM_SCALARS, stream_scalars,
+    scalars = resolve_scalars("arch_vpp2", _VPP2_STREAM_SCALARS, stream_scalars,
                               STREAM_SCALAR_KEYS)
 
     video, action = _dual_stream_wan_streams(
@@ -312,7 +312,7 @@ def _vpp2(config: Any = None, *,
     # frame and 6664 tokens in total; ``num_chunks = 32 / 4 = 8``.
     # These fields are marked [YAML] (spec_config §3.3); the override is
     # applied in step 3 of ``build_world_model``.
-    geometry = resolve_geometry("vpp2", dict(
+    geometry = resolve_geometry("arch_vpp2", dict(
         frame_height=224,
         frame_width=224,
         num_frames=65,
@@ -432,7 +432,7 @@ def _vpp2(config: Any = None, *,
     )
 
     return WorldModelSpec(
-        model_type="vpp2",
+        model_type="arch_vpp2",
         geometry=geometry,
         groups=(group,),
         diffusion=diffusion,

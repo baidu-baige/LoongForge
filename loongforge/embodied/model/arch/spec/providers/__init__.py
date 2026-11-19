@@ -16,8 +16,9 @@ in the Python here, and none of it appears in YAML.
 
 Two conventions:
 
-1. **The registry key is ``model_type``**, one-to-one with that key in the
-   model config, and one-to-one with the package name here.
+1. **The registry key is ``model_type``**, matching the model config.
+   The ``vpp2`` package uses ``arch_vpp2`` to distinguish its public entry
+   from the standalone VPP2 implementation.
 2. The six topology families (``dual_stream_wan`` and friends) are
    **unregistered factory functions**, not a public contract; providers call
    them, but neither YAML nor the launch arguments can name them.
@@ -27,7 +28,7 @@ from __future__ import annotations
 
 # Importing is registering: ``@register_provider`` fires as an import-time side
 # effect, so every new provider package must be listed here. The symptom of a
-# missing line is ``get_provider('vpp2')`` reporting an unknown model_type
+# missing line is ``get_provider('arch_vpp2')`` reporting an unknown model_type
 # while the package sits right next to this file.
 from . import fastwam  # noqa: F401
 from . import internw0_delta  # noqa: F401

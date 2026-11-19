@@ -42,7 +42,7 @@ from test_arch_blocks import (BATCH, MODEL_TYPES, build_streams, fake_bus,
 # The head table of each provider. The form names are an implementation detail,
 # but "which head is which form" is the criterion this file checks.
 HEAD_FORMS = {
-    "vpp2": {"video_flow": PatchFlowHead, "action_flow": LinearHead},
+    "arch_vpp2": {"video_flow": PatchFlowHead, "action_flow": LinearHead},
     "fastwam": {"video_flow": PatchFlowHead, "action_flow": LinearHead},
     "internw0_delta": {"video_flow": PatchFlowHead, "action_flow": LinearHead,
                        "future_delta": NormLinearHead,

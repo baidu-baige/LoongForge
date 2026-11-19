@@ -34,7 +34,7 @@ from loongforge.embodied.train.config_map import get_config_path, get_model_sche
 
 from test_arch_blocks import BATCH, CONTEXT_LEN, tiny_spec
 
-ARCH_MODELS = ("vpp2", "internw0_delta")
+ARCH_MODELS = ("arch_vpp2", "internw0_delta")
 
 
 def load_config(model_name: str):
@@ -126,6 +126,65 @@ def test_gate_does_not_take_over_fastwam():
     assert MODEL_REGISTRY["fastwam"] is FastWAMPolicy
 
 
+def test_vpp2_schema_and_model_entries_remain_distinct():
+    """Standalone and arch launches keep their own configs, YAMLs and models."""
+    from loongforge.embodied.data.datasets.fastwam.transforms.data_configuration_fastwam \
+        import FastWAMDataConfig
+    from loongforge.embodied.data.datasets.vpp2.transforms.data_configuration_vpp2 \
+        import VPP2DataConfig
+    from loongforge.embodied.model.arch.model_configuration_arch import Vpp2Config
+    from loongforge.embodied.model.arch.spec.core import get_provider, provider_names
+    from loongforge.embodied.model.vpp2.modeling_configuration_vpp2 \
+        import VPP2ModelConfig
+    from loongforge.embodied.model.vpp2.modeling_vpp2 import VPP2Model
+
+    standalone = get_model_schema("vpp2")
+    arch = get_model_schema("arch_vpp2")
+    assert standalone.yaml_file == "vpp2.yaml"
+    assert standalone.model_config_cls is VPP2ModelConfig
+    assert standalone.data_config_cls is VPP2DataConfig
+    assert arch.yaml_file == "arch/vpp2.yaml"
+    assert arch.model_config_cls is Vpp2Config
+    assert arch.data_config_cls is FastWAMDataConfig
+    assert load_config("vpp2").model_type == "vpp2"
+    assert load_config("arch_vpp2").model_type == "arch_vpp2"
+    assert MODEL_REGISTRY["vpp2"] is VPP2Model
+    assert MODEL_REGISTRY["arch_vpp2"] is ArchWorldModel
+    assert get_provider("arch_vpp2")().model_type == "arch_vpp2"
+    assert "vpp2" not in provider_names()
+
+
+def test_vpp2_data_registrations_remain_distinct():
+    """Importing both pipelines must preserve each model's data contract."""
+    from loongforge.embodied.data.datasets.fastwam.transforms.fastwam_collator \
+        import FastWAMPreprocessor
+    from loongforge.embodied.data.datasets.fastwam.transforms.fastwam_transform \
+        import build_fastwam_transforms
+    from loongforge.embodied.data.datasets.transforms.collator import (
+        _PREPROCESSOR_REGISTRY)
+    from loongforge.embodied.data.datasets.transforms.registry import (
+        _TRANSFORM_BUILDER_REGISTRY)
+    from loongforge.embodied.data.datasets.vpp2.transforms.vpp2_collator \
+        import VPP2Preprocessor
+    from loongforge.embodied.data.datasets.vpp2.transforms.vpp2_transform \
+        import build_vpp2_transforms
+
+    assert _PREPROCESSOR_REGISTRY["vpp2"] is VPP2Preprocessor
+    assert _PREPROCESSOR_REGISTRY["arch_vpp2"] is FastWAMPreprocessor
+    assert _TRANSFORM_BUILDER_REGISTRY["vpp2"] is build_vpp2_transforms
+    assert _TRANSFORM_BUILDER_REGISTRY["arch_vpp2"] is build_fastwam_transforms
+    assert _TRANSFORM_BUILDER_REGISTRY["fastwam"] is build_fastwam_transforms
+
+
+def test_arch_vpp2_checkpoint_transfer_uses_the_new_identity():
+    """The config's renamed identity still selects the legacy checkpoint map."""
+    from loongforge.embodied.model.arch.modeling_arch import _TRANSFERS
+    from loongforge.embodied.model.arch.transfer import vpp2_to_arch
+
+    assert _TRANSFERS[load_config("arch_vpp2").model_type] is vpp2_to_arch
+    assert "vpp2" not in _TRANSFERS
+
+
 @pytest.mark.parametrize("model_name", ARCH_MODELS)
 def test_arch_models_reuse_the_fastwam_preprocessor(model_name):
     """Preprocessor lookup is by ``model_type``, and these two share FastWAM's.
@@ -192,7 +251,7 @@ class StubImageEncoder(torch.nn.Module):
 
 @pytest.fixture
 def shell() -> ArchWorldModel:
-    """A vpp2 shell at test width, wired to stub encoders.
+    """An arch_vpp2 shell at test width, wired to stub encoders.
 
     The spec comes from the real provider (so the condition table, visibility
     and loss terms are the production ones) with the widths and geometry shrunk
@@ -200,7 +259,7 @@ def shell() -> ArchWorldModel:
     """
     from loongforge.embodied.model.arch.model_configuration_arch import Vpp2Config
 
-    spec = tiny_spec("vpp2")
+    spec = tiny_spec("arch_vpp2")
     core = WorldModel(spec, engine=JointAttentionEngine(backend="dense"),
                       layout=TokenLayout.from_geometry(spec.geometry,
                                                        spec.streams))
@@ -236,6 +295,22 @@ def test_shell_turns_a_pixel_batch_into_a_scalar_loss(shell):
     assert torch.isfinite(loss)
     for term in shell.spec.diffusion.losses:
         assert metrics[term.name].ndim == 0
+
+
+def test_shell_loads_legacy_checkpoint_with_arch_vpp2_identity(shell, tmp_path):
+    """Exercise transfer dispatch through the trainer's warm-start hook."""
+    from loongforge.embodied.model.arch.transfer import vpp2_to_arch
+    from test_arch_transfer import legacy_payload
+
+    payload = {**legacy_payload(shell.core), "step": 17}
+    expected = vpp2_to_arch(payload)
+    checkpoint = tmp_path / "legacy.pt"
+    torch.save(payload, checkpoint)
+
+    assert shell.config.model_type == "arch_vpp2"
+    assert shell.load_pretrained(str(checkpoint)) == 17
+    for key, value in shell.core.state_dict().items():
+        assert torch.equal(value, expected[key]), key
 
 
 def test_shell_fills_one_batch_key_per_stream_and_condition(shell):

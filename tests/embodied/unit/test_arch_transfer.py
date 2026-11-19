@@ -106,7 +106,7 @@ def test_remapped_keys_equal_the_model_state_dict_exactly():
     over is unexpected. Set equality pins both, and the difference is listed
     in the failure message.
     """
-    model = world(tiny_spec("vpp2"))
+    model = world(tiny_spec("arch_vpp2"))
     remapped = vpp2_to_arch(legacy_payload(model))
     want = set(model.state_dict())
     assert set(remapped) - want == set()
@@ -123,7 +123,7 @@ def test_payload_may_be_wrapped_in_mot_or_bare():
     ``mot`` subtree, and a genuine absence is reported as missing by
     ``strict=True`` rather than guessed at during remapping.
     """
-    model = world(tiny_spec("vpp2"))
+    model = world(tiny_spec("arch_vpp2"))
     payload = legacy_payload(model)
     full = set(vpp2_to_arch(payload))
     bare = set(vpp2_to_arch(mot_tree(payload)))
@@ -142,7 +142,7 @@ def test_strict_load_reports_nothing_missing_and_nothing_unexpected():
     so a set of weights that never entered the model still trains, with a
     curve that merely converges more slowly. Hence strict here.
     """
-    model = world(tiny_spec("vpp2"))
+    model = world(tiny_spec("arch_vpp2"))
     report = model.load_state_dict(vpp2_to_arch(legacy_payload(model)),
                                    strict=True)
     assert not report.missing_keys
@@ -155,7 +155,7 @@ def test_loaded_values_land_on_the_parameters():
     The usual cause of right shapes with unchanged contents is feeding the
     remapped dict to a different model instance.
     """
-    model = world(tiny_spec("vpp2"))
+    model = world(tiny_spec("arch_vpp2"))
     payload = legacy_payload(model)
     remapped = vpp2_to_arch(payload)
     model.load_state_dict(remapped, strict=True)
@@ -172,7 +172,7 @@ def test_loaded_model_trains_one_step():
     two things. A head whose weights were loaded but which no loss term uses
     shows up only at the backward step, as a parameter without a gradient.
     """
-    spec = tiny_spec("vpp2")
+    spec = tiny_spec("arch_vpp2")
     model = world(spec)
     model.load_state_dict(vpp2_to_arch(legacy_payload(model)), strict=True)
     loss, metrics = model(fake_batch(spec))
@@ -203,7 +203,7 @@ def test_key_from_an_unknown_stream_raises_instead_of_being_skipped():
     timing, and in exchange the rule table's size is independent of the layer
     count and of the submodule list.
     """
-    model = world(tiny_spec("vpp2"))
+    model = world(tiny_spec("arch_vpp2"))
     payload = legacy_payload(model)
     mot_tree(payload)["mixtures.vl.blocks.0.self_attn.q.weight"] = \
         torch.zeros(1)
@@ -218,7 +218,7 @@ def test_unknown_submodule_under_a_known_stream_surfaces_at_load_time():
     rejects it. This case is the evidence for "one step apart in timing": it
     pins down that the error is caught, not where it is caught.
     """
-    model = world(tiny_spec("vpp2"))
+    model = world(tiny_spec("arch_vpp2"))
     payload = legacy_payload(model)
     mot_tree(payload)["mixtures.video.something_new.weight"] = torch.zeros(1)
     remapped = vpp2_to_arch(payload)
@@ -261,7 +261,7 @@ def test_declared_video_token_prefixes_are_dropped():
     ckpt that did enable it, passing the prefixes explicitly also serves as a
     note that this file carries KVRoute weights.
     """
-    model = world(tiny_spec("vpp2"))
+    model = world(tiny_spec("arch_vpp2"))
     payload = legacy_payload(model)
     for index, prefix in enumerate(VPP2_VIDEO_TOKEN_PREFIXES):
         mot_tree(payload)[f"{prefix}{index}.weight"] = torch.zeros(1)

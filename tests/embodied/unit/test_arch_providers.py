@@ -32,7 +32,7 @@ from loongforge.embodied.model.arch.visibility.rules import same_stream
 
 import loongforge.embodied.model.arch.spec.providers  # noqa: F401  registers on import
 
-MODEL_TYPES = ("vpp2", "fastwam", "internw0_delta")
+MODEL_TYPES = ("arch_vpp2", "fastwam", "internw0_delta")
 
 
 @pytest.fixture(params=MODEL_TYPES)
@@ -289,7 +289,7 @@ def test_query_in_stream_rejects_unknown_name(layout):
 # entry channel count). The third column is today's ``in_dim``: vpp2's 36 is
 # 16 + 4 (mask) + 16 (condition-frame latent).
 ENTRY_CHANNELS = {
-    "vpp2": (16, 20, 36),
+    "arch_vpp2": (16, 20, 36),
     "fastwam": (48, 0, 48),
     "internw0_delta": (48, 0, 48),
 }
@@ -356,7 +356,7 @@ def test_cross_slots_and_conditions_reconcile_both_ways(model_spec):
                 filled[target].add(cond.name)
     for stream in model_spec.streams:
         assert set(stream.cross_kv_slots) == filled[stream.name], stream.name
-    want = {"vpp2": {"clip_image", "text"}}.get(model_spec.model_type,
+    want = {"arch_vpp2": {"clip_image", "text"}}.get(model_spec.model_type,
                                                 {"text"})
     assert set(model_spec.stream("video").cross_kv_slots) == want
 
@@ -379,7 +379,7 @@ def test_disabled_condition_still_counts_toward_entry_channels():
     change the shape, one YAML switch would make the same checkpoint
     unloadable, the hardest class of "weights do not match" bug to trace.
     """
-    spec = get_provider("vpp2")()
+    spec = get_provider("arch_vpp2")()
     before = spec.concat_channels("video")
     off = tuple(replace(c, enabled=False) if c.name == "cond_latent" else c
                 for c in spec.conditions)
@@ -404,7 +404,7 @@ def test_channel_concat_without_width_is_rejected():
 # source_width is configurable at all): libero is 8 for vpp2/fastwam
 # (``train_action.yaml:169``), and InternW0-Delta's 4D descriptor is 80
 # (``proprio_encoder.py:46-47``).
-PROPRIO_SOURCE_WIDTH = {"vpp2": 8, "fastwam": 8, "internw0_delta": 80}
+PROPRIO_SOURCE_WIDTH = {"arch_vpp2": 8, "fastwam": 8, "internw0_delta": 80}
 
 
 def test_proprio_rides_the_text_slot_in_all_three(model_spec):
@@ -480,7 +480,7 @@ def vpp2_proprio(**changes):
     validation has already happened by the time this helper returns; each case
     below wraps it in ``pytest.raises``.
     """
-    spec = get_provider("vpp2")()
+    spec = get_provider("arch_vpp2")()
     return replace(spec, conditions=tuple(
         replace(cond, **changes) if cond.name == "proprio" else cond
         for cond in spec.conditions))
@@ -538,7 +538,7 @@ def test_appended_condition_cannot_reach_a_stream_its_host_skips():
     ``width``, no shape error fires; that stream simply reads KV it was never
     meant to see.
     """
-    spec = get_provider("vpp2")()
+    spec = get_provider("arch_vpp2")()
     narrow = tuple(replace(cond, targets=("video",)) if cond.name == "text"
                    else cond for cond in spec.conditions)
     with pytest.raises(ValueError, match="does not inject them"):
@@ -551,7 +551,7 @@ def test_appended_condition_must_be_off_when_its_host_is_off():
 
     With the host gone there is nowhere for the appended value to go.
     """
-    spec = get_provider("vpp2")()
+    spec = get_provider("arch_vpp2")()
     off = tuple(replace(cond, enabled=False) if cond.name == "text" else cond
                 for cond in spec.conditions)
     with pytest.raises(ValueError, match="the append has nowhere to go"):
@@ -566,7 +566,7 @@ def test_append_order_follows_the_declaration_not_the_alphabet():
     renaming a condition would move the KV the attention reads, while the
     shapes, the key set and the loss magnitude all stay the same.
     """
-    spec = get_provider("vpp2")()
+    spec = get_provider("arch_vpp2")()
     later = replace(spec.condition("proprio"), name="aaa_later",
                     encoder=None, source_width=None, source_key="aaa")
     spec = replace(spec, conditions=spec.conditions + (later,))
@@ -580,7 +580,7 @@ def test_disabled_appended_condition_drops_out_of_the_order():
     so dropping it here cannot make the same checkpoint unloadable. This is the
     opposite of ``concat_channels``, where disabling must not change the shape.
     """
-    spec = get_provider("vpp2")()
+    spec = get_provider("arch_vpp2")()
     off = tuple(replace(cond, enabled=False) if cond.name == "proprio"
                 else cond for cond in spec.conditions)
     assert replace(spec, conditions=off).appended_to("text", "video") == ()

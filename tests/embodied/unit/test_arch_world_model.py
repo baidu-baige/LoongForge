@@ -46,7 +46,7 @@ from test_arch_blocks import BATCH, CONTEXT_LEN, tiny_spec
 # internw0_delta is absent here: its ``track_align`` head raises
 # NotImplementedError at build time (see the last case in this file), so a
 # whole-model forward is unreachable.
-BUILDABLE = ("vpp2", "fastwam")
+BUILDABLE = ("arch_vpp2", "fastwam")
 
 
 @pytest.fixture(params=BUILDABLE)

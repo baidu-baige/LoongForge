@@ -66,7 +66,7 @@ _CLIP_FILENAME = "models_clip_open-clip-xlm-roberta-large-vit-huge-14.pth"
 # projectors. A model without a table must say so rather than silently load
 # nothing, which would look like "trained from scratch with a warm start".
 _TRANSFERS: Dict[str, Callable[[Mapping[str, Any]], Dict[str, Any]]] = {
-    "vpp2": vpp2_to_arch,
+    "arch_vpp2": vpp2_to_arch,
 }
 
 
@@ -194,7 +194,7 @@ def _load_into(module: nn.Module, weights: Optional[str], what: str) -> None:
                 what, weights, len(missing), len(unexpected))
 
 
-@register_model("vpp2")
+@register_model("arch_vpp2")
 @register_model("internw0_delta")
 class ArchWorldModel(nn.Module):
     """Trainer-facing wrapper around one ``WorldModel``.
@@ -512,4 +512,3 @@ class ArchWorldModel(nn.Module):
             self.to(device)
         step = payload.get("step") if isinstance(payload, dict) else None
         return int(step) if isinstance(step, int) else None
-

@@ -43,7 +43,7 @@ from loongforge.embodied.model.arch.visibility.mask import AttentionPlan
 
 import loongforge.embodied.model.arch.spec.providers  # noqa: F401  registers on import
 
-MODEL_TYPES = ("vpp2", "fastwam", "internw0_delta")
+MODEL_TYPES = ("arch_vpp2", "fastwam", "internw0_delta")
 
 # Two narrow streams. ``num_heads`` must match across the two streams (joint
 # attention concatenates along the token axis) and so must ``head_dim`` (V3).
@@ -247,7 +247,7 @@ def test_submodule_names_match_the_existing_checkpoint(spec):
 # The cross-attention slots of each model's video stream. The vpp2 i2v path runs
 # attention twice and adds the results (``wan_video_dit.py:187-204``), so CLIP
 # and text are two separate slots, not one slot holding two segments.
-VIDEO_SLOTS = {"vpp2": ("clip_image", "text"), "fastwam": ("text",),
+VIDEO_SLOTS = {"arch_vpp2": ("clip_image", "text"), "fastwam": ("text",),
                "internw0_delta": ("text",)}
 
 
@@ -291,7 +291,7 @@ def test_context_projector_form_follows_the_params(spec):
                     "context_embedding.text.0.bias",
                     "context_embedding.text.2.weight",
                     "context_embedding.text.2.bias"}
-    if spec.model_type == "vpp2":
+    if spec.model_type == "arch_vpp2":
         clip = {k for k in keys
                 if k.startswith("context_embedding.clip_image.")}
         assert clip == {f"context_embedding.clip_image.proj.{i}.{suffix}"

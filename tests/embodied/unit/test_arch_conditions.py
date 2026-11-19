@@ -101,7 +101,7 @@ def test_encoder_widths_come_from_the_declaration_and_the_host_slot():
     disagreement shows up only as a ``cat`` shape error inside
     ``_embed_context`` during the forward pass, far from the declaration.
     """
-    spec = get_provider("vpp2")()
+    spec = get_provider("arch_vpp2")()
     cond = spec.condition("proprio")
     encoder = build(cond.encoder, spec=cond, geometry=spec.geometry,
                     world=spec)
@@ -122,13 +122,13 @@ def test_encoder_for_a_non_appended_condition_raises():
                          encoder=Spec(linear_token_encoder))
     with pytest.raises(NotImplementedError, match="no other injection kind has a defined output width source"):
         linear_token_encoder(spec=cond, geometry=None,
-                             world=get_provider("vpp2")())
+                             world=get_provider("arch_vpp2")())
 
 
 def test_encoder_without_source_width_raises():
     """The input width cannot be inferred from anywhere else: the width of the
     batch tensor is not visible at build time."""
-    spec = get_provider("vpp2")()
+    spec = get_provider("arch_vpp2")()
     with pytest.raises(ValueError, match="must give source_width"):
         linear_token_encoder(spec=appendee(source_width=None),
                              geometry=spec.geometry, world=spec)

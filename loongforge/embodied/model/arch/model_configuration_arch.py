@@ -134,7 +134,7 @@ class WorldModelConfig:
 
 @dataclass(frozen=True)
 class Vpp2Config(WorldModelConfig):
-    """``--model-name vpp2``.
+    """``--model-name arch_vpp2``.
 
     Attributes:
         visible_video_frames: How many leading video frames the action stream
@@ -146,7 +146,7 @@ class Vpp2Config(WorldModelConfig):
             slot. Unrelated to any stream width.
     """
 
-    model_type: str = "vpp2"
+    model_type: str = "arch_vpp2"
     visible_video_frames: Optional[int] = None
     inference_steps: Optional[int] = None
     proprio_dim: Optional[int] = None

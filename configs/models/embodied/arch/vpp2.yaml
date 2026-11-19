@@ -1,11 +1,11 @@
 # VPP2 — dual-stream (video + action) world model on the five-layer ``arch`` spec.
 #
 # Launch:
-#   torchrun ... loongforge/train.py --model-name vpp2 --training-phase sft \
+#   torchrun ... loongforge/train.py --model-name arch_vpp2 --training-phase sft \
 #       --pretrained-checkpoint <vpp2 .pt>
 #
 # No line below says "this is VPP2": model identity has a single source, the
-# ``--model-name vpp2`` launch argument. It selects this file plus ``Vpp2Config``
+# ``--model-name arch_vpp2`` launch argument. It selects this file plus ``Vpp2Config``
 # through ``train/config_map.py``, and ``Vpp2Config.model_type`` is what picks
 # the provider. Topology (stream count, visibility, condition table, loss terms)
 # is Python code in ``model/arch/spec/providers/dual_stream_wan.py`` and is not

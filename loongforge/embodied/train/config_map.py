@@ -117,7 +117,7 @@ MODEL_SCHEMA = {
     # Five-layer ``arch`` world models. They reuse FastWAMDataConfig because
     # they consume the same pixel-space batch; what differs is the model side,
     # and that difference is entirely inside the per-model config subclass.
-    "vpp2": ModelSchema("arch/vpp2.yaml", Vpp2Config, FastWAMDataConfig),
+    "arch_vpp2": ModelSchema("arch/vpp2.yaml", Vpp2Config, FastWAMDataConfig),
     "internw0_delta": ModelSchema(
         "arch/internw0_delta.yaml", InternW0DeltaConfig, FastWAMDataConfig
     ),
