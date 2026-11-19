@@ -24,6 +24,11 @@ try:
 except ImportError:
     _ApexFusedAdam = None
 
+try:
+    from loongforge.embodied.optimizer.coat_adamw import CoatAdamW as _CoatAdamW
+except ImportError:  # triton missing
+    _CoatAdamW = None
+
 logger = logging.getLogger(__name__)
 
 OPTIMIZER_REGISTRY = {
@@ -31,6 +36,7 @@ OPTIMIZER_REGISTRY = {
     "TorchFusedAdamW": torch.optim.AdamW,
     "TEFusedAdamW": _TEFusedAdam,
     "ApexFusedAdamW": _ApexFusedAdam,
+    "COATAdamW": _CoatAdamW,
     "Adam": torch.optim.Adam,
     "SGD": torch.optim.SGD,
 }
@@ -328,6 +334,12 @@ def build_optimizer(model: nn.Module, training_args) -> torch.optim.Optimizer:
         kwargs.update(betas=(training_args.adam_beta1, training_args.adam_beta2), eps=training_args.adam_eps)
         if optimizer_name == "TorchFusedAdamW":
             kwargs["fused"] = True
+    elif optimizer_name == "COATAdamW":
+        # AdamW with FP8 (E4M3) first/second moments (COAT dynamic range expansion).
+        if training_args.zero_optimizer:
+            raise ValueError("--optimizer COATAdamW does not support --zero-optimizer.")
+        kwargs.update(betas=(training_args.adam_beta1, training_args.adam_beta2), eps=training_args.adam_eps)
+        logger.info("Using COATAdamW: FP8 (E4M3) optimizer states, per-128 group dynamic range expansion")
     elif optimizer_name in ("TEFusedAdamW", "ApexFusedAdamW"):
         kwargs.update(betas=(training_args.adam_beta1, training_args.adam_beta2), eps=training_args.adam_eps)
         kwargs["adam_w_mode"] = True
