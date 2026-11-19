@@ -31,7 +31,7 @@ import pytest
 import torch
 
 from loongforge.embodied.model.arch.transfer import (
-    PROPRIO_PAYLOAD_KEY, VPP2_RENAME_RULES, VPP2_VIDEO_TOKEN_PREFIXES,
+    PROPRIO_PAYLOAD_KEY, VPP2_VIDEO_TOKEN_PREFIXES,
     remap_state_dict, vpp2_to_arch)
 
 from test_arch_blocks import tiny_spec
