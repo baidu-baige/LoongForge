@@ -284,7 +284,7 @@ class WanDiTStream(nn.Module):
         Returns:
             A ``StreamState`` with hidden tokens, optional modulation, and
             ``extras`` holding ``cross_kv`` and, when applicable,
-            ``t_embed``.
+            ``timestep_embedding``.
 
         Raises:
             ValueError: If the entry output width differs from
@@ -317,10 +317,10 @@ class WanDiTStream(nn.Module):
                 )
             assert self.spec.timestep_embed_width is not None
             assert self.time_projection is not None
-            t_embed = self.time_embedding(sinusoidal_embedding(
+            timestep_embedding = self.time_embedding(sinusoidal_embedding(
                 self.spec.timestep_embed_width, timestep.reshape(-1)))
-            extras["t_embed"] = t_embed
-            modulation = self.time_projection(t_embed).unflatten(
+            extras["timestep_embedding"] = timestep_embedding
+            modulation = self.time_projection(timestep_embedding).unflatten(
                 -1, (self.spec.modulation_slots.width, self.spec.residual_width))
         return StreamState(stream=self.spec.name, hidden=tokens,
                            modulation=modulation, extras=extras)
@@ -440,7 +440,7 @@ def _pad_tokens(tokens: Tensor, total: int) -> Tensor:
 
     The alignment length comes from ``GeometrySpec.padded_seq_len``, the
     single source of static shapes (INV-2). Padded positions carry
-    ``pad=True`` in the labels and visibility masks them out, so the padding
+    ``is_padding=True`` in the labels and visibility masks them out, so the padding
     value does not affect the result; zero is used so their grads are
     explicitly 0 instead of NaN.
 
@@ -647,4 +647,3 @@ class ActionStream(WanDiTStream):
                 f"got {x.shape[2]}"
             )
         return self.action_encoder(x)
-

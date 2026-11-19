@@ -13,7 +13,7 @@ Two hard conventions carry the properties of all of L2:
    the engine read parameters, the FSDP2 / ZeRO-3 all-gather would be
    triggered at the engine level, and the engine is not FSDP-wrapped.
 2. A single stream is the N=1 degenerate case, not a special case. The
-   engine must contain no ``if len(members) == 1``. The degeneracy shows up
+   engine must contain no ``if len(streams) == 1``. The degeneracy shows up
    only in two pieces of data: ``AttentionPlan.structural is None`` and
    ``routes == ()``.
 """
@@ -46,7 +46,7 @@ class AttentionGroup:
     """A set of streams sharing one joint attention, plus the layer count.
 
     Attributes:
-        members: Specs of the streams in this group, in token order.
+        streams: Specs of the streams in this group, in token order.
         num_layers: Number of joint layers. It is unrelated to any single
             stream's ``num_layers``; this independent number is exactly what
             the relaxation of "all three num_layers equal" requires. Each
@@ -55,30 +55,30 @@ class AttentionGroup:
         routes: Cross-stream KV routes inside this group.
     """
 
-    members: tuple[StreamSpec, ...]
+    streams: tuple[StreamSpec, ...]
     num_layers: int
     routes: tuple[KVRoute, ...] = ()
 
     def __post_init__(self) -> None:
-        if not self.members:
-            raise ValueError("AttentionGroup.members must not be empty")
+        if not self.streams:
+            raise ValueError("AttentionGroup.streams must not be empty")
         if self.num_layers <= 0:
             raise ValueError(
                 f"AttentionGroup.num_layers must be positive, got "
                 f"{self.num_layers}"
             )
-        names = [spec.name for spec in self.members]
+        names = [spec.name for spec in self.streams]
         if len(set(names)) != len(names):
             raise ValueError(
-                f"AttentionGroup.members has duplicate stream names: {names}"
+                f"AttentionGroup.streams has duplicate stream names: {names}"
             )
-        # V3: joint members must share head_dim. num_heads and
+        # V3: joint streams must share head_dim. num_heads and
         # residual_width may differ. This is the only width constraint left
         # after relaxing the "all three num_layers equal" rule.
-        head_dims = {spec.name: spec.head_dim for spec in self.members}
+        head_dims = {spec.name: spec.head_dim for spec in self.streams}
         if len(set(head_dims.values())) != 1:
             raise ValueError(
-                f"AttentionGroup members must share head_dim (L2/V3), got "
+                f"AttentionGroup streams must share head_dim (L2/V3), got "
                 f"{head_dims}"
             )
         known = set(names)
@@ -88,7 +88,7 @@ class AttentionGroup:
                 raise ValueError(
                     f"KVRoute({route.src!r} -> {route.dst!r}) points at "
                     f"streams outside this group: {sorted(missing)}; group "
-                    f"members are {names}"
+                    f"streams are {names}"
                 )
             if max(route.dst_layers) >= self.spec_of(route.dst).num_layers:
                 raise ValueError(
@@ -104,18 +104,18 @@ class AttentionGroup:
         """Shared head_dim of the group.
 
         Returns:
-            The first member's ``head_dim``; ``__post_init__`` has already
-            checked that all members agree.
+            The first stream's ``head_dim``; ``__post_init__`` has already
+            checked that all streams agree.
         """
-        return self.members[0].head_dim
+        return self.streams[0].head_dim
 
     @property
     def stream_names(self) -> tuple[str, ...]:
-        """Member stream names, in member order."""
-        return tuple(spec.name for spec in self.members)
+        """Stream names, in stream order."""
+        return tuple(spec.name for spec in self.streams)
 
     def spec_of(self, name: str) -> StreamSpec:
-        """Look up one member's spec.
+        """Look up one stream's spec.
 
         Args:
             name: Stream name.
@@ -126,23 +126,23 @@ class AttentionGroup:
         Raises:
             KeyError: If the stream is not a member of this group.
         """
-        for spec in self.members:
+        for spec in self.streams:
             if spec.name == name:
                 return spec
         raise KeyError(
-            f"AttentionGroup has no stream {name!r}; members are "
+            f"AttentionGroup has no stream {name!r}; streams are "
             f"{list(self.stream_names)}"
         )
 
     def layer_index_maps(self) -> dict[str, dict[int, int]]:
-        """Build every member's joint-to-local layer index map.
+        """Build every stream's joint-to-local layer index map.
 
         Returns:
             Stream name to {joint layer index: local layer index}. Computed
             once at construction time; the forward pass only reads it.
         """
         return {spec.name: spec.resolve_layer_index_map(self.num_layers)
-                for spec in self.members}
+                for spec in self.streams}
 
     def routes_into(self, dst: str) -> tuple[KVRoute, ...]:
         """Collect the routes ending at one stream.
@@ -439,7 +439,7 @@ class JointAttentionEngine:
 
     Not an ``nn.Module`` (convention 1 at the top of this module): it holds
     no parameters and never enters state_dict. It contains no
-    ``if len(members) == 1`` (convention 2): a single stream takes the same
+    ``if len(streams) == 1`` (convention 2): a single stream takes the same
     path, with one-item concat/split and ``plan.structural`` set to None.
 
     Masks are materialized once per ``run`` call and cached in a dict local
@@ -515,7 +515,7 @@ class JointAttentionEngine:
 
         Raises:
             ValueError: If the input or module stream sets differ from the
-                group members, if the layout segment order differs, if a
+                group streams, if the layout segment order differs, if a
                 joint layer has no participating stream, or if an override
                 returns the wrong stream set.
         """
@@ -525,7 +525,7 @@ class JointAttentionEngine:
             if got != set(names):
                 raise ValueError(
                     f"JointAttentionEngine.run: {label} stream set "
-                    f"{sorted(got)} != group members {list(names)}"
+                    f"{sorted(got)} != group streams {list(names)}"
                 )
         if layout.stream_names != names:
             raise ValueError(
@@ -685,7 +685,7 @@ def _resolve_captures(captures: Mapping[str, Sequence[int]] | None,
     if stray:
         raise KeyError(
             f"captures requested streams outside this group: {stray}; "
-            f"group members are {sorted(index_maps)}"
+            f"group streams are {sorted(index_maps)}"
         )
     resolved: dict[str, tuple[int, ...]] = {}
     for name, layer_ids in captures.items():

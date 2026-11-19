@@ -12,7 +12,8 @@
 #
 # As with vpp2, nothing below names the model (identity is ``--model-name``) and
 # nothing below changes topology: the five heads, the extra visibility rules and
-# the per-frame timestep shape are Python code in
+# the per-frame timestep shape are defined by Python providers, primarily
+# ``model/arch/spec/providers/internw0_delta/spec.py`` and shared helpers in
 # ``model/arch/spec/providers/dual_stream_wan.py``.
 
 model:
@@ -47,7 +48,7 @@ model:
   # at three nesting levels and one of them in a different file
   # (``configs/task/4D_distillation.yaml``); here each one is the single source
   # for the loss term that consumes the head of the same name.
-  heads: {video_flow: {weight: 0.5}, action_flow: {weight: 1.0},
+  losses: {video_flow: {weight: 0.5}, action_flow: {weight: 1.0},
           future_delta: {weight: 0.5}, semantic_future: {weight: 0.1},
           track_align: {weight: 0.1, warmup_steps: 2000}}
 

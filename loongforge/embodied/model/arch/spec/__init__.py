@@ -23,10 +23,10 @@ from .core import (
 
 __all__ = [
     "Spec", "build", "register_provider", "get_provider", "provider_names",
-    "WorldModelSpec", "build_world_model",
+    "WorldModelSpec", "build_world_model_spec",
 ]
 
-_LAZY = {"WorldModelSpec", "build_world_model"}
+_LAZY = {"WorldModelSpec", "build_world_model_spec"}
 
 
 def __getattr__(name: str) -> Any:

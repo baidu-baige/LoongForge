@@ -107,8 +107,8 @@ def test_joint_group_is_one_to_one_over_both_streams(model_spec):
     ``head_dim`` only: the two streams having different ``residual_width`` is
     the normal case, which is why width and attention width are separate.
     """
-    assert len(model_spec.groups) == 1
-    group = model_spec.groups[0]
+    assert len(model_spec.attention_groups) == 1
+    group = model_spec.attention_groups[0]
     assert group.stream_names == ("video", "action")
     # Unequal depths are reconciled by LayerMapping, but these three models are
     # equally deep and ONE_TO_ONE
@@ -118,7 +118,7 @@ def test_joint_group_is_one_to_one_over_both_streams(model_spec):
     # V3 constrains head_dim only; unequal residual_width across streams is the
     # normal case
     assert group.head_dim == model_spec.stream("video").head_dim
-    widths = {s.name: s.residual_width for s in group.members}
+    widths = {s.name: s.residual_width for s in group.streams}
     assert widths["video"] != widths["action"], widths
     assert group.routes == ()
 
@@ -189,7 +189,7 @@ def test_declared_backend_negotiates_exact(model_spec):
                         backend=model_spec.attention_backend,
                         block_size=model_spec.attention_block_size)
     for name, vis in model_spec.visibility.items():
-        assert CompiledMask.supports(vis, scenario) is Capability.EXACT, \
+        assert CompiledMask.negotiate_capability(vis, scenario) is Capability.EXACT, \
             (name, vis.expr)
 
 
@@ -521,13 +521,13 @@ def without_text_slot(spec, *streams: str):
     the condition table trips "a stream declares a text slot that nobody
     fills" and the check under test is never reached.
     """
-    group = spec.groups[0]
-    members = tuple(
+    group = spec.attention_groups[0]
+    streams = tuple(
         replace(stream, cross_kv_slots=tuple(
             slot for slot in stream.cross_kv_slots if slot != "text"))
         if stream.name in streams else stream
-        for stream in group.members)
-    return replace(group, members=members)
+        for stream in group.streams)
+    return replace(group, streams=streams)
 
 
 def test_appended_condition_cannot_reach_a_stream_its_host_skips():
@@ -543,7 +543,7 @@ def test_appended_condition_cannot_reach_a_stream_its_host_skips():
                    else cond for cond in spec.conditions)
     with pytest.raises(ValueError, match="does not inject them"):
         replace(spec, conditions=narrow,
-                groups=(without_text_slot(spec, "action"),))
+                attention_groups=(without_text_slot(spec, "action"),))
 
 
 def test_appended_condition_must_be_off_when_its_host_is_off():
@@ -556,7 +556,7 @@ def test_appended_condition_must_be_off_when_its_host_is_off():
                 for cond in spec.conditions)
     with pytest.raises(ValueError, match="the append has nowhere to go"):
         replace(spec, conditions=off,
-                groups=(without_text_slot(spec, "video", "action"),))
+                attention_groups=(without_text_slot(spec, "video", "action"),))
 
 
 def test_append_order_follows_the_declaration_not_the_alphabet():

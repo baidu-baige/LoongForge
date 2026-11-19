@@ -49,7 +49,7 @@ model:
   # leading video frames the action stream may attend to. There is no
   # ``visibility:`` section — the rule itself is code, only its argument is a
   # knob.
-  visible_video_frames: 3
+  video_prefix_frames: 3
 
   # Only ``action`` appears. The video stream is not disabled; its timestep
   # distribution has no tunable scalar (the provider pins it to
@@ -58,7 +58,7 @@ model:
   diffusion:
     action: {shift: 5.0}
 
-  heads: {video_flow: {weight: 1.0}, action_flow: {weight: 1.0}}
+  losses: {video_flow: {weight: 1.0}, action_flow: {weight: 1.0}}
 
   inference_steps: 10
   proprio_dim: 8

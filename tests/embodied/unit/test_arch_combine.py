@@ -25,7 +25,7 @@ def layout() -> TokenLayout:
     """Six tokens: 4 video then 2 action, over two frames."""
     return TokenLayout(
         segments=(SegmentRange("video", 0, 4), SegmentRange("action", 4, 6)),
-        labels={"stream": torch.tensor([0, 0, 0, 0, 1, 1]),
+        labels={"stream_id": torch.tensor([0, 0, 0, 0, 1, 1]),
                 "frame": torch.tensor([0, 0, 1, 1, 0, 1])})
 
 
@@ -133,7 +133,7 @@ def _query_is_stream(name: str) -> Visibility:
     @from_predicate(f"query_is_stream({name!r})")
     def rule(q, k):
         code = q.layout.stream_names.index(name)
-        return (q.get("stream") == code).expand(q.layout.total,
+        return (q.get("stream_id") == code).expand(q.layout.total,
                                                 k.layout.total)
 
     return rule

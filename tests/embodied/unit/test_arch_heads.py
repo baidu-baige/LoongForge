@@ -15,7 +15,7 @@ Four things are checked:
    the shape of that stream's raw input tensor.
 2. ``state_dict`` key names (``modulation`` / ``norm`` / ``head``) match the
    existing model, and the ``identity`` head has **no parameters at all**.
-3. ``needs_timestep`` and the timestep embedding passed in agree in both
+3. ``needs_timestep_embedding`` and the timestep embedding passed in agree in both
    directions, and a wrong embedding width raises.
 4. A wrong ``form``, an ``identity`` head with unequal widths, and
    ``track_align`` not being a flow head all surface at **construction time**
@@ -71,7 +71,7 @@ def run_heads(spec: WorldModelSpec):
     """Run the engine, then the heads.
 
     The timestep a head consumes is the source stream's
-    ``extras['t_embed']``, that is the embedding rather than the scalar.
+    ``extras['timestep_embedding']``, that is the embedding rather than the scalar.
     """
     modules = build_streams(spec)
     layout, out = run_engine(spec, modules, fake_bus(spec))
@@ -80,10 +80,11 @@ def run_heads(spec: WorldModelSpec):
     for head in spec.heads:
         if head.name not in heads:
             continue
-        embed = (out.require(head.source_stream).extras["t_embed"]
-                 if head.needs_timestep else None)
+        timestep_embedding = (
+            out.require(head.source_stream).extras["timestep_embedding"]
+            if head.needs_timestep_embedding else None)
         results[head.name] = heads[head.name](
-            head.source.resolve(out), timestep=embed)
+            head.source.resolve(out), timestep_embedding=timestep_embedding)
     return layout, heads, results
 
 
@@ -226,11 +227,11 @@ def test_timestep_declaration_is_checked_both_ways(spec):
     video, action = heads["video_flow"], heads["action_flow"]
     video_width = spec.stream("video").residual_width
     hidden = torch.randn(BATCH, 4, video_width)
-    with pytest.raises(ValueError, match="needs_timestep=True"):
-        video(hidden, timestep=None)
-    with pytest.raises(ValueError, match="needs_timestep=False"):
+    with pytest.raises(ValueError, match="needs_timestep_embedding=True"):
+        video(hidden, timestep_embedding=None)
+    with pytest.raises(ValueError, match="needs_timestep_embedding=False"):
         action(torch.randn(BATCH, 4, spec.stream("action").residual_width),
-               timestep=torch.randn(BATCH, 16))
+               timestep_embedding=torch.randn(BATCH, 16))
 
 
 def test_head_rejects_the_raw_timestep_scalar(spec):
@@ -245,9 +246,9 @@ def test_head_rejects_the_raw_timestep_scalar(spec):
     width = spec.stream("video").residual_width
     hidden = torch.randn(BATCH, 4, width)
     with pytest.raises(ValueError, match="consumes the timestep"):
-        video(hidden, timestep=torch.rand(BATCH))
+        video(hidden, timestep_embedding=torch.rand(BATCH))
     with pytest.raises(ValueError, match="consumes the timestep"):
-        video(hidden, timestep=torch.randn(BATCH, width + 1))
+        video(hidden, timestep_embedding=torch.randn(BATCH, width + 1))
 
 
 def test_head_rejects_hidden_of_the_wrong_width(spec):

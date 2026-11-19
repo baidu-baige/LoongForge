@@ -63,11 +63,11 @@ def test_labels_are_batch_free_and_aligned():
     ``AttentionPlan.key_valid``.
     """
     layout = small_layout()
-    for key in ("stream", "frame", "row", "col", "pad", "chunk"):
+    for key in ("stream_id", "frame", "row", "col", "is_padding", "chunk"):
         tensor = layout.labels_of(key)
         assert tensor.ndim == 1, key
         assert tensor.shape[0] == layout.total, key
-    assert layout.labels_of("stream").tolist() == [0] * 8 + [1] * 4
+    assert layout.labels_of("stream_id").tolist() == [0] * 8 + [1] * 4
     # Video tokens take the geometric frame index; an action token takes
     # step // action_video_freq_ratio, the latent frame it aligns to.
     assert layout.labels_of("frame").tolist() == \

@@ -397,10 +397,10 @@ class CompiledMask:
         return self.layout.segments
 
     @staticmethod
-    def supports(vis: Visibility, scenario: Scenario) -> Capability:
+    def negotiate_capability(vis: Visibility, scenario: Scenario) -> Capability:
         """Capability negotiation, done once at construction time.
 
-        **Must be called from build_world_model, not from forward.**
+        **Must be called from build_world_model_spec, not from forward.**
 
         The class of defect this is meant to catch: EXACT during training,
         UNSUPPORTED during inference. Today that defect shows up as "training

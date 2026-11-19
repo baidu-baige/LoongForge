@@ -149,7 +149,7 @@ def fake_bus(spec: WorldModelSpec, *, skip: str | None = None) -> ConditionBus:
 def run_engine(spec: WorldModelSpec, modules, bus: ConditionBus):
     """Run the engine once. The backend is always dense; backend negotiation is
     an L1 case (covered in the providers file)."""
-    group = spec.groups[0]
+    group = spec.attention_groups[0]
     layout = TokenLayout.from_geometry(spec.geometry, spec.streams)
     plan = AttentionPlan.from_visibility(
         join_stream_visibility(spec.visibility), layout)
@@ -388,7 +388,7 @@ def test_pure_condition_stream_runs_without_modulation(spec):
     state = module.prepare(fake_inputs(spec)["action"],
                            conditions=fake_bus(spec))
     assert state.modulation is None
-    assert "t_embed" not in state.extras
+    assert "timestep_embedding" not in state.extras
     qkv = module.pre_attn(state, local_layer_id=0)
     attn = torch.randn(BATCH, state.num_tokens, pure.num_heads, pure.head_dim)
     after = module.post_attn(state, attn, local_layer_id=0)

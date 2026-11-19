@@ -116,7 +116,7 @@ def joint_layout(*, video: int = VIDEO_TOKENS,
     return TokenLayout(
         segments=(SegmentRange("video", 0, video),
                   SegmentRange("action", video, video + action)),
-        labels={"stream": torch.tensor([0] * video + [1] * action)})
+        labels={"stream_id": torch.tensor([0] * video + [1] * action)})
 
 
 def two_streams(*, num_layers: int = 3, action_extra: dict | None = None):
@@ -130,7 +130,7 @@ def two_streams(*, num_layers: int = 3, action_extra: dict | None = None):
     video_spec = spec("video", num_layers=num_layers)
     action_spec = spec("action", num_layers=num_layers, residual_width=12,
                        **(action_extra or {}))
-    group = AttentionGroup(members=(video_spec, action_spec),
+    group = AttentionGroup(streams=(video_spec, action_spec),
                            num_layers=num_layers)
     trace: list = []
     modules = {"video": _ToyStream(video_spec, trace=trace, seed=1),
@@ -246,7 +246,7 @@ def _per_stream_reference(group, modules, inputs) -> dict[str, StreamState]:
     diagonal visibility.
     """
     final: dict[str, StreamState] = {}
-    for stream_spec in group.members:
+    for stream_spec in group.streams:
         module = modules[stream_spec.name]
         state = module.prepare(inputs[stream_spec.name], timestep=None)
         for layer in range(stream_spec.num_layers):
@@ -261,7 +261,7 @@ def test_single_stream_is_an_n_equals_one_degeneration():
     """A single stream takes the same path: ``plan.structural`` is None,
     ``routes`` is empty, and there is no special-case branch."""
     only = spec("video", num_layers=2)
-    group = AttentionGroup(members=(only,), num_layers=2)
+    group = AttentionGroup(streams=(only,), num_layers=2)
     assert group.routes == ()
     layout = TokenLayout(segments=(SegmentRange("video", 0, VIDEO_TOKENS),),
                          labels={})
@@ -321,7 +321,7 @@ def test_strided_stream_participates_in_a_subset_of_layers():
     video_spec = spec("video", num_layers=3)
     action_spec = spec("action", num_layers=2, residual_width=12,
                        layer_mapping=LayerMapping.STRIDED, stride=2)
-    group = AttentionGroup(members=(video_spec, action_spec), num_layers=3)
+    group = AttentionGroup(streams=(video_spec, action_spec), num_layers=3)
     assert group.layer_index_maps() == {"video": {0: 0, 1: 1, 2: 2},
                                         "action": {0: 0, 2: 1}}
     trace = []
@@ -368,7 +368,7 @@ def test_restrict_to_streams_renumbers_and_selects_both_channels():
     # TokenLayout requires the segments to cover [0, total)
     assert [(s.stream, s.start, s.stop) for s in sub_layout.segments] == \
         [("action", 0, ACTION_TOKENS)]
-    assert sub_layout.labels_of("stream").tolist() == [1] * ACTION_TOKENS
+    assert sub_layout.labels_of("stream_id").tolist() == [1] * ACTION_TOKENS
     assert sub_plan.structural.shape == (ACTION_TOKENS, ACTION_TOKENS)
     assert bool(sub_plan.structural.all())      # fully visible within action
     assert sub_plan.key_valid.shape == (BATCH, ACTION_TOKENS)
@@ -385,7 +385,7 @@ def test_num_heads_must_match_across_participating_streams():
                              residual_width=12, num_heads=NUM_HEADS + 1,
                              head_dim=HEAD_DIM, num_layers=3,
                              timestep_embed_width=256)
-    group = AttentionGroup(members=(video_spec, action_spec), num_layers=3)
+    group = AttentionGroup(streams=(video_spec, action_spec), num_layers=3)
     trace: list = []
     modules = {"video": _ToyStream(video_spec, trace=trace, seed=1),
                "action": _ToyStream(action_spec, trace=trace, seed=2)}
@@ -422,7 +422,7 @@ def test_prepare_eats_a_raw_tensor_and_tokenizes_it():
     rank 3) and the test would fail before the run.
     """
     only = spec("video", num_layers=2)
-    group = AttentionGroup(members=(only,), num_layers=2)
+    group = AttentionGroup(streams=(only,), num_layers=2)
     layout = TokenLayout(segments=(SegmentRange("video", 0, VIDEO_TOKENS),),
                          labels={})
     trace: list = []
@@ -500,7 +500,7 @@ def test_dead_layer_is_rejected():
     strided = spec("video", num_layers=2, residual_width=16,
                    layer_mapping=LayerMapping.AT_LAYERS,
                    participating_layers=(0, 1))
-    group = AttentionGroup(members=(strided,), num_layers=3)
+    group = AttentionGroup(streams=(strided,), num_layers=3)
     layout = TokenLayout(segments=(SegmentRange("video", 0, VIDEO_TOKENS),),
                          labels={})
     trace: list = []
@@ -518,30 +518,30 @@ def test_group_validates_members_and_routes():
     ``head_dim``, since the joint attention shares one score scale.
     """
     video_spec = spec("video")
-    assert AttentionGroup(members=(video_spec,),
+    assert AttentionGroup(streams=(video_spec,),
                           num_layers=3).head_dim == HEAD_DIM
     with pytest.raises(ValueError, match="must not be empty"):
-        AttentionGroup(members=(), num_layers=3)
+        AttentionGroup(streams=(), num_layers=3)
     with pytest.raises(ValueError, match="num_layers must be positive"):
-        AttentionGroup(members=(video_spec,), num_layers=0)
+        AttentionGroup(streams=(video_spec,), num_layers=0)
     with pytest.raises(ValueError, match="has duplicate stream names"):
-        AttentionGroup(members=(video_spec, spec("video")), num_layers=3)
+        AttentionGroup(streams=(video_spec, spec("video")), num_layers=3)
     # V3: num_heads and residual_width may differ, head_dim may not
     wide = StreamSpec(name="action", impl=Spec(impl=_ToyStream),
                       residual_width=12, num_heads=NUM_HEADS,
                       head_dim=HEAD_DIM * 2, num_layers=3,
                       timestep_embed_width=256)
     with pytest.raises(ValueError, match="must share head_dim"):
-        AttentionGroup(members=(video_spec, wide), num_layers=3)
+        AttentionGroup(streams=(video_spec, wide), num_layers=3)
     with pytest.raises(ValueError, match="points at .*streams outside this group"):
-        AttentionGroup(members=(video_spec,), num_layers=3,
+        AttentionGroup(streams=(video_spec,), num_layers=3,
                        routes=(KVRoute(src="video", dst="vl",
                                        src_layers=(0,), dst_layers=(0,)),))
     # Route layer ids are **local** layer ids, not joint layer ids
     action_spec = spec("action", num_layers=2, residual_width=12,
                        layer_mapping=LayerMapping.STRIDED, stride=2)
     with pytest.raises(ValueError, match="local.. layer indices"):
-        AttentionGroup(members=(video_spec, action_spec), num_layers=3,
+        AttentionGroup(streams=(video_spec, action_spec), num_layers=3,
                        routes=(KVRoute(src="video", dst="action",
                                        src_layers=(0,), dst_layers=(2,)),))
 
@@ -553,7 +553,7 @@ def test_group_routes_into():
     action_spec = spec("action", residual_width=12)
     route = KVRoute(src="video", dst="action", src_layers=(0,),
                     dst_layers=(0,))
-    group = AttentionGroup(members=(video_spec, action_spec), num_layers=3,
+    group = AttentionGroup(streams=(video_spec, action_spec), num_layers=3,
                            routes=(route,))
     assert group.routes_into("action") == (route,)
     # An empty tuple is normal (always empty for a single-stream model)

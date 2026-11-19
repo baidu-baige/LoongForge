@@ -60,7 +60,7 @@ are fastwam's, and VPP2 differs from them on every entry.
 """
 
 
-def _vpp2_visibility(visible_video_frames: int) -> dict[str, Visibility]:
+def _vpp2_visibility(video_prefix_frames: int) -> dict[str, Visibility]:
     """Build VPP2's L1 visibility.
 
     Keys are **stream names**; each value is the rule on that stream's query
@@ -94,7 +94,7 @@ def _vpp2_visibility(visible_video_frames: int) -> dict[str, Visibility]:
          labels, and that is the subject of the 12/04 gate.
 
     Args:
-        visible_video_frames: Number of leading video frames the action
+        video_prefix_frames: Number of leading video frames the action
             stream may read.
 
     Returns:
@@ -105,7 +105,7 @@ def _vpp2_visibility(visible_video_frames: int) -> dict[str, Visibility]:
         "video": same_stream(),
         "action": same_stream() | (
             stream_edge("video", "action")
-            & noise_gated_history(window=visible_video_frames)
+            & noise_gated_history(window=video_prefix_frames)
         ),
     }
 
@@ -113,7 +113,7 @@ def _vpp2_visibility(visible_video_frames: int) -> dict[str, Visibility]:
 @register_provider("vpp2")
 def _vpp2(config: Any = None, *,
           geometry: Mapping[str, Any] | None = None,
-          visible_video_frames: int = 3,
+          video_prefix_frames: int = 3,
           action_shift: float = 5.0,
           inference_steps: int = 10,
           action_width: int = 7,
@@ -131,7 +131,7 @@ def _vpp2(config: Any = None, *,
        per the field table of interfaces §3.1. Height and width are separate
        because non-square inputs exist.
     2. ``WorldModelSpec(streams=, routes=)`` becomes
-       ``groups=(AttentionGroup(members=..., num_layers=..., routes=...),)``.
+       ``attention_groups=(AttentionGroup(streams=..., num_layers=..., routes=...),)``.
        "Which streams share one joint attention" has to be visible in the
        type (EWAM's VL stream does not share one).
     3. Two per-stream ``DiffusionSpec`` objects become one, with ``timesteps``
@@ -143,13 +143,13 @@ def _vpp2(config: Any = None, *,
        ``sample_shape``.
     5. ``LossSpec(term=, reduce=, ignore_pad=)`` becomes
        ``LossSpec(name=, head=)``. ``reduce`` and ``ignore_pad`` belong to
-       ``broadcast`` and the ``pad`` labels (interface I2) instead of being
+       ``broadcast`` and the ``is_padding`` labels (interface I2) instead of being
        two more knobs on the loss.
     6. ``HeadSpec(inputs=(HiddenStateRef(layer=-1),))`` becomes
        ``source=HiddenStateRef(stream=...)``. Taking the final output is
        ``layer=None``; ``-1`` would be confused with a joint layer id.
     7. ``HeadSpec(inference=False)`` becomes
-       ``gate=UniformSteps(skip={"video"})``. "Drop the video stream at
+       ``sampling_gate=UniformSteps(skip={"video"})``. "Drop the video stream at
        inference" is a stepping policy, not a property of a head, otherwise
        the same fact has two sources.
     8. ``Spec(ShiftedUniform, ...)`` / ``Spec(Constant, ...)`` become
@@ -163,13 +163,13 @@ def _vpp2(config: Any = None, *,
 
     Args:
         config: Positional config object, rejected. It exists because
-            ``build_world_model`` historically called ``provider(config)``;
-            applying YAML overrides is step 3 of ``build_world_model`` and
+            ``build_world_model_spec`` historically called ``provider(config)``;
+            applying YAML overrides is step 3 of ``build_world_model_spec`` and
             belongs to the config layer, so a non-``None`` value raises
             instead of being ignored.
         geometry: The YAML ``geometry:`` section, merged over the provider's
             defaults before anything is derived from the geometry.
-        visible_video_frames: Leading video frames the action stream reads.
+        video_prefix_frames: Leading video frames the action stream reads.
         action_shift: ``shift`` of the action stream's ``UniformShift``.
         inference_steps: Euler steps at inference.
         action_width: Packed action dimension, both the action stream's entry
@@ -236,7 +236,7 @@ def _vpp2(config: Any = None, *,
     #    model, but it hangs off ``use_video_tokens``, which defaults to False
     #    (``action_dit.py:67``) and is enabled by neither training config, so
     #    the default topology has no such edge.
-    group = AttentionGroup(members=(video, action),
+    group = AttentionGroup(streams=(video, action),
                            num_layers=video.num_layers)
 
     # 3. L3. The two streams use different timestep distributions, which is
@@ -278,9 +278,9 @@ def _vpp2(config: Any = None, *,
         # not a property of a head.
         # The step count comes from ``evaluation.num_inference_steps: 10``
         # (``train_action.yaml:224``, same value as ``policy/VPP2/deploy.yml:21``).
-        gate=UniformSteps(num_steps=inference_steps,
+        sampling_gate=UniformSteps(num_steps=inference_steps,
                           skip=frozenset({"video"})),
-        sampler=EulerSampler(),
+        inference_solver=EulerSampler(),
         # Two levels: clean (condition frames) and noisy. A non-empty tuple is
         # what makes the ``noise_gate`` rule usable, which the second rule in
         # ``_vpp2_visibility`` below depends on.
@@ -311,7 +311,7 @@ def _vpp2(config: Any = None, *,
     # Derived: latent (17, 28, 56) -> patch (17, 14, 28), so 392 tokens per
     # frame and 6664 tokens in total; ``num_chunks = 32 / 4 = 8``.
     # These fields are marked [YAML] (spec_config §3.3); the override is
-    # applied in step 3 of ``build_world_model``.
+    # applied in step 3 of ``build_world_model_spec``.
     geometry = resolve_geometry("vpp2", dict(
         frame_height=224,
         frame_width=224,
@@ -351,7 +351,7 @@ def _vpp2(config: Any = None, *,
                  impl=Spec(build_flow_head, {"form": "patch_flow"}),
                  source=HiddenStateRef(stream="video"),
                  output_width=geometry.latent_channels,
-                 needs_timestep=True),
+                 needs_timestep_embedding=True),
         # The action head's width is the **packed** action dimension =
         # raw_action_dim x action_chunk_size (the inverse of ``vpp2.py:244``;
         # the output width of the Linear at ``action_dit.py:150``).
@@ -374,7 +374,7 @@ def _vpp2(config: Any = None, *,
     #    The i2v "clean condition frames" are deliberately not a fifth
     #    condition: replacing the first few frames of the noisy sequence along
     #    the time axis (``vpp2.py:815-817``, ``dim=2``) is the same fact as
-    #    ``visible_video_frames`` and the noise_gate rule below, so declaring
+    #    ``video_prefix_frames`` and the noise_gate rule below, so declaring
     #    it as a condition would create a second source.
     #    The ``cond_latent`` below is a different thing: concatenation along
     #    the channel axis.
@@ -434,11 +434,11 @@ def _vpp2(config: Any = None, *,
     return WorldModelSpec(
         model_type="vpp2",
         geometry=geometry,
-        groups=(group,),
+        attention_groups=(group,),
         diffusion=diffusion,
         heads=heads,
         conditions=conditions,
-        visibility=_vpp2_visibility(visible_video_frames),
+        visibility=_vpp2_visibility(video_prefix_frames),
         # Today a dense ``[S, S]`` bool mask is fed straight to the attention
         # kernel (``flash_attention(..., ctx_mask=)`` at ``mot.py:144-157``),
         # so the default backend is recorded as ``dense``. Switching to
