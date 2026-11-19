@@ -25,7 +25,8 @@ def rope_fp64(x,freqs,num_heads,out=None):
     assert x.is_cuda and x.is_contiguous() and x.dtype==torch.bfloat16
     assert freqs.dtype==torch.complex128 and freqs.is_contiguous()
     assert not torch.is_grad_enabled() or not x.requires_grad
-    batch,seq,width=x.shape;half=width//num_heads//2
+    batch,seq,width=x.shape
+    half=width//num_heads//2
     assert freqs.shape==(seq,1,half)
     y=torch.empty_like(x) if out is None else out
     if (y.shape != x.shape or y.dtype != x.dtype or y.device != x.device
