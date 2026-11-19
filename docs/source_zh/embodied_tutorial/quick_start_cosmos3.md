@@ -49,9 +49,19 @@ DROID 数据不需要额外的离线预处理，训练时通过内建的 `cosmos
 
 其余目标分辨率、动作 chunk 长度、CFG dropout 等已经写在 `configs/models/embodied/cosmos3/nano.yaml` 的 `data` 段（默认 `target_h/target_w=480`、`action_chunk_length=32`、`action_fps=15.0`），通常不需要覆盖。
 
+与官方 cosmos-framework 一致的数据行为（均为默认开启，无需额外参数）：
+
+- 动作目标取第 t..t+31 帧，初始状态取第 t 帧；
+- 训练顺序为按 episode 打乱、episode 内顺序读取的流式采样（`episode_stream=true`），并按 `randperm(N, seed=42)` 留出 3% episode 不参与训练（`split_val_ratio=0.03`）。
+
+动作 prompt 格式由 `data.format_prompt_as_json` 控制：
+
+- 默认 `false`（纯文本）：与官方 policy server 在权重未附带训练配置时的默认行为一致，开源权重 `nvidia/Cosmos3-Nano-Policy-DROID` 按官方 Quickstart 评测时即为纯文本；
+- `true`：官方 DROID 训练配方使用的 JSON prompt（含 `idle_frame`）。以此训练的权重在官方 policy server 上评测时需加 `--format-prompt-as-json`。
+
 ## 2. 启动训练
 
-启动脚本：`examples/embodied/cosmos3/run_cosmos3_nano_droid_fsdp_finetune.sh`。默认为单机 8 卡 FSDP2 + bf16，训练 500 步、每卡 batch=2。
+启动脚本：`examples/embodied/cosmos3/run_cosmos3_nano_droid_fsdp_finetune.sh`。默认为单机 8 卡 FSDP2，bf16 计算 + fp32 master 权重，训练 50 步、每卡 batch=2。
 
 ### 2.1 环境变量
 
@@ -88,6 +98,8 @@ bash examples/embodied/cosmos3/run_cosmos3_nano_droid_fsdp_finetune.sh
 --dtype bfloat16                     # 训练精度：bf16
 --fsdp-reduce-dtype bf16             # 梯度 reduce-scatter 用 bf16
 --fsdp-wrap-modules MoTDecoderLayer  # 每个 MoT decoder layer 包一个 FSDP group
+--fsdp-original-param-dtype fp32     # 参数以 fp32 存储（fp32 master），计算时 all-gather 为 bf16
+--no-fsdp-cast-forward-inputs        # FSDP 入口不把输入转 bf16，保持 fp32 动作目标
 --init-on-meta                       # 通过 meta device 降低模型初始化时的峰值显存
 ```
 
@@ -98,15 +110,15 @@ bash examples/embodied/cosmos3/run_cosmos3_nano_droid_fsdp_finetune.sh
 --dataset-strategy cosmos3_droid     # 官方 DROID 数据处理策略（画面拼接、图像增强等）
 --dataset-path $DATA_PATH            # DROID 数据目录
 --tokenizer-path $TOKENIZER_PATH     # Qwen3-VL tokenizer / processor 目录
---num-workers 4                      # DataLoader worker 数
+--num-workers 8                      # DataLoader worker 数
 ```
 
 **训练与优化器：**
 
 ```bash
 --trainer-type FinetuneTrainer
---train-iters 500                    # 训练步数
---per-device-batch-size 2            # 每卡 batch
+--train-iters 50                     # 训练步数
+--per-device-batch-size 2           # 每卡 batch
 --gradient-accumulation-steps 1
 --disable-tf32                       # 关闭 TF32，保持与官方参考实现一致的数值精度
 --pretrained-checkpoint $CHECKPOINT_PATH
@@ -123,14 +135,17 @@ Cosmos3-Nano 的动作头（`action2llm` / `llm2action` / `action_modality_embed
 --lr-group net.action2llm=1e-3,net.llm2action=1e-3,net.action_modality_embed=1e-3,net=2e-4
                                      # 动作头 1e-3，其余 net 2e-4
 --lr-decay-style lambda_linear       # 学习率衰减：线性
+--lambda-cycle-length 100000         # 线性周期，与官方 cycle_lengths=[100000] 一致
 --lr-warmup-iters 0
---optimizer TorchFusedAdamW          # 优化器：fused AdamW
+--optimizer CapturableFusedAdamW     
 --clip-grad 1.0
 --weight-decay 0.05
 --adam-beta1 0.9
 --adam-beta2 0.99
 --adam-eps 1e-8
 ```
+
+不要求与官方逐位一致时也可用 `TorchFusedAdamW`，两者只有末位舍入差异。
 
 如需按实际训练规模调整，常用做法是：
 
@@ -153,20 +168,30 @@ bash examples/embodied/cosmos3/run_cosmos3_nano_droid_fsdp_finetune.sh data.colo
 
 ### 2.5 正确性验证
 
-在相同数据、权重和训练配置下，与官方 cosmos-framework 的 `launch_sft_action_policy_droid` 做了逐 step loss 对比：26 个 step 的 loss **逐位相同（max |Δ| = 0）**。
+在相同数据、权重和训练配置下，与官方 cosmos-framework 的 `action_policy_droid_nano` 配置（8 卡、每卡 batch=2、grad accum=1）做了确定性模式下的逐 step loss 对比：100 个 step 的 rank 平均 loss 最大误差 total 2.9e-6、vision 5.0e-8、action 3.6e-7（纯文本 prompt；JSON prompt 下为 1.7e-6 / 4.8e-8 / 3.7e-7），残差在日志打印精度以内。
 
 ![cosmos3-nano loss 对齐](../../assets/images/precision/cosmos3.png)
 
-复现该对比时，下列参数需与官方保持一致：
+复现该对比时，LoongForge 侧除 2.3 节的 fp32 master、`--no-fsdp-cast-forward-inputs`、`CapturableFusedAdamW`、`--lambda-cycle-length 100000` 外，还需：
 
 ```bash
+export CUBLAS_WORKSPACE_CONFIG=:4096:8
+# varlen attention 使用 NATTEN，与官方在 sm80 架构的GPU上实际使用的后端一致
+export COSMOS3_VARLEN_ATTN=${COSMOS3_VARLEN_ATTN:-natten}
+
 --seed 42                            # 同 seed
 --set-seed-by-rank                   # 按 rank 偏移种子，与官方 per-rank 行为一致
 --dtype bfloat16                     # 训练精度 bf16
 --fsdp-reduce-dtype bf16             # 梯度 reduce-scatter 精度
 --fsdp-wrap-modules MoTDecoderLayer  # FSDP 分组粒度
 --disable-tf32                       # 关闭 TF32
---deterministic-mode                 # 确定性 kernel，需同时导出 CUBLAS_WORKSPACE_CONFIG=:4096:8
+--deterministic-mode                 # 确定性 kernel
+model.compile_model=false            # 官方 --deterministic 关闭模型编译
+data.use_image_augmentation=false    # 两框架增强的随机数消耗方式不同，对比时关闭
+data.colorjitter_on_gpu=false
 ```
+
+- `COSMOS3_VARLEN_ATTN` 默认 `flash2`。要与官方 loss 一致，必须设为 `natten`，并安装 NATTEN（可用 `pip install --no-deps --target <dir>` 安装后把 `<dir>` 加入 `PYTHONPATH`，不改动现有环境）。
+- 官方侧需同步：`--deterministic`、`PYTHONHASHSEED=42`、cfg dropout 设为 0、关闭图像增强、`checkpoint.keys_to_skip_loading=[net_ema.]`（动作头同样从 checkpoint 加载）、`trainer.callbacks.compile_tokenizer.enabled=False`
 
 此外，`GPUS_PER_NODE`、`--per-device-batch-size`、`--gradient-accumulation-steps` 决定 global batch 与采样分片，对齐实验中途不要改动。

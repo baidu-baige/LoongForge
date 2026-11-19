@@ -173,7 +173,7 @@ def get_vision_data_resolution(spatial_shape: tuple[int, int]) -> str:
         raise ValueError(f"Unsupported resolution: {spatial_shape}")
 
 
-def _contiguous_clone(t: torch.Tensor) -> torch.Tensor:
+def _contiguous_clone(t: torch.Tensor, memory_format: torch.memory_format = torch.contiguous_format) -> torch.Tensor:
     """Return a contiguous copy of *t* using exactly one allocation.
 
     When *t* is already contiguous, ``.contiguous()`` would be a no-op that
@@ -181,9 +181,9 @@ def _contiguous_clone(t: torch.Tensor) -> torch.Tensor:
     When *t* is non-contiguous, ``.contiguous()`` already allocates a fresh
     tensor with independent storage — no extra ``.clone()`` needed.
     """
-    if t.is_contiguous():
-        return t.clone()
-    return t.contiguous()
+    if t.is_contiguous(memory_format=memory_format):
+        return t.clone(memory_format=memory_format)  # same shape as t
+    return t.contiguous(memory_format=memory_format)  # same shape as t
 
 
 def _update_cache_and_apply(
@@ -204,7 +204,7 @@ def _update_cache_and_apply(
     to the list.
     """
     idx = feat_idx[0]
-    cache_x = _contiguous_clone(x[:, :, -CACHE_T:, :, :])
+    cache_x = _contiguous_clone(x[:, :, -CACHE_T:, :, :], layer.cache_memory_format)  # [B,C,<=2,H,W]
     if cache_x.shape[2] < 2 and feat_cache[idx] is not None:
         cache_x = torch.cat(
             [
@@ -213,6 +213,7 @@ def _update_cache_and_apply(
             ],
             dim=2,
         )  # [B,C,2,H,W]
+        cache_x = cache_x.contiguous(memory_format=layer.cache_memory_format)  # [B,C,2,H,W]
     x = layer(x, feat_cache[idx])
     feat_cache[idx] = cache_x
     feat_idx[0] += 1
@@ -223,6 +224,8 @@ class CausalConv3d(nn.Conv3d):
     """
     Causal 3d convolution.
     """
+
+    cache_memory_format: torch.memory_format = torch.contiguous_format
 
     def __init__(self, *args, **kwargs):
         """__init__."""
@@ -247,6 +250,10 @@ class CausalConv3d(nn.Conv3d):
             padding[4] -= cache_x.shape[2]
         x = F.pad(x, padding)  # [B,C,T_padded,H_padded,W_padded]
 
+        if self.cache_memory_format == torch.channels_last_3d:
+            x = x.contiguous(memory_format=torch.channels_last_3d)  # [B,C,T_padded,H_padded,W_padded]
+            out = super().forward(x)  # [B,out_C,T_out,H_out,W_out]
+            return out.contiguous(memory_format=torch.channels_last_3d)  # [B,out_C,T_out,H_out,W_out]
         return super().forward(x)  # [B,out_C,T_out,H_out,W_out]
 
 
@@ -274,11 +281,24 @@ class Upsample(nn.Upsample):
         """
         Fix bfloat16 support for nearest neighbor interpolation.
         """
+        if (
+            self.mode == "nearest-exact"
+            and self.scale_factor == (2.0, 2.0)
+            and x.is_contiguous(memory_format=torch.channels_last)
+        ):
+            # 2x nearest-exact repeats every pixel in a 2x2 block. One broadcast copy writes that in
+            # channels-last order; PyTorch's channels-last nearest kernel is slower than its NCHW kernel.
+            n, c, h, w = x.shape
+            y = x.float().permute(0, 2, 3, 1)[:, :, None, :, None, :]  # [N,H,1,W,1,C]
+            y = y.expand(n, h, 2, w, 2, c).contiguous().view(n, h * 2, w * 2, c)  # [N,H*2,W*2,C]
+            return y.permute(0, 3, 1, 2).type_as(x)  # [N,C,H*2,W*2]
         return super().forward(x.float()).type_as(x)
 
 
 class Resample(nn.Module):
     """Resample."""
+    cache_memory_format: torch.memory_format = torch.contiguous_format
+
     def __init__(self, dim, mode):
         """__init__."""
         assert mode in (
@@ -322,10 +342,12 @@ class Resample(nn.Module):
                 idx = feat_idx[0]
                 if feat_cache[idx] is None:
                     # First frame: skip time_conv, seed cache with zeros so the next call sees a real tensor
-                    feat_cache[idx] = torch.zeros(b, c, CACHE_T, h, w, device=x.device, dtype=x.dtype)  # [B,C,2,H,W]
+                    feat_cache[idx] = torch.empty(
+                        (b, c, CACHE_T, h, w), device=x.device, dtype=x.dtype, memory_format=self.cache_memory_format
+                    ).zero_()  # [B,C,2,H,W]
                     feat_idx[0] += 1
                 else:
-                    cache_x = _contiguous_clone(x[:, :, -CACHE_T:, :, :])  # [B,C,<=2,H,W]
+                    cache_x = _contiguous_clone(x[:, :, -CACHE_T:, :, :], self.cache_memory_format)  # [B,C,<=2,H,W]
                     if cache_x.shape[2] < 2:
                         cache_x = torch.cat(
                             [
@@ -334,12 +356,19 @@ class Resample(nn.Module):
                             ],
                             dim=2,
                         )  # [B,C,2,H,W]
+                        cache_x = cache_x.contiguous(memory_format=self.cache_memory_format)  # [B,C,2,H,W]
                     x = self.time_conv(x, feat_cache[idx])  # [B,C*2,T,H,W]
                     feat_cache[idx] = cache_x
                     feat_idx[0] += 1
-                    x = x.reshape(b, 2, c, t, h, w)  # [B,2,C,T,H,W]
-                    x = torch.stack((x[:, 0, :, :, :, :], x[:, 1, :, :, :, :]), 3)  # [B,C,T,2,H,W]
-                    x = x.reshape(b, c, t * 2, h, w)  # [B,C,T*2,H,W]
+                    if self.cache_memory_format == torch.channels_last_3d:
+                        # Interleave the two temporal phases with channels innermost, so the
+                        # "(b t) c h w" rearrange below stays a view of a channels-last tensor.
+                        x = x.unflatten(1, (2, c)).permute(0, 3, 1, 4, 5, 2).contiguous()  # [B,T,2,H,W,C]
+                        x = x.view(b, t * 2, h, w, c).permute(0, 4, 1, 2, 3)  # [B,C,T*2,H,W]
+                    else:
+                        x = x.reshape(b, 2, c, t, h, w)  # [B,2,C,T,H,W]
+                        x = torch.stack((x[:, 0, :, :, :, :], x[:, 1, :, :, :, :]), 3)  # [B,C,T,2,H,W]
+                        x = x.reshape(b, c, t * 2, h, w)  # [B,C,T*2,H,W]
         t = x.shape[2]
         x = rearrange(x, "b c t h w -> (b t) c h w")  # [B*T,C,H,W]
         x = self.resample(x)  # [B*T,C_out,H_out,W_out]
@@ -366,15 +395,15 @@ class Resample(nn.Module):
                     # If this is ever called with T>1 (non-standard chunking), fall back to a padded
                     # time_conv so the main path stays compatible with the shortcut path.
                     if x.shape[2] == 1:
-                        feat_cache[idx] = _contiguous_clone(x)
+                        feat_cache[idx] = _contiguous_clone(x, self.cache_memory_format)  # [B,C,1,H_out,W_out]
                     else:
-                        cache_x = _contiguous_clone(x[:, :, -1:, :, :])  # [B,C,1,H_out,W_out]
+                        cache_x = _contiguous_clone(x[:, :, -1:, :, :], self.cache_memory_format)  # [B,C,1,H_out,W_out]
                         x_in = F.pad(x, (0, 0, 0, 0, 2, 0))  # [B,C,T+2,H_out,W_out]
                         x = self.time_conv(x_in)  # [B,C,T//2+1,H_out,W_out]
                         feat_cache[idx] = cache_x
                     feat_idx[0] += 1
                 else:
-                    cache_x = _contiguous_clone(x[:, :, -1:, :, :])  # [B,C,1,H_out,W_out]
+                    cache_x = _contiguous_clone(x[:, :, -1:, :, :], self.cache_memory_format)  # [B,C,1,H_out,W_out]
                     x_cat = torch.cat([feat_cache[idx][:, :, -1:, :, :], x], 2)  # [B,C,T+1,H_out,W_out]
                     t_cat = x_cat.shape[2]
                     if t_cat < 3:
@@ -423,6 +452,8 @@ class AttentionBlock(nn.Module):
     Causal self-attention with a single head.
     """
 
+    output_memory_format: torch.memory_format = torch.contiguous_format
+
     def __init__(self, dim):
         """__init__."""
         super().__init__()
@@ -452,7 +483,8 @@ class AttentionBlock(nn.Module):
             k,
             v,
         )  # [B*T,1,H*W,C]
-        x = x.squeeze(1).permute(0, 2, 1).contiguous().reshape(b * t, c, h, w)  # [B*T,C,H,W]
+        x = x.squeeze(1).permute(0, 2, 1).reshape(b * t, c, h, w)  # [B*T,C,H,W]
+        x = x.contiguous(memory_format=self.output_memory_format)  # [B*T,C,H,W]
 
         # output
         x = self.proj(x)  # [B*T,C,H,W]
@@ -569,6 +601,8 @@ class AvgDown3D(nn.Module):
 
 class DupUp3D(nn.Module):
     """DupUp3D."""
+    output_memory_format: torch.memory_format = torch.contiguous_format
+
     def __init__(
         self,
         in_channels: int,
@@ -592,25 +626,39 @@ class DupUp3D(nn.Module):
         self, x: torch.Tensor, first_chunk=False
     ) -> torch.Tensor:  # x: [B,in_channels,T,H,W] -> [B,out_channels,T*factor_t,H*factor_s,W*factor_s]
         """forward."""
-        x = x.repeat_interleave(self.repeats, dim=1)  # [B,in_channels*repeats,T,H,W]
-        x = x.view(
-            x.size(0),
-            self.out_channels,
-            self.factor_t,
-            self.factor_s,
-            self.factor_s,
-            x.size(2),
-            x.size(3),
-            x.size(4),
-        )  # [B,out_channels,ft,fs,fs,T,H,W]
-        x = x.permute(0, 1, 5, 2, 6, 3, 7, 4).contiguous()  # [B,out_channels,T,ft,H,fs,W,fs]
-        x = x.view(
-            x.size(0),
-            self.out_channels,
-            x.size(2) * self.factor_t,
-            x.size(4) * self.factor_s,
-            x.size(6) * self.factor_s,
-        )  # [B,out_channels,T*ft,H*fs,W*fs]
+        if self.output_memory_format == torch.channels_last_3d:
+            b, _, t, h, w = x.shape
+            # Broadcasting the repeats replaces repeat_interleave; the single copy below writes the
+            # channels-last result directly instead of an NCDHW intermediate.
+            x = x.unsqueeze(2).expand(-1, -1, self.repeats, -1, -1, -1)  # [B,in_channels,repeats,T,H,W]
+            x = x.reshape(
+                b, self.out_channels, self.factor_t, self.factor_s, self.factor_s, t, h, w
+            )  # [B,out_channels,ft,fs,fs,T,H,W]
+            x = x.permute(0, 5, 2, 6, 3, 7, 4, 1).contiguous()  # [B,T,ft,H,fs,W,fs,out_channels]
+            x = x.view(
+                b, t * self.factor_t, h * self.factor_s, w * self.factor_s, self.out_channels
+            )  # [B,T*ft,H*fs,W*fs,out_channels]
+            x = x.permute(0, 4, 1, 2, 3)  # [B,out_channels,T*ft,H*fs,W*fs]
+        else:
+            x = x.repeat_interleave(self.repeats, dim=1)  # [B,in_channels*repeats,T,H,W]
+            x = x.view(
+                x.size(0),
+                self.out_channels,
+                self.factor_t,
+                self.factor_s,
+                self.factor_s,
+                x.size(2),
+                x.size(3),
+                x.size(4),
+            )  # [B,out_channels,ft,fs,fs,T,H,W]
+            x = x.permute(0, 1, 5, 2, 6, 3, 7, 4).contiguous()  # [B,out_channels,T,ft,H,fs,W,fs]
+            x = x.view(
+                x.size(0),
+                self.out_channels,
+                x.size(2) * self.factor_t,
+                x.size(4) * self.factor_s,
+                x.size(6) * self.factor_s,
+            )  # [B,out_channels,T*ft,H*fs,W*fs]
         if first_chunk:
             x = x[:, :, self.factor_t - 1 :, :, :]  # [B,out_channels,T*ft-ft+1,H*fs,W*fs]
         return x
@@ -899,6 +947,22 @@ def count_conv3d(model: nn.Module) -> int:
     return sum(1 for m in model.modules() if isinstance(m, CausalConv3d))
 
 
+def _enable_channels_last(*roots: nn.Module) -> None:
+    """Store conv weights, causal caches, and layout-producing outputs under *roots* channels-last."""
+    for root in roots:
+        for module in root.modules():
+            if isinstance(module, nn.Conv3d):
+                module.weight.data = module.weight.to(memory_format=torch.channels_last_3d)  # [O,I,Kt,Kh,Kw]
+            elif isinstance(module, nn.Conv2d):
+                module.weight.data = module.weight.to(memory_format=torch.channels_last)  # [O,I,Kh,Kw]
+            if isinstance(module, (CausalConv3d, Resample)):
+                module.cache_memory_format = torch.channels_last_3d
+            if isinstance(module, AttentionBlock):
+                module.output_memory_format = torch.channels_last
+            if isinstance(module, DupUp3D):
+                module.output_memory_format = torch.channels_last_3d
+
+
 class WanVAEModule(nn.Module):
     """WanVAEModule."""
     def __init__(
@@ -957,6 +1021,16 @@ class WanVAEModule(nn.Module):
         self._enc_conv_num = count_conv3d(self.encoder)
         self._dec_conv_num = count_conv3d(self.decoder)
         self._dec_cache: list[torch.Tensor | None] = self._new_dec_cache()
+        self.enable_channels_last_encoder()
+        self.enable_channels_last_decoder()
+
+    def enable_channels_last_encoder(self) -> None:
+        """Use channel-adjacent encoder storage without changing tensor dimensions."""
+        _enable_channels_last(self.encoder, self.conv1)
+
+    def enable_channels_last_decoder(self) -> None:
+        """Use channel-adjacent decoder storage; ``decode`` still returns a standard-contiguous video."""
+        _enable_channels_last(self.conv2, self.decoder)
 
     def _new_enc_cache(self) -> list:
         """Fresh per-layer cache for the encoder (one slot per CausalConv3d)."""
@@ -1003,13 +1077,13 @@ class WanVAEModule(nn.Module):
         """
         feat_cache = list(feat_cache)
 
-        assert all(c is None or c.is_contiguous() for c in feat_cache)
-        assert x_chunk.is_contiguous()
+        assert all(c is None or c.is_contiguous(memory_format=torch.channels_last_3d) for c in feat_cache)
+        assert x_chunk.is_contiguous(memory_format=torch.channels_last_3d)
 
         out = self.encoder(x_chunk, feat_cache=feat_cache)
 
-        assert out.is_contiguous()
-        assert all(c is None or c.is_contiguous() for c in feat_cache)
+        assert out.is_contiguous(memory_format=torch.channels_last_3d)
+        assert all(c is None or c.is_contiguous(memory_format=torch.channels_last_3d) for c in feat_cache)
 
         # Project encoder features through conv1, split to mu/log_var, and normalize.
         mu, _log_var = self.conv1(out).chunk(2, dim=1)
@@ -1120,9 +1194,12 @@ class WanVAEModule(nn.Module):
             """
             is_prime = feat_cache[0] is None
 
-            # Ensure contiguity so AOT-compiled functions receive tensors
-            # with deterministic strides regardless of the source slice.
-            x_chunk = x_chunk.contiguous()
+            # Ensure channels-last contiguity so eager and AOT-compiled functions receive
+            # tensors with deterministic strides regardless of the source slice.
+            x_chunk = x_chunk.contiguous(memory_format=torch.channels_last_3d)  # [B,12,T,H_patch,W_patch]
+            feat_cache = [
+                c.contiguous(memory_format=torch.channels_last_3d) if c is not None else None for c in feat_cache
+            ]
 
             if aot_chunk_fns is not None:
                 cache_t = 0 if is_prime else feat_cache[0].shape[2]
@@ -1168,17 +1245,14 @@ class WanVAEModule(nn.Module):
         parts = []
         for i in range(x.shape[2]):
             first_chunk = (i == 0) and all(c is None for c in self._dec_cache)
-            parts.append(
-                self.decoder(
-                    x[:, :, i : i + 1],
-                    feat_cache=self._dec_cache,
-                    first_chunk=first_chunk,
-                )
-            )
+            # A channels-last copy gives strides independent of T_latent.
+            x_chunk = x[:, :, i : i + 1].clone(memory_format=torch.channels_last_3d)  # [B,z_dim,1,H_lat,W_lat]
+            parts.append(self.decoder(x_chunk, feat_cache=self._dec_cache, first_chunk=first_chunk))
 
         if clear_decoder_cache:
             self._dec_cache = self._new_dec_cache()
 
+        # unpatchify's copy also converts the channels-last decoder output to the standard layout.
         decoded = unpatchify(torch.cat(parts, dim=2), patch_size=2)  # [B,3,T,H,W]
         return decoded  # [B,3,T,H,W]
 
@@ -1220,12 +1294,12 @@ def _video_vae(
     # whose storage may have different strides than the `to_empty`-initialized
     # tensors on other ranks. Without this, `_verify_param_shape_across_processes`
     # raises: "params[N] ... appears not to match strides of the same param in process 0".
+    # Singleton kernel dimensions can report contiguous with different strides (e.g. after
+    # the channels-last conversion), so always canonicalize with .to(memory_format=...).
     for p in model.parameters():
-        if not p.is_contiguous():
-            p.data = p.data.contiguous()
+        p.data = p.data.to(memory_format=torch.contiguous_format)  # same shape as p
     for b in model.buffers():
-        if not b.is_contiguous():
-            b.data = b.data.contiguous()
+        b.data = b.data.to(memory_format=torch.contiguous_format)  # same shape as b
     sync_model_states(model)
 
     return model
@@ -1370,6 +1444,9 @@ class WanVAE:
             self.context = nullcontext()
         else:
             self.context = torch.amp.autocast("cuda", dtype=dtype)
+        # Loading/synchronizing weights canonicalizes strides; restore the channels-last layouts afterwards.
+        self.model.enable_channels_last_encoder()
+        self.model.enable_channels_last_decoder()
 
     def count_param(self) -> int:
         """count_param."""
@@ -1690,7 +1767,10 @@ class Wan2pt2VAEInterface():
 
         def _rand_input(t: int, h: int, w: int) -> torch.Tensor:
             """_rand_input."""
-            return torch.rand((1, 12, t, h, w), dtype=torch.bfloat16, device="cuda")
+            # Channels-last, matching the layout ``_encode_chunk_impl`` asserts for eager chunks.
+            return torch.rand((1, 12, t, h, w), dtype=torch.bfloat16, device="cuda").contiguous(
+                memory_format=torch.channels_last_3d
+            )
 
         def _compile_variant(
             wrapper: _ChunkEncodeForAOT,

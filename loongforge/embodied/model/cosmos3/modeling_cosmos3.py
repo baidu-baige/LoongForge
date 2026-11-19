@@ -46,6 +46,8 @@ from loongforge.embodied.model.cosmos3.unified_mot import Qwen3VLMoTConfig, Qwen
 from loongforge.embodied.model.cosmos3.wan2pt2_vae_4x16x16 import Wan2pt2VAEInterface
 from loongforge.embodied.data.datasets.cosmos3.transforms.cosmos3_preprocessor import Cosmos3Batch
 from loongforge.embodied.train.utils.utils import resolve_dtype
+# Registers the Cosmos3 optimizer ``CapturableFusedAdamW`` (cosmos-framework FusedAdam).
+import loongforge.embodied.train.trainers.custom.cosmos3  # noqa: F401,E402
 
 logger = logging.getLogger(__name__)
 
@@ -210,12 +212,17 @@ class Cosmos3(nn.Module):
         """Return the underlying language-model backbone."""
         return self.net.language_model
 
-    def materialize(self, device, dtype):
+    def materialize(self, device, dtype, storage_dtype=None):
         """Allocate empty CUDA tensors for meta params (post-FSDP shard) then run
         each submodule's init_weights to populate them. Mirrors cosmos's
         ``hf_model._apply(empty_like, ...) + tie_embeddings``.
+
+        ``dtype`` is the compute dtype; ``storage_dtype`` (``--fsdp-original-param-dtype``)
+        keeps e.g. fp32 master weights under bf16 compute, like cosmos's
+        ``fsdp_master_dtype="float32"``.
         """
-        self.net.to(resolve_dtype(dtype))
+        self._compute_dtype = resolve_dtype(dtype)
+        self.net.to(storage_dtype if storage_dtype is not None else self._compute_dtype)
         self.net.to_empty(device=device)
         self.net.init_weights(buffer_device=device)
         logger.info("Cosmos3 materialized on %s", device)
@@ -309,7 +316,9 @@ class Cosmos3(nn.Module):
            ``raw_action_dim`` masking on the padded action channels.
         """
         device = next(self.net.parameters()).device
-        dtype = next(self.net.parameters()).dtype
+        # Compute dtype for the noisy inputs; differs from the parameter dtype when
+        # fp32 master weights are kept (see ``materialize``).
+        dtype = getattr(self, "_compute_dtype", None) or next(self.net.parameters()).dtype
         special_tokens = self._get_special_tokens()
 
         B = len(batch.videos)
@@ -320,7 +329,9 @@ class Cosmos3(nn.Module):
         vae = self._get_vae_encoder()
 
         def _vae(video):
-            v = video.to(device, dtype).div_(127.5).sub_(1.0).unsqueeze(0)
+            # Normalize uint8 -> [-1, 1] in fp32; the VAE casts to its own dtype once
+            # (matches cosmos sensor_encoder.normalize_uint8_item).
+            v = video.to(device).to(torch.float32).div_(127.5).sub_(1.0).unsqueeze(0)
             v = vae.encode(v)
             return v.contiguous().float()
         latents = [_vae(video) for video in batch.videos]
@@ -373,7 +384,9 @@ class Cosmos3(nn.Module):
         #    sigma along their condition_mask entries (matches cosmos's
         #    sigmas_action = sigma * (1 - condition_mask)). The padded channels
         #    beyond raw_action_dim are zeroed out to keep loss masking correct.
-        actions_clean: list[torch.Tensor] = [a.to(device, dtype) for a in batch.actions]
+        # Keep clean actions in fp32 through the flow interpolation and velocity target;
+        # only the noisy input is cast to the model dtype (matches cosmos omni_mot_model).
+        actions_clean: list[torch.Tensor] = [a.to(device, torch.float32) for a in batch.actions]
         raw_action_dims: list[torch.Tensor] = [d.to(device) for d in batch.raw_action_dims]
         action_domain_ids: list[torch.Tensor] = [d.to(device) for d in batch.action_domain_ids]
 

@@ -17,6 +17,7 @@ import torch
 from torch import nn
 
 from .sequence_packing import (
+    PAD_SEGMENT_ENABLED,
     FactoredSequencePack,
     from_joint,
     from_und_gen_splits,
@@ -456,14 +457,27 @@ class MoTDecoderLayer(nn.Module):
 
         gen_len = pack_attn_out["_num_full_tokens"]
         und_len = pack_attn_out["_num_causal_tokens"]
-        ln_out_und_unpadded = ln_out_und[:und_len]
-        ln_out_gen_unpadded = ln_out_gen[:gen_len]
+        if PAD_SEGMENT_ENABLED:
+            # cosmos ``_run_mlp`` (dense): run the MLP over the whole padded stream with the
+            # padding rows zeroed by a real-token mask, so GEMM shapes match cosmos and the
+            # padding rows get mlp(0) (= 0 for the bias-free gated MLP).
+            und_token_mask = torch.arange(ln_out_und.shape[0], device=ln_out_und.device) < und_len  # [N_und]
+            gen_token_mask = torch.arange(ln_out_gen.shape[0], device=ln_out_gen.device) < gen_len  # [N_gen]
+            mlp_out_und, lbl_metadata_und = _run_mlp(
+                self.mlp, torch.where(und_token_mask.unsqueeze(1), ln_out_und, ln_out_und.new_zeros(()))
+            )
+            mlp_out_gen, lbl_metadata_gen = _run_mlp(
+                self.mlp_moe_gen, torch.where(gen_token_mask.unsqueeze(1), ln_out_gen, ln_out_gen.new_zeros(()))
+            )
+        else:
+            ln_out_und_unpadded = ln_out_und[:und_len]
+            ln_out_gen_unpadded = ln_out_gen[:gen_len]
 
-        mlp_out_und_unpadded, lbl_metadata_und = _run_mlp(self.mlp, ln_out_und_unpadded)
-        mlp_out_gen_unpadded, lbl_metadata_gen = _run_mlp(self.mlp_moe_gen, ln_out_gen_unpadded)
+            mlp_out_und_unpadded, lbl_metadata_und = _run_mlp(self.mlp, ln_out_und_unpadded)
+            mlp_out_gen_unpadded, lbl_metadata_gen = _run_mlp(self.mlp_moe_gen, ln_out_gen_unpadded)
 
-        mlp_out_und = torch.cat([mlp_out_und_unpadded, ln_out_und[und_len:]], dim=0)
-        mlp_out_gen = torch.cat([mlp_out_gen_unpadded, ln_out_gen[gen_len:]], dim=0)
+            mlp_out_und = torch.cat([mlp_out_und_unpadded, ln_out_und[und_len:]], dim=0)
+            mlp_out_gen = torch.cat([mlp_out_gen_unpadded, ln_out_gen[gen_len:]], dim=0)
 
         if lbl_metadata_und is not None:
             lbl_metadata_dict["und"] = lbl_metadata_und
