@@ -489,7 +489,9 @@ LoongForge 按需发布。正式版使用不可变的 `vX.Y.Z` 标签，候选�
 和[发布记录](https://github.com/baidu-baige/LoongForge/releases)。
 
 LoongForge 承诺持续维护至少 12 个月，并用 PyTorch 最新两个稳定版本系列各自的最新补丁版本
-验证 LoongForge Python 包。维护者通过 GitHub Issue 和 Pull Request 跟进回归问题并协调修复。
+验证 LoongForge Python 包在各 Python 版本下的 CPU 兼容性。完整加速器和训练验证
+通过文档中的 Docker 与硬件 CI 路径执行。维护者通过 GitHub Issue 和 Pull Request
+跟进回归问题并协调修复。
 
 GitHub CI 执行 CPU 检查，并可运行 NVIDIA GPU 回归测试。项目继续支持昆仑芯 XPU。
 当前 CI 没有 XPU Runner，因此尚未覆盖 XPU 自动验证。详见[治理文档](GOVERNANCE.md)和[安全策略](SECURITY.md)。

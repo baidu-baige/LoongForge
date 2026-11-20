@@ -493,9 +493,11 @@ versioned image and creates a GitHub Release. See the
 [release notes](https://github.com/baidu-baige/LoongForge/releases).
 
 LoongForge commits to at least 12 months of active maintenance and to validating
-its Python package against the latest patch release in each of the two newest
-stable PyTorch release series. Maintainers use GitHub issues and pull requests
-to triage regressions and coordinate fixes.
+the CPU compatibility of its Python package against the latest patch release in
+each of the two newest stable PyTorch release series, for the Python versions
+supported by each release. Accelerator and training validation use the
+documented Docker and hardware CI paths. Maintainers use GitHub issues and pull
+requests to triage regressions and coordinate fixes.
 
 GitHub CI runs CPU checks and can run NVIDIA GPU regressions. Kunlun XPU support
 remains available, with automated XPU validation pending because CI has no XPU

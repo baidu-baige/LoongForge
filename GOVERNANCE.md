@@ -8,10 +8,14 @@ decision-making, releases, and maintenance expectations.
 
 ### Maintainers
 
-The `@baidu-baige/loongforge-team` GitHub team maintains LoongForge and is the
-default reviewer in [CODEOWNERS](.github/CODEOWNERS). Maintainers review and
-merge changes, maintain CI, triage issues and security reports, and coordinate
-releases.
+The named core maintainers are [@nullnonenilNULL](https://github.com/nullnonenilNULL)
+and [@Zachary-wW](https://github.com/Zachary-wW). The
+`@baidu-baige/loongforge-team` GitHub team is the broader repository review
+group, and the core maintainers, team, and current owners are listed together
+in [CODEOWNERS](.github/CODEOWNERS).
+
+Maintainers review and merge changes, maintain CI, triage issues and security
+reports, and coordinate releases.
 
 ### Appointment and retirement
 
@@ -43,8 +47,10 @@ documented in the [workflow guide](.github/workflows/README.md#releases).
 Maintainers review issues and pull requests, update supported-model and
 compatibility documentation, and publish fixes through the release process.
 LoongForge commits to at least 12 months of active maintenance and to validating
-its Python package against the latest patch release in each of the two newest
-stable PyTorch release series.
+the CPU compatibility of its Python package against the latest patch release in
+each of the two newest stable PyTorch release series, for the Python versions
+supported by each PyTorch release. Full accelerator and training validation is
+provided separately by the documented Docker and hardware CI paths.
 
 ## Hardware validation status
 
