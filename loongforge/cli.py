@@ -29,8 +29,9 @@ def main():
         parser = argparse.ArgumentParser(
             prog="LoongForge",
             description="Launch Megatron-based LLM, VLM, and diffusion training.",
-            epilog="Training requires a configured GPU or XPU environment. "
-            "For all training options, run python loongforge/train.py --help in that environment.",
+            epilog="The PyPI package provides the core Python code, CLI, and model configuration defaults. "
+            "Turnkey training requires the documented Docker image or source environment with the pinned "
+            "accelerator runtime. For all training options, run python loongforge/train.py --help there.",
         )
         parser.add_argument("--version", action="store_true", help="show the installed version and exit")
         parser.add_argument(

@@ -28,6 +28,25 @@ jobs:
 
       - run: twine check dist/*
 
+      - name: Verify wheel configuration data
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+
+          wheel = next(Path("dist").glob("*.whl"))
+          with ZipFile(wheel) as archive:
+              names = archive.namelist()
+          required = {
+              "loongforge/_configs/data/sft_dataset_config.yaml",
+              "loongforge/_configs/models/qwen3",
+          }
+          for path in required:
+              assert any(name == path or name.startswith(path + "/") for name in names), path
+          PY
+
       - name: Install wheel without optional dependencies
         shell: bash
         run: |
@@ -41,6 +60,7 @@ jobs:
           smoke_dir="$(mktemp -d)"
           cd "$smoke_dir"
           python -c "import loongforge; print(loongforge.__file__)"
+          python -c "from loongforge.config_paths import resolve_config; assert list(resolve_config('configs/models/qwen3').glob('*.yaml'))"
           LoongForge --help
           version="$(python -c 'from importlib.metadata import version; print(version("LoongForge"))')"
           test "$(LoongForge --version)" = "LoongForge $version"

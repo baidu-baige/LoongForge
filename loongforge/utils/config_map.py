@@ -3,7 +3,7 @@
 
 """config mapping"""
 
-from pathlib import Path
+from loongforge.config_paths import resolve_config
 
 
 # registry for model config
@@ -469,9 +469,6 @@ def get_config_from_model_name(model_name: str):
         )
     entry = MODEL_CONFIG_REGISTRY[name]
 
-    current_file = Path(__file__).resolve()
-    project_root = current_file.parent.parent.parent   # LoongForge root dir
-
-    abs_config_path = str(project_root / entry["config_path"])
+    abs_config_path = str(resolve_config(entry["config_path"]))
 
     return abs_config_path, entry["config_name"]
