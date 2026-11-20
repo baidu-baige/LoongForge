@@ -19,6 +19,7 @@ concurrency:
 
 env:
   PYTHON_VERSION: '3.12'
+  PYTHON_VERSIONS: '3.10,3.11,3.12'
   TORCH_CPU_INDEX: https://download.pytorch.org/whl/cpu
 
 jobs:
@@ -43,6 +44,7 @@ jobs:
       - id: select
         name: Select stable CPU releases
         env:
+          PYTHON_VERSIONS: ${{ env.PYTHON_VERSIONS }}
           TORCH_VERSIONS: ${{ inputs.torch-versions }}
         shell: bash
         run: |
@@ -52,7 +54,7 @@ jobs:
             | python .github/scripts/select_pytorch_versions.py
 
   compatibility:
-    name: PyTorch ${{ matrix.torch-version }}
+    name: Python ${{ matrix.python-version }} / PyTorch ${{ matrix.torch-version }}
     needs: versions
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -66,7 +68,7 @@ jobs:
 
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: ${{ matrix.python-version }}
           cache: pip
 
       - name: Install PyTorch CPU wheel

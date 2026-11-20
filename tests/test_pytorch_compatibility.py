@@ -6,7 +6,8 @@
 from importlib import metadata
 import os
 from pathlib import Path
-import shutil
+import subprocess
+import sys
 
 import pytest
 import torch
@@ -29,7 +30,9 @@ def test_installed_package() -> None:
         "loongforge/__init__.py"
     ).resolve()
     assert distribution.entry_points.select(group="console_scripts", name="LoongForge")
-    assert shutil.which("LoongForge") is not None
+    command = Path(sys.executable).with_name("LoongForge")
+    assert command.is_file()
+    subprocess.run([command, "--help"], check=True)
     print(f"LoongForge {distribution.version} imported from {loongforge.__file__}")
 
 

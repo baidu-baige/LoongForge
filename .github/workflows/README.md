@@ -33,10 +33,13 @@ dispatch inputs.
 ## PyTorch Compatibility
 
 The weekly workflow selects the latest patch in each of the two newest stable
-PyTorch series with compatible wheels in PyTorch's CPU index for Ubuntu x86-64
-and Python 3.12. Use `torch-versions` on manual runs to reproduce a specific
-version or pair. Each matrix job logs the installed Python and PyTorch versions,
-installs the LoongForge wheel, and tests it outside the source tree.
+PyTorch series with compatible wheels in PyTorch's CPU index for Ubuntu x86-64.
+It then tests each selected release on every configured Python version accepted
+by that PyTorch release. The default matrix covers Python 3.10-3.12. Use
+`torch-versions` on manual runs to reproduce a specific version or pair. Each
+matrix job logs the installed Python and PyTorch versions, installs the
+LoongForge wheel, executes the installed CLI, and tests it outside the source
+tree.
 
 The checks cover package import, CLI installation, and DreamZero's flow
 scheduler, action encoder, and Wan text encoder with synthetic inputs. Use the
