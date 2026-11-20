@@ -35,6 +35,8 @@ from megatron.core.transformer.utils import (
 )
 from torch import nn
 
+from loongforge.models.common.chunkpipe_state_cache import ChunkPipeStateCacheMixin
+
 from .kimi_k3_ops import RMSNorm, kda, sum_grads_across_tp
 
 
@@ -79,7 +81,7 @@ class KimiK3ShortConvolution(ShortConvolution):
         )
 
 
-class KimiK3Attention(MegatronModule):
+class KimiK3Attention(ChunkPipeStateCacheMixin, MegatronModule):
     """Select KDA or Kimi's no-RoPE MLA by global layer number."""
 
     def __init__(
@@ -114,6 +116,8 @@ class KimiK3Attention(MegatronModule):
         self.is_kda = layer_number in config.kimi_kda_layers
         if self.is_kda and self.cp_size > 1:
             raise ValueError("Kimi K3 KDA context parallelism is not supported yet")
+        if config.enable_chunkpipe:
+            self.setup_chunkpipe_cache_config()
         if self.is_kda:
             self._init_kda(config)
         else:
@@ -213,6 +217,26 @@ class KimiK3Attention(MegatronModule):
         sum_grads_across_tp(self.o_norm)
         self.o_proj = self._row_linear(self.projection_size, hidden_size)
         self.gate_lower_bound = config.kimi_kda_gate_lower_bound
+        # KDA has no TE dot-product attention; the chunkpipe scheduler's
+        # cache helpers do `getattr(self_attention.core_attention, 'indexer', None)`,
+        # so expose the attribute as None to keep that no-op path working.
+        self.core_attention = None
+
+        if config.enable_chunkpipe:
+            # Recurrent boundary state is fp32 (chunk_kda asserts it): [b, HV, K, V].
+            self.register_state_cache(
+                "kda_state",
+                (config.micro_batch_size, self.local_num_heads, self.head_dim, self.head_dim),
+                torch.float32,
+            )
+            # Short-convolution boundary states: [b, local_projection_size, kernel_size].
+            conv_state_shape = (
+                config.micro_batch_size,
+                self.local_projection_size,
+                config.kimi_linear_conv_kernel_size,
+            )
+            for name in ("q_conv_state", "k_conv_state", "v_conv_state"):
+                self.register_state_cache(name, conv_state_shape, dtype)
 
     def _init_mla(self, config) -> None:
         hidden_size = config.hidden_size
@@ -277,6 +301,176 @@ class KimiK3Attention(MegatronModule):
             pg_collection=self.pg_collection,
         )
 
+        if config.enable_chunkpipe:
+            if config.sft_chunkpipe_mode:
+                raise NotImplementedError(
+                    "K3 MLA chunk KV cache currently supports pretrain only"
+                )
+            self.init_chunk_key_value_cache_mla()
+
+    # ------------------------------------------------------------------
+    # Chunk KV cache (MLA, pretrain): mirrors multi_latent_attention.py,
+    # except K3's kv_a_proj_with_mqa is a duplicated linear, so the compressed
+    # KV and key-extra caches keep the full sequence on every rank (no // tp_size).
+    # ------------------------------------------------------------------
+    def init_chunk_key_value_cache_mla(self) -> None:
+        device = next(self.parameters()).device
+        dtype = next(self.parameters()).dtype
+        slot_size = self.config.max_chunk_size or self.config.chunksize
+        total_cache_tokens = self.kv_cache_chunk_size * slot_size
+        self.kv_compressed_cache = torch.zeros(
+            (total_cache_tokens, self.config.micro_batch_size, self.kv_lora_rank),
+            device=device,
+            dtype=dtype,
+        )
+        self.key_extra_cache = torch.zeros(
+            (total_cache_tokens, self.config.micro_batch_size, self.qk_extra_head_dim),
+            device=device,
+            dtype=dtype,
+        )
+        self.kv_compressed_cache_grad = {}
+        self.key_extra_cache_grad = {}
+
+    def append_chunk_key_value_cache_mla(self, normed_kv_compressed, key_extra) -> None:
+        """Cache a chunk of compressed KV and key-extra for MLA."""
+        if not self.config.enable_chunkpipe:
+            raise RuntimeError("Chunk key-value cache operations require chunkpipe to be enabled.")
+        # Backward recompute reuses forward-stored values; last chunk has no successor.
+        if not self.config.chunkpipe_forward:
+            return
+        if (self.config.chunkpipe_forward_microbatch + 1) % self.num_chunks_per_seq == 0:
+            return
+        if not self.empty_chunk_indices:
+            raise RuntimeError("No available cache chunks. Consider increasing cache size.")
+
+        chunk_id = self.empty_chunk_indices.pop(0)
+        self.micro_batch_to_cache_chunk_map[self.config.chunkpipe_forward_microbatch] = chunk_id
+
+        slot_size = self.config.max_chunk_size or self.config.chunksize
+        kv_len = normed_kv_compressed.shape[0]
+        indices = torch.arange(kv_len, device=normed_kv_compressed.device) + (chunk_id * slot_size)
+        if self.is_enable_grad_chunkpipe():
+            self.kv_compressed_cache[indices] = normed_kv_compressed.clone().detach()
+            self.key_extra_cache[indices] = key_extra.clone().detach()
+        else:
+            self.kv_compressed_cache[indices] = normed_kv_compressed
+            self.key_extra_cache[indices] = key_extra
+
+    def recover_key_value_up_proj_tensors(self, normed_kv_compressed, key_extra):
+        """Recover full key/value from the compressed KV latent + key-extra."""
+        key_value = _linear(self.kv_b_proj, normed_kv_compressed)
+        key_value = key_value.view(
+            *key_value.shape[:-1],
+            self.local_num_heads,
+            self.qk_nope_head_dim + self.v_head_dim,
+        )
+        key_nope, value = torch.split(
+            key_value, [self.qk_nope_head_dim, self.v_head_dim], dim=-1
+        )
+        if self.padding_v_head_dim:
+            value = F.pad(value, [0, self.v_channels - self.v_head_dim])
+        value = value.contiguous()
+        key_extra = copy_to_tensor_model_parallel_region(key_extra, group=self.tp_group)
+        key_extra = key_extra.unsqueeze(-2).expand(*key_nope.shape[:-1], -1)
+        key = torch.cat((key_nope, key_extra), dim=-1).contiguous()
+        return key, value
+
+    def concat_cached_chunk_key_value_mla(self, curr_key, curr_value):
+        """Concatenate cached previous chunks with the current chunk's key/value."""
+        if not self.config.enable_chunkpipe:
+            raise RuntimeError("Chunk concatenation requires chunkpipe to be enabled.")
+
+        is_forward = self.config.chunkpipe_forward
+        microbatch_idx = (
+            self.config.chunkpipe_forward_microbatch
+            if is_forward
+            else self.config.chunkpipe_backward_microbatch
+        )
+        current_chunk_idx = microbatch_idx % self.num_chunks_per_seq
+        start_microbatch_idx = microbatch_idx - current_chunk_idx
+
+        cu = self.config.cu_chunks
+        chunk_sizes = self.config.chunk_sizes
+        slot_size = self.config.max_chunk_size or self.config.chunksize
+        total_tokens = cu[current_chunk_idx + 1]
+
+        concatenated_key = torch.zeros(
+            (total_tokens, self.config.micro_batch_size, self.local_num_heads, self.q_head_dim),
+            device=self.kv_compressed_cache.device,
+            dtype=self.kv_compressed_cache.dtype,
+        )
+        concatenated_value = torch.zeros(
+            (total_tokens, self.config.micro_batch_size, self.local_num_heads, self.v_channels),
+            device=self.kv_compressed_cache.device,
+            dtype=self.kv_compressed_cache.dtype,
+        )
+
+        def kv_hook_fn(chunk_index):
+            def hook_fn(grad):
+                grads = self.kv_compressed_cache_grad
+                if chunk_index not in grads:
+                    grads[chunk_index] = grad
+                else:
+                    grads[chunk_index] = grads[chunk_index] + grad
+                return grad
+            return hook_fn
+
+        def key_extra_hook_fn(chunk_index):
+            def hook_fn(grad):
+                grads = self.key_extra_cache_grad
+                if chunk_index not in grads:
+                    grads[chunk_index] = grad
+                else:
+                    grads[chunk_index] = grads[chunk_index] + grad
+                return grad
+            return hook_fn
+
+        current_pos = 0
+        for prev_chunk_idx in range(current_chunk_idx):
+            cache_chunk_idx = self.micro_batch_to_cache_chunk_map[
+                start_microbatch_idx + prev_chunk_idx
+            ]
+            prev_len = chunk_sizes[prev_chunk_idx]
+            indices = torch.arange(prev_len, device=self.kv_compressed_cache.device) + (
+                cache_chunk_idx * slot_size
+            )
+            cached_kv_compressed = self.kv_compressed_cache[indices]
+            cached_key_extra = self.key_extra_cache[indices]
+
+            if self.is_enable_grad_chunkpipe():
+                cached_kv_compressed.requires_grad = True
+                cached_key_extra.requires_grad = True
+                cached_kv_compressed.register_hook(kv_hook_fn(prev_chunk_idx))
+                cached_key_extra.register_hook(key_extra_hook_fn(prev_chunk_idx))
+
+            cached_key, cached_value = self.recover_key_value_up_proj_tensors(
+                cached_kv_compressed, cached_key_extra
+            )
+            concatenated_key[current_pos : current_pos + prev_len] = cached_key
+            concatenated_value[current_pos : current_pos + prev_len] = cached_value
+            current_pos += prev_len
+
+        curr_len = curr_key.shape[0]
+        concatenated_key[current_pos : current_pos + curr_len] = curr_key
+        concatenated_value[current_pos : current_pos + curr_len] = curr_value
+        return concatenated_key, concatenated_value
+
+    def _make_mla_kv_consume_hook(self):
+        def hook_fn(grad):
+            chunks_in_sequence = self.config.chunkpipe_backward_microbatch % self.num_chunks_per_seq
+            if chunks_in_sequence == self.num_chunks_per_seq - 1:
+                return grad
+            return grad + self.kv_compressed_cache_grad.pop(chunks_in_sequence)
+        return hook_fn
+
+    def _make_mla_key_extra_consume_hook(self):
+        def hook_fn(grad):
+            chunks_in_sequence = self.config.chunkpipe_backward_microbatch % self.num_chunks_per_seq
+            if chunks_in_sequence == self.num_chunks_per_seq - 1:
+                return grad
+            return grad + self.key_extra_cache_grad.pop(chunks_in_sequence)
+        return hook_fn
+
     def sharded_state_dict(
         self,
         prefix: str = "",
@@ -303,6 +497,20 @@ class KimiK3Attention(MegatronModule):
         )
         return sharded_state_dict
 
+    def _run_kda_conv(self, name, module, x, cu_seqlens, ties) -> torch.Tensor:
+        """Run a KDA short convolution, carrying its boundary state across chunks."""
+        use_chunkpipe = self.config.enable_chunkpipe
+        kwargs = {"output_final_state": use_chunkpipe, "cu_seqlens": cu_seqlens}
+        if use_chunkpipe:
+            kwargs["cache"] = self.load_prev_state(name)
+        y, final = module(x=x, **kwargs)
+        if use_chunkpipe:
+            self.store_current_state(name, final)
+            tie = self.inject_state_grad(name, final)
+            if tie is not None:
+                ties.append(tie)
+        return y
+
     def _forward_kda(
         self,
         hidden_states: torch.Tensor,
@@ -315,10 +523,16 @@ class KimiK3Attention(MegatronModule):
         if packed_seq_params is not None and cu_seqlens is None:
             raise ValueError("Packed KDA input requires cu_seqlens_q")
 
-        conv_kwargs = {"output_final_state": False, "cu_seqlens": cu_seqlens}
-        q, _ = self.q_conv1d(x=_linear(self.q_proj, x), **conv_kwargs)
-        k, _ = self.k_conv1d(x=_linear(self.k_proj, x), **conv_kwargs)
-        v, _ = self.v_conv1d(x=_linear(self.v_proj, x), **conv_kwargs)
+        ties: list[torch.Tensor] = []
+        q = self._run_kda_conv(
+            "q_conv_state", self.q_conv1d, _linear(self.q_proj, x), cu_seqlens, ties
+        )
+        k = self._run_kda_conv(
+            "k_conv_state", self.k_conv1d, _linear(self.k_proj, x), cu_seqlens, ties
+        )
+        v = self._run_kda_conv(
+            "v_conv_state", self.v_conv1d, _linear(self.v_proj, x), cu_seqlens, ties
+        )
         q = rearrange(q, "b s (h d) -> b s h d", h=self.local_num_heads)
         k = rearrange(k, "b s (h d) -> b s h d", h=self.local_num_heads)
         v = rearrange(v, "b s (h d) -> b s h d", h=self.local_num_heads)
@@ -328,7 +542,14 @@ class KimiK3Attention(MegatronModule):
             h=self.local_num_heads,
         )
         beta = _linear(self.b_proj, x).float().sigmoid()
-        output = kda(
+
+        kda_kwargs = {
+            "output_final_state": self.config.enable_chunkpipe,
+            "cu_seqlens": cu_seqlens,
+        }
+        if self.config.enable_chunkpipe:
+            kda_kwargs["initial_state"] = self.load_prev_state("kda_state")
+        kda_result = kda(
             q,
             k,
             v,
@@ -337,8 +558,17 @@ class KimiK3Attention(MegatronModule):
             self.A_log,
             self.dt_bias,
             self.gate_lower_bound,
-            cu_seqlens=cu_seqlens,
+            **kda_kwargs,
         )
+        if self.config.enable_chunkpipe:
+            output, kda_final = kda_result
+            self.store_current_state("kda_state", kda_final)
+            tie = self.inject_state_grad("kda_state", kda_final)
+            if tie is not None:
+                ties.append(tie)
+        else:
+            output = kda_result
+
         gate = rearrange(
             _linear(self.g_proj, x),
             "b s (h d) -> b s h d",
@@ -348,7 +578,10 @@ class KimiK3Attention(MegatronModule):
             output.reshape(-1, self.head_dim), gate.reshape(-1, self.head_dim)
         )
         output = output.view(*gate.shape).flatten(-2)
-        return _linear(self.o_proj, output.to(hidden_states.dtype)).transpose(0, 1)
+        output = _linear(self.o_proj, output.to(hidden_states.dtype)).transpose(0, 1)
+        for tie in ties:
+            output = output + tie.to(output.dtype)
+        return output
 
     def _forward_mla(
         self,
@@ -365,23 +598,27 @@ class KimiK3Attention(MegatronModule):
             [self.kv_lora_rank, self.qk_extra_head_dim],
             dim=-1,
         )
-        key_value = _linear(self.kv_b_proj, self.kv_a_layernorm(kv_latent))
-        key_value = key_value.view(
-            *key_value.shape[:-1],
-            self.local_num_heads,
-            self.qk_nope_head_dim + self.v_head_dim,
+        normed_kv_compressed = self.kv_a_layernorm(kv_latent)
+
+        if self.config.enable_chunkpipe:
+            # The current chunk's compressed KV / key-extra feed its own key/value
+            # (so they are in the loss graph).  Register consume hooks that absorb
+            # the successor chunk's cached gradient, then store this chunk's values.
+            if self.is_enable_grad_chunkpipe():
+                normed_kv_compressed.register_hook(self._make_mla_kv_consume_hook())
+                key_extra.register_hook(self._make_mla_key_extra_consume_hook())
+            self.append_chunk_key_value_cache_mla(normed_kv_compressed, key_extra)
+
+        key, value = self.recover_key_value_up_proj_tensors(
+            normed_kv_compressed, key_extra
         )
-        key_nope, value = torch.split(
-            key_value,
-            [self.qk_nope_head_dim, self.v_head_dim],
-            dim=-1,
-        )
-        if self.padding_v_head_dim:
-            value = F.pad(value, [0, self.v_channels - self.v_head_dim])
-        value = value.contiguous()
-        key_extra = copy_to_tensor_model_parallel_region(key_extra, group=self.tp_group)
-        key_extra = key_extra.unsqueeze(-2).expand(*key_nope.shape[:-1], -1)
-        key = torch.cat((key_nope, key_extra), dim=-1)
+
+        attn_mask_type = AttnMaskType.causal
+        if self.config.enable_chunkpipe:
+            key, value = self.concat_cached_chunk_key_value_mla(key, value)
+            # Decoder-with-cache semantics: the kernel applies the causal diagonal
+            # at the current chunk's offset (inferred from s_kv - s_q).
+            attn_mask_type = AttnMaskType.causal_bottom_right
 
         is_thd = packed_seq_params is not None and packed_seq_params.qkv_format == "thd"
         if is_thd:
@@ -394,7 +631,7 @@ class KimiK3Attention(MegatronModule):
             value,
             None,
             packed_seq_params=packed_seq_params,
-            attn_mask_type=AttnMaskType.causal,
+            attn_mask_type=attn_mask_type,
         )
         if is_thd:
             output = output.reshape(output.size(0), 1, -1)
