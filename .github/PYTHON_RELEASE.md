@@ -3,8 +3,13 @@
 Use the **Python Package Release** workflow to build a wheel and source
 distribution, check their metadata, and test installation in separate clean
 environments. The `check` destination stops after creating the build artifact.
-Hardware runtime setup and validation follow the installation guides for each
-backend. The Docker image keeps its own release workflow.
+
+The PyPI package is the installable Python library/CLI boundary. It includes
+the model and data configuration defaults required by its documented entry
+points. Docker remains the supported turnkey training environment because it
+provides the pinned accelerator runtime, compiler stack, Megatron backend, and
+hardware-specific operators. A base PyPI install does not install a CUDA or
+Kunlun driver or claim that every GPU/XPU extra is a standalone training image.
 
 ## One-time setup
 
@@ -24,7 +29,10 @@ backend. The Docker image keeps its own release workflow.
    registry artifact links back to this repository and can be installed in a
    clean environment. Use the selected release candidate for backend testing
    and record those CI runs in the release notes.
-3. Dispatch on the stable tag with `pypi` and approve the deployment after
-   reviewing the build and validation results. Install the exact published
-   version in a clean environment outside the source tree, run `pip check`,
-   `import loongforge`, and `LoongForge --help`, and verify the registry links.
+3. Dispatch on the stable tag with `pypi`, provide the TestPyPI build run ID,
+   and approve the deployment after reviewing that run and its validation
+   results. PyPI must receive the same uploaded artifact from that run rather
+   than rebuilding it. Install the exact published version in a clean
+   environment outside the source tree, run `pip check`, `import loongforge`,
+   execute `LoongForge --help`, resolve a packaged model configuration, and
+   verify the registry links.
