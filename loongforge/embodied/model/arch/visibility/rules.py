@@ -42,7 +42,8 @@ _BLOCK_MODES = ("full", "diagonal", "none")
 
 def _always(q: LabelView, k: LabelView) -> Tensor:
     """Degenerate value used when a label is absent: all True."""
-    return torch.ones((q.layout.total, k.layout.total), dtype=torch.bool)
+    return torch.ones((q.layout.total, k.layout.total), dtype=torch.bool,
+                      device=q.positions().device)
 
 
 def _stream_code(view: LabelView, name: str, *, rule: str) -> int:
@@ -207,17 +208,12 @@ def prefix_only(n: int) -> Visibility:
     return rule
 
 
-def noise_gate(threshold: int) -> Visibility:
-    """Reads noise_level. Sees only keys whose noise step is <= ``threshold``.
+def noise_gate(threshold: int | float) -> Visibility:
+    """Read noise_level; allow keys whose noise coordinate is <= threshold.
 
-    Today's code cannot do this and VPP2 needs it: its clean-conditioning can
-    currently only return a ``[B]`` selection vector, which forces a mask with a
-    batch dimension (violating INV-1). The level is a **discrete step**, not a
-    continuous sigma; a continuous value would make the structural channel
-    per-sample.
-
-    This rule is the subject of the 12/04 gate (visibility depending on
-    ``noise_ids`` is the one hard constraint there).
+    The caller defines the coordinate (noise bucket, timestep or sigma) and
+    must use the same units for threshold and labels. Static [L] labels can
+    be compiled directly; batch [B, L] values must be bound to AttentionPlan.
 
     The test looks at the **key side** only: "who can be seen" is a property of
     the key. Writing ``q <= threshold`` would instead mean "which query rows get
@@ -236,9 +232,9 @@ def noise_gate(threshold: int) -> Visibility:
         if not k.has("noise_level"):
             return _always(q, k)
         gate = k.get("noise_level") <= threshold
-        return gate.expand(q.layout.total, k.layout.total)
+        return gate & _always(q, k)
 
-    return rule
+    return Visibility(rule.predicate, rule.expr, frozenset({"noise_level"}))
 
 
 def same_sample() -> Visibility:
@@ -301,23 +297,20 @@ def history(policy: str) -> Visibility:
         if policy == "all":
             return _always(q, k)
         if policy == "none":
-            return (~is_history).expand(q.layout.total, k.layout.total)
+            return (~is_history) & _always(q, k)
         if not k.has("frame"):
             raise KeyError(
                 "history('last_only') also reads the frame label, but this "
                 "layout only has role; "
                 f"existing labels are {sorted(k.layout.labels)}"
             )
-        # Taking a max over the **labels** is a construction-time scalar,
-        # not a reduction operator over [Q, K]
-        frames = k.layout.labels_of("frame")
-        roles = k.layout.labels_of("role")
-        hist_frames = frames[roles == 0]
-        if hist_frames.numel() == 0:
-            return _always(q, k)
-        last = int(hist_frames.max())
+        # Reduce the label axis, not the [Q,K] edge matrix. This works for
+        # static labels and for independent runtime histories in each batch.
+        frames = k.get("frame")
+        last = torch.where(is_history, frames, torch.full_like(frames, -1)).amax(
+            dim=-1, keepdim=True)
         keep = (~is_history) | (k.get("frame") == last)
-        return keep.expand(q.layout.total, k.layout.total)
+        return keep & _always(q, k)
 
     return rule
 

@@ -25,12 +25,19 @@ in this table that changes the tree shape, which is why it comes first.
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Iterable, Mapping
-from typing import Any
+from os import PathLike
+from typing import TYPE_CHECKING, Any
+
+import torch
+
+if TYPE_CHECKING:
+    from .builder import WorldModel
 
 __all__ = ["PROPRIO_PAYLOAD_KEY", "RenameRules", "VPP2_RENAME_RULES",
-           "remap_state_dict", "vpp2_to_arch"]
+           "load_vpp2_initializers", "remap_state_dict", "vpp2_to_arch"]
 
 RenameRules = tuple[tuple[str, str], ...]
 
@@ -225,3 +232,151 @@ def vpp2_to_arch(payload: Mapping[str, Any], *,
         for name, value in encoder.items():
             out[f"condition_encoders.proprio.{name}"] = value
     return out
+
+
+# MASTER ActionDiT.ACTION_BACKBONE_SKIP_PREFIXES. Video-token paths are
+# disabled in VPP2; they are NOT permission to leave arbitrary core weights
+# random, or to discard unexpected tensors from an initializer.
+_ACTION_BACKBONE_SKIP_PREFIXES = (
+    "action_encoder.", "head.", "video_kv_projections.",
+    "video_k_norms.", "video_token_encoder.",
+)
+_VPP2_RANDOM_KEYS = frozenset({
+    "blocks.action.action_encoder.weight", "blocks.action.action_encoder.bias",
+    "heads.action_flow.head.weight", "heads.action_flow.head.bias",
+    "condition_encoders.proprio.weight", "condition_encoders.proprio.bias",
+})
+
+
+def _initializer_state(path: str | PathLike[str], formats: set[str],
+                       field: str) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    payload = torch.load(path, map_location="cpu", mmap=True, weights_only=True)
+    if not isinstance(payload, Mapping) or payload.get("format") not in formats:
+        raise ValueError(f"Invalid VPP2 {field} initializer format at {path!s}; "
+                         f"expected {sorted(formats)}")
+    state = payload.get(field)
+    if not isinstance(state, Mapping) or not state:
+        raise ValueError(f"VPP2 initializer at {path!s} has no nonempty {field}")
+    for key, value in state.items():
+        if not isinstance(key, str) or not isinstance(value, torch.Tensor):
+            raise TypeError(f"VPP2 {field} entry {key!r} must be a named tensor")
+        if value.is_meta:
+            raise ValueError(f"VPP2 {field} tensor {key!r} has no checkpoint storage")
+    return payload, state
+
+
+def _strict_initializer_check(label: str, mapped: Mapping[str, torch.Tensor],
+                              expected: Mapping[str, torch.Tensor]) -> None:
+    missing = sorted(expected.keys() - mapped.keys())
+    unexpected = sorted(mapped.keys() - expected.keys())
+    mismatches = [
+        f"{key}: source={tuple(mapped[key].shape)} target={tuple(expected[key].shape)}"
+        for key in sorted(mapped.keys() & expected.keys())
+        if mapped[key].shape != expected[key].shape
+    ]
+    if missing or unexpected or mismatches:
+        raise RuntimeError(
+            f"Strict VPP2 {label} check failed: missing={missing}, "
+            f"unexpected={unexpected}, shape_mismatches={mismatches}")
+
+
+def load_vpp2_initializers(
+    core: WorldModel, video_path: str | PathLike[str],
+    action_path: str | PathLike[str],
+) -> dict[str, Any]:
+    """Validate and load the split Wan2.1 VPP2 initializers into a WorldModel.
+
+    Video coverage includes its head and every condition projector. Action
+    coverage excludes ONLY MASTER's random action entry/output projections.
+    Proprio is also kept as constructed, exactly as in MASTER's split load.
+    The action backbone metadata (not dataset-dependent action_dim) must match
+    the actual core. Counts are derived from that core, not hardcoded to 40
+    layers: the production files have 1303 video and 1010 backbone tensors.
+
+    Both files use CPU ``torch.load(mmap=True, weights_only=True)``; all key,
+    shape and policy checks finish before any parameter is modified. An
+    entirely meta core is validation-only, remains meta and consumes no weight
+    storage. A materialized core is copied into with ``strict=True``, preserving
+    parameter identity, device, dtype and the random tensors. Mixed meta/real
+    parameters are rejected. Callers must initialize random tensors normally
+    before loading (``to_empty`` alone does not initialize them).
+
+    Returns a report with video/action-backbone tensor counts, sorted
+    ``random_keys``, and ``validation_only``. No merged tensor allocation,
+    checkpoint export, model materialization, or auxiliary tower load occurs.
+    """
+    from .builder import WorldModel
+
+    if not isinstance(core, WorldModel) or core.spec.model_type != "vpp2":
+        raise TypeError("load_vpp2_initializers expects an actual VPP2 WorldModel")
+    parameters = tuple(core.parameters())
+    meta_flags = {parameter.is_meta for parameter in parameters}
+    if len(meta_flags) != 1:
+        raise ValueError("VPP2 initializer core must be entirely meta or materialized")
+    validation_only = meta_flags == {True}
+    target = core.state_dict()
+    video_expected = {
+        key: value for key, value in target.items()
+        if key.startswith(("blocks.video.", "heads.video_flow."))
+    }
+    action_expected = {
+        key: value for key, value in target.items()
+        if key.startswith(("blocks.action.", "heads.action_flow."))
+        and key not in _VPP2_RANDOM_KEYS
+    }
+    random_keys = _VPP2_RANDOM_KEYS & target.keys()
+    unexplained = target.keys() - video_expected.keys() - action_expected.keys() - random_keys
+    if unexplained:
+        raise RuntimeError(f"VPP2 core has unclassified parameters: {sorted(unexplained)}")
+
+    _, video = _initializer_state(video_path, {"wan21_video_v1"}, "dit")
+    action_payload, action = _initializer_state(
+        action_path, {"wan21_action_v1", "vpp2_wan21_action_v1"},
+        "backbone_state_dict")
+    stream = core.blocks["action"]
+    spec = stream.spec
+    expected_meta = {
+        "hidden_dim": spec.residual_width, "ffn_dim": spec.mlp_width,
+        "num_layers": spec.num_layers, "num_heads": spec.num_heads,
+        "attn_head_dim": spec.head_dim,
+        "text_dim": core.spec.condition("text").width,
+        "freq_dim": spec.timestep_embed_width,
+        "eps": stream.blocks[0].norm1.eps,
+    }
+    meta = action_payload.get("meta")
+    if not isinstance(meta, Mapping):
+        raise ValueError("VPP2 action initializer is missing its meta dictionary")
+    for key, expected in expected_meta.items():
+        got = meta.get(key)
+        if (not isinstance(got, (int, float)) or isinstance(got, bool)
+                or not math.isfinite(got)
+                or (abs(got - expected) > 1e-12 if key == "eps" else got != expected)):
+            raise ValueError(f"Action initializer meta.{key}={got!r} "
+                             f"does not match core value {expected!r}")
+    policy = action_payload.get("policy")
+    if (not isinstance(policy, Mapping)
+            or policy.get("projection_initialization") != "random"
+            or policy.get("skip_prefixes") != list(_ACTION_BACKBONE_SKIP_PREFIXES)):
+        raise ValueError("VPP2 action initializer policy must declare MASTER's "
+                         "skip_prefixes and projection_initialization='random'")
+
+    video_mapped = remap_state_dict(
+        {f"mixtures.video.{key}": value for key, value in video.items()},
+        VPP2_RENAME_RULES)
+    action_mapped = remap_state_dict(
+        {f"mixtures.action.{key}": value for key, value in action.items()},
+        VPP2_RENAME_RULES)
+    _strict_initializer_check("video", video_mapped, video_expected)
+    _strict_initializer_check("action backbone", action_mapped, action_expected)
+    if not validation_only:
+        # Shallow dictionary only: checkpoint values remain mmap-backed until
+        # PyTorch copies them into the existing destination parameters.
+        target.update(video_mapped)
+        target.update(action_mapped)
+        core.load_state_dict(target, strict=True)
+    return {
+        "video_tensors": len(video_mapped),
+        "action_backbone_tensors": len(action_mapped),
+        "random_keys": tuple(sorted(random_keys)),
+        "validation_only": validation_only,
+    }

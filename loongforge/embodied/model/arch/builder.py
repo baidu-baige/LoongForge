@@ -174,6 +174,10 @@ def join_stream_visibility(declared: Mapping[str, Visibility]
     Returns:
         The joint visibility, or None when nothing was declared.
     """
+    from .visibility.declarative import VisibilityTopology
+
+    if isinstance(declared, VisibilityTopology):
+        return declared.as_visibility()
     if not declared:
         return None
     joint: Visibility | None = None
@@ -204,6 +208,8 @@ class DiffusionRuntime:
     noised: dict[str, Tensor]
     noise: dict[str, Tensor]
     targets: dict[str, Tensor]
+    attention_key_valid: Tensor | None = None
+    attention_labels: Mapping[str, Tensor] | None = None
 
     def require(self, stream: str) -> tuple[Tensor, Tensor, Tensor]:
         """Return (x_t, target, timestep) for one stream.
@@ -279,9 +285,11 @@ class WorldModel(nn.Module):
         # 2. Materialize structural visibility. One plan per attention group
         #    (not per stream): joint attention shares one [total, total] mask
         #    across the whole group.
+        from .visibility.declarative import VisibilityTopology
+
         self.plans: dict[int, AttentionPlan] = {
-            index: AttentionPlan.from_visibility(
-                self._group_visibility(group), layout)
+            index: spec.visibility.compile(layout) if isinstance(spec.visibility, VisibilityTopology)
+            else AttentionPlan.from_visibility(self._group_visibility(group), layout)
             for index, group in enumerate(spec.attention_groups)
         }
 
@@ -472,7 +480,9 @@ class WorldModel(nn.Module):
             noise[stream.name] = eps
             targets[stream.name] = schedule.target(clean, eps, shaped)
         return DiffusionRuntime(timesteps=dict(timesteps), noised=noised,
-                                noise=noise, targets=targets)
+                                noise=noise, targets=targets,
+                                attention_key_valid=batch.get("attention_key_valid"),
+                                attention_labels=batch.get("attention_labels"))
 
     def stream_inputs(self, runtime: DiffusionRuntime) -> dict[str, Tensor]:
         """Extension point 4, step 4. Picks the **raw tensor** each stream feeds.
@@ -519,10 +529,15 @@ class WorldModel(nn.Module):
         index = self.spec.attention_groups.index(group)
         captures = {name: layers for name, layers in self.captures.items()
                     if name in group.stream_names}
+        plan = self.plans[index]
+        # The training recipe owns gate coordinates. A diffusion timestep is
+        # not implicitly a key noise label or a clean-cache routing decision.
+        labels = runtime.attention_labels if plan.visibility is not None else None
+        plan = plan.bind(labels=labels, key_valid=runtime.attention_key_valid)
         return self.engine.run(
             group, {name: inputs[name] for name in group.stream_names},
             {name: self.blocks[name] for name in group.stream_names},
-            self.plans[index], self.layout, conditions=conditions,
+            plan, self.layout, conditions=conditions,
             timesteps={name: runtime.timesteps.get(name)
                        for name in group.stream_names},
             captures=captures)

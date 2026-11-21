@@ -20,13 +20,17 @@ Two hard conventions carry the properties of all of L2:
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
+from contextlib import nullcontext
 from dataclasses import dataclass, field
+from functools import partial
 from typing import Any, Protocol
 
 import torch
 from torch import Tensor
 from torch.nn import functional as F  # noqa: N812
+from torch.utils._pytree import tree_flatten, tree_unflatten
+from torch.utils.checkpoint import checkpoint
 
 from ..layout import SegmentRange, TokenLayout
 from ..visibility.mask import AttentionPlan, LayerAttentionOverride
@@ -383,7 +387,10 @@ def restrict_to_streams(layout: TokenLayout, plan: AttentionPlan,
         cursor += seg.length
     sub_layout = TokenLayout(
         segments=tuple(segments),
-        labels={key: value[index] for key, value in layout.labels.items()},
+        labels={key: value.index_select(0, index.to(value.device))
+                for key, value in layout.labels.items()},
+        regions={name: membership.index_select(0, index.to(membership.device))
+                 for name, membership in layout.regions.items()},
     )
     structural = plan.structural
     if structural is not None:
@@ -392,8 +399,15 @@ def restrict_to_streams(layout: TokenLayout, plan: AttentionPlan,
     key_valid = plan.key_valid
     if key_valid is not None:
         key_valid = key_valid.index_select(1, index.to(key_valid.device))
+    if plan.visibility is not None:
+        raise ValueError("bind runtime visibility before restricting streams")
+    pairwise = plan.pairwise
+    if pairwise is not None:
+        idx = index.to(pairwise.device)
+        pairwise = pairwise.index_select(1, idx).index_select(2, idx)
     return sub_layout, AttentionPlan(structural=structural,
-                                     key_valid=key_valid, layout=sub_layout)
+                                     key_valid=key_valid, layout=sub_layout,
+                                     pairwise=pairwise)
 
 
 def _joint_attention(packed: QKV, mask: Any, *, backend: str) -> Tensor:
@@ -434,6 +448,30 @@ def _joint_attention(packed: QKV, mask: Any, *, backend: str) -> Tensor:
     return out.transpose(1, 2)
 
 
+def _copy_state(state: StreamState, *, detach: bool = False) -> StreamState:
+    """Copy state containers for replay, optionally cutting tensor graphs.
+
+    Do not deepcopy tensors: trainable modulation and cached context must keep
+    their connection to prepare/condition encoders. Stream methods must not
+    modify tensor storage in place when checkpointing is enabled.
+    """
+    def copy(value: Any) -> Any:
+        if isinstance(value, Tensor):
+            return value.detach() if detach else value
+        if isinstance(value, dict):
+            return {key: copy(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [copy(item) for item in value]
+        if isinstance(value, tuple):
+            items = tuple(copy(item) for item in value)
+            return type(value)(*items) if hasattr(value, "_fields") else items
+        return value
+
+    return StreamState(stream=state.stream, hidden=copy(state.hidden),
+                       modulation=copy(state.modulation),
+                       extras=copy(state.extras))
+
+
 class JointAttentionEngine:
     """``StreamEngine`` implementation: concat, one joint attention, split.
 
@@ -453,10 +491,15 @@ class JointAttentionEngine:
     Attributes:
         backend: ``"dense"``, ``"sdpa"`` or ``"flex"``.
         block_size: BlockMask block size, required by the flex backend.
+        frozen_streams: Stream names executed without autograd. Their states,
+            QKV and attention outputs are detached, not the condition bus.
+        checkpoint_layers: Recompute each joint layer during backward.
     """
 
     def __init__(self, *, backend: str = "dense",
-                 block_size: int | None = None) -> None:
+                 block_size: int | None = None,
+                 frozen_streams: Iterable[str] = (),
+                 checkpoint_layers: bool = False) -> None:
         """Configure the attention backend.
 
         Args:
@@ -464,6 +507,13 @@ class JointAttentionEngine:
             block_size: BlockMask block size. Required when
                 ``backend == "flex"`` because it changes the BlockMask shape
                 and the BlockMask is captured by ``torch.compile``.
+            frozen_streams: Names whose prepare/pre_attn/post_attn/finalize
+                run under no_grad, regardless of parameter requires_grad.
+                Freezing is a stop-gradient execution policy, not a change to
+                parameters or visibility. Other streams can attend their
+                detached KV. The caller owns choosing a suitable topology.
+            checkpoint_layers: Use non-reentrant checkpointing for each joint
+                layer when autograd is enabled, preserving RNG and conditions.
 
         Raises:
             ValueError: If the backend is unsupported, or if flex is chosen
@@ -482,6 +532,15 @@ class JointAttentionEngine:
             )
         self.backend = backend
         self.block_size = block_size
+        self.frozen_streams = frozenset(frozen_streams)
+        self.checkpoint_layers = checkpoint_layers
+
+    def _stream_context(self, name: str) -> Any:
+        return torch.no_grad() if name in self.frozen_streams else nullcontext()
+
+    def _stream_state(self, name: str, state: StreamState) -> StreamState:
+        return (_copy_state(state, detach=True)
+                if name in self.frozen_streams else state)
 
     def run(self, group: AttentionGroup,
             inputs: Mapping[str, Tensor],
@@ -543,10 +602,13 @@ class JointAttentionEngine:
         # condition's semantics but must pass the bus down, otherwise
         # cross-attention KV and channel-concat conditions would have no
         # path into L2 at all.
-        live = {name: modules[name].prepare(inputs[name],
-                                            timestep=timesteps.get(name),
-                                            conditions=conditions)
-                for name in names}
+        live = {}
+        for name in names:
+            with self._stream_context(name):
+                state = modules[name].prepare(
+                    inputs[name], timestep=timesteps.get(name),
+                    conditions=conditions)
+            live[name] = self._stream_state(name, state)
         _assert_prepared_against_layout(live, layout)
 
         # Step 2: per joint layer, pre_attn on all participating streams,
@@ -563,35 +625,92 @@ class JointAttentionEngine:
                     f"stream: "
                     f"{ {n: sorted(m) for n, m in index_maps.items()} }"
                 )
-            qkvs = {
-                name: modules[name].pre_attn(
-                    live[name], local_layer_id=index_maps[name][layer_id])
-                for name in active
-            }
-            if override is not None and override.handles_layer(layer_id):
-                outs = override.run_attention(layer_id, qkvs, plan, layout)
-                if set(outs) != set(active):
-                    raise ValueError(
-                        f"LayerAttentionOverride returned stream set "
-                        f"{sorted(outs)} at layer {layer_id} != "
-                        f"participating streams {list(active)}"
-                    )
-            else:
-                outs = self._attend(active, qkvs, plan, layout, masks)
+            # Bind IDs now, not through loop-variable closures that would
+            # replay every checkpoint using the final layer's IDs/state.
+            run_layer = partial(
+                self._run_layer, active=active,
+                local_ids=tuple(index_maps[name][layer_id] for name in active),
+                layer_id=layer_id, modules=modules, plan=plan, layout=layout,
+                masks=masks, override=override)
             before = dict(live)
-            for name in active:
-                live[name] = modules[name].post_attn(
-                    live[name], outs[name],
-                    local_layer_id=index_maps[name][layer_id])
+            states = tuple(live[name] for name in active)
+            if self.checkpoint_layers and torch.is_grad_enabled():
+                # Expose tensors in state dataclasses as checkpoint inputs:
+                # checkpoint needs their devices to save accelerator RNG
+                # state (a dataclass itself is not a registered pytree).
+                values, structure = tree_flatten(tuple(
+                    (state.stream, state.hidden, state.modulation, state.extras)
+                    for state in states))
+                after = checkpoint(
+                    partial(self._checkpoint_layer, run_layer=run_layer,
+                            structure=structure),
+                    *values, use_reentrant=False)
+            else:
+                after = run_layer(*states)
+            live.update(zip(active, after))
             assert_shape_signature(before, live)
             for name in active:
                 if layer_id in wanted.get(name, ()):
                     captured[(name, layer_id)] = live[name].hidden
 
         # Step 3: finalize every stream
-        final = {name: modules[name].finalize(live[name]) for name in names}
+        final = {}
+        for name in names:
+            with self._stream_context(name):
+                state = modules[name].finalize(live[name])
+            final[name] = self._stream_state(name, state)
         assert_shape_signature(live, final)
         return EngineOutput(states=final, captured=captured)
+
+    @staticmethod
+    def _checkpoint_layer(*values: Any, run_layer: Any,
+                          structure: Any) -> tuple[StreamState, ...]:
+        states = tuple(StreamState(stream=stream, hidden=hidden,
+                                   modulation=modulation, extras=extras)
+                       for stream, hidden, modulation, extras
+                       in tree_unflatten(list(values), structure))
+        return run_layer(*states)
+
+    def _run_layer(self, *states: StreamState,
+                   active: tuple[str, ...], local_ids: tuple[int, ...],
+                   layer_id: int, modules: Mapping[str, Any],
+                   plan: AttentionPlan, layout: TokenLayout,
+                   masks: dict[tuple[str, ...], tuple[TokenLayout, Any]],
+                   override: LayerAttentionOverride | None
+                   ) -> tuple[StreamState, ...]:
+        # Each execution owns fresh containers; post_attn may update a state
+        # or nested cache without mutating the checkpoint's input snapshot.
+        live = tuple(_copy_state(state) for state in states)
+        qkvs = {}
+        for name, state, local_id in zip(active, live, local_ids):
+            with self._stream_context(name):
+                packed = modules[name].pre_attn(state, local_layer_id=local_id)
+            if name in self.frozen_streams:
+                packed = QKV(q=packed.q.detach(), k=packed.k.detach(),
+                             v=packed.v.detach())
+            qkvs[name] = packed
+        if override is not None and override.handles_layer(layer_id):
+            outs = override.run_attention(layer_id, qkvs, plan, layout)
+            if set(outs) != set(active):
+                raise ValueError(
+                    f"LayerAttentionOverride returned stream set "
+                    f"{sorted(outs)} at layer {layer_id} != "
+                    f"participating streams {list(active)}"
+                )
+        else:
+            # Never put joint attention under a frozen stream's no_grad:
+            # trainable queries still need gradients through detached KV.
+            outs = self._attend(active, qkvs, plan, layout, masks)
+        after = []
+        for name, state, local_id in zip(active, live, local_ids):
+            out = outs[name]
+            if name in self.frozen_streams:
+                out = out.detach()
+            with self._stream_context(name):
+                state = modules[name].post_attn(
+                    state, out, local_layer_id=local_id)
+            after.append(self._stream_state(name, state))
+        return tuple(after)
 
     def _attend(self, active: tuple[str, ...],
                 qkvs: Mapping[str, QKV],
@@ -634,13 +753,10 @@ class JointAttentionEngine:
         v = torch.cat([qkvs[name].v for name in active], dim=1)
         if active not in masks:
             sub_layout, sub_plan = restrict_to_streams(layout, plan, active)
-            if sub_plan.structural is not None \
-                    and sub_plan.structural.device != q.device:
-                sub_plan = AttentionPlan(
-                    structural=sub_plan.structural.to(q.device),
-                    key_valid=None if sub_plan.key_valid is None
-                    else sub_plan.key_valid.to(q.device),
-                    layout=sub_layout)
+            sub_plan = sub_plan.to(q.device)
+            for channel in (sub_plan.key_valid, sub_plan.pairwise):
+                if channel is not None and channel.shape[0] != q.shape[0]:
+                    raise ValueError("attention mask batch size disagrees with QKV")
             masks[active] = (
                 sub_layout,
                 sub_plan.materialize(self.backend, block_size=self.block_size),

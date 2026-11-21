@@ -9,7 +9,7 @@ which fails silently rather than loudly when it breaks:
 
 1. ``MODEL_SCHEMA`` rows resolve to YAML files that exist and merge cleanly into
    the typed config classes.
-2. ``geometry.num_frames`` equals ``data.num_video_frames``. The VAE sees the
+2. ``geometry.num_frames`` equals the sampled RGB frame count. The VAE sees the
    frames the dataset sampled, so these two numbers are one fact written twice;
    a disagreement only surfaces as a latent-grid shape error deep in a forward.
 3. The model registry maps both arch names onto the one shell, and does *not*
@@ -94,14 +94,20 @@ def test_model_identity_is_not_written_in_the_yaml(model_name):
 def test_geometry_frame_count_matches_the_dataloader(model_name):
     """``geometry.num_frames`` is the pixel frame count handed to the VAE.
 
-    The dataset samples ``num_video_frames`` frames out of
-    ``(T - 1) * action_video_freq_ratio + 1`` raw ones, so the tensor that
-    reaches ``vae.encode`` has exactly ``data.num_video_frames`` frames. If the
-    geometry says otherwise, the latent grid check in ``encode_video`` fires on
-    the first batch of a real run — long after the config was written.
+    VPP2 samples observation offsets from its raw ``num_frames`` window;
+    InternW0-Delta uses FastWAM's explicit ``num_video_frames`` count.
+    Either count must agree with the geometry before a real VAE forward.
     """
     yaml_cfg = OmegaConf.load(get_config_path(model_name))
-    assert yaml_cfg.model.geometry.num_frames == yaml_cfg.data.num_video_frames
+    if model_name == "vpp2":
+        from loongforge.embodied.data.datasets.vpp2.transforms import VPP2DataConfig
+
+        data_cfg = OmegaConf.to_object(OmegaConf.merge(
+            OmegaConf.structured(VPP2DataConfig), yaml_cfg.data))
+        sampled_frames = len(data_cfg.observation_delta_indices)
+    else:
+        sampled_frames = yaml_cfg.data.num_video_frames
+    assert yaml_cfg.model.geometry.num_frames == sampled_frames
     assert (yaml_cfg.model.geometry.action_video_freq_ratio
             == yaml_cfg.data.action_video_freq_ratio)
 
@@ -127,19 +133,17 @@ def test_gate_does_not_take_over_fastwam():
 
 
 @pytest.mark.parametrize("model_name", ARCH_MODELS)
-def test_arch_models_reuse_the_fastwam_preprocessor(model_name):
-    """Preprocessor lookup is by ``model_type``, and these two share FastWAM's.
-
-    They consume the same pixel-space batch and read the same four config
-    attributes, so a separate collator would be a copy of this one.
-    """
+def test_arch_models_route_to_their_data_preprocessor(model_name):
+    """VPP2 uses its native data contract; InternW0-Delta keeps FastWAM's."""
     import loongforge.embodied.data.datasets.fastwam.transforms  # noqa: F401
     from loongforge.embodied.data.datasets.fastwam.transforms.fastwam_collator \
         import FastWAMPreprocessor
     from loongforge.embodied.data.datasets.transforms.collator import (
         _PREPROCESSOR_REGISTRY)
+    from loongforge.embodied.data.datasets.vpp2.transforms import VPP2Preprocessor
 
-    assert _PREPROCESSOR_REGISTRY[model_name] is FastWAMPreprocessor
+    expected = VPP2Preprocessor if model_name == "vpp2" else FastWAMPreprocessor
+    assert _PREPROCESSOR_REGISTRY[model_name] is expected
 
 
 @pytest.mark.parametrize("model_name", ARCH_MODELS)

@@ -93,7 +93,8 @@ class WorldModelConfig:
         """
         base = frozenset(f.name for f in fields(WorldModelConfig))
         return {f.name: getattr(self, f.name) for f in fields(self)
-                if f.name not in base and getattr(self, f.name) is not None}
+                if f.name not in base and not f.metadata.get("runtime")
+                and getattr(self, f.name) is not None}
 
     def build_spec(self) -> WorldModelSpec:
         """Build the ``WorldModelSpec`` this config describes.
@@ -151,6 +152,23 @@ class Vpp2Config(WorldModelConfig):
     video_prefix_frames: Optional[int] = None
     inference_steps: Optional[int] = None
     proprio_dim: Optional[int] = None
+    video_attention_mask_mode: Optional[str] = None
+    training_stage: str = field(default="joint", metadata={"runtime": True})
+    video_checkpoint_path: Optional[str] = field(
+        default=None, metadata={"runtime": True})
+    action_dit_pretrained_path: Optional[str] = field(
+        default=None, metadata={"runtime": True})
+    gradient_checkpointing: bool = field(
+        default=True, metadata={"runtime": True})
+    action_only_first_frame_fast_path: bool = field(
+        default=True, metadata={"runtime": True})
+
+    def __post_init__(self) -> None:
+        if self.training_stage not in ("action", "joint"):
+            raise ValueError("VPP2 training_stage must be 'action' or 'joint'")
+        if bool(self.video_checkpoint_path) != bool(
+                self.action_dit_pretrained_path):
+            raise ValueError("VPP2 split initialization requires both checkpoints")
 
 
 @dataclass(frozen=True)
