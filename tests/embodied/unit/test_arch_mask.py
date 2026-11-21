@@ -176,20 +176,33 @@ def test_unknown_backend_lists_registered_ones():
     assert KNOWN_BACKENDS == ("dense", "sdpa", "flex", "varlen")
 
 
-def test_flex_requires_block_size_and_structural():
-    """The flex path needs both a positive ``block_size`` and a structural mask.
-
-    A BlockMask is defined in terms of blocks, and the per-sample channel alone
-    carries no (q, kv) structure to build one from.
-    """
+def test_flex_requires_block_size():
+    """A masked flex plan requires an explicit positive block size."""
     p = plan()
     with pytest.raises(ValueError, match="requires block_size"):
         p.materialize("flex")
-    only_valid = AttentionPlan(key_valid=torch.ones((2, TOTAL),
-                                                    dtype=torch.bool),
-                               layout=layout())
-    with pytest.raises(ValueError, match="structural channel is None"):
-        only_valid.materialize("flex", block_size=64)
+    for block_size in (0, -1, True):
+        with pytest.raises(ValueError, match="positive integer"):
+            p.materialize("flex", block_size=block_size)
+
+
+def test_flex_key_valid_only_matches_dense_on_cpu():
+    """Absent structure is all-visible; per-batch padding still masks keys."""
+    pytest.importorskip("torch.nn.attention.flex_attention")
+    valid = torch.ones((2, TOTAL), dtype=torch.bool)
+    valid[1, -4:] = False
+    only_valid = AttentionPlan(key_valid=valid, layout=layout())
+    block = only_valid.materialize("flex", block_size=64)
+    batch = torch.arange(2)[:, None, None]
+    query = torch.arange(TOTAL)[None, :, None]
+    key = torch.arange(TOTAL)[None, None, :]
+    actual = block.mask_mod(batch, torch.tensor(0), query, key)
+    assert torch.equal(actual, only_valid.dense_bool()[:, 0])
+    assert only_valid.structural is None
+    assert not block.mask_mod(torch.tensor(0), torch.tensor(0),
+                              torch.tensor(TOTAL), torch.tensor(0))
+    assert not block.mask_mod(torch.tensor(0), torch.tensor(0),
+                              torch.tensor(0), torch.tensor(TOTAL))
 
 
 @needs_flex
