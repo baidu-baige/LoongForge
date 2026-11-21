@@ -677,15 +677,20 @@ loongforge/embodied/data/datasets/vpp2/
     └── vpp2_processor.py
 ```
 
-配置和启动入口位于：
+master 配置入口位于：
 
 ```text
 configs/models/embodied/vpp2.yaml
 configs/models/embodied/vpp2_robodojo.yaml
-examples/embodied/vpp2/run_vpp2_sft_ddp_finetune.sh
-examples/embodied/vpp2/run_vpp2_sft_deepspeed_zero2_finetune.sh
-examples/embodied/vpp2/run_robodojo_joint_50.sh
 ```
+
+下列启动脚本属于 master，不在当前重构分支中。请在
+[master 对照版本](https://github.com/baidu-baige/LoongForge/tree/c9c76eac247ef9b99cc9d8cc453ba58cd9ff03a1)
+的 VPP2 示例目录中查找，不能直接在本分支运行：
+
+- 双卡 DDP finetune：`run_vpp2_sft_ddp_finetune.sh`
+- DeepSpeed ZeRO-2 finetune：`run_vpp2_sft_deepspeed_zero2_finetune.sh`
+- RoboDojo joint training：`run_robodojo_joint_50.sh`
 
 ### A.3 master VPP2 训练流程
 
