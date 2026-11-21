@@ -14,7 +14,8 @@ This directory contains the CI/CD workflows for LoongForge.
 | `secrets.yml` | Reusable workflow | Scan PR commits for leaked secrets via gitleaks |
 | `lint.yml` | Reusable workflow | Run Ruff on changed Python files |
 | `sensitive.yml` | Reusable workflow | Scan tracked files for internal identifiers via `.github/scripts/sensitive_scan.py` |
-| `build.yml` | Reusable workflow | Build sdist + wheel and run Python 3.12 import smoke |
+| `build.yml` | Reusable workflow | Build sdist + wheel and verify installed import, CLI, and packaged configuration defaults |
+| `python-release.yml` | Workflow dispatch | Build and verify Python distributions, publish to TestPyPI, then promote the same tested artifact to PyPI |
 | `submodule-sync.yml` | repository dispatch / workflow dispatch + manual | Sync `third_party/Loong-Megatron` to its tracked branch and push the submodule pointer update |
 | `auto-label.yml` | Issue/PR open/edit | Auto-label issues and PRs by keyword matching |
 | `ok-to-test.yml` | Maintainer issue comment | Validate and dispatch `/ok-to-test` GPU regression |
@@ -160,9 +161,10 @@ debug run `38675600445`, source commit
 `33295fc292f675a6c03634dd0b644290e192a302`. It preserves actual metrics,
 including the first iteration's warmup time. No SFT baseline is implied.
 
-The Release workflow does not publish to PyPI. If package publication is added
-later, it should become an explicit stage switch rather than a Git-tag side
-effect.
+The image Release workflow does not publish Python distributions. Python
+packages use the separate `python-release.yml` workflow. PyPI promotion requires
+the successful TestPyPI run ID and downloads that run's artifact, so the bytes
+published to PyPI are the bytes already validated on TestPyPI.
 
 The image policy rejects `bcecmd`, common credential files, AK/SK and signed
 authorization metadata, and internal endpoints or runner paths before a
