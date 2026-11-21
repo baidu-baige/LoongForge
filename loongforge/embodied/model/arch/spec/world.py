@@ -34,6 +34,7 @@ from ..streams.conditions import ConditionSpec, InjectionKind
 from ..streams.engine import AttentionGroup
 from ..streams.spec import StreamSpec
 from ..visibility.combine import Visibility
+from ..visibility.declarative import VisibilityTopology
 from .core import get_provider
 
 __all__ = ["WorldModelSpec", "build_world_model_spec"]
@@ -83,7 +84,7 @@ class WorldModelSpec:
     diffusion: DiffusionSpec
     heads: tuple[HeadSpec, ...] = ()
     conditions: tuple[ConditionSpec, ...] = ()
-    visibility: Mapping[str, Visibility] = field(default_factory=dict)
+    visibility: VisibilityTopology | Mapping[str, Visibility] = field(default_factory=dict)
     # Keyed by **stream name**; value is that stream's query-side visibility.
     # Missing key => fully bidirectional (structural=None).
     attention_backend: str = "dense"    # [YAML] resolved backend, not "auto"
@@ -95,8 +96,11 @@ class WorldModelSpec:
         self._validate_diffusion_layer()
         self._validate_head_layer()
         self._validate_visibility_layer()
-        object.__setattr__(self, "visibility",
-                           MappingProxyType(dict(self.visibility)))
+        if isinstance(self.visibility, VisibilityTopology):
+            self.visibility.validate_streams(self.stream_names)
+        else:
+            object.__setattr__(self, "visibility",
+                               MappingProxyType(dict(self.visibility)))
 
     # ---- queries ----
 
@@ -895,6 +899,5 @@ def build_world_model_spec(config: Any) -> WorldModelSpec:
     spec = _apply_heads(spec, _plain(getattr(config, "heads", None)))
     return _apply_backend(spec, getattr(config, "attention_backend", None),
                           getattr(config, "attention_block_size", None))
-
 
 

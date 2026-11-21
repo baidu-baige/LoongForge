@@ -173,10 +173,8 @@ def _build_image_encoder(model_id: str) -> nn.Module:
 def _load_into(module: nn.Module, weights: Optional[str], what: str) -> None:
     """Load a plain state dict into a frozen encoder, logging the key counts.
 
-    ``strict=False`` on purpose: the published Wan files carry the trunk only,
-    while the wrappers add buffers of their own. Counting the leftovers and
-    logging them is more informative than a hard failure, because a genuine
-    mismatch shows up as "nearly every key missing".
+    Load the exact VAE trunk or CLIP visual tower strictly. Published CLIP files
+    also carry an unused text tower, which is removed by namespace first.
 
     Args:
         module: Destination module (the wrapper's inner trunk).
@@ -185,11 +183,14 @@ def _load_into(module: nn.Module, weights: Optional[str], what: str) -> None:
     """
     if weights is None:
         return
-    state = torch.load(weights, map_location="cpu")
+    state = torch.load(weights, map_location="cpu", mmap=True, weights_only=True)
     for key in ("state_dict", "model_state"):
         if isinstance(state, dict) and key in state:
             state = state[key]
-    missing, unexpected = module.load_state_dict(state, strict=False)
+    if what == "CLIP":
+        state = {key: value for key, value in state.items()
+                 if key.startswith("visual.") or key == "log_scale"}
+    missing, unexpected = module.load_state_dict(state, strict=True)
     logger.info("[arch] %s loaded from %s; missing=%d unexpected=%d",
                 what, weights, len(missing), len(unexpected))
 
@@ -263,17 +264,51 @@ class ArchWorldModel(nn.Module):
                 "ArchWorldModel.from_pretrained expects a WorldModelConfig "
                 f"subclass instance; got {type(cfg).__name__}")
         spec = cfg.build_spec()
-        core = WorldModel(
+        action_stage = (
+            cfg.model_type == "vpp2"
+            and getattr(cfg, "training_stage", "joint") == "action"
+        )
+        core_cls = WorldModel
+        if action_stage:
+            from .vpp2_training import VPP2TrainingWorldModel
+
+            core_cls = VPP2TrainingWorldModel
+        core = core_cls(
             spec,
             engine=JointAttentionEngine(backend=spec.attention_backend,
-                                        block_size=spec.attention_block_size),
+                                        block_size=spec.attention_block_size,
+                                        frozen_streams={"video"} if action_stage else (),
+                                        checkpoint_layers=getattr(
+                                            cfg, "gradient_checkpointing", False)),
             layout=TokenLayout.from_geometry(spec.geometry, spec.streams))
+        core.to(dtype=_resolve_dtype(cfg.dtype))
+        if getattr(cfg, "video_checkpoint_path", None):
+            from .transfer import load_vpp2_initializers
+
+            report = load_vpp2_initializers(
+                core, cfg.video_checkpoint_path, cfg.action_dit_pretrained_path)
+            logger.info("[arch] VPP2 split initialization: %s", report)
         names = {cond.name for cond in spec.conditions if cond.enabled}
         model = cls(cfg, core,
                     vae=_build_vae(spec, cfg.model_id),
                     image_encoder=(_build_image_encoder(cfg.model_id)
                                    if "clip_image" in names else None))
+        if action_stage:
+            # Match master: VAE fp32, CLIP fp16, trainable DiT bf16.
+            model.vae.to(dtype=torch.float32)
+            if model.image_encoder is not None:
+                model.image_encoder.to(dtype=torch.float16)
+            return model
         return model.to(dtype=_resolve_dtype(cfg.dtype))
+
+    def train(self, mode: bool = True) -> "ArchWorldModel":
+        super().train(mode)
+        self.vae.eval()
+        if self.image_encoder is not None:
+            self.image_encoder.eval()
+        if getattr(self.config, "training_stage", None) == "action":
+            self.core.blocks["video"].eval()
+        return self
 
     def forward(self, batch: Any) -> Tuple[Tensor, Dict[str, Any]]:
         """Run one training step. Interface I4: ``(loss, metrics)``.
@@ -308,10 +343,42 @@ class ArchWorldModel(nn.Module):
             KeyError: The sample lacks a key some stream or condition needs.
         """
         video = self._require(sample, "video").to(dtype=self._dtype)
-        latents = self.encode_video(video)
+        action_stage = (
+            self.config.model_type == "vpp2"
+            and getattr(self.config, "training_stage", "joint") == "action"
+        )
+        if action_stage and self.config.action_only_first_frame_fast_path:
+            expected = self.spec.geometry
+            if tuple(video.shape[2:]) != (
+                    expected.num_frames, expected.frame_height,
+                    expected.frame_width * expected.num_views):
+                raise ValueError("VPP2 pixel video disagrees with configured geometry")
+            with torch.no_grad(), torch.autocast(video.device.type, enabled=False):
+                first = self.vae.encode(video[:, :, :1].float(), tiled=False)
+            if tuple(first.shape[2:]) != (1, *expected.latent_grid[1:]):
+                raise ValueError("VPP2 first-frame VAE grid disagrees with geometry")
+            latents = first.new_zeros(
+                (first.shape[0], first.shape[1], *expected.latent_grid))
+            latents[:, :, :1] = first
+            latents = latents.to(dtype=self._dtype)
+        else:
+            latents = self.encode_video(video)
         out: Dict[str, Any] = {
             "global_step": int(sample.get("global_step", 0)),
         }
+        if action_stage:
+            for name in ("action_is_pad", "action_terminal_mask", "image_is_pad"):
+                if sample.get(name) is not None:
+                    out[name] = sample[name].to(latents.device)
+        # These optional values are already in joint-token order. Pixel/latent
+        # padding conversion belongs to the adapter that creates them.
+        if "attention_key_valid" in sample:
+            out["attention_key_valid"] = sample["attention_key_valid"].to(latents.device)
+        if "attention_labels" in sample:
+            out["attention_labels"] = {
+                name: value.to(latents.device)
+                for name, value in sample["attention_labels"].items()
+            }
         for stream in self.spec.streams:
             if stream.name == "video":
                 out[stream.batch_key] = latents
@@ -512,4 +579,3 @@ class ArchWorldModel(nn.Module):
             self.to(device)
         step = payload.get("step") if isinstance(payload, dict) else None
         return int(step) if isinstance(step, int) else None
-

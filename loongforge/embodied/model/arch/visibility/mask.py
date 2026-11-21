@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""L1 materialization: the two mask channels and capability negotiation (Lane A).
+"""L1 static structure, batch validity, runtime edges and backend compilation.
 
 ``AttentionPlan`` carries the two channels and ``CompiledMask`` is the
 materialized result. The signatures follow
@@ -14,7 +14,7 @@ materialized result. The signatures follow
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Any, Literal, Protocol
 
@@ -41,7 +41,8 @@ would depend on something only known at run time.
 
 
 def _block_mask(structural: Tensor, *, block_size: int,
-                key_valid: Tensor | None) -> Any:
+                key_valid: Tensor | None,
+                pairwise: Tensor | None = None) -> Any:
     """Build a FlexAttention ``BlockMask`` from the structural channel.
 
     The two channels are **composed into one mask_mod** here, instead of folding
@@ -61,19 +62,28 @@ def _block_mask(structural: Tensor, *, block_size: int,
     """
     from torch.nn.attention.flex_attention import create_block_mask
 
+    if not isinstance(block_size, int) or isinstance(block_size, bool) or block_size <= 0:
+        raise ValueError("block_size must be positive integer")
     device = structural.device
     valid = None if key_valid is None else key_valid.to(device)
+    dynamic = None if pairwise is None else pairwise.to(device)
+    total = int(structural.shape[0])
 
     def mask_mod(b: Tensor, h: Tensor, q_idx: Tensor,
                  kv_idx: Tensor) -> Tensor:
         del h
-        keep = structural[q_idx, kv_idx]
-        if valid is None:
-            return keep
-        return keep & valid[b, kv_idx]
+        # create_block_mask evaluates rounded-up blocks, including tail indices.
+        q_safe, k_safe = q_idx.clamp(max=total - 1), kv_idx.clamp(max=total - 1)
+        keep = (q_idx < total) & (kv_idx < total) & structural[q_safe, k_safe]
+        if valid is not None:
+            keep = keep & valid[b, k_safe]
+        if dynamic is not None:
+            keep = keep & dynamic[b, q_safe, k_safe]
+        return keep
 
     total = int(structural.shape[0])
-    batch = None if valid is None else int(valid.shape[0])
+    batch = (int(dynamic.shape[0]) if dynamic is not None else
+             None if valid is None else int(valid.shape[0]))
     return create_block_mask(mask_mod, B=batch, H=None, Q_LEN=total,
                              KV_LEN=total, device=device,
                              BLOCK_SIZE=block_size)
@@ -81,7 +91,7 @@ def _block_mask(structural: Tensor, *, block_size: int,
 
 @dataclass(frozen=True)
 class AttentionPlan:
-    """Carrier of I1. The two-channel split is what makes this refactor fast.
+    """Reusable structural template or a bound per-batch attention plan.
 
     Why two channels: structural visibility (who may see whom) is shared across
     the batch, so it is compilable, cacheable, and can generate a BlockMask;
@@ -98,11 +108,16 @@ class AttentionPlan:
         structural: Batch-shared structural visibility, or None for all visible.
         key_valid: Per-sample valid bits, or None for all valid.
         layout: The layout these channels came from.
+        pairwise: Optional [B, L, L] runtime edge constraints. These are separate
+            from static structural visibility and may carry a batch dimension.
+        visibility: Deferred expression; bind labels before materialization.
     """
 
     structural: Tensor | None = None    # [total, total] bool, shared; None = all visible
     key_valid: Tensor | None = None     # [B, total] bool, per-sample; None = all valid
     layout: TokenLayout | None = None   # Source layout; lets B assert order (C8)
+    pairwise: Tensor | None = None      # [B, L, L], runtime edge constraints
+    visibility: Visibility | None = None  # Deferred expression needing batch labels
     # structural=None is **the normal case for a monolithic model**
     # (interfaces §2.3): one stream and no causality means all visible, and then
     # materializing an all-True [L, L] tensor is pure wasted memory and blocks
@@ -110,6 +125,10 @@ class AttentionPlan:
     # for "fully bidirectional" (the existing motus is such a case).
 
     def __post_init__(self) -> None:
+        for name in ("structural", "key_valid", "pairwise"):
+            value = getattr(self, name)
+            if value is not None and value.dtype != torch.bool:
+                raise ValueError(f"AttentionPlan.{name} must have bool dtype")
         if self.structural is not None:
             shape = tuple(self.structural.shape)
             if self.structural.ndim != 2:
@@ -121,6 +140,8 @@ class AttentionPlan:
                 raise ValueError(
                     f"AttentionPlan.structural must be square, got {shape}"
                 )
+            if shape[0] == 0:
+                raise ValueError("structural must contain at least one token")
             if self.layout is not None and shape[0] != self.layout.total:
                 raise ValueError(
                     f"AttentionPlan.structural shape {shape} disagrees with "
@@ -138,6 +159,16 @@ class AttentionPlan:
                     f"AttentionPlan.key_valid total dim "
                     f"{self.key_valid.shape[1]} != layout.total {self.layout.total}"
                 )
+            if self.structural is not None and self.key_valid.shape[1] != self.structural.shape[0]:
+                raise ValueError("key_valid length disagrees with structural")
+            if self.key_valid.shape[0] == 0:
+                raise ValueError("key_valid must have a non-empty batch")
+        if self.pairwise is not None:
+            if (self.pairwise.ndim != 3 or self.pairwise.shape[0] == 0
+                    or self.pairwise.shape[1:] != (self.total, self.total)):
+                raise ValueError("pairwise must be [B, total, total]")
+            if self.key_valid is not None and self.key_valid.shape[0] != self.pairwise.shape[0]:
+                raise ValueError("pairwise and key_valid batch sizes disagree")
 
     @property
     def total(self) -> int:
@@ -147,6 +178,8 @@ class AttentionPlan:
             return int(self.structural.shape[0])
         if self.key_valid is not None:
             return int(self.key_valid.shape[1])
+        if self.pairwise is not None:
+            return int(self.pairwise.shape[-1])
         raise ValueError(
             "AttentionPlan has all three fields None, cannot report total")
 
@@ -154,7 +187,7 @@ class AttentionPlan:
     def from_visibility(cls, visibility: Visibility | None,
                         layout: TokenLayout,
                         *, key_valid: Tensor | None = None) -> AttentionPlan:
-        """Step 2 of ``WorldModel.__init__``: materialize the structural channel once.
+        """Compile static visibility or defer expressions requiring batch labels.
 
         ``visibility is None`` means fully bidirectional, and ``structural``
         stays None (absent means unconstrained; single-stream models and the
@@ -168,8 +201,56 @@ class AttentionPlan:
         Returns:
             The constructed ``AttentionPlan``.
         """
-        structural = None if visibility is None else visibility.evaluate(layout)
-        return cls(structural=structural, key_valid=key_valid, layout=layout)
+        from .declarative import _DeclarativeVisibility
+
+        if isinstance(visibility, _DeclarativeVisibility):
+            structural = visibility.evaluate_structural(layout)
+            if bool(structural.all()):
+                structural = None
+            return cls(structural=structural, key_valid=key_valid, layout=layout,
+                       visibility=visibility if visibility.runtime_labels else None)
+        deferred = (visibility is not None and
+                    bool(visibility.runtime_labels - layout.labels.keys()))
+        structural = None if visibility is None or deferred else visibility.evaluate(layout)
+        return cls(structural=structural, key_valid=key_valid, layout=layout,
+                   visibility=visibility if deferred else None)
+
+    def bind(self, *, labels: Mapping[str, Tensor] | None = None,
+             key_valid: Tensor | None = None) -> AttentionPlan:
+        """Create a batch plan, leaving the reusable template untouched.
+
+        key_valid always masks keys globally; runtime visibility retains the
+        expression's edge scope. Values must already be in layout token order.
+        Query/loss validity is deliberately not inferred from key validity.
+        """
+        pairwise = self.pairwise
+        if self.visibility is not None:
+            if self.layout is None:
+                raise ValueError("runtime visibility requires a layout")
+            evaluated = self.visibility.evaluate_runtime(self.layout, labels or {})
+            pairwise = (evaluated if pairwise is None else
+                        pairwise & evaluated.to(pairwise.device))
+        elif labels:
+            raise ValueError("this plan has no deferred runtime visibility")
+        valid = self.key_valid
+        if key_valid is not None:
+            if key_valid.dtype != torch.bool or key_valid.ndim != 2 or key_valid.shape[1] != self.total:
+                raise ValueError("key_valid must be bool [B, total]")
+            if valid is not None and key_valid.shape != valid.shape:
+                raise ValueError("bound key_valid shapes must agree")
+            valid = key_valid if valid is None else valid & key_valid.to(valid.device)
+        return replace(self, key_valid=valid, pairwise=pairwise, visibility=None)
+
+    def _require_bound(self) -> None:
+        if self.visibility is not None:
+            raise ValueError("runtime visibility is unbound; call plan.bind(labels=...) first")
+
+    def to(self, device: torch.device | str) -> AttentionPlan:
+        """Move every mask channel together; preserve the static layout."""
+        return replace(self, **{
+            name: None if getattr(self, name) is None else getattr(self, name).to(device)
+            for name in ("structural", "key_valid", "pairwise")
+        })
 
     def dense_bool(self) -> Tensor:
         """Both channels composed into a ``[B or 1, 1, Lq, Lk]`` bool tensor.
@@ -182,16 +263,20 @@ class AttentionPlan:
         Returns:
             Bool mask of shape ``[B or 1, 1, Lq, Lk]``.
         """
+        self._require_bound()
         total = self.total
         if self.structural is None:
-            device = None if self.key_valid is None else self.key_valid.device
+            device = (self.pairwise.device if self.pairwise is not None else
+                      None if self.key_valid is None else self.key_valid.device)
             base = torch.ones((1, 1, total, total), dtype=torch.bool,
                               device=device)
         else:
             base = self.structural.unsqueeze(0).unsqueeze(0)
-        if self.key_valid is None:
-            return base
-        return base & self.key_valid.to(base.device)[:, None, None, :]
+        if self.key_valid is not None:
+            base = base & self.key_valid.to(base.device)[:, None, None, :]
+        if self.pairwise is not None:
+            base = base & self.pairwise.to(base.device)[:, None, :, :]
+        return base
 
     def materialize(self, backend: str, *,
                     block_size: int | None = None) -> Any:
@@ -202,7 +287,7 @@ class AttentionPlan:
                 mask_mod); **only this path reads block_size**, taken from
                 ``WorldModelSpec.attention_block_size``
         sdpa  → additive float bias (-inf where invisible)
-        both channels None → returns None, so the caller takes the maskless
+        all mask channels None → returns None, so the caller takes the maskless
                 fast path
 
         The return type is deliberately Any: each backend wants a different
@@ -217,10 +302,15 @@ class AttentionPlan:
             The backend-specific mask object, or None when nothing is masked.
 
         Raises:
-            ValueError: On an unknown backend, or on ``flex`` without a
-                structural channel or without ``block_size``.
+            ValueError: On an unknown backend, an unbound dynamic expression,
+                or ``flex`` without a positive ``block_size``.
         """
-        if self.structural is None and self.key_valid is None:
+        if backend not in KNOWN_BACKENDS:
+            raise ValueError(f"AttentionPlan.materialize: unknown backend {backend!r}")
+        self._require_bound()
+        if backend == "varlen":
+            raise ValueError("varlen materialization requires CompiledMask.as_segments()")
+        if self.structural is None and self.key_valid is None and self.pairwise is None:
             return None
         if backend == "dense":
             return self.dense_bool()
@@ -230,13 +320,6 @@ class AttentionPlan:
                                device=dense.device)
             return bias.masked_fill(~dense, float("-inf"))
         if backend == "flex":
-            if self.structural is None:
-                raise ValueError(
-                    "AttentionPlan.materialize(flex): structural channel is "
-                    "None (all visible) and only key_valid is set. BlockMask "
-                    "block-level skipping buys nothing on such input; use "
-                    "dense, or let the caller apply key_valid as padding"
-                )
             if block_size is None:
                 raise ValueError(
                     "AttentionPlan.materialize(flex) requires block_size, and "
@@ -244,8 +327,12 @@ class AttentionPlan:
                     "negotiation: a different value is a different mask, and "
                     "the BlockMask gets captured by torch.compile"
                 )
-            return _block_mask(self.structural, block_size=block_size,
-                               key_valid=self.key_valid)
+            structural = self.structural
+            if structural is None:
+                device = self.pairwise.device if self.pairwise is not None else self.key_valid.device
+                structural = torch.ones((self.total, self.total), dtype=torch.bool, device=device)
+            return _block_mask(structural, block_size=block_size,
+                               key_valid=self.key_valid, pairwise=self.pairwise)
         raise ValueError(
             f"AttentionPlan.materialize: unknown backend {backend!r}; "
             f"registered backends are {list(KNOWN_BACKENDS)}"
@@ -294,6 +381,12 @@ class Scenario:
                                      # BlockMask
 
     def __post_init__(self) -> None:
+        if self.phase not in ("train", "inference"):
+            raise ValueError("Scenario.phase must be train or inference")
+        if self.block_size is not None and (
+                not isinstance(self.block_size, int)
+                or isinstance(self.block_size, bool) or self.block_size <= 0):
+            raise ValueError("block_size must be positive integer")
         if self.backend == "auto":
             raise ValueError(
                 "Scenario.backend does not accept 'auto': build time must "
@@ -319,6 +412,11 @@ class CompiledMask:
     layout: TokenLayout
     backend: str
 
+    def __post_init__(self) -> None:
+        AttentionPlan(structural=self.structural, layout=self.layout)
+        if self.backend not in KNOWN_BACKENDS:
+            raise ValueError(f"unknown backend {self.backend!r}")
+
     def as_dense(self) -> Tensor:
         """``[1, 1, Lq, Lk]`` bool.
 
@@ -328,7 +426,7 @@ class CompiledMask:
         Returns:
             Bool mask of shape ``[1, 1, Lq, Lk]``.
         """
-        return self.structural.unsqueeze(0).unsqueeze(0)
+        return AttentionPlan(structural=self.structural, layout=self.layout).dense_bool()
 
     def as_block_mask(self, *, block_size: int) -> Any:
         """FlexAttention's BlockMask. Requires structural to have no batch dim.
@@ -442,7 +540,7 @@ class CompiledMask:
                 # unsupported
                 return Capability.DEGRADED
             return Capability.EXACT
-        if vis.expr in ("always_visible", "same_stream()"):
+        if vis.expr == "same_stream()":
             return Capability.EXACT
         return Capability.UNSUPPORTED
 

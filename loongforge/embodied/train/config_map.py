@@ -22,6 +22,7 @@ from loongforge.embodied.model.xvla.model_configuration_xvla import XvlaModelCon
 from loongforge.embodied.data.datasets.xvla.transforms.data_configuration_xvla import XvlaDataConfig
 from loongforge.embodied.model.fastwam.modeling_configuration_fastwam import FastWAMModelConfig
 from loongforge.embodied.data.datasets.fastwam.transforms.data_configuration_fastwam import FastWAMDataConfig
+from loongforge.embodied.data.datasets.vpp2.transforms.data_configuration_vpp2 import VPP2DataConfig
 from loongforge.embodied.model.gr00t_n1_7.model_configuration_gr00t_n1_7 import GrootN1d7Config
 from loongforge.embodied.data.datasets.gr00t_n1_7.transforms.data_configuration_gr00t_n1_7 import (
     GrootN1d7DataConfig,
@@ -111,10 +112,8 @@ MODEL_SCHEMA = {
     "giga_brain07": ModelSchema(
         "giga_brain07.yaml", GigaBrain07ModelConfig, GigaBrain07DataConfig
     ),
-    # Five-layer ``arch`` world models. They reuse FastWAMDataConfig because
-    # they consume the same pixel-space batch; what differs is the model side,
-    # and that difference is entirely inside the per-model config subclass.
-    "vpp2": ModelSchema("arch/vpp2.yaml", Vpp2Config, FastWAMDataConfig),
+    # Arch VPP2 uses the master VPP2 video/action/proprio batch contract.
+    "vpp2": ModelSchema("arch/vpp2.yaml", Vpp2Config, VPP2DataConfig),
     "internw0_delta": ModelSchema(
         "arch/internw0_delta.yaml", InternW0DeltaConfig, FastWAMDataConfig
     ),

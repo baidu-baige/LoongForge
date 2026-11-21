@@ -14,7 +14,7 @@ score_mod path.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -52,6 +52,7 @@ class Visibility:
 
     predicate: Predicate = field(repr=False)
     expr: str = "<anonymous>"
+    runtime_labels: frozenset[str] = frozenset()
 
     # ---- the four combinators, all elementwise ----
 
@@ -60,6 +61,7 @@ class Visibility:
         return Visibility(
             lambda q, k: self.predicate(q, k) & other.predicate(q, k),
             f"({self.expr} & {other.expr})",
+            self.runtime_labels | other.runtime_labels,
         )
 
     def __or__(self, other: Visibility) -> Visibility:
@@ -67,6 +69,7 @@ class Visibility:
         return Visibility(
             lambda q, k: self.predicate(q, k) | other.predicate(q, k),
             f"({self.expr} | {other.expr})",
+            self.runtime_labels | other.runtime_labels,
         )
 
     def __invert__(self) -> Visibility:
@@ -74,6 +77,7 @@ class Visibility:
         return Visibility(
             lambda q, k: ~self.predicate(q, k),
             f"~{self.expr}",
+            self.runtime_labels,
         )
 
     def restrict(self, *, where: Visibility) -> Visibility:
@@ -93,6 +97,7 @@ class Visibility:
         return Visibility(
             lambda q, k: (~where.predicate(q, k)) | self.predicate(q, k),
             f"{self.expr}.restrict({where.expr})",
+            self.runtime_labels | where.runtime_labels,
         )
 
     # ---- materialization ----
@@ -134,6 +139,41 @@ class Visibility:
             )
         return out
 
+    def evaluate_runtime(self, layout: TokenLayout,
+                         labels: Mapping[str, Tensor]) -> Tensor:
+        """Evaluate batch labels without changing the static layout.
+
+        Runtime values are [B, L]. Boolean composition is evaluated as a whole:
+        a noise gate scoped to a cross-stream edge must not mask unrelated
+        self-attention edges. The result is [B, L, L], never a structural mask.
+        """
+        missing = self.runtime_labels - labels.keys() - layout.labels.keys()
+        if missing:
+            raise ValueError(f"visibility {self.expr} requires runtime labels {sorted(missing)}")
+        batch = None
+        device = None
+        for name, value in labels.items():
+            if value.ndim != 2 or value.shape[1] != layout.total:
+                raise ValueError(f"runtime label {name!r} must be [B, {layout.total}]")
+            if batch is not None and (value.shape[0] != batch or value.device != device):
+                raise ValueError("runtime labels must share batch size and device")
+            batch, device = value.shape[0], value.device
+        if batch is None or batch == 0:
+            raise ValueError("runtime labels must contain a non-empty batch")
+        # Static predicates also participate in the expression, on the same
+        # device as the batch labels.
+        local = TokenLayout(
+            layout.segments,
+            {key: value.to(device) for key, value in layout.labels.items()},
+            regions={name: membership.to(device)
+                     for name, membership in layout.regions.items()},
+        )
+        out = self.predicate(_RuntimeLabelView(local, "query", labels),
+                             _RuntimeLabelView(local, "key", labels))
+        if out.dtype != torch.bool:
+            raise ValueError("runtime visibility must evaluate to bool")
+        return torch.broadcast_to(out, (batch, layout.total, layout.total))
+
     def compile(self, layout: TokenLayout, *, backend: str) -> CompiledMask:
         """Materialize on a layout. ``backend`` picks the materialization path.
 
@@ -146,8 +186,36 @@ class Visibility:
         """
         from .mask import CompiledMask
 
+        missing = self.runtime_labels - layout.labels.keys()
+        if missing:
+            raise ValueError(
+                f"cannot compile runtime labels {sorted(missing)} as a static mask; "
+                "use AttentionPlan.from_visibility(...).bind(labels=...)"
+            )
         return CompiledMask(structural=self.evaluate(layout),
                             layout=layout, backend=backend)
+
+
+class _RuntimeLabelView:
+    """LabelView-compatible lookup with batched runtime overrides."""
+
+    def __init__(self, layout, side, labels):
+        self.layout, self.side, self.labels = layout, side, labels
+
+    def has(self, key):
+        return key in self.labels or self.layout.has_label(key)
+
+    def get(self, key):
+        if key in self.labels:
+            value = self.labels[key]
+            return value.unsqueeze(2 if self.side == "query" else 1)
+        value = self.layout.labels_of(key)
+        return value.unsqueeze(1 if self.side == "query" else 0)
+
+    def positions(self):
+        device = next(iter(self.labels.values())).device
+        value = torch.arange(self.layout.total, device=device)
+        return value.unsqueeze(1 if self.side == "query" else 0)
 
 
 def from_predicate(expr: str) -> Callable[[Predicate], Visibility]:
@@ -169,7 +237,8 @@ def from_predicate(expr: str) -> Callable[[Predicate], Visibility]:
 
 
 ALWAYS_VISIBLE = Visibility(
-    lambda q, k: torch.ones((q.layout.total, k.layout.total), dtype=torch.bool),
+    lambda q, k: torch.ones((q.layout.total, k.layout.total), dtype=torch.bool,
+                            device=q.positions().device),
     "always_visible",
 )
 """Fully visible. Rules degrade to this when a label is absent, rather than

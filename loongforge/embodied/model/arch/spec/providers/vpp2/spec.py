@@ -27,9 +27,7 @@ from ....streams.blocks import ActionStream, WanVideoStream
 from ....streams.conditions import ConditionSpec, InjectionKind
 from ....streams.encoders import linear_token_encoder
 from ....streams.engine import AttentionGroup
-from ....visibility.combine import Visibility
-from ....visibility.presets import get_preset
-from ....visibility.rules import same_stream, stream_edge
+from ....visibility.declarative import VisibilityTopology
 from ...core import Spec, register_provider
 from ...overrides import reject_config, resolve_geometry, resolve_scalars
 from ...world import WorldModelSpec
@@ -60,60 +58,49 @@ are fastwam's, and VPP2 differs from them on every entry.
 """
 
 
-def _vpp2_visibility(video_prefix_frames: int) -> dict[str, Visibility]:
-    """Build VPP2's L1 visibility.
+def _vpp2_visibility(
+    video_prefix_frames: int,
+    video_attention_mask_mode: str = "first_frame_causal",
+) -> VisibilityTopology:
+    """Declare video intra-attention and a fixed action-to-video prefix.
 
-    Keys are **stream names**; each value is the rule on that stream's query
-    side.
-
-    First-hand facts (``vpp2.py:879-906``, three writes into one ``[S, S]``
-    bool matrix):
-
-      - ``:889`` video -> video;
-      - ``:894`` action -> action, all True;
-      - ``:905`` action -> the first N video frames
-        (``visible_video_tokens = tokens_per_frame x visible_frames``).
-
-    There is **no video -> action edge**, so the ``video`` side is
-    ``same_stream()``. That is also the structural reason inference can run
-    the action head alone.
-
-    Three differences from the §4.3 example, all to be ruled on before the
-    equivalence tests. This function follows the example and records the
-    differences here rather than silently picking a side:
-
-      1. the example has ``chunk_causal()``; the current code at ``:894`` is
-         all True. Adding that rule would hide the action stream's own future
-         chunks;
-      2. the example's comment says "the most recent N frames", while
-         ``:905`` takes the **first** N frames (a prefix). A sliding window
-         corresponds to ``frame_causal(N)``, a prefix to ``prefix_only(n)``;
-      3. today's clean condition is two methods returning ``[B]`` bools
-         (``:908-921`` / ``:923-936``), which INV-1 forbids from entering
-         ``structural``. ``noise_gate`` lifts it into a rule over per-token
-         labels, and that is the subject of the 12/04 gate.
-
-    Args:
-        video_prefix_frames: Number of leading video frames the action
-            stream may read.
-
-    Returns:
-        ``{"video": ..., "action": ...}`` visibility rules.
+    MASTER ``wan_video_dit.py:453-468`` restricts only first-frame queries
+    under ``first_frame_causal``; later queries remain bidirectional.
+    ``vpp2.py:894-905`` gives action queries bidirectional action attention
+    and the first N video frames, with no video-to-action edge. This topology
+    does not infer an edge gate from timesteps or runtime noise labels.
     """
-    noise_gated_history = get_preset("noise_gated_history")
-    return {
-        "video": same_stream(),
-        "action": same_stream() | (
-            stream_edge("video", "action")
-            & noise_gated_history(window=video_prefix_frames)
-        ),
+    if (isinstance(video_prefix_frames, bool)
+            or not isinstance(video_prefix_frames, int)
+            or video_prefix_frames <= 0):
+        raise ValueError("video_prefix_frames must be a positive integer")
+    modes = {
+        "bidirectional": "bidirectional",
+        "three_frame": "bidirectional",
+        "first_frame_causal": "first_frame_causal",
+        "per_frame_causal": "frame_causal",
+        "frame_causal": "frame_causal",
     }
+    if video_attention_mask_mode not in modes:
+        raise ValueError(
+            f"Unsupported video_attention_mask_mode: {video_attention_mask_mode!r}"
+        )
+    return VisibilityTopology({
+        "video": {"intra": modes[video_attention_mask_mode]},
+        "action": {
+            "intra": "bidirectional",
+            "reads": {"video": {
+                "mode": "prefix_frames", "frames": video_prefix_frames,
+            }},
+        },
+    })
 
 
 @register_provider("vpp2")
 def _vpp2(config: Any = None, *,
           geometry: Mapping[str, Any] | None = None,
           video_prefix_frames: int = 3,
+          video_attention_mask_mode: str = "first_frame_causal",
           action_shift: float = 5.0,
           inference_steps: int = 10,
           action_width: int = 7,
@@ -170,6 +157,10 @@ def _vpp2(config: Any = None, *,
         geometry: The YAML ``geometry:`` section, merged over the provider's
             defaults before anything is derived from the geometry.
         video_prefix_frames: Leading video frames the action stream reads.
+        video_attention_mask_mode: Video intra-attention policy. Defaults to
+            the MASTER constructor's ``first_frame_causal``; training configs
+            explicitly override it to ``bidirectional``. ``per_frame_causal``
+            aliases ``frame_causal`` and ``three_frame`` aliases ``bidirectional``.
         action_shift: ``shift`` of the action stream's ``UniformShift``.
         inference_steps: Euler steps at inference.
         action_width: Packed action dimension, both the action stream's entry
@@ -246,10 +237,7 @@ def _vpp2(config: Any = None, *,
             # video: ``train_sampling_strategy: pure_noise``
             # (``train_action.yaml:204``; the code at ``vpp2.py:1608`` pins it
             # to num_train_timesteps), so t is always at the pure-noise end.
-            # Expressed as ``Constant`` rather than an ``if not add_noise``
-            # inside the stream: the latter would make "this stream's noise
-            # level" invisible in the spec, and ``noise_gate`` could not read
-            # it.
+            # This sampling policy is independent of attention visibility.
             # The ``beta_alpha: 7.0 / beta_beta: 1.0`` configured in the same
             # section **takes no part in sampling** under pure_noise, so no
             # ``BetaDist`` is declared here; declaring one would add a knob
@@ -281,9 +269,7 @@ def _vpp2(config: Any = None, *,
         sampling_gate=UniformSteps(num_steps=inference_steps,
                           skip=frozenset({"video"})),
         solver=EulerSampler(),
-        # Two levels: clean (condition frames) and noisy. A non-empty tuple is
-        # what makes the ``noise_gate`` rule usable, which the second rule in
-        # ``_vpp2_visibility`` below depends on.
+        # Available noise tiers; they do not gate the fixed visibility prefix.
         noise_levels=(0.0, 1.0),
     )
 
@@ -373,9 +359,8 @@ def _vpp2(config: Any = None, *,
     #
     #    The i2v "clean condition frames" are deliberately not a fifth
     #    condition: replacing the first few frames of the noisy sequence along
-    #    the time axis (``vpp2.py:815-817``, ``dim=2``) is the same fact as
-    #    ``video_prefix_frames`` and the noise_gate rule below, so declaring
-    #    it as a condition would create a second source.
+    #    the time axis (``vpp2.py:815-817``, ``dim=2``) belongs to batch
+    #    materialization, not the fixed structural attention prefix.
     #    The ``cond_latent`` below is a different thing: concatenation along
     #    the channel axis.
     conditions = (
@@ -438,7 +423,8 @@ def _vpp2(config: Any = None, *,
         diffusion=diffusion,
         heads=heads,
         conditions=conditions,
-        visibility=_vpp2_visibility(video_prefix_frames),
+        visibility=_vpp2_visibility(video_prefix_frames,
+                                    video_attention_mask_mode),
         # Today a dense ``[S, S]`` bool mask is fed straight to the attention
         # kernel (``flash_attention(..., ctx_mask=)`` at ``mot.py:144-157``),
         # so the default backend is recorded as ``dense``. Switching to
