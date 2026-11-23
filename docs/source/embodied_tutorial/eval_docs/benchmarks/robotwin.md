@@ -200,7 +200,8 @@ Full clean sweep (50 tasks × 100 episodes, seed 100000, offline expert check, 8
 Per task the mean deviation is +0.22 pt; 49 of 50 tasks are within ±7 pt. The one real
 gap is `open_microwave` (35% vs 62%), reproduced across three independent runs — that
 task needs the official `deploy_policy` entry point to tell a protocol effect from a
-checkpoint weakness. The randomized column has not been run yet.
+checkpoint weakness. The randomized column is also finalized (5,000 episodes, 92.12%
+success): 2.36 h end-to-end / 2.29 h worker, **13.5× / 14.0×**.
 
 ## Calibration results
 
@@ -233,9 +234,9 @@ official step limits, 8 GPUs):
 The second number excludes model loading and service startup (about 5 min for eight
 services); sim-worker process startup is included. The two runs use different seed sets
 (see [Result alignment](../parallel_eval.md#8-result-alignment)), so the failure counts
-are not directly comparable. Full-scale numbers (50 tasks × 100 episodes) are in
-[FastWAM: batching is the lever](#fastwam-batching-is-the-lever-n-is-not) above and in
-the pi05 result table of the PR description.
+are not directly comparable. Full-scale π0.5 (50 tasks × 100 episodes): 41.03 h → 1.77 h,
+**23.2× E2E / 24.6× steady**. Full-scale FastWAM numbers are in
+[FastWAM: batching is the lever](#fastwam-batching-is-the-lever-n-is-not) above.
 
 > **Reproducibility note.** This pipeline is not bit-reproducible on GPU: two identical
 > runs (same config, fixed `model.noise_seed`, `max_batch_size: 1`) still differ by 1–3

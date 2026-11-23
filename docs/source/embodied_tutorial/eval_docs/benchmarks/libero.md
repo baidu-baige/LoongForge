@@ -67,6 +67,8 @@ Environment variables:
 | `MUJOCO_GL` / `PYOPENGL_PLATFORM` | MuJoCo offscreen GL backend | `osmesa` |
 | `LD_LIBRARY_PATH` | NVIDIA libs (xvla script) | `/path/to/nvidia_lib:/usr/lib64` |
 
+> **Rendering backend.** `osmesa` is the simplest headless default (no NVIDIA EGL libs required). For maximum throughput on a GPU-visible host, prefer `egl`: on 8×A800 it measures ~14% faster per step than OSMesa (2.8 vs 3.1 ms/step).
+
 Key config fields (see `examples/embodied/<model>/eval/configs/libero/*.yaml`):
 
 - `benchmark.suite` — `libero_object` | `libero_spatial` | `libero_goal` | `libero_10`
@@ -190,22 +192,26 @@ comparable with the wall-clock figures below, which also include ramp-up and dra
 
 ## Measured speedup
 
-Full-suite comparison against the official evaluation script (FastWAM, 2000 episodes,
-8 GPUs, `per_task` + scene snapshots, `chunk_execute_steps=10`, `episodes_per_chunk=4`,
-`skip_intra_chunk_obs=true`, batching on, `N=24` → 192 slots):
+Full-suite comparison against the official evaluation script (2000 episodes, 8 GPUs,
+`per_task` + scene snapshots, `chunk_execute_steps=10`, `episodes_per_chunk=4`,
+`skip_intra_chunk_obs=true`, batching on, `N=24` → 192 slots). Same-backend pairing:
+FastWAM is OSMesa↔OSMesa, π0.5 is EGL↔EGL.
 
-| Measurement | Wall | Speedup vs official |
-|---|---|---|
-| Official script (8-card equivalent) | 173.7 min | 1.0× |
-| Parallel evaluation, worker phase | 13.2 min (791 s) | 13.2× |
-| Parallel evaluation, end-to-end | **16.3 min** (979 s) | **10.6×** |
+| Model (backend) | Official baseline | Parallel (worker) | Parallel (end-to-end) | Speedup (E2E / steady) |
+|---|---|---|---|---|
+| FastWAM (OSMesa) | 173.7 min | 16.80 min (1008 s) | **20.32 min** (1219 s) | **8.5× / 10.1×** |
+| FastWAM (EGL) | 73.9 min | 14.57 min (874 s) | **18.02 min** (1081 s) | **4.1× / 5.1×** |
+| π0.5 (EGL) | 80.24 min | 12.6 min (753 s) | **16.28 min** (977 s) | **4.9× / 6.1×** |
 
-End-to-end is the number to quote: 979 s from coordinator start to the last record, of
-which 791 s are the worker phase and 187 s are loading the eight services and waiting for
-health. Fixed start-up cost matters in proportion to the run: the same ~190 s is 19% of a
-16 min run but ~6% of a 1.8 h RoboTwin run, so short runs are visibly depressed by I/O,
-model loading and process start-up while full-scale runs are barely affected. Compare
-configurations at the same scale, and prefer end-to-end when comparing across benchmarks.
+End-to-end is the number to quote: 1219 s (FastWAM OSMesa) / 1081 s (FastWAM EGL) /
+977 s (π0.5 EGL) from coordinator start to the last record, of which 1008 s / 874 s /
+753 s are the worker phase and the rest is loading the eight services and waiting for
+health (~3.5 / 3.5 / 3.7 min). Fixed start-up cost
+matters in proportion to the run: the same ~190 s is 19% of a 16–20 min LIBERO run but
+~6% of a 1.8 h RoboTwin run, so short runs are visibly depressed by I/O, model loading
+and process start-up while full-scale runs are barely affected. Compare configurations
+at the same scale and the same backend, and prefer end-to-end when comparing across
+benchmarks.
 
 The render skip is the largest lever in that pair of runs, but note the comparison is not
 controlled: turning it off also changed `N` from 24 to 48, so the two effects are not
