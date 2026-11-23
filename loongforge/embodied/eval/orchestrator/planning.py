@@ -34,7 +34,7 @@ def benchmark_family(config: Dict[str, Any]) -> str:
     name = str(benchmark.get("name") or "").lower()
     if name == "libero" or name.startswith("libero_"):
         return "libero"
-    if name in {"calvin", "simplerenv", "robotwin", "maniskill"}:
+    if name in {"calvin", "simplerenv", "robotwin", "maniskill", "robolab"}:
         return name
     raise ValueError(f"Unsupported benchmark.name: {benchmark.get('name')!r}")
 
@@ -381,12 +381,69 @@ def plan_calvin(config: Dict[str, Any], total_workers: int) -> List[Shard]:
     ]
 
 
+def robolab_tasks(config: Dict[str, Any]) -> List[str]:
+    """Resolve the RoboLab task list from ``benchmark.tasks`` or ``benchmark.task_name``."""
+    benchmark = _benchmark(config)
+    tasks = benchmark.get("tasks")
+    if isinstance(tasks, str):
+        tasks = [tasks]
+    if tasks:
+        seen: set = set()
+        return [str(task) for task in tasks if not (task in seen or seen.add(task))]
+    task = str(benchmark.get("task_name") or "")
+    if not task:
+        raise ValueError("robolab planning needs benchmark.task_name or benchmark.tasks")
+    return [task]
+
+
+def plan_robolab(config: Dict[str, Any], total_workers: int) -> List[Shard]:
+    """RoboLab: one shard per task, ``episodes_per_task`` episodes inside it.
+
+    RoboLab steps ``num_envs`` environments in lockstep inside one Isaac Sim
+    process and resets them together once per run, so a task is the natural
+    unit: the shard pins ``num_envs`` / ``num_runs`` / ``seed`` and the runner
+    emits one record per (run, env). Splitting a task across processes would
+    replay the same scene sequence, which is exactly the ``per_task`` trap.
+    """
+    benchmark = _benchmark(config)
+    tasks = robolab_tasks(config)
+    num_envs = max(1, int(benchmark.get("num_envs") or 1))
+    episodes = int(benchmark.get("episodes_per_task") or num_envs)
+    if episodes % num_envs:
+        raise ValueError(
+            f"robolab episodes_per_task={episodes} must be a multiple of num_envs={num_envs} "
+            "(episodes = num_envs * num_runs)"
+        )
+    runs = episodes // num_envs
+    offset = int(benchmark.get("episode_offset") or 0)
+    if benchmark.get("seed") is not None:
+        base_seed = int(benchmark["seed"])
+    else:
+        base_seed = int((config.get("run") or {}).get("seed") or 0)
+    return [
+        {
+            "id": f"{task}/seed={base_seed + offset}",
+            "overrides": {
+                "benchmark": {
+                    "task_name": task,
+                    "seed": base_seed + offset,
+                    "num_envs": num_envs,
+                    "num_runs": runs,
+                }
+            },
+            "expected": episodes,
+        }
+        for task in tasks
+    ]
+
+
 PLANNERS: Dict[str, Planner] = {
     "libero": plan_libero,
     "calvin": plan_calvin,
     "robotwin": plan_robotwin,
     "simplerenv": plan_episode_indexed,
     "maniskill": plan_episode_indexed,
+    "robolab": plan_robolab,
 }
 
 

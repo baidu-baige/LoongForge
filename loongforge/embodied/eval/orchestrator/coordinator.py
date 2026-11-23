@@ -54,7 +54,7 @@ from loongforge.embodied.eval.orchestrator.validation import (
 
 PORT_STRIDE = 20
 DEFAULT_PORT_BASE = 6000  # outside the kernel ephemeral range (10000-61000), see docs §4
-GPU_SIM_FAMILIES = {"robotwin", "simplerenv", "maniskill"}
+GPU_SIM_FAMILIES = {"robotwin", "simplerenv", "maniskill", "robolab"}
 PLACEMENT_MODES = {"co_locate", "separate"}
 UNITS_PER_SLOT = 4  # shards per worker slot: slack so fast slots can steal work
 DEFAULT_MAX_RETRIES = 2  # episode-level infra retries (episode_error / timeouts) per unit

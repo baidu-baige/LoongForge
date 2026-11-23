@@ -25,6 +25,7 @@ from loongforge.embodied.eval.orchestrator.runners.libero_runner import (
     _build_rpc_payload,
 )
 from loongforge.embodied.eval.payload_builders import build_payload_builder
+from loongforge.embodied.eval.payload_builders.base import resize_with_pad
 from loongforge.embodied.eval.payload_builders.registry import (
     PAYLOAD_BUILDER_REGISTRY,
     _auto_import_payload_builder_modules,
@@ -75,6 +76,46 @@ def test_registry_keys_are_consistent():
         f"factory - builder = {factory_keys - builder_keys}; "
         f"builder - factory = {builder_keys - factory_keys}"
     )
+
+
+def test_pi05_payload_builder_empty_cameras_pads_blank_slots():
+    """``empty_cameras`` reserves extra image slots whose mask is False.
+
+    The official ``lerobot/pi05_libero`` config declares ``empty_cameras: 1``
+    (2 real cameras + 1 masked pad, matching openpi's ``right_wrist`` zeros with
+    ``image_mask=False``). It requests the slot via ``image_mask``; the model
+    fills missing slots with zeros.
+    """
+    adapter = LiberoAdapter("libero_object")
+    canonical = adapter.obs_to_canonical(_synthetic_env_obs(), _synthetic_context())
+    pb = build_payload_builder("pi05", yaml_model={"empty_cameras": 1})
+    kwargs = pb.build(canonical, {"benchmark_name": "libero"})
+    assert len(kwargs["images"]) == 2
+    assert kwargs["image_mask"] == [True, True, False]
+
+
+def test_pi05_payload_builder_droid_layout():
+    """``view_layout: droid`` sends [exterior(left), wrist] at 224 plus the masked third slot."""
+    rng = np.random.default_rng(0)
+    left = rng.integers(0, 255, (720, 1280, 3), dtype=np.uint8)
+    wrist = rng.integers(0, 255, (720, 1280, 3), dtype=np.uint8)
+    canonical = {
+        "images": {"primary": wrist, "wrist": wrist, "left": left, "right": left},
+        "instruction": "put the banana in the bowl",
+        "state_raw": {"joint": np.arange(8, dtype=np.float32)},
+    }
+    pb = build_payload_builder(
+        "pi05",
+        yaml_model={"view_layout": "droid", "empty_cameras": 1, "state_encoding": "passthrough"},
+    )
+    kwargs = pb.build(canonical, {"benchmark_name": "robolab"})
+    exterior_224, wrist_224 = kwargs["images"]
+    assert exterior_224.shape == wrist_224.shape == (224, 224, 3)
+    # 1280x720 -> 224x126, centered with 49 zero rows above and below (openpi resize_with_pad).
+    assert not exterior_224[:49].any() and not exterior_224[-49:].any() and exterior_224[49:175].any()
+    assert np.array_equal(exterior_224, resize_with_pad(left, 224, 224))
+    assert kwargs["image_mask"] == [True, True, False]
+    assert np.array_equal(kwargs["state"], np.arange(8, dtype=np.float32))
 
 
 def test_pi05_payload_builder_defaults_and_state_none():

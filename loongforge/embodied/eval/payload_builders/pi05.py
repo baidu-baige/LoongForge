@@ -17,8 +17,11 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 from loongforge.embodied.eval.adapters.robotwin import ROBOTWIN_ACTION_DIM
-from loongforge.embodied.eval.payload_builders.base import PayloadBuilder
+from loongforge.embodied.eval.payload_builders.base import PayloadBuilder, resize_with_pad
 from loongforge.embodied.eval.payload_builders.registry import register_payload_builder
+
+# openpi pi05 image resolution.
+_DROID_IMAGE_SIZE = 224
 
 # openpi Aloha/RoboTwin proprio helpers (adapt_to_pi input side). These used to
 # live in ``adapters/robotwin.py``; they now live next to their only consumer
@@ -122,6 +125,21 @@ def _pack_images(images_by_cam: Dict[str, Optional[np.ndarray]]) -> List[np.ndar
     return packed
 
 
+def _pack_images_droid(images_by_cam: Dict[str, Optional[np.ndarray]], size: int) -> List[np.ndarray]:
+    """openpi DROID layout ``[exterior, wrist]``, each resize-with-padded to ``size``.
+
+    Matches the official RoboLab pi0-family client: the exterior view is
+    ``over_shoulder_left_camera`` (canonical ``left``) and frames are resized
+    client-side with PIL before inference. Pair with ``empty_cameras: 1`` for the
+    masked third slot openpi feeds the model.
+    """
+    exterior = images_by_cam.get("left")
+    wrist = images_by_cam.get("wrist")
+    if exterior is None or wrist is None:
+        raise ValueError("view_layout 'droid' needs the 'left' (exterior) and 'wrist' views")
+    return [resize_with_pad(np.asarray(exterior), size, size), resize_with_pad(np.asarray(wrist), size, size)]
+
+
 @register_payload_builder("pi05")
 class Pi05PayloadBuilder(PayloadBuilder):
     """Pi0.5 client-side payload assembly."""
@@ -139,6 +157,14 @@ class Pi05PayloadBuilder(PayloadBuilder):
     action_encoding: str = "axis_angle"  # pos(3)+axis_angle(3)+grip(1)
     action_dim: int = 7
     action_horizon: int = 50
+    # Blank camera slots appended after the real views. The official
+    # ``lerobot/pi05_libero`` checkpoint expects 3 slots (base + wrist + 1 pad);
+    # openpi masks the pad (image_mask=False), so we pass the mask rather than a
+    # real third view: predict_action fills the slot with zeros. 0 = no padding.
+    empty_cameras: int = 0
+    # Camera packing: ``""`` = :func:`_pack_images`; ``droid`` = openpi DROID
+    # ``[exterior, wrist]`` at 224x224 (RoboLab ``pi05_droid_jointpos``).
+    view_layout: str = ""
 
     # Non-annotated attributes are internal (not YAML-overridable).
     unnorm_key = ""
@@ -171,12 +197,20 @@ class Pi05PayloadBuilder(PayloadBuilder):
 
     def build(self, canonical: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:
         """Return the kwargs consumed by ``Pi05.predict_action``."""
-        images = _pack_images(canonical["images"])
+        if self.view_layout == "droid":
+            images = _pack_images_droid(canonical["images"], _DROID_IMAGE_SIZE)
+        elif not self.view_layout:
+            images = _pack_images(canonical["images"])
+        else:
+            raise ValueError(f"Unsupported pi05 view_layout: {self.view_layout!r}")
         kwargs: Dict[str, Any] = {
             "images": images,
             "instructions": [str(canonical["instruction"])],
             "state": self._encode_state(canonical),
         }
+        empty_cameras = max(0, int(self.empty_cameras))
+        if empty_cameras:
+            kwargs["image_mask"] = [True] * len(images) + [False] * empty_cameras
         if self.unnorm_key:
             kwargs["unnorm_key"] = self.unnorm_key
         return kwargs

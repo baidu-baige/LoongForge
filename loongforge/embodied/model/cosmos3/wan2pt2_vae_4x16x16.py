@@ -1204,7 +1204,8 @@ def _video_vae(
             encode_exact_durations=encode_exact_durations,
         )
 
-    if torch.distributed.get_rank() == 0:
+    # Single-process callers (e.g. the eval policy server) have no process group.
+    if not dist.is_initialized() or dist.get_rank() == 0:
         ckpt = torch.load(
             pretrained_path,
             map_location=device,

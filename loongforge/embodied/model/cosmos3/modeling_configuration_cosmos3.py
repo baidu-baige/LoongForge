@@ -86,6 +86,29 @@ class Cosmos3ModelConfig:
     loss_scale: float = 1.0
     encode_exact_durations: list = field(default_factory=lambda: [33])
 
+    # Eval contract (RoboLab / DROID): 7 arm joints + 1 gripper, 32-step chunks.
+    action_dim: int = 8
+    action_horizon: int = 32
+    state_dim: int = 8
+
+    # Policy inference; defaults match the official RoboLab policy server
+    # (cosmos_framework/scripts/action_policy_server_robolab.py RobolabServerArgs).
+    domain_name: str = "droid_lerobot"
+    guidance: float = 3.0
+    num_steps: int = 4
+    inference_shift: float = 5.0
+    resolution: str = "480"
+    conditioning_fps: float = 15.0
+    image_height: int = 540
+    image_width: int = 640
+    use_state: bool = True
+    history_length: int = 1
+    seed: int = 0
+    # False: draw a fresh seed per request from an RNG seeded with ``seed``.
+    deterministic_seed: bool = False
+    # Output gripper is 0 = open / 1 = close after this threshold.
+    gripper_threshold: float = 0.5
+
     train_modules: list[str] = field(default_factory=lambda: [])
     keys_to_skip_loading: list[str] = field(default_factory=lambda: [])
 

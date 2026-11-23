@@ -1,0 +1,176 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+# Cosmos3 x RoboLab full benchmark: 120 tasks x 10 episodes (official protocol).
+# 6 policy servers, 2 per GPU on GPU0-2 (16B bf16, ~33 GB each); 6 Isaac Sim workers spread
+# over GPU3-7. 
+# Replace the /path/to placeholders, then run via run_robolab_eval.sh with CONFIG=<this file>.
+
+benchmark:
+  name: robolab
+  tasks:
+  - AnimalsInBinTask
+  - AppleAndYogurtInBowlTask
+  - BagelsOnPlateTask
+  - BananaInBowlTask
+  - BananaOnPlateTask
+  - BananasInBinOneMoreTask
+  - BananasInBinThreeTotalTask
+  - BananasInCrateTask
+  - BananasOutOfBinTask
+  - BananaThenRubiksCubeTask
+  - BBQSauceInBinTask
+  - BigPumpkinInBinTask
+  - BlackItemsInBinTask
+  - BlocksInBinTask
+  - BlockStackingOrderAgnosticTask
+  - BlockStackingSpecifiedOrderTask
+  - BowlInBinTask
+  - BowlStackingLeftOnRightTask
+  - BowlStackingRightOnLeftTask
+  - ButterAboveRaisinTask
+  - CannedFoodInBinTask
+  - ClampInRightBinTask
+  - CleanUpToysTask
+  - ClearOrganicObjectsTask
+  - ClutterPlasticTask
+  - ClutterPumpkinTask
+  - CoffeePotInBinTask
+  - CondimentsInBinTask
+  - CookingClearPlateTask
+  - CookingPickPastaToolTask
+  - CubesAndBlocksInBinTask
+  - DishesInBinTask
+  - ElectronicsInBinTask
+  - FoodPacking1BoxesTask
+  - FoodPacking1CansTask
+  - FoodPacking2BoxesTask
+  - FoodPacking2CansTask
+  - FoodPacking3BoxesTask
+  - FoodPacking3CansTask
+  - FoodPackingByColorTask
+  - FruitsGreenLimesOnPlateTask
+  - FruitsMovingOrangeOrLimeTask
+  - FruitsMovingTask
+  - FruitsOnionTask
+  - FruitsOnionToPlateTask
+  - FruitsOnPlate3Task
+  - FruitsOnPlateTask
+  - FruitsOrangesOnPlateTask
+  - GrabABagelTask
+  - GrabAFruitTask
+  - GreenSpoonsInPotTask
+  - HammersInLeftBinTask
+  - JugsOnShelfTask
+  - KeyboardOutOfBinTask
+  - LargerObjectRaisinBoxInBinTask
+  - MarkerInMugTask
+  - MouseOnKeyboardTask
+  - MoveBananaToBagelPlateTask
+  - MustardAboveRaisinTask
+  - MustardInLeftBinTask
+  - MustardInRightBinTask
+  - NonHammerToolsInRightBinTask
+  - OneBottleInSquarePailTask
+  - OneBottleOnShelfTask
+  - PhoneOrRemoteInBinTask
+  - PickDrillTask
+  - PickGlassesTask
+  - PickOrangeObjectTask
+  - PickUpBluePitcherTask
+  - PickUpGreenObjectTask
+  - PinkSpoonInPotTask
+  - PlasticBottlesInSquarePailTask
+  - PutBowlOnShelfTopTask
+  - PutMugsOnShelfTask
+  - PutTwoMugsOnShelfTask
+  - RecycleCartonsOnBoxTask
+  - RecycleCartonsVerticalCrateTask
+  - RecycleCartonTask
+  - RedDishesInBinTask
+  - RedItemsInBinTask
+  - ReorientAllMugsTask
+  - ReorientJugTask
+  - ReorientRedMugTask
+  - ReorientWhiteMugsTask
+  - RubiksCubeAndBananaTask
+  - RubiksCubeBehindBowlTask
+  - RubiksCubeInFrontOfBowlTask
+  - RubiksCubeLeftOfBowlTask
+  - RubiksCubeOrBananaTask
+  - RubiksCubeRightOfBowlTask
+  - RubiksCubesInBinTask
+  - RubiksCubeTask
+  - RubiksCubeThenBananaTask
+  - SauceBottlesCrateTask
+  - SmallerObjectButterInBinTask
+  - SmallPumpkinInBinTask
+  - SmartphoneInBinTask
+  - SpoonInMugTask
+  - SpoonsInPotTask
+  - Stack3RubiksCubeTask
+  - StackWhiteMugsTask
+  - StackYellowOnRedTask
+  - TakeMeasuringSpoonOutTask
+  - TakeMugsOffOfShelfTask
+  - TakeSpatulaOffShelfTask
+  - ThrowAwayAppleTask
+  - ThrowAwaySnacksTask
+  - ToolOrganizationBothTask
+  - ToolOrganizationTask
+  - ToolsPickingAllHammersTask
+  - ToolsPickingDrillTask
+  - ToolsPickingHammerTask
+  - ToyInBinTask
+  - UnstackRubiksCubeTask
+  - UtensilsInMugTask
+  - WhiteMugInCenterOfTableTask
+  - WhiteMugsInBinTask
+  - WoodSpatulaToBowlTask
+  - YellowAndWhiteObjectsInBinTask
+  - YogurtInBowlTask
+  num_envs: 10
+  episodes_per_task: 10
+  max_steps: 0
+  headless: true
+  device: cuda:0
+  return_action_chunk: true
+model:
+  backend: loongforge
+  model_type: cosmos3
+  name: cosmos3-nano-policy-droid
+  qwen3_vl_path: /path/to/ckpt/Cosmos3-Nano-Policy-DROID
+  vae_path: /path/to/Wan2.2-TI2V-5B/Wan2.2_VAE.pth
+  action_dim: 8
+  action_horizon: 32
+  state_dim: 8
+servers:
+  - gpus: [0, 1, 2, 0, 1, 2]
+
+pools:
+  gpu_sim:
+    n_sims_per_server: 1
+    placement: separate
+    sim_gpus: [3, 4, 5, 6, 7]
+server:
+  port: 61300
+  health_port: 61301
+  start_timeout_sec: 900
+  python: /usr/bin/python3
+  ckpt_path: /path/to/ckpt/Cosmos3-Nano-Policy-DROID
+  loongforge_root: /path/to/LoongForge
+  log: /path/to/output/robolab_cosmos3/policy_server.log
+timeouts:
+  policy_call_ms: 180000
+  per_step_sec: 300
+  per_episode_sec: 900
+run:
+  seed: 0
+  output_dir: /path/to/output/robolab_cosmos3
+  timestamped_output: false
+  max_retries: 2
+  unit_timeout_sec: 21600
+env:
+  ld_library_path: <site-packages>/torch/lib:<site-packages>/nvidia/cudnn/lib
+  eval_root: /path/to/LoongForge/loongforge/embodied/eval
+  loongforge_root: /path/to/LoongForge

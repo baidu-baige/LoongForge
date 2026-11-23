@@ -7,6 +7,7 @@ Per-benchmark reproduction guides (env setup, run, verification):
 - [SimplerEnv (WidowX)](simplerenv.md)
 - [RoboTwin](robotwin.md)
 - [ManiSkill](maniskill.md)
+- [RoboLab](robolab.md)
 
 ```{toctree}
 :hidden:
@@ -16,4 +17,5 @@ calvin
 simplerenv
 robotwin
 maniskill
+robolab
 ```

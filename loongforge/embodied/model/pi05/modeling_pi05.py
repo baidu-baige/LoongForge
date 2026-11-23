@@ -1048,7 +1048,7 @@ class PI05Policy(nn.Module):
     @torch.no_grad()
     def predict_action(
         self, images, instructions, state=None, dataset_stats=None, *,
-        image_normalize_mode="identity", normalization_mode="q99",
+        image_normalize_mode="identity", normalization_mode="q99", image_mask=None,
         seeds: Optional[Sequence[int]] = None,
     ) -> np.ndarray:
         """Inference: Euler ODE denoising, returns ndarray (B, action_horizon, max_action_dim)."""
@@ -1064,16 +1064,22 @@ class PI05Policy(nn.Module):
         image_transform = ImageTransform(apply_to=[], image_size=self._image_size, normalize_mode=image_normalize_mode)
         # Use the number of views provided by the eval client so LIBERO (2) and
         # RoboTwin (3) both work without hard-coding a single camera count.
+        # ``image_mask`` may request more slots than provided: the official
+        # pi05_libero / pi05_droid checkpoints expect 3 slots (2 views + 1 masked
+        # pad), and openpi pads the extra slot with a zero image whose mask is False.
         num_images = max(len(images[0]), 1)
+        if image_mask is not None:
+            num_images = max(num_images, len(image_mask))
 
         images_list, img_masks = [], []
         for v in range(num_images):
+            valid = True if not image_mask or v >= len(image_mask) else bool(image_mask[v])
             view = []
             mask_vals = []
             for im_list in images:
                 if v < len(im_list):
                     view.append(im_list[v])
-                    mask_vals.append(True)
+                    mask_vals.append(valid)
                 else:
                     view.append(torch.zeros(3, self._image_size, self._image_size))
                     mask_vals.append(False)
@@ -1132,6 +1138,13 @@ class PI05Policy(nn.Module):
             dim = min(actions.shape[-1], normalizer.statistics[stat_key].numel()) if stat_key else self.config.action_dim
             actions = actions.clone()
             actions[..., :dim] = normalizer.inverse(actions[..., :dim]).to(actions.dtype)
+        delta_dims = int(self.config.delta_action_dims)
+        if delta_dims > 0:
+            if state is None:
+                raise ValueError("delta_action_dims > 0 needs the raw state to anchor the deltas")
+            actions = actions.clone()
+            anchor = state[:, :delta_dims].to(device=actions.device, dtype=actions.dtype)  # [B,n]
+            actions[..., :delta_dims] += anchor.unsqueeze(1)
         return actions.cpu().numpy()
 
     @staticmethod
