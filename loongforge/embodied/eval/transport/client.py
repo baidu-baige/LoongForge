@@ -23,6 +23,12 @@ class PolicyClient:
         self._uri = f"ws://{host}:{port}"
         self._packer = msgpack_numpy.Packer()
         self._ws, self._server_metadata = self._wait_for_server(timeout=timeout)
+        # Monotonic per-request identity. Every message on the wire carries a
+        # unique id so a reply can be matched to the request that awaited it;
+        # without this, an abandoned request (policy-call timeout) leaves its
+        # late reply queued on the connection and the next call reads it as if
+        # it were its own.
+        self._request_seq = 0
 
     @property
     def metadata(self) -> Dict[str, Any]:
@@ -75,10 +81,13 @@ class PolicyClient:
         self,
         message_type: str,
         payload: Optional[Dict[str, Any]] = None,
-        request_id: str = "default",
+        request_id: Optional[str] = None,
         timeout: Optional[float] = None,
     ) -> Dict[str, Any]:
         """Send a request and read the reply. ``timeout`` bounds the wait for the reply."""
+        if request_id is None:
+            self._request_seq += 1
+            request_id = str(self._request_seq)
         message = {
             "type": message_type,
             "request_id": request_id,
@@ -86,10 +95,27 @@ class PolicyClient:
             "payload": payload or {},
         }
         self._ws.send(self._packer.pack(message))
-        response = self._ws.recv() if timeout is None else self._ws.recv(timeout=timeout)
+        try:
+            response = self._ws.recv() if timeout is None else self._ws.recv(timeout=timeout)
+        except TimeoutError:
+            # The reply is still on its way (or the request was abandoned), so the
+            # stream is now out of sync: the next recv() on this connection would
+            # return *this* request's late reply. Drop the connection so a later
+            # call fails fast (ConnectionClosed) and the caller rebuilds, instead
+            # of silently accepting a reply that belongs to another request.
+            try:
+                self._ws.close()
+            except Exception:
+                pass
+            raise
         if isinstance(response, str):
             raise RuntimeError(response)
-        return msgpack_numpy.unpackb(response)
+        result = msgpack_numpy.unpackb(response)
+        if result.get("request_id") != request_id:
+            raise RuntimeError(
+                f"request_id mismatch: sent {request_id!r}, got {result.get('request_id')!r}"
+            )
+        return result
 
     def ping(self, timeout: Optional[float] = None) -> Dict[str, Any]:
         """Round-trip a ``ping``. ``timeout`` bounds the wait for the pong."""

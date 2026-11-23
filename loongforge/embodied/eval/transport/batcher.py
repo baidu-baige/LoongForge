@@ -127,9 +127,17 @@ class AsyncBatcher:
         if self._task is not None and self._task.done():
             raise RuntimeError("eval batcher is not running") from self._task.exception()
 
+        # Capture the cache generation *now*, while still on the event loop.
+        # ``reset`` is routed inline on the event loop too, so this read is
+        # strictly ordered against any reset that lands before this request is
+        # actually processed. The policy's write-back guard must compare against
+        # this value, not a generation re-read after the batch is assembled.
+        capture = getattr(self._policy, "capture_cache_generation", None)
+        generation = capture(payload) if callable(capture) else None
+
         future: asyncio.Future = loop.create_future()
         self.total_requests += 1
-        await self._queue.put((payload, future))
+        await self._queue.put((payload, generation, future))
         return await future
 
     async def _run(self) -> None:
@@ -144,22 +152,22 @@ class AsyncBatcher:
             self._fail_queued(exc)
 
     def _fail_batch(self, batch: List[tuple], exc: Exception) -> None:
-        for _, pending in batch:
+        for _, _, pending in batch:
             if not pending.done():
                 pending.set_exception(exc)
 
     def _fail_queued(self, exc: Exception) -> None:
         while True:
             try:
-                _, pending = self._queue.get_nowait()
+                _, _, pending = self._queue.get_nowait()
             except asyncio.QueueEmpty:
                 return
             if not pending.done():
                 pending.set_exception(exc)
 
     async def _run_batch(self, loop: asyncio.AbstractEventLoop) -> None:
-        payload, future = await self._queue.get()
-        batch = [(payload, future)]
+        payload, generation, future = await self._queue.get()
+        batch = [(payload, generation, future)]
         deadline = loop.time() + self._max_wait_s
         while len(batch) < self._max_batch_size:
             timeout = deadline - loop.time()
@@ -171,10 +179,11 @@ class AsyncBatcher:
                 break
 
         payloads = [item[0] for item in batch]
+        generations = [item[1] for item in batch]
         start = time.perf_counter()
         try:
             results = await loop.run_in_executor(
-                None, self._policy.predict_action_batch, payloads
+                None, self._policy.predict_action_batch, payloads, generations
             )
         except asyncio.CancelledError:
             raise
@@ -193,7 +202,7 @@ class AsyncBatcher:
                     f"policy returned {0 if results is None else len(results)} results "
                     f"for {len(batch)} requests"
                 )
-            for (_, pending), result in zip(batch, results):
+            for (_, _, pending), result in zip(batch, results):
                 if not pending.done():
                     pending.set_result(result)
         except asyncio.CancelledError:
