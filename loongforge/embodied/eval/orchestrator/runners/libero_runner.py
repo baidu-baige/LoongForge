@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import pathlib
+import re
 import sys
 import time
 from typing import Any, Dict, List, Optional
@@ -22,14 +23,17 @@ import numpy as np
 from websockets.exceptions import ConnectionClosed
 
 from loongforge.embodied.eval.adapters.libero import (
-    LIBERO_DUMMY_ACTION, LIBERO_ENV_RESOLUTION, SUITE_MAX_STEPS, LiberoAdapter,
+    LIBERO_DUMMY_ACTION, LIBERO_ENV_RESOLUTION, SUITE_MAX_STEPS, LiberoAdapter, base_suite_name,
 )
 from loongforge.embodied.eval.metrics import (
     append_jsonl,
     completed_episode_keys,
     load_jsonl,
+    load_task_classification,
+    summarize_libero_plus,
     summarize_suites,
     write_eval_report,
+    write_libero_plus_summary_csv,
     write_suite_summary_csv,
     write_summary_csv,
 )
@@ -57,6 +61,38 @@ class EpisodeTimeoutError(TimeoutError):
     pass
 
 
+_BDDL_LANGUAGE_RE = re.compile(r"\(:language\s+([^)]+)\)")
+
+
+def _bddl_language(bddl_file: pathlib.Path) -> str:
+    """Return the instruction declared in a BDDL ``(:language ...)`` block.
+
+    LIBERO-Pro's ``_lan`` / ``_task`` suites keep the stock task file names but
+    rewrite the instruction inside the BDDL, so ``task.language`` (derived from
+    the filename) is the original one and must not be used for them.
+    """
+    try:
+        match = _BDDL_LANGUAGE_RE.search(bddl_file.read_text(encoding="utf-8"))
+    except OSError:
+        return ""
+    return match.group(1).strip() if match else ""
+
+
+def _task_instruction(task, instruction_from_bddl: bool) -> str:
+    """Instruction for a task: BDDL text for LIBERO-Pro, filename-derived otherwise."""
+    if not instruction_from_bddl:
+        return task.language
+    from libero.libero import get_libero_path
+
+    bddl_file = pathlib.Path(get_libero_path("bddl_files")) / task.problem_folder / task.bddl_file
+    return _bddl_language(bddl_file) or task.language
+
+
+def _pro_variant(args: argparse.Namespace) -> bool:
+    """True when benchmark.variant is ``pro`` (LIBERO-Pro instruction semantics)."""
+    return str(getattr(args, "libero_variant", "standard") or "standard").strip().lower() == "pro"
+
+
 def _render_resolution(args: argparse.Namespace) -> int:
     """Camera render size: optional benchmark.render_resolution, else the shared default.
 
@@ -76,7 +112,9 @@ def _get_libero_env(task, resolution: int, seed: int):
 
     task_bddl_file = pathlib.Path(get_libero_path("bddl_files")) / task.problem_folder / task.bddl_file
     env = OffScreenRenderEnv(
-        bddl_file_name=task_bddl_file,
+        # LIBERO-Plus' env_wrapper does substring checks on bddl_file_name
+        # ("_view_", "_initstate_"), so it must be a str, not a Path.
+        bddl_file_name=str(task_bddl_file),
         camera_heights=resolution,
         camera_widths=resolution,
     )
@@ -339,7 +377,7 @@ def run_episode(
         episode_seed = int(args.seed) + task_id * 1000 + episode_idx
         np.random.seed(episode_seed)
 
-    task_description = task.language
+    task_description = _task_instruction(task, _pro_variant(args))
     episode_id = f"libero/{task_suite_name}/task={task_id}/episode={episode_idx}"
     reset_time_sec: Optional[float] = None
     steps = 0
@@ -374,7 +412,8 @@ def run_episode(
             if env_seed_mode == "per_task":
                 env = _get_cached_env(task, _render_resolution(args), episode_seed)
             else:
-                env, task_description = _get_libero_env(task, _render_resolution(args), episode_seed)
+                # Instruction already resolved above (BDDL text for LIBERO-Pro).
+                env, _ = _get_libero_env(task, _render_resolution(args), episode_seed)
             # With a snapshot directory, each episode restores the RNG state the
             # single-process serial run would have had before its own reset. This is
             # what makes episode-level sharding safe under per_task seeding.
@@ -430,7 +469,7 @@ def run_episode(
             # Explicit benchmark.max_steps takes priority over the suite
             # default so long-horizon policies (e.g. X-VLA, horizon 800) are
             # not clamped by SUITE_MAX_STEPS.
-            max_steps = args.max_steps if args.max_steps > 0 else SUITE_MAX_STEPS[task_suite_name]
+            max_steps = args.max_steps if args.max_steps > 0 else SUITE_MAX_STEPS[base_suite_name(task_suite_name)]
             done = False
             info: Dict[str, Any] = {}
             obs_rendered = True
@@ -635,6 +674,7 @@ def _manifest_protocol(args: argparse.Namespace) -> Dict[str, Any]:
     return {
         "seed": args.seed,
         "episodes_per_task": args.episodes_per_task,
+        "variant": getattr(args, "libero_variant", None),
         "num_steps_wait": args.num_steps_wait,
         "max_steps": args.max_steps,
         "env_seed_mode": getattr(args, "env_seed_mode", None),
@@ -655,8 +695,17 @@ def run_batch(args: argparse.Namespace) -> Dict[str, Any]:
         return _run_batch_groot_official(args)
     if protocol != "legacy":
         raise ValueError(f"Unknown LIBERO protocol: {protocol!r}")
+    libero_variant = str(getattr(args, "libero_variant", "standard") or "standard").strip().lower()
+    if libero_variant not in {"standard", "plus", "pro"}:
+        raise ValueError(
+            f"Unknown benchmark.variant for LIBERO: {libero_variant!r}. Use standard | plus | pro."
+        )
     os.environ.setdefault("MUJOCO_GL", "egl")
     os.environ.setdefault("PYOPENGL_PLATFORM", "egl")
+    # LIBERO / LIBERO-Plus ship init-state pickles that contain numpy globals,
+    # which torch >= 2.6 rejects under the new weights_only=True default. The
+    # files are the benchmark's own vendored assets, so restore the legacy load.
+    os.environ.setdefault("TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD", "1")
 
     from libero.libero import benchmark
 
@@ -685,6 +734,12 @@ def run_batch(args: argparse.Namespace) -> Dict[str, Any]:
             protocol_version=PROTOCOL_VERSION,
             benchmark_modules=("libero",),
         )
+
+    # Load the perturbation labels before running any episode so a missing or
+    # inconsistent task_classification.json fails fast instead of after hours.
+    classification = None
+    if libero_variant == "plus":
+        classification = load_task_classification(getattr(args, "task_classification_path", "") or None)
 
     task_suite = benchmark.get_benchmark_dict()[args.task_suite_name]()
     n_tasks = task_suite.n_tasks if args.max_tasks <= 0 else min(task_suite.n_tasks, args.max_tasks)
@@ -780,6 +835,17 @@ def run_batch(args: argparse.Namespace) -> Dict[str, Any]:
         min_episodes=min_episodes,
         expected_counts=expected_counts,
     )
+    # LIBERO-Plus only adds an aggregation view: the official leaderboard is
+    # reported per perturbation category (7) + Total, which the standard
+    # per-task/per-suite tables cannot express.
+    libero_plus_summary_path = None
+    if classification is not None:
+        libero_plus_summary_path = output_dir / "libero_plus_summary.csv"
+        write_libero_plus_summary_csv(
+            libero_plus_summary_path,
+            summarize_libero_plus(all_records, classification),
+        )
+        logging.info("libero runner: wrote LIBERO-Plus summary to %s", libero_plus_summary_path)
     report = None
     if args.generate_report:
         report = write_eval_report(
@@ -806,6 +872,7 @@ def run_batch(args: argparse.Namespace) -> Dict[str, Any]:
         "results_path": str(results_path),
         "summary_path": str(summary_path),
         "suite_summary_path": str(suite_summary_path),
+        "libero_plus_summary_path": str(libero_plus_summary_path) if libero_plus_summary_path else None,
         "report": report,
         "elapsed_sec": time.time() - start_time,
     }
@@ -841,6 +908,26 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--episodes-per-task", type=int, default=1)
     parser.add_argument("--libero-protocol", choices=["legacy", "gr00t_official"], default="legacy")
     parser.add_argument("--episode-offset", type=int, default=0, help="first episode index within each task")
+    parser.add_argument(
+        "--libero-variant",
+        choices=["standard", "plus", "pro"],
+        default="standard",
+        help=(
+            "Installed LIBERO package variant. standard = stock LIBERO; plus = "
+            "LIBERO-Plus drop-in package, which additionally writes "
+            "libero_plus_summary.csv split by perturbation category; pro = "
+            "LIBERO-Pro drop-in package, whose _lan/_task suites are evaluated "
+            "with the instruction declared inside the BDDL."
+        ),
+    )
+    parser.add_argument(
+        "--task-classification-path",
+        default="",
+        help=(
+            "Override for LIBERO-Plus benchmark/task_classification.json; "
+            "empty means <libero benchmark_root>/benchmark/task_classification.json."
+        ),
+    )
     parser.add_argument("--num-steps-wait", type=int, default=10)
     parser.add_argument("--max-steps", type=int, default=-1, help="<=0 means suite default")
     parser.add_argument(

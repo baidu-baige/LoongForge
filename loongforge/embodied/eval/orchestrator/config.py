@@ -170,6 +170,13 @@ CONFIG_MAPPING = {
     "benchmark.episodes_per_task": "episodes_per_task",
     "benchmark.libero_protocol": "libero_protocol",
     "benchmark.episode_offset": "episode_offset",
+    # LIBERO package variant: standard (default) or plus (LIBERO-Plus drop-in
+    # package). `plus` only adds the perturbation-level summary; task
+    # enumeration, episodes and actions reuse the same libero runner.
+    "benchmark.variant": "libero_variant",
+    # Optional override for LIBERO-Plus' benchmark/task_classification.json;
+    # empty means <libero benchmark_root>/benchmark/task_classification.json.
+    "benchmark.task_classification_path": "task_classification_path",
     "benchmark.num_steps_wait": "num_steps_wait",
     # Env seeding granularity: per_episode (legacy default) re-creates and re-seeds the env
     # for every episode; per_task reuses ONE env seeded with run.seed across all trials,

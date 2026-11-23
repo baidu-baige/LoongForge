@@ -1,0 +1,132 @@
+# pi0.5 LIBERO-Pro parallel-evaluation template (open-source).
+#
+# LIBERO-Pro is a drop-in replacement of the `libero` package that adds
+# perturbation suites on top of the stock four: libero_<base>_<dim> with
+# dim in {object, swap, lan, task, env} = official Obj / Pos / Sem / Task / Env.
+# The *_env suites are not shipped upstream; generate them once with the
+# official pipeline (`GEN_ENV=1 bash run_libero_pro_eval.sh`) before running.
+#
+# Parallel mode: one inference service per GPU (`servers[].gpus`), N CPU-sim
+# workers per GPU (`pools.cpu_sim.n_sims_per_server`), global queue across all
+# suites. Keep `env.mujoco_gl: egl` in parallel mode: the coordinator pins each
+# worker's EGL device to its slot GPU; OSMesa is CPU-only and cannot be spread.
+#
+# Runtime requirements:
+#   - TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 (the runner sets it automatically;
+#     keep it here for standalone `python -m libero_runner` runs)
+#   - LIBERO_CONFIG_PATH pointing at the LIBERO-Pro config.yaml
+#     (env.libero_config_path below)
+#
+# Evaluation protocol: 50 episodes/task (each .pruned_init holds 50 states).
+# Reference run (8 GPUS, spatial 5 dims = 2,500 episodes): N=16, batching=8,
+# episodes_per_chunk=2, tasks_per_unit=5.
+
+benchmark:
+  name: libero
+  variant: pro              # LIBERO-Pro: read the instruction from BDDL (:language ...)
+  # Full 4 suite x 5 perturbation matrix (20 cells) in one coordinated plan.
+  # Trim this list to run a single row, e.g. the spatial 5 dims used above.
+  suites:
+    - libero_spatial_lan
+    - libero_spatial_object
+    - libero_spatial_swap
+    - libero_spatial_task
+    - libero_spatial_env
+    - libero_object_lan
+    - libero_object_object
+    - libero_object_swap
+    - libero_object_task
+    - libero_object_env
+    - libero_goal_lan
+    - libero_goal_object
+    - libero_goal_swap
+    - libero_goal_task
+    - libero_goal_env
+    - libero_10_lan
+    - libero_10_object
+    - libero_10_swap
+    - libero_10_task
+    - libero_10_env
+  max_tasks: 0              # 0 = all 10 tasks in each suite
+  episodes_per_task: 50     # official protocol
+  episodes_per_chunk: 2     # floor(E / slots) for the reference 2,500-episode run
+  tasks_per_unit: 5         # several tasks share one process -> amortise the import cost
+  plan_order: lpt
+  max_steps: -1             # <=0 = base-suite default (spatial 220 / object 280 / goal 300 / 10 520)
+  num_steps_wait: 10
+  continuous_gripper: true
+
+model:
+  backend: loongforge
+  model_type: pi05
+  name: loongforge-pi05-libero-pro
+  action_dim: 7
+  state_dim: 8
+  action_horizon: 10
+  max_action_dim: 32
+  max_state_dim: 32
+  compile_model: false
+  # pi05 preprocessing must match openpi's LiberoInputs:
+  #   images -> resize_with_pad + [-1,1] (siglip), 3 slots (2 real + 1 masked pad)
+  #   state/actions -> QUANTILES (q01 -> -1, q99 -> +1)
+  eval_image_normalize_mode: siglip
+  eval_normalization_mode: q99
+  state_encoding: libero_ee8
+  # Number of extra (masked) camera slots; MUST match how the checkpoint was
+  # trained. Default is 1 here because the official `lerobot/pi05_libero`
+  # checkpoint declares `empty_cameras: 1` — 2 real cameras (base + wrist) plus
+  # one zero-image slot whose mask is False. Set 0 for a 2-camera checkpoint.
+  # Wrong value silently changes the prefix token layout and collapses success.
+  empty_cameras: 1
+
+server:
+  host: 127.0.0.1
+  # The coordinator assigns each service `LOONGFORGE_COORD_PORT_BASE + stride*i`
+  # and overrides these; kept here for standalone `loongforge_server` runs.
+  port: 12103
+  health_port: 12104
+  python: /path/to/loongforge/bin/python
+  log: /path/to/LoongForge/loongforge/embodied/eval/reports/pi05/libero_pro/policy_server.log
+  start_timeout_sec: 1800
+  ckpt_path: /path/to/pi05_libero
+  dataset_statistics_path: /path/to/pi05_libero_norm_stats.json
+  loongforge_root: /path/to/LoongForge
+  tokenizer_path: /path/to/paligemma-3b-pt-224
+  use_bf16: false
+  chunk_execute_steps: 10
+  # Server-side batching used by the reference runs.
+  batching:
+    max_batch_size: 8
+    max_wait_ms: 5
+
+# One inference service per GPU. Shorten the list to use fewer cards.
+servers:
+  - gpus: [0, 1, 2, 3, 4, 5, 6, 7]
+
+# LIBERO is a CPU-sim family: use pools.cpu_sim (gpu_sim is ignored).
+pools:
+  cpu_sim:
+    n_sims_per_server: 16
+
+env:
+  eval_root: /path/to/LoongForge/loongforge/embodied/eval
+  libero_config_path: /path/to/libero_pro_config   # dir containing config.yaml
+  # EGL (not osmesa) so the coordinator can pin each worker to a slot GPU.
+  mujoco_gl: egl
+  pyopengl_platform: egl
+  ld_library_path: /path/to/nvidia_lib
+
+run:
+  output_dir: /path/to/LoongForge/loongforge/embodied/eval/reports/pi05/libero_pro
+  seed: 7
+  save_trace: false
+  save_replay: false
+  timestamped_output: false
+  worker_local_files: true
+  resume: true
+  unit_timeout_sec: 5400
+
+timeouts:
+  policy_call_ms: 600000
+  per_step_sec: 600
+  per_episode_sec: 900

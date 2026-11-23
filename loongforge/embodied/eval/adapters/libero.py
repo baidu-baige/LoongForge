@@ -27,6 +27,28 @@ SUITE_MAX_STEPS = {
     "libero_90": 400,
 }
 
+# LIBERO-Pro registers perturbation suites as derived names on top of the stock
+# ones (libero_goal_lan, libero_object_swap, ...). They keep the base suite's
+# protocol (step budget), so every lookup below goes through base_suite_name().
+_DERIVED_SUITE_SUFFIXES = ("_lan", "_object", "_swap", "_task", "_env", "_temp")
+
+
+def base_suite_name(suite_name: str) -> str:
+    """Map a derived LIBERO suite to its base suite.
+
+    ``libero_goal_lan`` -> ``libero_goal``; stock names are returned unchanged.
+    Unknown names are also returned unchanged so the caller's validation still
+    reports them.
+    """
+    if suite_name in SUITE_MAX_STEPS:
+        return suite_name
+    for suffix in _DERIVED_SUITE_SUFFIXES:
+        if suite_name.endswith(suffix):
+            base = suite_name[: -len(suffix)]
+            if base in SUITE_MAX_STEPS:
+                return base
+    return suite_name
+
 
 def binarize_gripper_open(open_val: np.ndarray | float) -> np.ndarray:
     """Map model open-gripper scalar to LIBERO gripper command.
@@ -67,7 +89,7 @@ class LiberoAdapter(BaseBenchmarkAdapter):
         prefer_controller_ee: bool = True,
     ) -> None:
         """Initialize the LIBERO adapter."""
-        if suite_name not in SUITE_MAX_STEPS:
+        if base_suite_name(suite_name) not in SUITE_MAX_STEPS:
             raise ValueError(f"Unknown LIBERO suite {suite_name!r}; choose one of {sorted(SUITE_MAX_STEPS)}")
         self.suite_name = suite_name
         self.robot_setup = robot_setup
@@ -168,7 +190,7 @@ class LiberoAdapter(BaseBenchmarkAdapter):
             "benchmark": "libero",
             "robot_setup": self.robot_setup,
             "control_hz": self.control_hz,
-            "max_steps": {self.suite_name: SUITE_MAX_STEPS[self.suite_name]},
+            "max_steps": {self.suite_name: SUITE_MAX_STEPS[base_suite_name(self.suite_name)]},
             "action_scale": {
                 "pos_scale": 1.0,
                 "rot_scale": 1.0,

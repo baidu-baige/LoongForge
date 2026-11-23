@@ -78,10 +78,13 @@ class PI05ModelFactory:
         original_predict_action = model.predict_action
 
         @torch.no_grad()
-        def _predict_action_wrapper(images, instructions, state=None, dataset_stats=None):
+        def _predict_action_wrapper(
+            images, instructions, state=None, dataset_stats=None, image_mask=None
+        ):
             out = original_predict_action(
                 images, instructions, state=state, dataset_stats=dataset_stats,
                 image_normalize_mode=image_norm_mode, normalization_mode=norm_mode,
+                image_mask=image_mask,
             )
             return out[:, :chunk_execute_steps] if chunk_execute_steps > 0 else out
 

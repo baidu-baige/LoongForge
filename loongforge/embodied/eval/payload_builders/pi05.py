@@ -139,6 +139,12 @@ class Pi05PayloadBuilder(PayloadBuilder):
     action_encoding: str = "axis_angle"  # pos(3)+axis_angle(3)+grip(1)
     action_dim: int = 7
     action_horizon: int = 50
+    # Blank camera slots appended after the real views. The official
+    # ``lerobot/pi05_libero`` checkpoint declares ``empty_cameras: 1`` in its
+    # config.json (2 real cameras + 1 empty slot); passing only the two real
+    # views changes the prefix token count and collapses success (measured
+    # 0/5 on stock LIBERO-10). 0 keeps the previous behaviour.
+    empty_cameras: int = 0
 
     # Non-annotated attributes are internal (not YAML-overridable).
     unnorm_key = ""
@@ -177,6 +183,13 @@ class Pi05PayloadBuilder(PayloadBuilder):
             "instructions": [str(canonical["instruction"])],
             "state": self._encode_state(canonical),
         }
+        # Ask the model to reserve extra image slots. The official
+        # lerobot/pi05_libero checkpoint expects 3 slots (base + wrist + 1 pad)
+        # and openpi masks the pad (image_mask=False), so we pass the mask rather
+        # than a real third view; predict_action fills the slot with zeros.
+        empty_cameras = max(0, int(self.empty_cameras))
+        if empty_cameras:
+            kwargs["image_mask"] = [True] * len(images) + [False] * empty_cameras
         if self.unnorm_key:
             kwargs["unnorm_key"] = self.unnorm_key
         return kwargs

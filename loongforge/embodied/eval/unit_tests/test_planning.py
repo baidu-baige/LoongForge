@@ -553,3 +553,36 @@ def test_plan_robotwin_consume_uses_cache_index_offset() -> None:
         assert b["test_num"] == 2
         offsets.append(b["offline_expert_check_offset"])
     assert offsets == [0, 2, 4, 6]
+
+
+def test_plan_libero_groups_tasks_per_unit_when_configured() -> None:
+    """Several tasks may share one worker process to amortise the import cost."""
+    config: dict = {
+        "benchmark": {
+            "name": "libero",
+            "suite": "libero_spatial",
+            "task_ids": [0, 1, 2, 3, 4],
+            "episodes_per_task": 1,
+            "tasks_per_unit": 2,
+        }
+    }
+    shards = plan_libero(config, 64)
+    assert [s["overrides"]["benchmark"]["task_ids"] for s in shards] == [[0, 1], [2, 3], [4]]
+    assert [s["expected"] for s in shards] == [2, 2, 1]
+    assert shards[0]["id"] == "libero_spatial/task=0-1/eps=0-0"
+
+
+def test_plan_libero_keeps_one_task_per_unit_under_per_task_seeding() -> None:
+    """Without scene snapshots, per_task seeding requires one task per process."""
+    config: dict = {
+        "benchmark": {
+            "name": "libero",
+            "suite": "libero_spatial",
+            "task_ids": [0, 1, 2],
+            "episodes_per_task": 2,
+            "env_seed_mode": "per_task",
+            "tasks_per_unit": 3,
+        }
+    }
+    shards = plan_libero(config, 64)
+    assert [s["overrides"]["benchmark"]["task_ids"] for s in shards] == [[0], [1], [2]]
