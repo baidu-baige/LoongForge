@@ -150,6 +150,7 @@ class FastWAMLinearNormalizeTransform(BaseTransform):
 
 
 @register_transform_builder("fastwam")
+@register_transform_builder("fastwam_arch")
 def build_fastwam_transforms(ctx: TransformBuilderContext):
     """Build FastWAM-specific per-sample transforms."""
     from loongforge.embodied.data.datasets.transforms.utils.action_transform import ActionTransform

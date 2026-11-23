@@ -22,6 +22,7 @@ from loongforge.embodied.model.xvla.model_configuration_xvla import XvlaModelCon
 from loongforge.embodied.data.datasets.xvla.transforms.data_configuration_xvla import XvlaDataConfig
 from loongforge.embodied.model.fastwam.modeling_configuration_fastwam import FastWAMModelConfig
 from loongforge.embodied.data.datasets.fastwam.transforms.data_configuration_fastwam import FastWAMDataConfig
+from loongforge.embodied.data.datasets.vpp2.transforms.data_configuration_vpp2 import VPP2DataConfig
 from loongforge.embodied.model.gr00t_n1_7.model_configuration_gr00t_n1_7 import GrootN1d7Config
 from loongforge.embodied.data.datasets.gr00t_n1_7.transforms.data_configuration_gr00t_n1_7 import (
     GrootN1d7DataConfig,
@@ -50,6 +51,7 @@ from loongforge.embodied.data.datasets.lingbot_vla_v2.transforms.data_configurat
 )
 
 from loongforge.embodied.model.arch.model_configuration_arch import (
+    FastwamArchConfig,
     InternW0DeltaConfig,
     Vpp2Config,
 )
@@ -84,6 +86,7 @@ MODEL_SCHEMA = {
     "gr00t_n1_6": ModelSchema("gr00t_n1_6.yaml", GrootN1d6ModelConfig, GrootN1d6DataConfig),
     "xvla": ModelSchema("xvla.yaml", XvlaModelConfig, XvlaDataConfig),
     "fastwam": ModelSchema("fastwam.yaml", FastWAMModelConfig, FastWAMDataConfig),
+    "fastwam_arch": ModelSchema("arch/fastwam.yaml", FastwamArchConfig, FastWAMDataConfig),
     "gr00t_n1_7": ModelSchema("gr00t_n1_7.yaml", GrootN1d7Config, GrootN1d7DataConfig),
     "cosmos3_nano": ModelSchema("cosmos3/nano.yaml", Cosmos3ModelConfig, Cosmos3DroidConfig),
     "dreamzero_lora_wan22_5b": ModelSchema(
@@ -111,10 +114,8 @@ MODEL_SCHEMA = {
     "giga_brain07": ModelSchema(
         "giga_brain07.yaml", GigaBrain07ModelConfig, GigaBrain07DataConfig
     ),
-    # Five-layer ``arch`` world models. They reuse FastWAMDataConfig because
-    # they consume the same pixel-space batch; what differs is the model side,
-    # and that difference is entirely inside the per-model config subclass.
-    "vpp2": ModelSchema("arch/vpp2.yaml", Vpp2Config, FastWAMDataConfig),
+    # Arch VPP2 uses the master VPP2 video/action/proprio batch contract.
+    "vpp2": ModelSchema("arch/vpp2.yaml", Vpp2Config, VPP2DataConfig),
     "internw0_delta": ModelSchema(
         "arch/internw0_delta.yaml", InternW0DeltaConfig, FastWAMDataConfig
     ),

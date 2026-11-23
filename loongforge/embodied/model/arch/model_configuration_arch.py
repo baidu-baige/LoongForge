@@ -26,7 +26,7 @@ Two rules the sections exist to enforce:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, replace
 from typing import Any, Dict, Optional
 
 from .spec.world import WorldModelSpec, build_world_model_spec
@@ -93,7 +93,8 @@ class WorldModelConfig:
         """
         base = frozenset(f.name for f in fields(WorldModelConfig))
         return {f.name: getattr(self, f.name) for f in fields(self)
-                if f.name not in base and getattr(self, f.name) is not None}
+                if f.name not in base and not f.metadata.get("runtime")
+                and getattr(self, f.name) is not None}
 
     def build_spec(self) -> WorldModelSpec:
         """Build the ``WorldModelSpec`` this config describes.
@@ -134,6 +135,39 @@ class WorldModelConfig:
 
 
 @dataclass(frozen=True)
+class FastwamArchConfig(WorldModelConfig):
+    """FastWAM training on the arch engine, without replacing the legacy key."""
+
+    model_type: str = "fastwam_arch"
+    model_id: str = "Wan-AI/Wan2.2-TI2V-5B"
+    inference_steps: Optional[int] = None
+    proprio_dim: Optional[int] = 8
+    video_attention_mask_mode: str = field(
+        default="first_frame_causal", metadata={"runtime": True})
+    video_checkpoint_path: Optional[str] = field(default=None, metadata={"runtime": True})
+    action_dit_pretrained_path: Optional[str] = field(default=None, metadata={"runtime": True})
+    gradient_checkpointing: bool = field(default=False, metadata={"runtime": True})
+    disable_train_autocast: bool = field(default=True, metadata={"runtime": True})
+    allow_random_initialization: bool = field(default=False, metadata={"runtime": True})
+
+    def __post_init__(self) -> None:
+        if self.video_attention_mask_mode != "first_frame_causal":
+            raise ValueError("FastWAM arch currently implements the master first-frame mask")
+        if bool(self.video_checkpoint_path) != bool(self.action_dit_pretrained_path):
+            raise ValueError("FastWAM split initialization requires both checkpoints")
+
+    def build_spec(self) -> WorldModelSpec:
+        # The CLI alias selects the shell; model identity stays in the provider.
+        return WorldModelConfig.build_spec(replace(self, model_type="fastwam"))
+
+    def provider_kwargs(self) -> Dict[str, Any]:
+        kwargs = super().provider_kwargs()
+        # None disables proprioception instead of restoring the provider default.
+        kwargs["proprio_dim"] = self.proprio_dim
+        return kwargs
+
+
+@dataclass(frozen=True)
 class Vpp2Config(WorldModelConfig):
     """``--model-name vpp2``.
 
@@ -151,6 +185,23 @@ class Vpp2Config(WorldModelConfig):
     video_prefix_frames: Optional[int] = None
     inference_steps: Optional[int] = None
     proprio_dim: Optional[int] = None
+    video_attention_mask_mode: Optional[str] = None
+    training_stage: str = field(default="joint", metadata={"runtime": True})
+    video_checkpoint_path: Optional[str] = field(
+        default=None, metadata={"runtime": True})
+    action_dit_pretrained_path: Optional[str] = field(
+        default=None, metadata={"runtime": True})
+    gradient_checkpointing: bool = field(
+        default=True, metadata={"runtime": True})
+    action_only_first_frame_fast_path: bool = field(
+        default=True, metadata={"runtime": True})
+
+    def __post_init__(self) -> None:
+        if self.training_stage not in ("action", "joint"):
+            raise ValueError("VPP2 training_stage must be 'action' or 'joint'")
+        if bool(self.video_checkpoint_path) != bool(
+                self.action_dit_pretrained_path):
+            raise ValueError("VPP2 split initialization requires both checkpoints")
 
 
 @dataclass(frozen=True)

@@ -12,7 +12,7 @@ by guessing an axis from a tensor shape.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Literal
 
@@ -94,6 +94,7 @@ class TokenLayout:
 
     segments: tuple[SegmentRange, ...]
     labels: Mapping[str, Tensor]
+    regions: Mapping[str, Tensor] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.segments:
@@ -131,6 +132,15 @@ class TokenLayout:
                     f"!= total {cursor}"
                 )
         object.__setattr__(self, "labels", MappingProxyType(dict(self.labels)))
+        for name, membership in self.regions.items():
+            if not isinstance(name, str) or not name:
+                raise ValueError("TokenLayout region names must be non-empty strings")
+            if name in seen:
+                raise ValueError(f"TokenLayout region {name!r} conflicts with a stream name")
+            if (not isinstance(membership, Tensor) or membership.dtype != torch.bool
+                    or membership.ndim != 1 or membership.shape[0] != cursor):
+                raise ValueError(f"TokenLayout.regions[{name!r}] must be bool [{cursor}]")
+        object.__setattr__(self, "regions", MappingProxyType(dict(self.regions)))
 
     # ---- Queries ----
 
@@ -213,7 +223,18 @@ class TokenLayout:
                 f"one label may have only one source"
             )
         return TokenLayout(segments=self.segments,
-                           labels={**self.labels, **extra})
+                           labels={**self.labels, **extra}, regions=self.regions)
+
+    def with_regions(self, **extra: Tensor) -> TokenLayout:
+        """Attach named bool[total] groups without changing labels or streams.
+
+        Read-only groups may overlap. Query partition validation belongs to the
+        topology compiler, which knows the owning stream of each query region.
+        """
+        clash = sorted(set(extra) & set(self.regions))
+        if clash:
+            raise ValueError(f"TokenLayout.with_regions: regions already exist {clash}")
+        return TokenLayout(self.segments, self.labels, {**self.regions, **extra})
 
     def label_views(self) -> tuple[LabelView, LabelView]:
         """Return the (query side, key side) label views handed to ``Predicate``."""
@@ -311,7 +332,8 @@ class LabelView:
         that backwards does not fail, it just moves the prefix to the other
         side).
         """
-        flat = torch.arange(self.layout.total, dtype=torch.long)
+        device = next(iter(self.layout.labels.values())).device if self.layout.labels else None
+        flat = torch.arange(self.layout.total, dtype=torch.long, device=device)
         return flat.unsqueeze(1) if self.side == "query" else flat.unsqueeze(0)
 
 

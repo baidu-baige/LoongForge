@@ -25,12 +25,19 @@ in this table that changes the tree shape, which is why it comes first.
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Iterable, Mapping
-from typing import Any
+from os import PathLike
+from typing import TYPE_CHECKING, Any
+
+import torch
+
+if TYPE_CHECKING:
+    from .builder import WorldModel
 
 __all__ = ["PROPRIO_PAYLOAD_KEY", "RenameRules", "VPP2_RENAME_RULES",
-           "remap_state_dict", "vpp2_to_arch"]
+           "load_vpp2_initializers", "remap_state_dict", "vpp2_to_arch"]
 
 RenameRules = tuple[tuple[str, str], ...]
 
@@ -225,3 +232,468 @@ def vpp2_to_arch(payload: Mapping[str, Any], *,
         for name, value in encoder.items():
             out[f"condition_encoders.proprio.{name}"] = value
     return out
+
+
+# MASTER ActionDiT.ACTION_BACKBONE_SKIP_PREFIXES. Video-token paths are
+# disabled in VPP2; they are NOT permission to leave arbitrary core weights
+# random, or to discard unexpected tensors from an initializer.
+_ACTION_BACKBONE_SKIP_PREFIXES = (
+    "action_encoder.", "head.", "video_kv_projections.",
+    "video_k_norms.", "video_token_encoder.",
+)
+_VPP2_RANDOM_KEYS = frozenset({
+    "blocks.action.action_encoder.weight", "blocks.action.action_encoder.bias",
+    "heads.action_flow.head.weight", "heads.action_flow.head.bias",
+    "condition_encoders.proprio.weight", "condition_encoders.proprio.bias",
+})
+
+
+def _initializer_state(path: str | PathLike[str], formats: set[str],
+                       field: str) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    payload = torch.load(path, map_location="cpu", mmap=True, weights_only=True)
+    if not isinstance(payload, Mapping) or payload.get("format") not in formats:
+        raise ValueError(f"Invalid VPP2 {field} initializer format at {path!s}; "
+                         f"expected {sorted(formats)}")
+    state = payload.get(field)
+    if not isinstance(state, Mapping) or not state:
+        raise ValueError(f"VPP2 initializer at {path!s} has no nonempty {field}")
+    for key, value in state.items():
+        if not isinstance(key, str) or not isinstance(value, torch.Tensor):
+            raise TypeError(f"VPP2 {field} entry {key!r} must be a named tensor")
+        if value.is_meta:
+            raise ValueError(f"VPP2 {field} tensor {key!r} has no checkpoint storage")
+    return payload, state
+
+
+def _strict_initializer_check(label: str, mapped: Mapping[str, torch.Tensor],
+                              expected: Mapping[str, torch.Tensor]) -> None:
+    missing = sorted(expected.keys() - mapped.keys())
+    unexpected = sorted(mapped.keys() - expected.keys())
+    mismatches = [
+        f"{key}: source={tuple(mapped[key].shape)} target={tuple(expected[key].shape)}"
+        for key in sorted(mapped.keys() & expected.keys())
+        if mapped[key].shape != expected[key].shape
+    ]
+    if missing or unexpected or mismatches:
+        raise RuntimeError(
+            f"Strict VPP2 {label} check failed: missing={missing}, "
+            f"unexpected={unexpected}, shape_mismatches={mismatches}")
+
+
+def load_vpp2_initializers(
+    core: WorldModel, video_path: str | PathLike[str],
+    action_path: str | PathLike[str],
+) -> dict[str, Any]:
+    """Validate and load the split Wan2.1 VPP2 initializers into a WorldModel.
+
+    Video coverage includes its head and every condition projector. Action
+    coverage excludes ONLY MASTER's random action entry/output projections.
+    Proprio is also kept as constructed, exactly as in MASTER's split load.
+    The action backbone metadata (not dataset-dependent action_dim) must match
+    the actual core. Counts are derived from that core, not hardcoded to 40
+    layers: the production files have 1303 video and 1010 backbone tensors.
+
+    Both files use CPU ``torch.load(mmap=True, weights_only=True)``; all key,
+    shape and policy checks finish before any parameter is modified. An
+    entirely meta core is validation-only, remains meta and consumes no weight
+    storage. A materialized core is copied into with ``strict=True``, preserving
+    parameter identity, device, dtype and the random tensors. Mixed meta/real
+    parameters are rejected. Callers must initialize random tensors normally
+    before loading (``to_empty`` alone does not initialize them).
+
+    Returns a report with video/action-backbone tensor counts, sorted
+    ``random_keys``, and ``validation_only``. No merged tensor allocation,
+    checkpoint export, model materialization, or auxiliary tower load occurs.
+    """
+    from .builder import WorldModel
+
+    if not isinstance(core, WorldModel) or core.spec.model_type != "vpp2":
+        raise TypeError("load_vpp2_initializers expects an actual VPP2 WorldModel")
+    parameters = tuple(core.parameters())
+    meta_flags = {parameter.is_meta for parameter in parameters}
+    if len(meta_flags) != 1:
+        raise ValueError("VPP2 initializer core must be entirely meta or materialized")
+    validation_only = meta_flags == {True}
+    target = core.state_dict()
+    video_expected = {
+        key: value for key, value in target.items()
+        if key.startswith(("blocks.video.", "heads.video_flow."))
+    }
+    action_expected = {
+        key: value for key, value in target.items()
+        if key.startswith(("blocks.action.", "heads.action_flow."))
+        and key not in _VPP2_RANDOM_KEYS
+    }
+    random_keys = _VPP2_RANDOM_KEYS & target.keys()
+    unexplained = target.keys() - video_expected.keys() - action_expected.keys() - random_keys
+    if unexplained:
+        raise RuntimeError(f"VPP2 core has unclassified parameters: {sorted(unexplained)}")
+
+    _, video = _initializer_state(video_path, {"wan21_video_v1"}, "dit")
+    action_payload, action = _initializer_state(
+        action_path, {"wan21_action_v1", "vpp2_wan21_action_v1"},
+        "backbone_state_dict")
+    stream = core.blocks["action"]
+    spec = stream.spec
+    expected_meta = {
+        "hidden_dim": spec.residual_width, "ffn_dim": spec.mlp_width,
+        "num_layers": spec.num_layers, "num_heads": spec.num_heads,
+        "attn_head_dim": spec.head_dim,
+        "text_dim": core.spec.condition("text").width,
+        "freq_dim": spec.timestep_embed_width,
+        "eps": stream.blocks[0].norm1.eps,
+    }
+    meta = action_payload.get("meta")
+    if not isinstance(meta, Mapping):
+        raise ValueError("VPP2 action initializer is missing its meta dictionary")
+    for key, expected in expected_meta.items():
+        got = meta.get(key)
+        if (not isinstance(got, (int, float)) or isinstance(got, bool)
+                or not math.isfinite(got)
+                or (abs(got - expected) > 1e-12 if key == "eps" else got != expected)):
+            raise ValueError(f"Action initializer meta.{key}={got!r} "
+                             f"does not match core value {expected!r}")
+    policy = action_payload.get("policy")
+    if (not isinstance(policy, Mapping)
+            or policy.get("projection_initialization") != "random"
+            or policy.get("skip_prefixes") != list(_ACTION_BACKBONE_SKIP_PREFIXES)):
+        raise ValueError("VPP2 action initializer policy must declare MASTER's "
+                         "skip_prefixes and projection_initialization='random'")
+
+    video_mapped = remap_state_dict(
+        {f"mixtures.video.{key}": value for key, value in video.items()},
+        VPP2_RENAME_RULES)
+    action_mapped = remap_state_dict(
+        {f"mixtures.action.{key}": value for key, value in action.items()},
+        VPP2_RENAME_RULES)
+    _strict_initializer_check("video", video_mapped, video_expected)
+    _strict_initializer_check("action backbone", action_mapped, action_expected)
+    if not validation_only:
+        # Shallow dictionary only: checkpoint values remain mmap-backed until
+        # PyTorch copies them into the existing destination parameters.
+        target.update(video_mapped)
+        target.update(action_mapped)
+        core.load_state_dict(target, strict=True)
+    return {
+        "video_tensors": len(video_mapped),
+        "action_backbone_tensors": len(action_mapped),
+        "random_keys": tuple(sorted(random_keys)),
+        "validation_only": validation_only,
+    }
+
+
+# ---- FastWAM (Wan2.2, not the VPP2 Wan2.1 initializer policy) ----
+
+FASTWAM_RENAME_RULES: RenameRules = (
+    (r"^mixtures\.video\.head\.head\.(weight|bias)$", r"heads.video_flow.head.\1"),
+    (r"^mixtures\.video\.head\.modulation$", "heads.video_flow.modulation"),
+    (r"^mixtures\.action\.head\.(weight|bias)$", r"heads.action_flow.head.\1"),
+    (r"^proprio_encoder\.(weight|bias)$", r"condition_encoders.proprio.\1"),
+    (r"^mixtures\.(video|action)\.text_embedding\.(0|2)\.(weight|bias)$",
+     r"blocks.\1.context_embedding.text.\2.\3"),
+    (r"^mixtures\.(video|action)\.blocks\.(\d+)\.cross_attn\.(k|v|norm_k)\.(weight|bias)$",
+     r"blocks.\1.blocks.\2.cross_attn.kv.text.\3.\4"),
+    (r"^mixtures\.(video|action)\.blocks\.(\d+)\."
+     r"((?:self_attn\.(?:q|k|v|o|norm_q|norm_k)|cross_attn\.(?:q|o|norm_q)|"
+     r"norm3|ffn\.(?:0|2))\.(?:weight|bias)|modulation)$",
+     r"blocks.\1.blocks.\2.\3"),
+    (r"^mixtures\.(video|action)\."
+     r"((?:time_embedding\.(?:0|2)|time_projection\.1)\.(?:weight|bias))$",
+     r"blocks.\1.\2"),
+    (r"^mixtures\.video\.patch_embedding\.(weight|bias)$",
+     r"blocks.video.patch_embedding.\1"),
+    (r"^mixtures\.action\.action_encoder\.(weight|bias)$",
+     r"blocks.action.action_encoder.\1"),
+)
+
+__all__ += ["FASTWAM_RENAME_RULES", "fastwam_to_arch", "load_fastwam_initializers"]
+
+_FASTWAM_RANDOM_KEYS = frozenset({
+    "blocks.action.action_encoder.weight", "blocks.action.action_encoder.bias",
+    "heads.action_flow.head.weight", "heads.action_flow.head.bias",
+    "condition_encoders.proprio.weight", "condition_encoders.proprio.bias",
+})
+
+
+def _fastwam_named_tensors(state: Mapping[str, Any]) -> None:
+    for key, value in state.items():
+        if not isinstance(key, str) or not isinstance(value, torch.Tensor):
+            raise TypeError(f"FastWAM entry {key!r} must be a named tensor")
+        if value.is_meta:
+            raise ValueError(f"FastWAM tensor {key!r} has no checkpoint storage")
+
+
+def _fastwam_canonical_key(key: str) -> str:
+    # FastWAMPolicy.core and Policy.dit, FastWAM.{mot,dit}, and direct
+    # expert registrations all reference the SAME experts in MASTER.
+    key = key.removeprefix("core.")
+    key = re.sub(r"^(?:mot|dit)\.(?=mixtures\.)", "", key)
+    key = re.sub(r"^(video|action)_expert\.", r"mixtures.\1.", key)
+    return key
+
+
+def fastwam_to_arch(payload: Mapping[str, Any], *,
+                    drop: Iterable[str] = ()) -> dict[str, torch.Tensor]:
+    """Map MASTER FastWAM tensors for the wrapper's ``fastwam_arch`` transfer.
+
+    Accept ``{"mot": mot.state_dict(), "proprio_encoder": ...}``, a bare MoT
+    state dict, a FastWAM/FastWAMPolicy state dict, or a ``state_dict`` envelope.
+    Heads, text projectors, cross-attention KV, both complete expert backbones
+    and optional proprio are mapped. Full transfer does NOT exclude projections.
+
+    Equal shared-expert registrations are coalesced without overwriting the
+    first tensor; unequal aliases (including shape/dtype differences) raise
+    ValueError. Unknown tensors raise KeyError. Auxiliary VAE/text towers and
+    TE bookkeeping are not WorldModel weights: callers must explicitly declare
+    their *source* prefixes in ``drop`` if present (stale drops also raise).
+    A bare MoT state dict cannot supply proprio; strict loading must check that.
+    """
+    if not isinstance(payload, Mapping):
+        raise TypeError("FastWAM checkpoint must be a mapping")
+    if "state_dict" in payload:
+        if set(payload) != {"state_dict"}:
+            raise KeyError("FastWAM state_dict envelope has unknown sibling keys")
+        tree = payload["state_dict"]
+    elif "mot" in payload:
+        unknown = set(payload) - {"mot", "proprio_encoder", "optimizer", "step"}
+        if unknown:
+            raise KeyError(f"Unknown FastWAM payload keys: {sorted(unknown)}")
+        if not isinstance(payload["mot"], Mapping):
+            raise TypeError("FastWAM mot must be a state-dict mapping")
+        tree = dict(payload["mot"])
+        encoder = payload.get("proprio_encoder")
+        if encoder is not None:
+            if not isinstance(encoder, Mapping):
+                raise TypeError("FastWAM proprio_encoder must be a mapping")
+            for name, value in encoder.items():
+                key = f"proprio_encoder.{name}"
+                if key in tree:
+                    raise ValueError(f"FastWAM duplicate payload key: {key}")
+                tree[key] = value
+    else:
+        tree = payload
+    if not isinstance(tree, Mapping) or not tree:
+        raise ValueError("FastWAM checkpoint needs a nonempty state dict")
+    prefixes = tuple(drop)
+    dropped: set[str] = set()
+    canonical: dict[str, torch.Tensor] = {}
+    sources: dict[str, str] = {}
+    for key, value in tree.items():
+        if not isinstance(key, str):
+            raise TypeError(f"FastWAM entry {key!r} must be a named tensor")
+        hits = {prefix for prefix in prefixes if key.startswith(prefix)}
+        if hits:
+            dropped.update(hits)
+            continue
+        _fastwam_named_tensors({key: value})
+        name = _fastwam_canonical_key(key)
+        if name in canonical:
+            previous = canonical[name]
+            if (previous.shape != value.shape or previous.dtype != value.dtype
+                    or not torch.equal(previous, value)):
+                raise ValueError(
+                    f"FastWAM shared expert alias collision: {sources[name]!r} "
+                    f"and {key!r} disagree for {name!r}")
+            continue
+        canonical[name] = value
+        sources[name] = key
+    stale = set(prefixes) - dropped
+    if stale:
+        raise ValueError(f"FastWAM drop prefixes {sorted(stale)} matched no key")
+    return remap_state_dict(canonical, FASTWAM_RENAME_RULES)
+
+
+def _fastwam_video_shards(path: str | PathLike[str]) -> dict[str, torch.Tensor]:
+    """Read an indexed local Wan directory without writing/merging weight files."""
+    import json
+    from pathlib import Path
+
+    from safetensors.torch import load_file
+
+    location = Path(path)
+    index_path = (location / "diffusion_pytorch_model.safetensors.index.json"
+                  if location.is_dir() else location)
+    if not index_path.is_file():
+        raise FileNotFoundError(f"FastWAM Wan shard index not found: {index_path}")
+    with index_path.open() as handle:
+        index = json.load(handle)
+    weight_map = index.get("weight_map") if isinstance(index, Mapping) else None
+    if not isinstance(weight_map, Mapping) or not weight_map:
+        raise ValueError(f"FastWAM Wan index needs a nonempty weight_map: {index_path}")
+    for key, filename in weight_map.items():
+        if (not isinstance(key, str) or not isinstance(filename, str)
+                or Path(filename).name != filename
+                or not filename.endswith(".safetensors")):
+            raise ValueError(f"Invalid FastWAM Wan index entry: {key!r}: {filename!r}")
+    files = [index_path.parent / name for name in sorted(set(weight_map.values()))]
+    for shard in files:
+        if not shard.is_file():
+            raise FileNotFoundError(f"FastWAM Wan index references missing shard: {shard}")
+    state: dict[str, torch.Tensor] = {}
+    for shard in files:
+        tensors = load_file(str(shard), device="cpu")
+        _fastwam_named_tensors(tensors)
+        overlap = state.keys() & tensors.keys()
+        if overlap:
+            raise ValueError(f"Duplicate FastWAM Wan shard keys: {sorted(overlap)}")
+        misplaced = [key for key in tensors if weight_map.get(key) != shard.name]
+        if misplaced:
+            raise ValueError(f"FastWAM Wan shard/index mismatch: {misplaced}")
+        # Only dictionary references are combined; no tensor clone/cat or disk
+        # export. Each safetensors shard is opened once and stays CPU-backed.
+        state.update(tensors)
+    missing = weight_map.keys() - state.keys()
+    if missing:
+        raise ValueError(f"FastWAM Wan shard/index missing keys: {sorted(missing)}")
+    return state
+
+
+def _fastwam_checkpoint_file(path: str | PathLike[str],
+                            field: str) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    from pathlib import Path
+
+    if not path:
+        raise ValueError(f"FastWAM {field} requires an explicit local checkpoint path")
+    checkpoint = Path(path)
+    if field == "dit" and (checkpoint.is_dir() or checkpoint.name.endswith(".index.json")):
+        state = _fastwam_video_shards(checkpoint)
+        return state, state
+    if not checkpoint.is_file():
+        raise FileNotFoundError(
+            f"FastWAM {field} requires an explicit checkpoint FILE: {checkpoint}. "
+            "Remote model_id is not resolved; supply a local indexed Wan2.2 "
+            "directory, DiT file, and the preprocessed ActionDiT .pt file.")
+    if checkpoint.suffix == ".safetensors":
+        from safetensors.torch import load_file
+
+        payload = load_file(str(checkpoint), device="cpu")
+    else:
+        payload = torch.load(checkpoint, map_location="cpu", weights_only=True)
+    if not isinstance(payload, Mapping):
+        raise TypeError(f"FastWAM {field} checkpoint must be a mapping")
+    state = payload.get(field, payload) if field == "dit" else payload.get(field)
+    if not isinstance(state, Mapping) or not state:
+        raise ValueError(f"FastWAM checkpoint has no nonempty {field}: {checkpoint}")
+    if field == "dit" and "dit" in payload:
+        unknown = set(payload) - {"dit", "format"}
+        if unknown:
+            raise KeyError(f"Unknown FastWAM video payload keys: {sorted(unknown)}")
+    if field == "backbone_state_dict":
+        unknown = set(payload) - {"backbone_state_dict", "meta", "policy", "format"}
+        if unknown:
+            raise KeyError(f"Unknown FastWAM action payload keys: {sorted(unknown)}")
+    _fastwam_named_tensors(state)
+    return payload, state
+
+
+def _fastwam_initializer_check(label: str, mapped: Mapping[str, torch.Tensor],
+                              expected: Mapping[str, torch.Tensor]) -> None:
+    missing = sorted(expected.keys() - mapped.keys())
+    unexpected = sorted(mapped.keys() - expected.keys())
+    mismatches = [
+        f"{key}: source={tuple(mapped[key].shape)} target={tuple(expected[key].shape)}"
+        for key in sorted(mapped.keys() & expected.keys())
+        if mapped[key].shape != expected[key].shape
+    ]
+    if missing or unexpected or mismatches:
+        raise RuntimeError(
+            f"Strict FastWAM {label} check failed: missing={missing}, "
+            f"unexpected={unexpected}, shape_mismatches={mismatches}")
+
+
+def load_fastwam_initializers(
+    core: WorldModel, video_checkpoint_path: str | PathLike[str],
+    action_dit_pretrained_path: str | PathLike[str],
+) -> dict[str, Any]:
+    """Strictly load separate Wan2.2 video and MASTER ActionDiT checkpoints.
+
+    Both paths are REQUIRED explicit local paths. Video accepts a raw
+    WanVideoDiT ``.safetensors``/torch state dict or ``{"dit": state_dict}``,
+    an indexed Wan2.2 directory, or its safetensors ``.index.json`` file.
+    The index's shard list is checked for duplicates, placement and coverage;
+    shards are read on CPU without creating consolidated files or cloning
+    tensors. Remote ``model_id`` resolution/download is unsupported. Action
+    accepts MASTER's ``{"meta": ..., "backbone_state_dict": ..., "policy": ...}``;
+    meta is required, policy optional, with skip_prefixes ONLY action_encoder
+    and head if declared. No VPP2-format or skip-policy substitution occurs.
+
+    All video weights are required. Action entry/output projections and optional
+    proprio remain exactly as constructed; excluded tensors in the action
+    backbone payload are REJECTED, not loaded or silently discarded. Every key,
+    shape and metadata check finishes before modifying the core. Entirely meta
+    cores validate only; mixed meta/materialized state is rejected.
+
+    The core spec remains ``fastwam`` even when the wrapper config/transfer key
+    is ``fastwam_arch``. This function never falls back to random initialization
+    or loads auxiliary towers. Production callers must supply BOTH initializers
+    or subsequently load a complete trained checkpoint.
+    """
+    from .builder import WorldModel
+
+    if not isinstance(core, WorldModel) or core.spec.model_type != "fastwam":
+        raise TypeError("load_fastwam_initializers expects an actual FastWAM WorldModel")
+    if not video_checkpoint_path or not action_dit_pretrained_path:
+        raise ValueError("FastWAM requires explicit video and action checkpoint paths")
+    target = core.state_dict()
+    flags = {value.is_meta for value in target.values()}
+    if len(flags) != 1:
+        raise ValueError("FastWAM initializer core must be entirely meta or materialized")
+    validation_only = flags == {True}
+    random_keys = _FASTWAM_RANDOM_KEYS & target.keys()
+    video_expected = {
+        key: value for key, value in target.items()
+        if key.startswith(("blocks.video.", "heads.video_flow."))
+    }
+    action_expected = {
+        key: value for key, value in target.items()
+        if key.startswith("blocks.action.") and key not in random_keys
+    }
+    unexplained = target.keys() - video_expected.keys() - action_expected.keys() - random_keys
+    if unexplained:
+        raise RuntimeError(f"FastWAM core has unclassified parameters: {sorted(unexplained)}")
+    _, video = _fastwam_checkpoint_file(video_checkpoint_path, "dit")
+    payload, action = _fastwam_checkpoint_file(
+        action_dit_pretrained_path, "backbone_state_dict")
+    stream = core.blocks["action"]
+    spec = stream.spec
+    expected_meta = {
+        "hidden_dim": spec.residual_width, "ffn_dim": spec.mlp_width,
+        "num_layers": spec.num_layers, "num_heads": spec.num_heads,
+        "attn_head_dim": spec.head_dim,
+        "text_dim": core.spec.condition("text").width,
+        "freq_dim": spec.timestep_embed_width,
+        "eps": stream.blocks[0].norm1.eps,
+    }
+    meta = payload.get("meta")
+    if not isinstance(meta, Mapping):
+        raise ValueError("FastWAM action initializer requires meta")
+    for key, expected in expected_meta.items():
+        got = meta.get(key)
+        if (not isinstance(got, (int, float)) or isinstance(got, bool)
+                or not math.isfinite(got)
+                or (abs(got - expected) > 1e-12 if key == "eps" else got != expected)):
+            raise ValueError(f"FastWAM action meta.{key}={got!r} "
+                             f"does not match core value {expected!r}")
+    policy = payload.get("policy")
+    if policy is not None:
+        if (not isinstance(policy, Mapping)
+                or policy.get("projection_initialization", "random") != "random"
+                or policy.get("skip_prefixes", ["action_encoder.", "head."])
+                != ["action_encoder.", "head."]):
+            raise ValueError("FastWAM action policy must keep action_encoder/head random")
+    video_mapped = fastwam_to_arch(
+        {f"mixtures.video.{key}": value for key, value in video.items()})
+    action_mapped = fastwam_to_arch(
+        {f"mixtures.action.{key}": value for key, value in action.items()})
+    _fastwam_initializer_check("video", video_mapped, video_expected)
+    _fastwam_initializer_check("action backbone", action_mapped, action_expected)
+    if not validation_only:
+        target.update(video_mapped)
+        target.update(action_mapped)
+        core.load_state_dict(target, strict=True)
+    return {
+        "video_tensors": len(video_mapped),
+        "action_backbone_tensors": len(action_mapped),
+        "random_keys": tuple(sorted(random_keys)),
+        "validation_only": validation_only,
+    }

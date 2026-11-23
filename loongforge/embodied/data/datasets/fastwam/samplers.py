@@ -117,6 +117,7 @@ class _FixedEpochSampler(Sampler[int]):
 
 
 @register_sampler_builder("fastwam")
+@register_sampler_builder("fastwam_arch")
 def build_fastwam_sampler(context: SamplerBuilderContext) -> Sampler | None:
     """Build the FastWAM training sampler.
 

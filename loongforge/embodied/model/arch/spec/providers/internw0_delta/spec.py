@@ -27,9 +27,7 @@ from ....streams.blocks import ActionStream, WanVideoStream
 from ....streams.conditions import ConditionSpec, InjectionKind
 from ....streams.encoders import linear_token_encoder
 from ....streams.engine import AttentionGroup
-from ....visibility.combine import Visibility
-from ....visibility.rules import (frame_causal, prefix_only, same_stream,
-                                  stream_edge)
+from ....visibility.declarative import VisibilityTopology
 from ...core import Spec, register_provider
 from ...overrides import reject_config, resolve_geometry, resolve_scalars
 from ...world import WorldModelSpec
@@ -93,65 +91,25 @@ width have to be two separate fields.
 """
 
 
-def _internw0_delta_visibility(tokens_per_frame: int,
-                               condition_frames: int) -> dict[str, Visibility]:
-    """Build query-side visibility for the video and action streams.
+def _internw0_delta_visibility(condition_frames: int) -> VisibilityTopology:
+    """Preserve the approximate two-stream policy, not the actual delta layout.
 
-    The visibility below follows the legacy InternW0-Delta frame-attention
-    implementation.
-
-    Current layout (single camera, 96 tokens per frame): video 0-479 =
-    anchor 0-95 + recent 96-191 + current-clean 192-287 +
-    noisy-future 288-479; **delta 480-575**; action 576-607.
-
-    The legacy implementation applies these visibility rules: condition
-    video frames are frame-causal, noisy future video is fully bidirectional
-    over real video, delta reads recent and current-clean video but excludes
-    the anchor, action reads condition video only, action reads delta, and
-    action reads its own tokens.
-
-    **Four representation limits are handled explicitly. The provider uses the
-    stricter available approximation where necessary:**
-
-      1. **Delta tokens are not a stream.** Those 96 tokens are appended
-         inside the video stream (appended once at
-         the legacy video path, where they are appended and later trimmed), so they
-         appear neither in ``GeometrySpec``'s token accounting nor as their
-         own ``StreamSpec``. The three delta rules and the action->delta edge
-         therefore have nowhere to land. The current abstraction has no
-         derived geometry field for these delta tokens, so the limitation
-         remains explicit here.
-      2. **``frame_causal()`` is too strict for the noisy future.** Rows
-         288-479 are fully bidirectional in the code; per-frame causality
-         would limit them to the past. Stricter is preferred: in an
-         equivalence test, "saw tokens it should not have" still converges
-         numerically and cannot be detected, while "saw too few" shows up
-         immediately.
-      3. **The action side can only be written ``prefix_only(3 x 96)``** for
-         "reads the three condition frames only". It happens to equal
-         ``[0, 288)`` because the condition frames sit at the front
-         of the sequence; the two facts diverge as soon as the layout
-         changes. ``history(policy)`` is where it really belongs.
-      4. The older names ``sees`` / ``reads`` / ``delta_reads_local`` have
-         no direct counterpart in ``visibility/rules.py``. The available
-         ``frame_causal`` rule takes ``window`` rather than
-         ``condition_frames``.
-
-    Args:
-        tokens_per_frame: Video tokens per latent frame (96 today).
-        condition_frames: Number of leading clean condition frames the action
-            stream may read.
-
-    Returns:
-        ``{"video": ..., "action": ...}`` visibility rules.
+    ``frame_attention.py:6-56`` includes appended delta tokens, delta-local
+    reads, action-to-delta reads, and bidirectional noisy-future video rows.
+    The actual delta layout is not implemented by this provider. Its existing
+    approximation remains frame-causal video, bidirectional action, and an
+    action-to-video prefix of ``condition_frames`` frames, with no reverse
+    edge. The prefix does not imply that these frames are pinned clean.
     """
-    return {
-        "video": same_stream() & frame_causal(),
-        "action": same_stream() | (
-            stream_edge("video", "action")
-            & prefix_only(condition_frames * tokens_per_frame)
-        ),
-    }
+    return VisibilityTopology({
+        "video": {"intra": "frame_causal"},
+        "action": {
+            "intra": "bidirectional",
+            "reads": {"video": {
+                "mode": "prefix_frames", "frames": condition_frames,
+            }},
+        },
+    })
 
 
 @register_provider("internw0_delta")
@@ -180,8 +138,8 @@ def _internw0_delta(config: Any = None, *,
     Args:
         config: Positional config object, rejected (see ``reject_config``).
         geometry: The YAML ``geometry:`` section, merged over the defaults.
-        condition_frames: Leading clean condition frames, 3 today; the action
-            stream reads ``condition_frames x tokens_per_frame`` video tokens.
+        condition_frames: Number of leading video frames visible to action,
+            3 today. Clean-frame pinning belongs to materialization.
         video_shift: ``shift`` of the video ``UniformShift`` (6.0).
         action_shift: ``shift`` of the action ``UniformShift`` (1.0).
         inference_steps: Euler steps at inference.
@@ -255,11 +213,12 @@ def _internw0_delta(config: Any = None, *,
     # so a **single ``[B]`` draw** is broadcast over the future frames while
     # the condition frames are pinned to 0. Broadcast therefore stays at the
     # default per-sample, **not** ``sample_shape=("batch","frame")``, which
-    # would mean F independent draws and does not match the code. The declared
-    # ``noise_levels`` describe the clean and noisy cases, while assigning a
-    # level to each token remains part of the training data path.
-    # A separate ``[B, T]`` per-action-token path exists in the legacy RTC
-    # branch, but it is disabled in the default topology.
+    # would mean F independent draws and does not match the code. Clean-frame
+    # pinning belongs to materialization; neither noise tiers nor the structural
+    # visibility prefix implement per-frame noise placement.
+    # (The ``[B, T]`` per-action-token path at ``action_dit.py:348-392`` does
+    # exist, but it hangs off RTC and ``wam.yaml:40-42`` has
+    # ``enabled: false``, so it is inactive in the default topology.)
     diffusion = DiffusionSpec(
         timesteps={
             "video": TimestepSampler(UniformShift(shift=video_shift)),
@@ -296,9 +255,7 @@ def _internw0_delta(config: Any = None, *,
         sampling_gate=UniformSteps(num_steps=inference_steps,
                           skip=frozenset({"video"})),
         solver=EulerSampler(),
-        # Declare the clean and noisy levels used by the visibility rules.
-        # The training path still has to attach the corresponding labels to
-        # individual tokens.
+        # Available noise tiers, not a policy for pinning condition frames clean.
         noise_levels=(0.0, 1.0),
     )
 
@@ -401,8 +358,7 @@ def _internw0_delta(config: Any = None, *,
                           encoder=Spec(linear_token_encoder),
                           source_key="proprio"),
         ),
-        visibility=_internw0_delta_visibility(geometry.tokens_per_frame,
-                                              condition_frames),
+        visibility=_internw0_delta_visibility(condition_frames),
         # This provider uses the ``flex`` backend with block size 128. The
         # value is selected because it is the effective block size in the
         # legacy training path and must be supplied explicitly for this backend.

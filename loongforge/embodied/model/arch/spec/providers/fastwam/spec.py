@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from typing import Any
+from ....fastwam_training import FastWAMActionStream, FastWAMVideoHead, FastWAMVideoStream
 
 from ....diffusion.loss import LossSpec
 from ....diffusion.schedule import RectifiedFlow
@@ -21,13 +22,10 @@ from ....diffusion.timesteps import TimestepSampler, UniformShift
 from ....heads.flow import build_flow_head
 from ....heads.hidden_ref import HiddenStateRef
 from ....heads.spec import HeadSpec
-from ....streams.blocks import ActionStream, WanVideoStream
 from ....streams.conditions import ConditionSpec, InjectionKind
 from ....streams.encoders import linear_token_encoder
 from ....streams.engine import AttentionGroup
-from ....visibility.combine import Visibility
-from ....visibility.presets import get_preset
-from ....visibility.rules import prefix_only, same_stream, stream_edge
+from ....visibility.declarative import VisibilityTopology
 from ...core import Spec, register_provider
 from ...overrides import reject_config, resolve_geometry, resolve_scalars
 from ...world import WorldModelSpec
@@ -46,66 +44,24 @@ first place. YAML can still override key by key (see ``resolve_scalars``).
 """
 
 
-def _fastwam_visibility(tokens_per_frame: int) -> dict[str, Visibility]:
-    """Build fastwam's L1 visibility.
-
-    First-hand facts: ``model/fastwam/mot/fastwam.py:433-456``.
-
-    Three writes, same shape as VPP2: video->video from
-    ``build_video_to_video_mask``, action->action all True (``:452``), and
-    action->**the first latent frame** (``:455``, where
-    ``first_frame_tokens = min(video_tokens_per_frame, video_seq_len)``).
-    Again there is **no video -> action edge**.
-
-    **Two mismatches with the fastwam row of design doc §2. The code wins and
-    the mismatch is recorded here:**
-
-      1. §2 writes the action side as ``same_stream() & chunk_causal()``;
-         code ``:452`` is all True with no chunk causality at all. Adding that
-         rule would hide the action stream's own future chunks.
-      2. §2's video side maps to ``first_frame_causal``, but **the preset of
-         that name and the code of that name are not the same thing**: the
-         code (``model/fastwam/wan/dit.py:595-600``) starts all True and then
-         removes the edges from the first frame's rows to later frames, so
-         every frame except the first is fully bidirectional and can even see
-         future frames. The preset ``frame_causal() | prefix_only(n)`` is
-         per-frame causal instead.
-         None of the nine atomic rules can express the code's shape ("only
-         the first frame is restricted"). The **stricter** preset is used
-         here: what the equivalence tests need is "never grant extra
-         visibility". Being too permissive would let the model see tokens it
-         should not while the numbers still converge, and that kind of
-         deviation cannot be detected.
-
-    The ``same_stream() &`` term cannot be dropped: the preset only constrains
-    the frame axis, and action tokens carry frame labels too (the layout tags
-    them 0..F-1 according to ``action_video_freq_ratio``). Without that term,
-    ``frame_causal()`` would open action columns with smaller frame ids to
-    video query rows, which is the opposite of "there is no video -> action
-    edge" above.
-
-    Args:
-        tokens_per_frame: Video tokens per latent frame, which is also the
-            prefix length the action stream may read.
-
-    Returns:
-        ``{"video": ..., "action": ...}`` visibility rules.
+def _fastwam_visibility() -> VisibilityTopology:
+    """Master: first-frame queries read only first-frame keys; later video
+    queries read all video keys. Action reads itself and the first video frame.
     """
-    first_frame_causal = get_preset("first_frame_causal")
-    return {
-        "video": same_stream() & first_frame_causal(
-            prefix_tokens=tokens_per_frame),
-        "action": same_stream() | (
-            stream_edge("video", "action") & prefix_only(tokens_per_frame)
-        ),
-    }
+    return VisibilityTopology({
+        "video": {"intra": "first_frame_causal"},
+        "action": {
+            "intra": "bidirectional",
+            "reads": {"video": {"mode": "prefix_frames", "frames": 1}},
+        },
+    })
 
 
 @register_provider("fastwam")
 def _fastwam(config: Any = None, *,
              geometry: Mapping[str, Any] | None = None,
              video_shift: float = 5.0,
-             action_shift: float = 5.0,
+             action_shift: float = 1.0,
              inference_steps: int = 20,
              action_width: int = 7,
              proprio_dim: int | None = 8,
@@ -119,11 +75,8 @@ def _fastwam(config: Any = None, *,
 
     1. **The video timestep is not a constant.** fastwam really samples t for
        both streams (``video_scheduler`` and ``action_scheduler`` carry the
-       **same numbers** at ``modeling_configuration_fastwam.py:98-103``:
-       ``train_shift: 5.0`` / ``infer_shift: 5.0``), so both get
-       ``UniformShift(5.0)`` rather than vpp2's ``Constant(1.0)``.
-       **Design doc §2's fastwam row says video 3.0 / action 1.0, which
-       contradicts the code**; the code wins and the mismatch is recorded.
+       video shift 5 and action shift 1 in master configuration), rather than
+       vpp2's constant pure-noise video coordinate.
     2. **``seperated_timestep: True``** (``:82``). Its actual shape in code is
        ``token_timesteps = ones(B, F, tokens_per_frame) * t.view(B,1,1)``
        followed by ``token_timesteps[:, 0, :] = 0``
@@ -132,8 +85,8 @@ def _fastwam(config: Any = None, *,
        frames, with the first latent frame pinned clean**.
        So it is **not** ``BroadcastSpec(axes=("frame",))``, which would mean F
        independent draws: each stream keeps the default per-sample broadcast,
-       and "first frame clean" is expressed by the two ``noise_levels`` plus
-       the ``prefix_only(tokens_per_frame)`` rule in L1. The sampling code at
+       and first-frame clean pinning is an independent materialization policy,
+       not implemented by noise tiers or structural visibility. The code at
        ``action/schedulers.py:51-58`` indeed produces only ``[B]``.
     3. **Single condition frame, two cameras.** ``num_video_frames: 9`` is the
        frame count **after** subsampling (``observation_delta_indices`` in
@@ -168,8 +121,8 @@ def _fastwam(config: Any = None, *,
     scalars = resolve_scalars("fastwam", _FASTWAM_STREAM_SCALARS,
                               stream_scalars, STREAM_SCALAR_KEYS)
     video, action = _dual_stream_wan_streams(
-        video_impl=Spec(WanVideoStream),
-        action_impl=Spec(ActionStream),
+        video_impl=Spec(FastWAMVideoStream),
+        action_impl=Spec(FastWAMActionStream),
         **scalars,
     )
     group = AttentionGroup(streams=(video, action),
@@ -180,7 +133,7 @@ def _fastwam(config: Any = None, *,
     # ``action_horizon: 32`` (:13), ``action_video_freq_ratio: 4`` (:35).
     # The two cameras are concatenated along **width**
     # (``cat(dim=-1)`` at ``fastwam_transform.py:57-65``, libero_2cam).
-    # The VAE keeps the defaults 16/4: fastwam uses **Wan2.2's
+    # The VAE uses strides 16/4: fastwam uses **Wan2.2's
     # ``WanVideoVAE38``** (``model/fastwam/wan/vae.py:1469-1499``:
     # ``z_dim=48``, ``upsampling_factor=16``,
     # ``temporal_downsample_factor=4``), a **different generation** from
@@ -196,6 +149,7 @@ def _fastwam(config: Any = None, *,
         num_frames=9,
         num_views=2,
         latent_channels=48,
+        vae_spatial_stride=16,
         action_horizon=32,
         action_video_freq_ratio=4,
         # Action stream entry width = ``action_flow`` head output width
@@ -221,8 +175,7 @@ def _fastwam(config: Any = None, *,
         sampling_gate=UniformSteps(num_steps=inference_steps,
                           skip=frozenset({"video"})),
         solver=EulerSampler(),
-        # Two levels = first latent frame clean, the rest noisy
-        # (``wan/dit.py:645``).
+        # Available tiers; first-frame clean pinning is a materialization policy.
         noise_levels=(0.0, 1.0),
     )
 
@@ -235,7 +188,7 @@ def _fastwam(config: Any = None, *,
         # the unflatten happens inside the head and does not enter
         # ``output_width``.
         HeadSpec(name="video_flow",
-                 impl=Spec(build_flow_head, {"form": "patch_flow"}),
+                 impl=Spec(FastWAMVideoHead),
                  source=HiddenStateRef(stream="video"),
                  output_width=geometry.latent_channels,
                  needs_timestep_embedding=True),
@@ -283,7 +236,7 @@ def _fastwam(config: Any = None, *,
                           encoder=Spec(linear_token_encoder),
                           source_key="proprio"),
         ) if proprio_dim is not None else ()),
-        visibility=_fastwam_visibility(geometry.tokens_per_frame),
+        visibility=_fastwam_visibility(),
         # ``mot/fastwam.py:433-456`` produces a dense ``[S, S]`` bool mask.
         attention_backend="dense",
     )

@@ -1,27 +1,31 @@
 # VPP2 — dual-stream (video + action) world model on the five-layer ``arch`` spec.
 #
 # Launch:
-#   torchrun ... loongforge/train.py --model-name vpp2 --training-phase sft \
-#       --pretrained-checkpoint <vpp2 .pt>
+#   torchrun ... loongforge/embodied/train.py --model-name vpp2
 #
 # No line below says "this is VPP2": model identity has a single source, the
 # ``--model-name vpp2`` launch argument. It selects this file plus ``Vpp2Config``
 # through ``train/config_map.py``, and ``Vpp2Config.model_type`` is what picks
 # the provider. Topology (stream count, visibility, condition table, loss terms)
-# is Python code in ``model/arch/spec/providers/dual_stream_wan.py`` and is not
+# is Python code in ``model/arch/spec/providers/vpp2/spec.py`` and is not
 # reachable from here — this file only moves numbers.
 #
-# Trainable DiT weights are NOT named here either; they arrive via
-# ``--pretrained-checkpoint``, which the launcher already owns
-# (``train/training_args.py``). ``model_id`` below is the *encoder* stack only
-# (Wan VAE + CLIP image encoder), which the shell builds eagerly.
+# Split initializers are runtime paths, not architecture declarations.
+# ``model_id`` is the encoder stack; full upstream MoT checkpoints can still
+# be loaded through ``--pretrained-checkpoint`` instead of split initialization.
 
 model:
   # Wan2.1 generation: 16 latent channels, /8 spatial stride. The geometry
   # section states the same two facts; the shell cross-checks them so a mismatch
   # fails at build time instead of as a latent-grid shape error.
-  model_id: Wan-AI/Wan2.1-I2V-14B-480P
+  model_id: ${oc.env:VPP2_ASSETS_ROOT,/workspace/vpp2}/Wan2.1-I2V-14B-480P
   dtype: bfloat16
+  training_stage: action
+  video_checkpoint_path: ${oc.env:VPP2_VIDEO_CHECKPOINT,${oc.env:VPP2_ASSETS_ROOT,/workspace/vpp2}/libero/video_step010000.pt}
+  action_dit_pretrained_path: ${oc.env:VPP2_ASSETS_ROOT,/workspace/vpp2}/libero/action_init.pt
+  gradient_checkpointing: true
+  action_only_first_frame_fast_path: true
+  video_attention_mask_mode: bidirectional
 
   # Token count of the cached text embeddings = length of the ``text``
   # cross-attention slot. Must match the cache under
@@ -30,12 +34,11 @@ model:
 
   geometry:
     # ``num_frames`` is the number of *pixel* frames the VAE sees, so it must
-    # equal ``data.num_video_frames`` — the dataset samples that many frames out
-    # of ``(T-1) * action_video_freq_ratio + 1`` raw ones. Latent frames are
-    # then ``1 + (num_frames - 1) / 4 = 3``.
+    # equal 1 + (data.num_frames - 1) / action_video_freq_ratio: the VPP2
+    # dataset samples 17 RGB frames from a 65-frame window. VAE yields 5 latents.
     frame_height: 224
     frame_width: 224
-    num_frames: 9
+    num_frames: 17
     num_views: 2            # two cameras, concatenated along width
     action_horizon: 32
     action_video_freq_ratio: 4
@@ -45,10 +48,9 @@ model:
     video:  {residual_width: 5120, num_heads: 40, head_dim: 128, num_layers: 40, ffn_width: 13824}
     action: {residual_width: 512,  num_heads: 40, head_dim: 128, num_layers: 40, ffn_width: 2048}
 
-  # Formal parameter of the ``noise_gated_history`` visibility rule: how many
-  # leading video frames the action stream may attend to. There is no
-  # ``visibility:`` section — the rule itself is code, only its argument is a
-  # knob.
+  # Number of source-relative leading video frames read by action through the
+  # declarative ``prefix_frames`` policy. This is a fixed prefix, not a sliding
+  # history window or an implicit noise gate. The provider owns the topology.
   video_prefix_frames: 3
 
   # Only ``action`` appears. The video stream is not disabled; its timestep
@@ -58,25 +60,19 @@ model:
   diffusion:
     action: {shift: 5.0}
 
-  heads: {video_flow: {weight: 1.0}, action_flow: {weight: 1.0}}
+  heads: {video_flow: {weight: 0.0}, action_flow: {weight: 1.0}}
 
   inference_steps: 10
   proprio_dim: 8
 
 data:
-  # Must equal model.geometry.num_frames (see the comment there).
-  num_video_frames: 9
-  image_size: 224
-  image_normalize_mode: siglip
-  image_resize_strategy: center_crop
-  # Pre-computed text embeddings. The collator hashes each prompt and expects
-  # ``<sha256>.t5_len128.<encoder_id>.pt``, so this must be the cache built with
-  # tokenizer_max_len=128.
-  text_embedding_cache_dir: data/text_embeds_cache/libero
-  use_image_transform: true
-  normalization_mode: q99
-  norm_stats_path: null
-  fastwam_norm_mode: min/max
-  delta_action_dim_mask: [true, true, true, true, true, true, false]
-  action_padding_strategy: zero
+  # Raw observation span: offsets 0, 4, ..., 64 yield 17 RGB frames.
+  # The model owner must keep model.geometry.num_frames aligned at 17.
+  num_frames: 65
   action_video_freq_ratio: 4
+  image_size: 224
+  context_len: 128
+  text_embedding_cache_dir: ${oc.env:VPP2_ASSETS_ROOT,/workspace/vpp2}/text_cache_real
+  text_embedding_cache_tag: wan21i2v14b480p
+  norm_stats_path: ${oc.env:VPP2_ASSETS_ROOT,/workspace/vpp2}/libero/dataset_stats.json
+  delta_action_dim_mask: [true, true, true, true, true, true, false]
