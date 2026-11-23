@@ -51,6 +51,7 @@ from loongforge.embodied.data.datasets.lingbot_vla_v2.transforms.data_configurat
 )
 
 from loongforge.embodied.model.arch.model_configuration_arch import (
+    FastwamArchConfig,
     InternW0DeltaConfig,
     Vpp2Config,
 )
@@ -85,6 +86,7 @@ MODEL_SCHEMA = {
     "gr00t_n1_6": ModelSchema("gr00t_n1_6.yaml", GrootN1d6ModelConfig, GrootN1d6DataConfig),
     "xvla": ModelSchema("xvla.yaml", XvlaModelConfig, XvlaDataConfig),
     "fastwam": ModelSchema("fastwam.yaml", FastWAMModelConfig, FastWAMDataConfig),
+    "fastwam_arch": ModelSchema("arch/fastwam.yaml", FastwamArchConfig, FastWAMDataConfig),
     "gr00t_n1_7": ModelSchema("gr00t_n1_7.yaml", GrootN1d7Config, GrootN1d7DataConfig),
     "cosmos3_nano": ModelSchema("cosmos3/nano.yaml", Cosmos3ModelConfig, Cosmos3DroidConfig),
     "dreamzero_lora_wan22_5b": ModelSchema(

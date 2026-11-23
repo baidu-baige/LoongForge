@@ -63,6 +63,7 @@ class FastWAMPreparedBatch(PreparedBatch):
 
 
 @register_preprocessor("fastwam")
+@register_preprocessor("fastwam_arch")
 @register_preprocessor("vpp2")
 @register_preprocessor("internw0_delta")
 class FastWAMPreprocessor(BasePreprocessor):

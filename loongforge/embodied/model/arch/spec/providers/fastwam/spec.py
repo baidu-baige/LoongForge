@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from typing import Any
+from ....fastwam_training import FastWAMActionStream, FastWAMVideoHead, FastWAMVideoStream
 
 from ....diffusion.loss import LossSpec
 from ....diffusion.schedule import RectifiedFlow
@@ -21,7 +22,6 @@ from ....diffusion.timesteps import TimestepSampler, UniformShift
 from ....heads.flow import build_flow_head
 from ....heads.hidden_ref import HiddenStateRef
 from ....heads.spec import HeadSpec
-from ....streams.blocks import ActionStream, WanVideoStream
 from ....streams.conditions import ConditionSpec, InjectionKind
 from ....streams.encoders import linear_token_encoder
 from ....streams.engine import AttentionGroup
@@ -45,16 +45,11 @@ first place. YAML can still override key by key (see ``resolve_scalars``).
 
 
 def _fastwam_visibility() -> VisibilityTopology:
-    """Preserve the provider's frame-causal video and first-frame prefix.
-
-    The legacy preset named ``first_frame_causal`` was frame causality OR a
-    first-frame prefix. On valid frame-major video layouts that is equivalent
-    to ``frame_causal``, not MASTER's first-frame-only restriction. Action
-    queries retain bidirectional intra-attention and read the first video
-    frame; video queries never read action keys.
+    """Master: first-frame queries read only first-frame keys; later video
+    queries read all video keys. Action reads itself and the first video frame.
     """
     return VisibilityTopology({
-        "video": {"intra": "frame_causal"},
+        "video": {"intra": "first_frame_causal"},
         "action": {
             "intra": "bidirectional",
             "reads": {"video": {"mode": "prefix_frames", "frames": 1}},
@@ -66,7 +61,7 @@ def _fastwam_visibility() -> VisibilityTopology:
 def _fastwam(config: Any = None, *,
              geometry: Mapping[str, Any] | None = None,
              video_shift: float = 5.0,
-             action_shift: float = 5.0,
+             action_shift: float = 1.0,
              inference_steps: int = 20,
              action_width: int = 7,
              proprio_dim: int | None = 8,
@@ -80,11 +75,8 @@ def _fastwam(config: Any = None, *,
 
     1. **The video timestep is not a constant.** fastwam really samples t for
        both streams (``video_scheduler`` and ``action_scheduler`` carry the
-       **same numbers** at ``modeling_configuration_fastwam.py:98-103``:
-       ``train_shift: 5.0`` / ``infer_shift: 5.0``), so both get
-       ``UniformShift(5.0)`` rather than vpp2's ``Constant(1.0)``.
-       **Design doc §2's fastwam row says video 3.0 / action 1.0, which
-       contradicts the code**; the code wins and the mismatch is recorded.
+       video shift 5 and action shift 1 in master configuration), rather than
+       vpp2's constant pure-noise video coordinate.
     2. **``seperated_timestep: True``** (``:82``). Its actual shape in code is
        ``token_timesteps = ones(B, F, tokens_per_frame) * t.view(B,1,1)``
        followed by ``token_timesteps[:, 0, :] = 0``
@@ -129,8 +121,8 @@ def _fastwam(config: Any = None, *,
     scalars = resolve_scalars("fastwam", _FASTWAM_STREAM_SCALARS,
                               stream_scalars, STREAM_SCALAR_KEYS)
     video, action = _dual_stream_wan_streams(
-        video_impl=Spec(WanVideoStream),
-        action_impl=Spec(ActionStream),
+        video_impl=Spec(FastWAMVideoStream),
+        action_impl=Spec(FastWAMActionStream),
         **scalars,
     )
     group = AttentionGroup(streams=(video, action),
@@ -141,7 +133,7 @@ def _fastwam(config: Any = None, *,
     # ``action_horizon: 32`` (:13), ``action_video_freq_ratio: 4`` (:35).
     # The two cameras are concatenated along **width**
     # (``cat(dim=-1)`` at ``fastwam_transform.py:57-65``, libero_2cam).
-    # The VAE keeps the defaults 16/4: fastwam uses **Wan2.2's
+    # The VAE uses strides 16/4: fastwam uses **Wan2.2's
     # ``WanVideoVAE38``** (``model/fastwam/wan/vae.py:1469-1499``:
     # ``z_dim=48``, ``upsampling_factor=16``,
     # ``temporal_downsample_factor=4``), a **different generation** from
@@ -157,6 +149,7 @@ def _fastwam(config: Any = None, *,
         num_frames=9,
         num_views=2,
         latent_channels=48,
+        vae_spatial_stride=16,
         action_horizon=32,
         action_video_freq_ratio=4,
         # Action stream entry width = ``action_flow`` head output width
@@ -195,7 +188,7 @@ def _fastwam(config: Any = None, *,
         # the unflatten happens inside the head and does not enter
         # ``output_width``.
         HeadSpec(name="video_flow",
-                 impl=Spec(build_flow_head, {"form": "patch_flow"}),
+                 impl=Spec(FastWAMVideoHead),
                  source=HiddenStateRef(stream="video"),
                  output_width=geometry.latent_channels,
                  needs_timestep_embedding=True),

@@ -10,15 +10,15 @@ one object that bridges those two: it owns the frozen encoder stack (video VAE
 and CLIP image encoder), turns the pixel batch into the keys each
 ``ConditionSpec`` declares, and forwards to ``WorldModel``.
 
-Why one shell for every arch model instead of one per model: nothing in here is
-model-specific. Which conditions exist, how wide they are and which batch key
-feeds them are all read off the built ``WorldModelSpec``, so a new provider
-becomes a new registry row and a new YAML file, not a new ``nn.Module``.
+One shell shares encoder and condition plumbing across arch models. Conditions,
+widths and batch keys are read off ``WorldModelSpec``; model-specific training
+recipes stay in core adapters, with encoder API differences handled here.
 
 The registry keys are the ``model_type`` values of the config subclasses, which
 is also what ``--model-name`` resolves to. ``fastwam`` is deliberately absent:
 that name already belongs to ``FastWAMPolicy``, and two classes claiming one
 registry key would make the winner depend on import order.
+The explicit ``fastwam_arch`` alias selects FastWAM's restructured path.
 """
 
 from __future__ import annotations
@@ -146,8 +146,15 @@ def _build_vae(spec: WorldModelSpec, model_id: str) -> nn.Module:
             "axis, which shows up as a token-count mismatch, not as a "
             "shape error")
     weights = _optional_file(model_id, filename)
-    factory = WanVideoVAE if channels == 16 else WanVideoVAE38
-    vae = factory(z_dim=channels, vae_pretrained_path=weights)
+    if spec.model_type == "fastwam":
+        from loongforge.embodied.model.fastwam.wan.vae import WanVideoVAE38 as FastWAMVAE
+
+        if weights is None:
+            raise FileNotFoundError(f"FastWAM requires {filename} under {model_id}")
+        vae = FastWAMVAE(z_dim=channels)
+    else:
+        factory = WanVideoVAE if channels == 16 else WanVideoVAE38
+        vae = factory(z_dim=channels, vae_pretrained_path=weights)
     _load_into(getattr(vae, "model", vae), weights, "VAE")
     return vae.eval().requires_grad_(False)
 
@@ -197,6 +204,7 @@ def _load_into(module: nn.Module, weights: Optional[str], what: str) -> None:
 
 @register_model("vpp2")
 @register_model("internw0_delta")
+@register_model("fastwam_arch")
 class ArchWorldModel(nn.Module):
     """Trainer-facing wrapper around one ``WorldModel``.
 
@@ -264,6 +272,11 @@ class ArchWorldModel(nn.Module):
                 "ArchWorldModel.from_pretrained expects a WorldModelConfig "
                 f"subclass instance; got {type(cfg).__name__}")
         spec = cfg.build_spec()
+        fastwam = cfg.model_type == "fastwam_arch"
+        if fastwam and not cfg.video_checkpoint_path and not cfg.allow_random_initialization:
+            raise ValueError(
+                "FastWAM arch requires video/action initialization checkpoints; "
+                "set allow_random_initialization only for explicit scratch experiments")
         action_stage = (
             cfg.model_type == "vpp2"
             and getattr(cfg, "training_stage", "joint") == "action"
@@ -273,6 +286,10 @@ class ArchWorldModel(nn.Module):
             from .vpp2_training import VPP2TrainingWorldModel
 
             core_cls = VPP2TrainingWorldModel
+        elif fastwam:
+            from .fastwam_training import FastWAMTrainingWorldModel
+
+            core_cls = FastWAMTrainingWorldModel
         core = core_cls(
             spec,
             engine=JointAttentionEngine(backend=spec.attention_backend,
@@ -283,16 +300,19 @@ class ArchWorldModel(nn.Module):
             layout=TokenLayout.from_geometry(spec.geometry, spec.streams))
         core.to(dtype=_resolve_dtype(cfg.dtype))
         if getattr(cfg, "video_checkpoint_path", None):
-            from .transfer import load_vpp2_initializers
+            from .transfer import load_fastwam_initializers, load_vpp2_initializers
 
-            report = load_vpp2_initializers(
+            initializer = load_fastwam_initializers if fastwam else load_vpp2_initializers
+            report = initializer(
                 core, cfg.video_checkpoint_path, cfg.action_dit_pretrained_path)
-            logger.info("[arch] VPP2 split initialization: %s", report)
+            logger.info("[arch] %s split initialization: %s", cfg.model_type, report)
         names = {cond.name for cond in spec.conditions if cond.enabled}
         model = cls(cfg, core,
                     vae=_build_vae(spec, cfg.model_id),
                     image_encoder=(_build_image_encoder(cfg.model_id)
                                    if "clip_image" in names else None))
+        if cfg.compile_vae_encode:
+            model.vae.encode = torch.compile(model.vae.encode)
         if action_stage:
             # Match master: VAE fp32, CLIP fp16, trainable DiT bf16.
             model.vae.to(dtype=torch.float32)
@@ -366,10 +386,13 @@ class ArchWorldModel(nn.Module):
         out: Dict[str, Any] = {
             "global_step": int(sample.get("global_step", 0)),
         }
-        if action_stage:
+        if action_stage or self.config.model_type == "fastwam_arch":
             for name in ("action_is_pad", "action_terminal_mask", "image_is_pad"):
                 if sample.get(name) is not None:
                     out[name] = sample[name].to(latents.device)
+        if self.config.model_type == "fastwam_arch":
+            out["context_mask"] = self._require(sample, "context_mask").to(
+                device=latents.device, dtype=torch.bool)
         # These optional values are already in joint-token order. Pixel/latent
         # padding conversion belongs to the adapter that creates them.
         if "attention_key_valid" in sample:
@@ -433,7 +456,11 @@ class ArchWorldModel(nn.Module):
                 which means the data pipeline and the config describe different
                 videos.
         """
-        latents = self.vae.encode(video, tiled=False).to(dtype=self._dtype)
+        if self.config.model_type == "fastwam_arch":
+            latents = self.vae.encode(video, device=video.device, tiled=False)
+        else:
+            latents = self.vae.encode(video, tiled=False)
+        latents = latents.to(dtype=self._dtype)
         expected = self.spec.geometry.latent_grid
         if tuple(latents.shape[2:]) != expected:
             raise ValueError(
@@ -566,6 +593,10 @@ class ArchWorldModel(nn.Module):
             NotImplementedError: No rename table is registered for this model.
         """
         transfer = _TRANSFERS.get(self.config.model_type)
+        if self.config.model_type == "fastwam_arch":
+            from .transfer import fastwam_to_arch
+
+            transfer = fastwam_to_arch
         if transfer is None:
             raise NotImplementedError(
                 f"no checkpoint rename table for model_type="
