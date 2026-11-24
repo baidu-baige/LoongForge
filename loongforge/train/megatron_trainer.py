@@ -4,6 +4,7 @@
 """Megatron trainer and MCore 0.20 runtime compatibility."""
 
 import os
+import sys
 from copy import copy
 from functools import partial
 
@@ -34,6 +35,12 @@ def _is_hf_checkpoint(load_path):
 
 
 def _load_hf_weights(context, *, args, model_config):
+    repo_root = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
+    for path in (repo_root, os.path.join(repo_root, "tools")):
+        if path not in sys.path:
+            sys.path.insert(0, path)
     from tools.mcore_bridge.checkpoint.hf_checkpoint_loader import load_hf_checkpoint_online
 
     layout = getattr(model_config, "pipeline_model_parallel_layout", None)
