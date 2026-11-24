@@ -78,6 +78,19 @@ def _add_checkpoint_args(parser):
     group.add_argument('--force_pow_2_scales', action='store_true',
                        help=("Define whether to force destination checkpoint's scale to be power-of-two.")
     )
+    group.add_argument(
+        '--fp8-param-gather', '--fp8_param_gather',
+        dest='fp8_param_gather',
+        action='store_true',
+        help='Keep FP8 parameter storage in the MCore checkpoint.',
+    )
+    group.add_argument(
+        '--no-fp8-param-gather', '--no_fp8_param_gather',
+        dest='fp8_param_gather',
+        action='store_false',
+        help='Materialize source FP8 weights as floating-point MCore parameters.',
+    )
+    group.set_defaults(fp8_param_gather=None)
     group.add_argument('--amax_epsilon', type=float, default=0.0,
                        help=("Epsilon value added to the amax calculation to avoid divised by zero "
                              "when converting to FP8. Only used in Transformer Engine FP8 conversion.")

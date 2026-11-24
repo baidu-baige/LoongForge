@@ -1,0 +1,270 @@
+hydra:
+  searchpath:
+    - file://${oc.env:LOONGFORGE_PATH}/configs/models/
+
+defaults:
+  - deepseek4.1@module: ???
+  - _self_
+
+
+args:
+  common:
+    num_layers: ${module.num_layers}
+    hidden_size: ${module.hidden_size}
+    ffn_hidden_size: ${module.ffn_hidden_size}
+    num_attention_heads: ${module.num_attention_heads}
+    num_key_value_heads: ${module.num_query_groups}
+    vocab_size: ${module.vocab_size_in_config_file}
+    num_experts: ${module.num_experts}
+    num_experts_per_tok: ${module.num_experts_per_tok}
+    mtp_num_layers: ${module.mtp_num_layers}
+    q_lora_rank: ${module.q_lora_rank}
+    o_lora_rank: ${module.o_lora_rank}
+    o_groups: ${module.o_groups}
+    index_n_heads: ${module.index_n_heads}
+    index_head_dim: ${module.index_head_dim}
+    index_topk: ${module.index_topk}
+    head_dim: ${module.head_dim}
+  huggingface: {}
+  mcore:
+    untie_embeddings_and_output_weights: true
+    make_vocab_size_divisible_by: ${module.make_vocab_size_divisible_by}
+    pad_vocab_size_to: ${module.padded_vocab_size}
+    add_embedding_padding: true
+    transpose_mlp_dense: true
+    transpose_query_key_value: true
+name_map:
+  huggingface:
+    word_embeddings: embed
+    image_start:
+      name: image_start
+      is_direct_name: true
+    image_end:
+      name: image_end
+      is_direct_name: true
+    image_newline:
+      name: image_newline
+      is_direct_name: true
+    transformer: ""
+    layer_prefix: layers
+    input_layernorm: attn_norm
+    attention.q_down: attn.wq_a
+    attention.q_up: attn.wq_b
+    attention.q_up_layernorm: attn.q_norm
+    attention.kv_down: attn.wkv
+    attention.kv_norm: attn.kv_norm
+    attention.wo_a: attn.wo_a
+    attention.wo_b: attn.wo_b
+    attention.attn_sink:
+      name: attn.attn_sink
+      is_direct_name: true
+    attention.compressor.wkv: attn.compressor.wkv
+    attention.compressor.wgate: attn.compressor.wgate
+    attention.compressor.norm: attn.compressor.norm
+    attention.indexer.weights_proj: attn.indexer.weights_proj
+    attention.indexer.wk: attn.indexer.wk
+    attention.indexer.k_norm: attn.indexer.k_norm
+    engram.embed: engram.embed
+    engram.wkv: engram.wkv
+    engram.q_weight:
+      name: engram.q_weight
+      is_direct_name: true
+    engram.k_weight:
+      name: engram.k_weight
+      is_direct_name: true
+    attention.indexer.wq_b: attn.indexer.wq_b
+    post_attention_layernorm: ffn_norm
+    moe.gate: ffn.gate
+    moe.gate.bias: ffn.gate.bias
+    moe.gate.bias_vl:
+      name: ffn.gate.bias_vl
+      is_direct_name: true
+    moe.expert: ffn.experts
+    moe.shared_expert: ffn.shared_experts
+    moe.expert_h_to_4h:
+    - w1
+    - w3
+    moe.shared_expert_h_to_4h:
+    - w1
+    - w3
+    moe.expert_4h_to_h: w2
+    moe.shared_expert_4h_to_h: w2
+    final_layernorm: norm
+    word_embeddings_for_head: head
+    hc_attn_fn:
+      name: hc_attn_fn
+      is_direct_name: true
+    hc_attn_scale:
+      name: hc_attn_scale
+      is_direct_name: true
+    hc_attn_base:
+      name: hc_attn_base
+      is_direct_name: true
+    hc_ffn_fn:
+      name: hc_ffn_fn
+      is_direct_name: true
+    hc_ffn_scale:
+      name: hc_ffn_scale
+      is_direct_name: true
+    hc_ffn_base:
+      name: hc_ffn_base
+      is_direct_name: true
+  mcore:
+    word_embeddings: embedding.word_embeddings
+    image_start:
+      name: image_start
+      is_direct_name: true
+      ignore_tp: true
+    image_end:
+      name: image_end
+      is_direct_name: true
+      ignore_tp: true
+    image_newline:
+      name: image_newline
+      is_direct_name: true
+      ignore_tp: true
+    transformer: model
+    layer_prefix: decoder.layers
+    input_layernorm: attn_norm
+    engram.embed:
+      name: engram.embed
+      # Engram is row-sharded across the TP owner group. The converter
+      # materializes each local shard as BF16; HF keeps the released FP8
+      # row-scale representation.
+      extra: false
+    engram.wkv:
+      name: engram.wkv
+      extra: true
+      ignore_tp: true
+    engram.q_weight:
+      name: engram.q_weight
+      is_direct_name: true
+      ignore_tp: true
+    engram.k_weight:
+      name: engram.k_weight
+      is_direct_name: true
+      ignore_tp: true
+    attention.q_down:
+      name: attn.linear_q_down_proj
+      extra: true
+      fp8: true
+      ignore_tp: true
+    attention.q_up:
+      name: attn.linear_q_up_proj
+      extra: true
+      fp8: true
+    attention.q_up_layernorm:
+      name: attn.q_layernorm
+      extra: true
+    attention.kv_down:
+      name: attn.linear_kv_proj
+      extra: true
+      fp8: true
+      fp8_ignore_tp: true
+      ignore_tp: true
+    attention.kv_norm:
+      name: attn.kv_layernorm
+      extra: true
+    attention.wo_a:
+      name: attn.linear_o_group_proj
+      is_direct_name: true
+    attention.wo_b:
+      name: attn.linear_proj
+      extra: true
+      fp8: true
+    attention.attn_sink:
+      name: attn.attn_sink
+      is_direct_name: true
+    attention.compressor.wkv:
+      name: attn.compressor_wkv
+      ignore_tp: true
+    attention.compressor.wgate:
+      name: attn.compressor_wgate
+      ignore_tp: true
+    attention.compressor.norm:
+      name: attn.compressor_norm
+      extra: true
+    attention.indexer.weights_proj:
+      name: attn.indexer_weights_proj
+      extra: true
+    attention.indexer.wk:
+      name: attn.indexer_wk
+      extra: true
+      ignore_tp: true
+    attention.indexer.k_norm:
+      name: attn.indexer_k_norm
+      extra: true
+    attention.indexer.wq_b:
+      name: attn.indexer_wq_b
+      fp8: true
+      extra: true
+    post_attention_layernorm: ffn_norm
+    moe.gate: mlp.router
+    moe.gate.bias:
+      name: mlp.router.expert_bias
+      is_direct_name: true
+      ignore_tp: true
+    moe.gate.bias_vl:
+      name: mlp.router.bias_vl
+      is_direct_name: true
+      ignore_tp: true
+    # The native V4.1 decoder owns the grouped expert container directly.
+    # Loong-Megatron's generic MoELayer adds `local_experts`, but this model
+    # state dict exposes `mlp.experts.linear_fc{1,2}.weight{expert}`.
+    moe.expert: mlp.experts
+    moe.groupedgemm.expert: mlp.experts
+    moe.shared_expert: mlp.shared_experts
+    moe.expert_h_to_4h:
+      name: linear_fc1
+      fp8: true
+      extra: true
+    moe.shared_expert_h_to_4h:
+      name: mlp.shared_experts.linear_fc1
+      fp8: true
+      extra: true
+    moe.expert_4h_to_h:
+      name: linear_fc2
+      fp8: true
+      extra: true
+    moe.shared_expert_4h_to_h:
+      name: mlp.shared_experts.linear_fc2
+      fp8: true
+      extra: true
+    final_layernorm:
+      name: decoder.final_layernorm
+      extra: true
+    word_embeddings_for_head: output_layer
+    transformer_tpl: model%d
+    hc_attn_fn:
+      name: attn_hc.fn
+      is_direct_name: true
+      ignore_tp: true
+    hc_attn_scale:
+      name: attn_hc.scale
+      is_direct_name: true
+      ignore_tp: true
+    hc_attn_base:
+      name: attn_hc.base
+      is_direct_name: true
+      ignore_tp: true
+    hc_ffn_fn:
+      name: ffn_hc.fn
+      is_direct_name: true
+      ignore_tp: true
+    hc_ffn_scale:
+      name: ffn_hc.scale
+      is_direct_name: true
+      ignore_tp: true
+    hc_ffn_base:
+      name: ffn_hc.base
+      is_direct_name: true
+      ignore_tp: true
+tensor_parallel_dim:
+  "engram.embed.weight": 0
+  # linear_o_group_proj is a bare Parameter and stores TP-local output groups.
+  "attention.wo_a.weight": 0
+  "attention.wo_b.weight": 1
+  "attention.attn_sink.weight": 0
+  "attention.indexer.wq_b.weight": 0
+  "attention.indexer.weights_proj.weight": 0
+torch_dtype: bfloat16

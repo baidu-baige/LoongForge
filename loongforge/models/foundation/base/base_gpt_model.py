@@ -9,7 +9,7 @@
 import torch
 from torch import Tensor
 import logging
-from typing import Dict, Optional, Literal
+from typing import Dict, Optional, Literal, Type
 from collections import OrderedDict
 
 logger = logging.getLogger(__name__)
@@ -124,6 +124,7 @@ class BaseGPTModel(BaseMegatronLanguageModule):
         mtp_block_spec: Optional[ModuleSpec] = None,
         pg_collection: Optional[ProcessGroupCollection] = None,
         vp_stage: Optional[int] = None,
+        decoder_cls: Type[torch.nn.Module] = TransformerBlock,
     ) -> None:
         super().__init__(config=config, pg_collection=pg_collection)
 
@@ -229,7 +230,7 @@ class BaseGPTModel(BaseMegatronLanguageModule):
         self.rotary_pos_emb_cache = {}
 
         # Transformer.
-        self.decoder = TransformerBlock(
+        self.decoder = decoder_cls(
             config=self.config,
             spec=transformer_layer_spec,
             pre_process=self.pre_process,

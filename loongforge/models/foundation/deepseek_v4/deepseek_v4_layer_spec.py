@@ -33,6 +33,7 @@ from megatron.core.transformer.transformer_layer import (
     get_transformer_layer_offset,
 )
 
+from loongforge.models.common.clamped_swiglu import ClampedSwiGLUSharedExpertMLP
 from loongforge.models.foundation.deepseek_v4.deepseek_v4_attention import (
     DSv4HybridSelfAttention,
     DSv4HybridSelfAttentionSubmodules,
@@ -67,13 +68,15 @@ def _get_mlp_module_spec_for_backend(
             ),
         )
 
-    return get_moe_module_spec_for_backend(
+    spec = get_moe_module_spec_for_backend(
         backend=backend,
         num_experts=num_experts,
         moe_grouped_gemm=moe_grouped_gemm,
         moe_use_legacy_grouped_gemm=moe_use_legacy_grouped_gemm,
         use_te_activation_func=use_te_activation_func,
     )
+    spec.submodules.shared_experts.module = ClampedSwiGLUSharedExpertMLP
+    return spec
 
 
 def _get_deepseek_v4_layer_with_te_spec(

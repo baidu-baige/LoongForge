@@ -48,6 +48,7 @@ from mcore_checkpoint_convert.common.common_checkpoint import (
     LAYER_NEED_TRANSPOSE,
     LAYER_DTYPE
 )
+from mcore_checkpoint_convert.common.common_checkpoint import ENGRAM_EMBED
 
 from mcore_checkpoint_convert.huggingface.util.hf_attn_converter import HfAttnQkvConverter, HfAttnGateQkvConverter
 from mcore_checkpoint_convert.huggingface.util.hf_mixer_attn_converter import HfMixerAttnConverter
@@ -66,6 +67,15 @@ def is_dsv4_hybrid_config(c_config):
         common_args.get("experimental_attention_variant") == "dsv4_hybrid"
         or module_args.get("experimental_attention_variant") == "dsv4_hybrid"
     )
+
+
+def is_dsv41_config(c_config):
+    """Return whether the conversion config targets DeepSeek-V4.1."""
+    if c_config is None:
+        return False
+    module_args = c_config.get("module", {}) if hasattr(c_config, "get") else {}
+    return module_args.get("model_type") == "deepseek_v41"
+
 
 class HuggingfaceBase:
     """
@@ -172,6 +182,12 @@ class HuggingfaceBase:
     def _get_output_dtype(self):
         return self.output_dtype
 
+    def _weight_scale_path(self, name, hf_name):
+        """Return the released scale suffix for a named tensor."""
+        if is_dsv41_config(self.c_config) and name == ENGRAM_EMBED:
+            return f"{hf_name}.scale"
+        return f"{hf_name}.{self.weight_scale_suffix}"
+
     def _materialize_fp8_weight_if_needed(self, weight, weight_scale):
         if weight is None:
             return weight, weight_scale
@@ -259,7 +275,7 @@ class HuggingfaceBase:
                 hf_weight_path = f"{hf_name}.{WEIGHT}"
             hf_bias_path = self.name_map[f"{spec_name}.{BIAS}"] \
                     if f"{spec_name}.{BIAS}" in self.name_map else f"{hf_name}.{BIAS}"
-            hf_weight_scale_path = f"{hf_name}.{self.weight_scale_suffix}"
+            hf_weight_scale_path = self._weight_scale_path(name, hf_name)
             # Clone MTP word embedding to avoid shared memory with main embedding
             
             if is_dsv4_hybrid_config(self.c_config) and name == MTP_WORD_EMBEDDING:
@@ -302,7 +318,9 @@ class HuggingfaceBase:
                 bias_name = f"{name}.{BIAS}"
                 hf_bias_path = self._build_path(transformer, layer_prefix, hf_layer_id, self.name_map[bias_name]) \
                         if bias_name in self.name_map else f"{hf_prefix_path}.{BIAS}"
-                hf_weight_scale_path = f"{hf_prefix_path}.{self.weight_scale_suffix}"
+                hf_weight_scale_path = self._weight_scale_path(
+                    name, hf_prefix_path
+                )
                 if self.num_padded_heads != 0:
                     if name == ATTENTION_DENSE:
                         weight = weight[:, :self.heads * self.hidden_size_per_head].contiguous()
@@ -420,7 +438,7 @@ class HuggingfaceBase:
                     hf_weight_path = f"{hf_name}.{WEIGHT}"
                 hf_bias_path = self.name_map[f"{name}.{BIAS}"] \
                         if f"{name}.{BIAS}" in self.name_map else f"{hf_name}.{BIAS}"
-                hf_weight_scale_path = f"{hf_name}.{self.weight_scale_suffix}"
+                hf_weight_scale_path = self._weight_scale_path(name, hf_name)
                 weight, bias, weight_scale = self.get_from_state_dict(
                         h_dict, hf_weight_path, hf_bias_path=hf_bias_path, hf_weight_scale_path=hf_weight_scale_path)
             if (name == WORD_EMBEDDINGS_FOR_HEAD or name == MTP_WORD_EMBEDDING) and weight is None and WORD_EMBEDDINGS in self.name_map:
@@ -467,7 +485,9 @@ class HuggingfaceBase:
                 bias_name = f"{name}.{BIAS}"
                 hf_bias_path = self._build_path(transformer, layer_prefix, hf_layer_id, self.name_map[bias_name]) \
                         if bias_name in self.name_map else f"{hf_prefix_path}.{BIAS}"
-                hf_weight_scale_path = f"{hf_prefix_path}.{self.weight_scale_suffix}"
+                hf_weight_scale_path = self._weight_scale_path(
+                    name, hf_prefix_path
+                )
                 weight, bias, weight_scale = self.get_from_state_dict(
                         h_dict, hf_weight_path, hf_bias_path=hf_bias_path, hf_weight_scale_path=hf_weight_scale_path)
                 if ATTENTION_ROTARY_EMB_INV_FREQ == name and weight is None:

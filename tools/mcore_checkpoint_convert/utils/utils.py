@@ -598,7 +598,8 @@ def get_quantizer_with_weight_scale_inv(weight, weight_scale_inv, dtype, amax_ep
 
 def convert_fp8_to_bf16(fp8_blocks: torch.Tensor,
                         scales: torch.Tensor,
-                        dtype: torch.dtype = torch.bfloat16) -> torch.Tensor:
+                        dtype: torch.dtype = torch.bfloat16,
+                        block_size: int = 128) -> torch.Tensor:
     """
     Dequantizes a tensor from FP8, assuming `fp8_blocks` has the original, unpadded shape.
 
@@ -606,6 +607,7 @@ def convert_fp8_to_bf16(fp8_blocks: torch.Tensor,
         fp8_blocks: The FP8 quantized tensor with its original shape.
         scales: The per-block scales used for quantization.
         dtype: The desired output data type (e.g., torch.bfloat16).
+        block_size: Quantization block width and height; MCore uses 128.
 
     Returns:
         The dequantized tensor with the same shape as `fp8_blocks`.
@@ -617,32 +619,17 @@ def convert_fp8_to_bf16(fp8_blocks: torch.Tensor,
     # Get the original shape directly from the input tensor.
     m, n = fp8_blocks.shape
 
-    # Calculate the padded dimensions required for 128x128 block operations.
-    m_pad = ceil_div(m, 128) * 128
-    n_pad = ceil_div(n, 128) * 128
-
-    # Trim the scales tensor to match the padded dimensions of the input.
-    scales = scales[:ceil_div(m, 128), :ceil_div(n, 128)].contiguous()
-
-    # Create a padded version of the input tensor if its dimensions are not
-    # a multiple of the block size.
-    if m_pad == m and n_pad == n:
-        fp8_padded = fp8_blocks
-    else:
-        fp8_padded = torch.zeros((m_pad, n_pad), dtype=fp8_blocks.dtype, device=fp8_blocks.device)
-        fp8_padded[:m, :n] = fp8_blocks
-
-    # Dequantize block by block.
-    fp8_view = fp8_padded.view(-1, 128, n_pad // 128, 128)
-    scale_expanded = scales.view(-1, 1, scales.size(1), 1)
-    x_recon_view = fp8_view.to(scale_expanded.dtype) * scale_expanded
-
-    # Reshape the dequantized blocks into a 2D tensor of the padded size,
-    # then slice it back to the original dimensions.
-    x_recon = x_recon_view.view(m_pad, n_pad)[:m, :n].contiguous()
-    x_recon = x_recon.to(dtype)
-
-    return x_recon
+    if scales.ndim != 2:
+        raise ValueError(f"FP8 scale tensor must be 2D, got shape {tuple(scales.shape)}")
+    scale_rows, scale_cols = ceil_div(m, block_size), ceil_div(n, block_size)
+    if scales.shape[0] < scale_rows or scales.shape[1] < scale_cols:
+        raise ValueError(
+            f"FP8 scale shape {tuple(scales.shape)} does not cover weight shape {tuple(fp8_blocks.shape)}"
+        )
+    expanded = scales[:scale_rows, :scale_cols].float().repeat_interleave(block_size, dim=0).repeat_interleave(
+        block_size, dim=1
+    )
+    return (fp8_blocks.float() * expanded[:m, :n]).to(dtype).contiguous()
 
 def convert_bf16_to_fp8(
     x: torch.Tensor,

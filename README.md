@@ -88,6 +88,7 @@ Since optimal training strategies differ across model families and scales, Loong
 ## 🔥 Latest News
 
 - **[2026/11]** ✨ Added BF16 pretraining and supervised fine-tuning (SFT) support for **[ERNIE-5.5-Flash-Base](./examples/ernie5.5/)**.
+- **[2026/11]** ✨ Added training support for **[DeepSeek-V4.1-Flash](./examples/deepseek_v4.1/)**.
 - **[2026/10]** 🤖 Added VLA training support for **[LingBot-VLA-v2](./examples/embodied/lingbot_vla_v2/)**, built on the new tensor_wise distributed optimizer with Muon. `--optimizer muon` also runs under plain DDP for any model.
 - **[2026/10]** 🤖 Introducing **[LoongForge-VLDA](./cookbook/loongforge-vlda/)**, a Vision-Language-Delta-Action model trained with LoongForge: **98.5%** on LIBERO, **84.5%** zero-shot on LIBERO-Plus, and **+17–18 points** over π0.5 on real robots. [[project page](https://baidu-baige.github.io/LoongForge/projects/vlda.html)] [[paper](https://arxiv.org/abs/2610.25874)]
 - **[2026/10]** 🦾 Open-sourced **[ego2robot](./tools/ego2robot/)** — a pipeline that converts first-person videos of human manipulation into dual-arm robot training data, outputting **LeRobot v3.0** format across **16 robot morphologies**.
@@ -347,6 +348,7 @@ Click any model for its training examples; see [`configs/models/`](./configs/mod
 <td valign="top">
 <ul>
 <li><a href="examples/qwen2.5_vl/">Qwen2.5-VL</a></li>
+<li><a href="examples/deepseek_v4.1/">DeepSeek-V4.1-Flash</a></li>
 <li><a href="examples/qwen3_vl/">Qwen3-VL</a></li>
 <li><a href="examples/qwen3.5/">Qwen3.5</a></li>
 <li><a href="examples/qwen3.6/">Qwen3.6</a></li>
