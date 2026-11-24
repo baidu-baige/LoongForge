@@ -274,6 +274,12 @@ def pretrain_with_mcore(
     cfg = pretrain_cfg_container_from_args(runtime_args, None)
     set_global_variables(runtime_args, cfg, build_tokenizer=False)
     set_loongforge_extra_global_vars(runtime_args, build_tokenizer=True)
+    if getattr(model_config, "image_encoder", None) is not None:
+        from loongforge.models.encoder.internvl_vision_models.internvl_config import (
+            resolve_image_token_id,
+        )
+
+        resolve_image_token_id(model_config.image_encoder)
     return pretrain(
         cfg,
         train_valid_test_dataset_provider,
