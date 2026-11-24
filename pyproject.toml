@@ -136,7 +136,7 @@ gpu = [
     "nvidia-cudnn-cu13==9.24.0.43",
     # Megatron / Qwen
     "qwen-vl-utils==0.0.11",
-    "megatron-energon==5.0.0",
+    "megatron-energon==5.2.0",
     # GPU-specific
     "deepspeed==0.17.6",
     "flashinfer-python==0.6.2",
@@ -170,7 +170,7 @@ xpu = [
     "pybind11",
     "numpy",
     "Cython",
-    "megatron-energon==5.0.0",
+    "megatron-energon==5.2.0",
     "torchdata==0.11.0",
     "botocore==1.41.6",
     # VLA / embodied runtime
