@@ -165,7 +165,7 @@ class DeepseekV41Router(TopKRouter):
         sequence_length, batch_size = logits.shape[:2]
         flat_logits = self.apply_z_loss(logits).reshape(-1, self.config.num_moe_experts)
         if self.score_function != "sqrtsoftplus":
-            raise ValueError("DeepSeek-V4.1 requires sqrtsoftplus routing, " f"got {self.score_function!r}")
+            raise ValueError(f"DeepSeek-V4.1 requires sqrtsoftplus routing, got {self.score_function!r}")
         # Keep the released FP32 score and top-k weight path through dispatch.
         # Casting the weights back to BF16 changes the routed expert sum even
         # when the selected expert IDs are unchanged.
@@ -564,10 +564,11 @@ class DeepseekV41DecoderBlock(nn.Module):
         vp_stage: Optional[int] = None,
     ):
         super().__init__()
-        if vp_stage is not None:
-            raise ValueError("DeepSeek-V4.1 does not support VPP")
         if getattr(config, "pipeline_model_parallel_layout", None) is not None:
-            raise ValueError("DeepSeek-V4.1 does not support an explicit PP layout")
+            raise ValueError(
+                "DeepSeek-V4.1 does not support an explicit PP layout; "
+                "set the virtual chunk sizes with --num-virtual-stages-per-pipeline-rank instead"
+            )
         backend = (
             TESpecProvider()
             if getattr(config, "transformer_impl", "local") == "transformer_engine"

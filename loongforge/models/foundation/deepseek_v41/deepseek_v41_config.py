@@ -214,8 +214,6 @@ class DeepseekV41Config(BaseModelMLAConfig):
             raise ValueError("num_attention_heads must be divisible by o_groups")
         if self.context_parallel_size != 1:
             raise ValueError("DeepSeek-V4.1 CP is intentionally not enabled in this integration")
-        if self.pipeline_model_parallel_size > 1 and self.virtual_pipeline_model_parallel_size not in (None, 1):
-            raise ValueError("DeepSeek-V4.1 does not support VPP")
         if self.pipeline_model_parallel_size > 1:
             # CSA2 and mHC carry changes the tensor width between PP stages.
             self.variable_seq_lengths = True

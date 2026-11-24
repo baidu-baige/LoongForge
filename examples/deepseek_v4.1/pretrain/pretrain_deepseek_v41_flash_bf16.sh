@@ -116,6 +116,7 @@ MOE_ARGS=(
 MODEL_PARALLEL_ARGS=(
   --tensor-model-parallel-size ${TP_SIZE:-8}
   --pipeline-model-parallel-size ${PP_SIZE:-1}
+  --num-virtual-stages-per-pipeline-rank ${VPP_SIZE:-1}
   --context-parallel-size 1
   --expert-model-parallel-size ${EP_SIZE:-8}
   --expert-tensor-parallel-size ${ETP_SIZE:-1}

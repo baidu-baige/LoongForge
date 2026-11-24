@@ -11,7 +11,9 @@ from typing import List
 import torch
 from megatron.core import mpu, tensor_parallel
 from megatron.core.enums import ModelType
+from megatron.core.utils import get_attr_wrapped_model
 from megatron.training import get_timers
+from megatron.training.utils import is_first_or_last_pipeline_stage
 
 from loongforge.data.multimodal import build_task_encoder
 from loongforge.data.multimodal.dataloader_provider import (
@@ -51,8 +53,8 @@ def _broadcast_optional(data, key, dtype):
     return tensor_parallel.broadcast_data([key], data, dtype)[key].cuda(non_blocking=True)
 
 
-def _native_get_batch(data_iterator):
-    if not (mpu.is_pipeline_first_stage() or mpu.is_pipeline_last_stage()):
+def _native_get_batch(data_iterator, vp_stage: int | None = None):
+    if not is_first_or_last_pipeline_stage(vp_stage):
         return {
             key: None
             for key in (
@@ -89,7 +91,8 @@ def _native_get_batch(data_iterator):
 def _native_forward_step(data_iterator, model, return_schedule_plan=False):
     timers = get_timers()
     timers("batch-generator", log_level=2).start()
-    batch = _native_get_batch(data_iterator)
+    vp_stage = get_attr_wrapped_model(model, "vp_stage")
+    batch = _native_get_batch(data_iterator, vp_stage)
     timers("batch-generator").stop()
     if return_schedule_plan:
         raise NotImplementedError("DeepSeek-V4.1 native multimodal schedule-plan execution is not enabled")

@@ -59,6 +59,25 @@ def test_config_defaults_keep_vision_and_shared_expert():
     assert config.moe_router_topk == config.num_experts_per_tok == 6
 
 
+def test_config_accepts_virtual_pipeline_parallelism():
+    from loongforge.models.foundation.deepseek_v41.deepseek_v41_config import DeepseekV41Config
+
+    config = DeepseekV41Config(
+        num_layers=8,
+        pipeline_model_parallel_size=2,
+        virtual_pipeline_model_parallel_size=2,
+        pipeline_dtype=torch.bfloat16,
+        csa_compress_ratios=[0, 0, 2, 2, 2, 2, 2, 2],
+        kv_source_layer_ids=[2],
+        index_source_layer_ids=[2],
+        engram_layer_ids=[1, 6],
+        engram_num_embeddings=[1024, 2048],
+    )
+    assert config.pipeline_model_parallel_size == 2
+    assert config.virtual_pipeline_model_parallel_size == 2
+    assert config.variable_seq_lengths is True
+
+
 def test_moe_spec_reuses_mcore_and_keeps_config_unchanged(monkeypatch):
     from megatron.core.models.backends import LocalSpecProvider
     from megatron.core.transformer.moe.experts import SequentialMLP
@@ -473,6 +492,36 @@ def test_pipeline_carry_keeps_padding_metadata_and_source_gradients():
         torch.testing.assert_close(source.grad, torch.ones_like(source))
 
 
+def test_carry_survives_two_virtual_chunk_boundaries():
+    from loongforge.models.foundation.deepseek_v41.deepseek_v41_attention import DeepseekV41AttentionState
+    from loongforge.models.foundation.deepseek_v41.deepseek_v41_layers import (
+        _pack_v41_carry,
+        _unpack_v41_carry,
+    )
+
+    hidden = torch.randn(8, 2, 16, dtype=torch.bfloat16)
+    pre = torch.randn(2, 8, 4)
+    compressed = torch.randn(2, 4, 8, dtype=torch.bfloat16)
+    ids = torch.arange(16).reshape(2, 8)
+    positions = torch.arange(8).expand(2, -1)
+    valid = positions < torch.tensor([[8], [6]])
+    state = DeepseekV41AttentionState(compressed_kv=compressed, compression_ratio=2)
+
+    first = _unpack_v41_carry(
+        _pack_v41_carry(hidden, pre, ids, positions, None, None, None, state, valid_tokens=valid),
+        hidden.shape[-1],
+    )
+    second = _unpack_v41_carry(
+        _pack_v41_carry(first[0], first[1], first[2], first[3], None, None, None, first[-1], valid_tokens=first[-2]),
+        hidden.shape[-1],
+    )
+    torch.testing.assert_close(second[0], hidden, atol=0, rtol=0)
+    torch.testing.assert_close(second[2], ids, atol=0, rtol=0)
+    torch.testing.assert_close(second[-2], valid, atol=0, rtol=0)
+    torch.testing.assert_close(second[1], pre, atol=2e-5, rtol=2e-5)
+    torch.testing.assert_close(second[-1].compressed_kv, compressed, atol=0, rtol=0)
+
+
 def test_native_pretrain_passes_its_loader_through_megatron(monkeypatch):
     from loongforge.train.pretrain import pretrain_deepseek_v41 as training
 
@@ -496,6 +545,43 @@ def test_native_pretrain_passes_its_loader_through_megatron(monkeypatch):
     args.packing_pretrain_data = True
     with pytest.raises(ValueError, match="packing is not supported"):
         training._build_trainer(args)
+
+
+def test_native_get_batch_respects_vp_stage(monkeypatch):
+    from loongforge.train.pretrain import pretrain_deepseek_v41 as training
+
+    class ReachedDataPath(Exception):
+        pass
+
+    stages = []
+
+    def record(vp_stage):
+        stages.append(vp_stage)
+        return False
+
+    monkeypatch.setattr(training, "is_first_or_last_pipeline_stage", record)
+    batch = training._native_get_batch(None, vp_stage=1)
+    training._native_get_batch(None)
+    assert stages == [1, None]
+    assert set(batch) == {
+        "tokens",
+        "labels",
+        "position_ids",
+        "loss_mask",
+        "attn_mask",
+        "pixel_values",
+        "image_grid_hws",
+        "vision_token_types",
+    }
+    assert all(value is None for value in batch.values())
+
+    def reach_data_path(*args, **kwargs):
+        raise ReachedDataPath
+
+    monkeypatch.setattr(training.tensor_parallel, "broadcast_data", reach_data_path)
+    monkeypatch.setattr(training, "is_first_or_last_pipeline_stage", lambda vp_stage: True)
+    with pytest.raises(ReachedDataPath):
+        training._native_get_batch(None, vp_stage=0)
 
 
 def test_native_collator_masks_image_targets_padding_and_sample_wrap(monkeypatch):
