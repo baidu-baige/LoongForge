@@ -45,10 +45,12 @@ def convert_megatron_transformer_config_args(megatron_args, config_class=None):
     transformer_config_args["persist_layer_norm"] = not megatron_args[
         "no_persist_layer_norm"
     ]
-    transformer_config_args["layernorm_zero_centered_gamma"] = megatron_args[
-        "apply_layernorm_1p"
-    ]
-    transformer_config_args["layernorm_epsilon"] = megatron_args["norm_epsilon"]
+    transformer_config_args["layernorm_zero_centered_gamma"] = megatron_args.get(
+        "apply_layernorm_1p", False
+    )
+    transformer_config_args["layernorm_epsilon"] = megatron_args.get(
+        "norm_epsilon", 1e-5
+    )
     transformer_config_args["deallocate_pipeline_outputs"] = True
     transformer_config_args["pipeline_dtype"] = megatron_args["params_dtype"]
     transformer_config_args["batch_p2p_comm"] = not megatron_args["overlap_p2p_comm"]

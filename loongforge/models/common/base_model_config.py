@@ -10,6 +10,7 @@ from megatron.core.transformer.transformer_config import MLATransformerConfig
 import dataclasses
 from typing import Optional, List, Dict, Set
 from collections import defaultdict
+from omegaconf import ListConfig
 
 
 def _initialize_pretrained_config(config, **kwargs):
@@ -55,6 +56,8 @@ class BaseModelConfig(TransformerConfig, PretrainedConfig):
 
     def __post_init__(self, **kwargs):
         _initialize_pretrained_config(self, **kwargs)
+        if isinstance(self.cuda_graph_modules, ListConfig):
+            self.cuda_graph_modules = list(self.cuda_graph_modules)
         TransformerConfig.__post_init__(self)
 
 
@@ -75,6 +78,8 @@ class BaseModelMLAConfig(MLATransformerConfig, PretrainedConfig):
 
     def __post_init__(self, **kwargs):
         _initialize_pretrained_config(self, **kwargs)
+        if isinstance(self.cuda_graph_modules, ListConfig):
+            self.cuda_graph_modules = list(self.cuda_graph_modules)
         MLATransformerConfig.__post_init__(self)
 
 

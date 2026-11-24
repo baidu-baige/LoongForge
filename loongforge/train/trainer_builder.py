@@ -4,6 +4,7 @@
 """all model trainer"""
 
 from typing import Union, List, Callable
+import importlib
 import logging
 
 from loongforge.utils.global_vars import get_hydra_config
@@ -12,6 +13,44 @@ from loongforge.utils import constants
 MODEL_FAMILY_TRAINER_FACTORY = {}
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+
+def _ensure_trainer_registered(model_family: str, training_phase: str) -> None:
+    """Import only the trainer module required by the selected family."""
+    if model_family in MODEL_FAMILY_TRAINER_FACTORY and (
+        training_phase in MODEL_FAMILY_TRAINER_FACTORY[model_family]
+    ):
+        return
+
+    language_families = set(constants.LanguageModelFamilies.names())
+    vision_families = set(constants.VisionLanguageModelFamilies.names())
+    custom_families = set(constants.CustomModelFamilies.names())
+    vla_families = set(constants.VisionLanguageActionModelFamilies.names())
+
+    if model_family in language_families and training_phase == constants.TrainingPhase.PRETRAIN:
+        module_name = "loongforge.train.pretrain.pretrain_llm"
+    elif model_family in language_families and training_phase == constants.TrainingPhase.SFT:
+        module_name = "loongforge.train.sft.sft_llm"
+    elif model_family in vision_families and training_phase == constants.TrainingPhase.PRETRAIN:
+        module_name = "loongforge.train.pretrain.pretrain_vlm"
+    elif model_family == constants.VisionLanguageModelFamilies.INTERN_VL:
+        module_name = "loongforge.train.sft.sft_internvl"
+    elif model_family == constants.VisionLanguageModelFamilies.ERNIE4_5_VL:
+        module_name = "loongforge.train.sft.sft_ernie"
+    elif model_family in vision_families:
+        module_name = "loongforge.train.sft.sft_vlm"
+    elif model_family == constants.CustomModelFamilies.QWEN_IMAGE:
+        module_name = "loongforge.train.diffusion.pretrain_qwen_image"
+    elif model_family in custom_families:
+        module_name = "loongforge.train.diffusion.pretrain_wan"
+    elif model_family in vla_families:
+        raise ValueError(
+            f"LoongForge VLA trainer for {model_family} is not part of the core v0.20 migration"
+        )
+    else:
+        raise ValueError(f"Unknown model family: {model_family}")
+
+    importlib.import_module(module_name)
 
 
 def register_model_trainer(
@@ -73,6 +112,9 @@ def build_model_trainer(args):
         if not hasattr(config, 'model'):
             raise ValueError("Invalid model configuration structure")
         model_family = config.model.model_type
+
+    _ensure_trainer_registered(model_family, args.training_phase)
+
     # get model family trainer
     if model_family not in MODEL_FAMILY_TRAINER_FACTORY:
         raise ValueError(

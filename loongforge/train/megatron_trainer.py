@@ -1,13 +1,114 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""model trainer"""
+"""Megatron trainer and the minimal MCore 0.20 runtime adapter."""
 
-from .training_utils import pretrain
+import os
+from copy import copy
+from functools import partial
+
+from loongforge.train.parser import parse_args_from_config
+from loongforge.utils import constants
+from loongforge.utils.global_vars import (
+    get_model_config,
+    set_loongforge_extra_global_vars,
+)
+
+from megatron.training.argument_utils import pretrain_cfg_container_from_args
+from megatron.training.callbacks import CallbackManager
+from megatron.training.global_vars import set_global_variables
+from megatron.training.training import pretrain
+
+
+def _is_hf_checkpoint(load_path):
+    """Return whether a path contains a supported HuggingFace checkpoint."""
+    if load_path is None:
+        return False
+    names = (
+        "model.safetensors.index.json",
+        "model.safetensors",
+        "pytorch_model.bin.index.json",
+        "pytorch_model.bin",
+    )
+    return any(os.path.exists(os.path.join(load_path, name)) for name in names)
+
+
+def _load_hf_weights(context, *, args, model_config):
+    from tools.mcore_bridge.checkpoint.hf_checkpoint_loader import load_hf_checkpoint_online
+
+    layout = getattr(model_config, "pipeline_model_parallel_layout", None)
+    if layout is not None and getattr(layout, "layout", None) is not None:
+        args.convert_pp_layout = layout
+    load_hf_checkpoint_online(
+        context.model, context.optimizer, context.scheduler, args, model_config=model_config
+    )
+
+
+def _normalize_sft_args(train_args):
+    """Map LoongForge SFT flags onto the flags consumed by MCore."""
+    if getattr(train_args, "training_phase", None) != constants.TrainingPhase.SFT:
+        return
+    train_args.sft = True
+    train_args.sft_chunkpipe_mode = False
+    train_args.sft_loss_log_mode = "microbatch"
+
+
+def pretrain_with_mcore(
+    train_args,
+    train_valid_test_dataset_provider,
+    model_provider,
+    model_type,
+    forward_step_func,
+    process_non_loss_data_func=None,
+    get_embedding_ranks=None,
+    get_position_embedding_ranks=None,
+    allow_chunkpipe=False,
+):
+    """Run LoongForge's provider through the MCore 0.20 training entrypoint."""
+    if getattr(train_args, "enable_chunkpipe", False):
+        raise NotImplementedError("ChunkPipe support is introduced in LF-C.")
+
+    _normalize_sft_args(train_args)
+    parse_args_from_config(train_args)
+    model_config = get_model_config()
+
+    if train_args.enable_ema or getattr(model_config, "peft_config", None) is not None:
+        raise NotImplementedError("This MCore runtime adapter does not yet support EMA or PEFT")
+
+    callbacks = CallbackManager()
+    runtime_args = train_args
+    if _is_hf_checkpoint(train_args.load):
+        if train_args.use_megatron_fsdp or train_args.moe_use_upcycling:
+            raise NotImplementedError("Online HF loading does not support Megatron FSDP or upcycling")
+        if train_args.pretrained_checkpoint is not None:
+            raise ValueError("Specify one source when loading HF weights through --load")
+        runtime_args = copy(train_args)
+        runtime_args.load = None
+        callbacks.register(
+            "on_data_init_start",
+            partial(_load_hf_weights, args=train_args, model_config=model_config),
+        )
+
+    _normalize_sft_args(runtime_args)
+    runtime_args.model_type = model_type
+    cfg = pretrain_cfg_container_from_args(runtime_args, None)
+    set_global_variables(runtime_args, cfg, build_tokenizer=False)
+    set_loongforge_extra_global_vars(runtime_args, build_tokenizer=True)
+    return pretrain(
+        cfg,
+        train_valid_test_dataset_provider,
+        model_type,
+        forward_step_func,
+        model_provider=model_provider,
+        process_non_loss_data_func=process_non_loss_data_func,
+        get_embedding_ranks=get_embedding_ranks,
+        get_position_embedding_ranks=get_position_embedding_ranks,
+        callbacks=callbacks,
+    )
 
 
 class MegatronTrainer(object):
-    """megatron trainer"""
+    """Trainer that selects the MCore or legacy runtime explicitly."""
 
     def __init__(
         self,
@@ -19,23 +120,8 @@ class MegatronTrainer(object):
         process_non_loss_data_func=None,
         get_embedding_ranks=None,
         get_position_embedding_ranks=None,
+        pretrain_func=None,
     ):
-        """
-        train_valid_test_dataset_provider: a function that takes the size of
-            train/valid/test dataset and returns `train, valid, test` datasets.
-        model_provider: a function that returns a vanilla version of the
-            model. By vanilla we mean a simple model on cpu with no fp16 or ddp.
-        model_type: an enum that specifies the type of model being trained.
-        forward_step_func: a function that takes a `data iterator` and `model`,
-            and returns a `loss` scalar with a dictionary with key:values being
-            the info we would like to monitor during training, for example
-            `lm-loss: value`. We also require that this function add
-            `batch generator` to the timers class.
-        process_non_loss_data_func: a function to post process outputs of the
-            network. It can be used for dumping output tensors (e.g images) to
-            tensorboard. It takes `collected data`(list of tensors),
-            `current iteration index` and `tensorboard writer` as arguments.
-        """
         self.train_args = train_args
         self.train_valid_test_datasets_provider = train_valid_test_dataset_provider
         self.model_provider = model_provider
@@ -44,12 +130,18 @@ class MegatronTrainer(object):
         self.process_non_loss_data_func = process_non_loss_data_func
         self.get_embedding_ranks = get_embedding_ranks
         self.get_position_embedding_ranks = get_position_embedding_ranks
+        self.pretrain_func = pretrain_func
 
     def train(self):
-        """start training"""
+        """Start training."""
+        if self.pretrain_func is None:
+            raise RuntimeError(
+                "MegatronTrainer requires an explicit pretrain_func; "
+                "select pretrain_with_mcore or the diffusion legacy runtime."
+            )
         self.train_valid_test_datasets_provider.is_distributed = True
 
-        pretrain(
+        self.pretrain_func(
             train_args=self.train_args,
             train_valid_test_dataset_provider=self.train_valid_test_datasets_provider,
             model_provider=self.model_provider,
