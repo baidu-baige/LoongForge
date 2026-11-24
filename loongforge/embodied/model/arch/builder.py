@@ -19,12 +19,15 @@ lanes, not at a missing algorithm.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections import OrderedDict
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Any
 
 import torch
 from torch import Tensor, nn
+from torch.utils.hooks import RemovableHandle
 
 from .diffusion.loss import LossSpec
 from .diffusion.spec import DiffusionSpec
@@ -38,7 +41,8 @@ from .streams.spec import StreamSpec
 from .visibility.combine import Visibility, from_predicate
 from .visibility.mask import AttentionPlan
 
-__all__ = ["DiffusionDraw", "DiffusionRuntime", "WorldModel", "join_stream_visibility",
+__all__ = ["DiffusionDraw", "DiffusionRuntime", "STEP_HOOK_EVENTS", "StepHook",
+           "WorldModel", "join_stream_visibility",
            "materialize_conditions", "query_in_stream"]
 
 
@@ -252,6 +256,11 @@ class DiffusionDraw:
     model_timesteps: dict[str, Tensor]
 
 
+# What ``WorldModel.register_step_hook`` reports, in the order of one forward.
+STEP_HOOK_EVENTS = ("draw", "runtime", "outputs", "losses")
+StepHook = Callable[["WorldModel", str, Any], None]
+
+
 class WorldModel(nn.Module):
     """The world model. ``spec`` in, ``(loss, metrics)`` out (interface I4).
 
@@ -276,6 +285,8 @@ class WorldModel(nn.Module):
         self.spec = spec
         self.engine = engine
         self.layout = layout
+        # OrderedDict, not dict: RemovableHandle keeps a weak reference to it.
+        self._step_hooks: OrderedDict[int, StepHook] = OrderedDict()
 
         # 1. Build the stream blocks. All parameters live here; the engine
         #    holds none.
@@ -381,13 +392,17 @@ class WorldModel(nn.Module):
             batch: Raw batch; stream inputs, condition sources, and
                 ``global_step`` are all read from it.
 
+        Steps 1, 3, 6 and 7 are reported to ``register_step_hook`` observers.
+
         Returns:
             A tuple of the total loss and a metrics dict.
         """
         step = int(batch.get("global_step", 0))
         draw = self.draw(batch)                                     # 1
+        self._notify_step("draw", draw)
         conditions = self.build_conditions(batch)                   # 2
         runtime = self.add_noise(batch, draw)                       # 3
+        self._notify_step("runtime", runtime)
         inputs = self.stream_inputs(runtime)                        # 4
         merged = EngineOutput(states={}, captured={})               # 5
         for group in self.spec.attention_groups:
@@ -395,7 +410,41 @@ class WorldModel(nn.Module):
             merged.states.update(partial.states)
             merged.captured.update(partial.captured)
         outputs = self._run_heads(merged)                           # 6
-        return self.compute_losses(merged, runtime, outputs, step=step)  # 7
+        self._notify_step("outputs", MappingProxyType(outputs))
+        loss, metrics = self.compute_losses(merged, runtime, outputs, step=step)  # 7
+        self._notify_step("losses", (loss, MappingProxyType(metrics)))
+        return loss, metrics
+
+    def register_step_hook(self, hook: StepHook) -> RemovableHandle:
+        """Observe the L3/L4 intermediates of every training step. Read-only.
+
+        ``hook(model, event, value)`` runs once per ``forward`` for each event
+        in ``STEP_HOOK_EVENTS``: ``"draw"`` after step 1 (``DiffusionDraw``),
+        ``"runtime"`` after step 3 (``DiffusionRuntime``), ``"outputs"`` after
+        step 6 (head name -> prediction) and ``"losses"`` after step 7
+        (``(loss, metrics)``). The calls sit in ``forward``, outside activation
+        checkpointing, so recomputation in backward never repeats them -- unlike
+        a forward hook on a module inside a checkpointed layer.
+
+        The hook observes and must not mutate: its return value is ignored and
+        the two mappings are read-only views. An experiment that has to replace
+        an intermediate (replaying noise, say) overrides ``draw`` or
+        ``add_noise`` in a test subclass, where the substitution is visible,
+        instead of hiding it in a hook. Hooks are not saved in the state dict.
+
+        Args:
+            hook: Called as ``hook(model, event, value)``.
+
+        Returns:
+            A handle whose ``remove()`` unregisters the hook.
+        """
+        handle = RemovableHandle(self._step_hooks)
+        self._step_hooks[handle.id] = hook
+        return handle
+
+    def _notify_step(self, event: str, value: Any) -> None:
+        for hook in tuple(self._step_hooks.values()):
+            hook(self, event, value)
 
     def _raw_tensor(self, batch: Mapping[str, Any],
                     stream: StreamSpec) -> Tensor:

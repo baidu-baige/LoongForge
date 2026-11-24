@@ -32,7 +32,8 @@ from dataclasses import replace
 import pytest
 import torch
 
-from loongforge.embodied.model.arch.builder import DiffusionRuntime, WorldModel
+from loongforge.embodied.model.arch.builder import (
+    STEP_HOOK_EVENTS, DiffusionDraw, DiffusionRuntime, WorldModel)
 from loongforge.embodied.model.arch.diffusion.broadcast import BroadcastSpec
 from loongforge.embodied.model.arch.diffusion.loss import Bsmntw, LossSpec, WeightRamp
 from loongforge.embodied.model.arch.diffusion.timesteps import RngPolicy, TimestepSampler
@@ -462,3 +463,45 @@ def test_bsmntw_on_a_constant_timestep_stream_is_rejected():
         with_losses(tiny_spec("vpp2"),
                     LossSpec(name="video_flow", head="video_flow", weight_of=Bsmntw()),
                     LossSpec(name="action_flow", head="action_flow"))
+
+
+# ---- step hook: read-only observation of steps 1, 3, 6 and 7 ----
+
+
+def test_step_hook_reports_each_stage_once_in_order(spec):
+    model = world(spec)
+    seen = []
+    handle = model.register_step_hook(lambda m, event, value: seen.append((m, event, value)))
+    batch = fake_batch(spec)
+    loss, metrics = model(batch)
+    assert [event for _, event, _ in seen] == list(STEP_HOOK_EVENTS)
+    assert all(m is model for m, _, _ in seen)
+    draw, runtime, outputs, (hook_loss, hook_metrics) = (value for _, _, value in seen)
+    assert isinstance(draw, DiffusionDraw) and isinstance(runtime, DiffusionRuntime)
+    assert all(runtime.noise[name] is draw.noise[name] for name in draw.noise)
+    assert set(outputs) == {head.name for head in spec.heads}
+    assert hook_loss is loss and dict(hook_metrics) == metrics
+    handle.remove()
+    model(batch)
+    assert len(seen) == len(STEP_HOOK_EVENTS)
+
+
+def test_step_hook_is_read_only_and_leaves_the_step_unchanged(spec):
+    """Same seed, same loss and generator state with or without an observer."""
+    model = world(spec)
+    batch = fake_batch(spec)
+    torch.manual_seed(5)
+    expected, _ = model(batch)
+    state = torch.get_rng_state()
+
+    def hook(m, event, value):
+        if event == "outputs":
+            with pytest.raises(TypeError):
+                value["extra"] = None
+        return "ignored"
+
+    model.register_step_hook(hook)
+    torch.manual_seed(5)
+    loss, _ = model(batch)
+    assert torch.equal(loss, expected)
+    assert torch.equal(torch.get_rng_state(), state)
