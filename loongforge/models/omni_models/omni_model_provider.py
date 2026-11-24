@@ -67,7 +67,8 @@ def omni_model_provider(
     for name in ["image_encoder", "image_projector"]:
         component_config = getattr(model_config, name)
         component_config.pipeline_model_parallel_size = 1
-        component_config.tensor_model_parallel_size = 1
+        if name == "image_projector":
+            component_config.tensor_model_parallel_size = 1
         component_config.sequence_parallel = False
         component_config.tp_comm_overlap = False
         component_config.context_parallel_size = 1
