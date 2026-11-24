@@ -211,6 +211,24 @@ class DeepseekV4Config(BaseModelMLAConfig):
         # Map swiglu_limit to activation_func_clamp_value for shared expert MLP
         self.activation_func_clamp_value = self.swiglu_limit
 
+        # LoongForge's historical DSA backend names are not all valid for
+        # MCore's native DSV4 hybrid path. Preserve the reference/safe choices
+        # and let MCore choose its default for "auto".
+        legacy_dsa_backend = self.dsa_kernel_backend
+        dsa_backend_map = {
+            "auto": None,
+            "sm100": "cudnn",
+            "sm80": "none",
+            "torch_ref": "none",
+            "tilelang": "none",
+        }
+        if legacy_dsa_backend in dsa_backend_map:
+            self.dsa_kernel_backend = dsa_backend_map[legacy_dsa_backend]
+        elif legacy_dsa_backend not in (None, "none", "cudnn"):
+            raise ValueError(
+                f"Unsupported dsa_kernel_backend for DeepSeek-V4: {legacy_dsa_backend!r}"
+            )
+
         super().__post_init__(**kwargs)
         self.rotary_percent = 1.0
 
