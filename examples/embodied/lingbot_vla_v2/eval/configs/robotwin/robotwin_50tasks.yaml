@@ -1,0 +1,130 @@
+# LingBot-VLA v2 RoboTwin 2.0 eval config (all 50 tasks, serial sweep; run several copies on different GPUs/ports to parallelise).
+# Weight: official robbyant/lingbot-vla-v2-6b-robotwin (checkpoints/global_step_50000/hf_ckpt,
+# lingbotvla_cli.yaml three levels up). The LoongForge-trained checkpoints use the same layout.
+#
+# Protocol of the community launcher experiment/robotwin/start_robotwin_infer_and_eval.sh
+# (lingbot-vla-v2, RoboTwin 13c3c47): seed 0 -> start seed 100000, 100 expert-valid episodes per task,
+# instruction_type unseen (policy/ACT/deploy_policy.yml), each task's official step limit from
+# task_config/_eval_step_limit.yml (the runner writes benchmark.max_steps over it, so pass the official
+# value), FP32 inference with torch.compile, 50-step chunks executed open-loop (the model returns the
+# whole chunk; server.chunk_execute_steps stays unset). Published: Clean 93.52% / Randomized 92.80%.
+#
+# Notes:
+#   - model.qwen3vl_path: Qwen3-VL-4B-Instruct dir (config, tokenizer, processor; no weights read).
+#   - The server python needs the upstream lingbotvla package (pinned commit of the training example)
+#     and flash-attn; transformers 4.57.3 (community pin) or 5.x (LoongForge shims) both load it.
+#   - run.worker_local_files must stay true: otherwise the runner edits script/eval_policy.py and
+#     task_config/_eval_step_limit.yml inside the RoboTwin checkout.
+#   - demo_randomized additionally needs the RoboTwin background_texture assets.
+#   - model.noise_seed / dump_dir are parity-check knobs; leave them off for benchmark runs.
+
+benchmark:
+  name: robotwin
+  task_name: adjust_bottle
+  task_config: demo_clean  # demo_randomized for the randomized benchmark
+  start_seed: 100000
+  episodes_per_task: 100
+  max_steps: 400
+  disable_expert_check: false
+  instruction_type: unseen
+  action_bridge: lingbot_vla_v2_joint14
+  # Client-owned 50-step chunk: one request and one camera render per chunk, which is the
+  # community client's loop (the model returns the whole chunk; chunk_execute_steps stays unset).
+  return_action_chunk: true
+  skip_intra_chunk_obs: true
+
+model:
+  backend: loongforge
+  model_type: lingbot_vla_v2
+  name: lingbot-vla-v2-robotwin
+  qwen3vl_path: /path/to/Qwen3-VL-4B-Instruct
+  training_config_path: ""  # empty -> <ckpt_path>/../../../lingbotvla_cli.yaml
+  robo_name: robotwin
+  use_length: 50
+  use_compile: true
+  attention_implementation: eager
+  seed: 42
+  noise_seed: null
+
+server:
+  host: 127.0.0.1
+  port: 62900
+  health_port: 62901
+  python: /path/to/lingbotvla_env/bin/python
+  log: /path/to/reports/lingbot_vla_v2/robotwin/full/policy_server.log
+  start_timeout_sec: 1800
+  random_init: false
+  ckpt_path: /path/to/lingbot-vla-v2-6b-robotwin/checkpoints/global_step_50000/hf_ckpt
+  use_bf16: false  # release protocol is FP32; bf16 changes success rates
+
+env:
+  eval_root: /path/to/LoongForge/loongforge/embodied/eval
+  loongforge_root: /path/to/LoongForge
+  robotwin_root: /path/to/RoboTwin
+  robotwin_python: /path/to/robotwin_env/bin/python
+
+run:
+  output_dir: /path/to/reports/lingbot_vla_v2/robotwin/full
+  seed: 0
+  ckpt_setting: loongforge_lingbot_vla_v2_robotwin
+  worker_local_files: true
+  disable_eval_video_log: true
+  keep_config: true
+  timestamped_output: false
+
+timeouts:
+  # Budget for one task's whole official eval subprocess (all episodes).
+  per_episode_sec: 21600
+
+# One entry per task: max_steps is that task's official step limit (RoboTwin 13c3c47).
+sweep:
+  - {run.id: adjust_bottle, benchmark.task_name: adjust_bottle, benchmark.max_steps: 400}
+  - {run.id: beat_block_hammer, benchmark.task_name: beat_block_hammer, benchmark.max_steps: 400}
+  - {run.id: blocks_ranking_rgb, benchmark.task_name: blocks_ranking_rgb, benchmark.max_steps: 1200}
+  - {run.id: blocks_ranking_size, benchmark.task_name: blocks_ranking_size, benchmark.max_steps: 1200}
+  - {run.id: click_alarmclock, benchmark.task_name: click_alarmclock, benchmark.max_steps: 400}
+  - {run.id: click_bell, benchmark.task_name: click_bell, benchmark.max_steps: 400}
+  - {run.id: dump_bin_bigbin, benchmark.task_name: dump_bin_bigbin, benchmark.max_steps: 600}
+  - {run.id: grab_roller, benchmark.task_name: grab_roller, benchmark.max_steps: 400}
+  - {run.id: handover_block, benchmark.task_name: handover_block, benchmark.max_steps: 800}
+  - {run.id: handover_mic, benchmark.task_name: handover_mic, benchmark.max_steps: 600}
+  - {run.id: hanging_mug, benchmark.task_name: hanging_mug, benchmark.max_steps: 900}
+  - {run.id: lift_pot, benchmark.task_name: lift_pot, benchmark.max_steps: 400}
+  - {run.id: move_can_pot, benchmark.task_name: move_can_pot, benchmark.max_steps: 400}
+  - {run.id: move_pillbottle_pad, benchmark.task_name: move_pillbottle_pad, benchmark.max_steps: 400}
+  - {run.id: move_playingcard_away, benchmark.task_name: move_playingcard_away, benchmark.max_steps: 400}
+  - {run.id: move_stapler_pad, benchmark.task_name: move_stapler_pad, benchmark.max_steps: 400}
+  - {run.id: open_laptop, benchmark.task_name: open_laptop, benchmark.max_steps: 700}
+  - {run.id: open_microwave, benchmark.task_name: open_microwave, benchmark.max_steps: 1500}
+  - {run.id: pick_diverse_bottles, benchmark.task_name: pick_diverse_bottles, benchmark.max_steps: 400}
+  - {run.id: pick_dual_bottles, benchmark.task_name: pick_dual_bottles, benchmark.max_steps: 400}
+  - {run.id: place_a2b_left, benchmark.task_name: place_a2b_left, benchmark.max_steps: 400}
+  - {run.id: place_a2b_right, benchmark.task_name: place_a2b_right, benchmark.max_steps: 400}
+  - {run.id: place_bread_basket, benchmark.task_name: place_bread_basket, benchmark.max_steps: 700}
+  - {run.id: place_bread_skillet, benchmark.task_name: place_bread_skillet, benchmark.max_steps: 500}
+  - {run.id: place_burger_fries, benchmark.task_name: place_burger_fries, benchmark.max_steps: 500}
+  - {run.id: place_can_basket, benchmark.task_name: place_can_basket, benchmark.max_steps: 700}
+  - {run.id: place_cans_plasticbox, benchmark.task_name: place_cans_plasticbox, benchmark.max_steps: 800}
+  - {run.id: place_container_plate, benchmark.task_name: place_container_plate, benchmark.max_steps: 400}
+  - {run.id: place_dual_shoes, benchmark.task_name: place_dual_shoes, benchmark.max_steps: 600}
+  - {run.id: place_empty_cup, benchmark.task_name: place_empty_cup, benchmark.max_steps: 500}
+  - {run.id: place_fan, benchmark.task_name: place_fan, benchmark.max_steps: 400}
+  - {run.id: place_mouse_pad, benchmark.task_name: place_mouse_pad, benchmark.max_steps: 400}
+  - {run.id: place_object_basket, benchmark.task_name: place_object_basket, benchmark.max_steps: 700}
+  - {run.id: place_object_scale, benchmark.task_name: place_object_scale, benchmark.max_steps: 400}
+  - {run.id: place_object_stand, benchmark.task_name: place_object_stand, benchmark.max_steps: 400}
+  - {run.id: place_phone_stand, benchmark.task_name: place_phone_stand, benchmark.max_steps: 400}
+  - {run.id: place_shoe, benchmark.task_name: place_shoe, benchmark.max_steps: 500}
+  - {run.id: press_stapler, benchmark.task_name: press_stapler, benchmark.max_steps: 400}
+  - {run.id: put_bottles_dustbin, benchmark.task_name: put_bottles_dustbin, benchmark.max_steps: 1700}
+  - {run.id: put_object_cabinet, benchmark.task_name: put_object_cabinet, benchmark.max_steps: 700}
+  - {run.id: rotate_qrcode, benchmark.task_name: rotate_qrcode, benchmark.max_steps: 400}
+  - {run.id: scan_object, benchmark.task_name: scan_object, benchmark.max_steps: 500}
+  - {run.id: shake_bottle, benchmark.task_name: shake_bottle, benchmark.max_steps: 700}
+  - {run.id: shake_bottle_horizontally, benchmark.task_name: shake_bottle_horizontally, benchmark.max_steps: 700}
+  - {run.id: stack_blocks_three, benchmark.task_name: stack_blocks_three, benchmark.max_steps: 1200}
+  - {run.id: stack_blocks_two, benchmark.task_name: stack_blocks_two, benchmark.max_steps: 800}
+  - {run.id: stack_bowls_three, benchmark.task_name: stack_bowls_three, benchmark.max_steps: 1200}
+  - {run.id: stack_bowls_two, benchmark.task_name: stack_bowls_two, benchmark.max_steps: 900}
+  - {run.id: stamp_seal, benchmark.task_name: stamp_seal, benchmark.max_steps: 400}
+  - {run.id: turn_switch, benchmark.task_name: turn_switch, benchmark.max_steps: 400}
