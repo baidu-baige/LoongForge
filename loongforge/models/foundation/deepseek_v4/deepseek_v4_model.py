@@ -10,12 +10,18 @@ from torch import Tensor
 
 from megatron.core import InferenceParams
 from megatron.core.inference.contexts import BaseInferenceContext
+from megatron.core.models.hybrid.hybrid_layer_specs import hybrid_dsv4_stack_spec
 from megatron.core.models.hybrid.hybrid_model import HybridModel
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.process_groups_config import ProcessGroupCollection
 
 from loongforge.models.utils import import_module
 from .deepseek_v4_config import DeepseekV4Config
+
+
+def get_deepseek_v4_hybrid_stack_spec(config=None, vp_stage=None):
+    """Return MCore's native DeepSeek-V4 HybridStack specification."""
+    return hybrid_dsv4_stack_spec
 
 
 def _load_state_dict_hook_ignore_extra_state(module, incompatible_keys):
@@ -69,7 +75,7 @@ class DeepseekV4Model(HybridModel):
             raise ValueError("DeepSeekV4Config did not derive hybrid_layer_pattern.")
 
         model_spec = config.model_spec or [
-            "loongforge.models.foundation.deepseek_v4.deepseek_v4_layer_spec",
+            "loongforge.models.foundation.deepseek_v4.deepseek_v4_model",
             "get_deepseek_v4_hybrid_stack_spec",
         ]
         hybrid_stack_spec = import_module(model_spec, config, vp_stage=vp_stage)
