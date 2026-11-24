@@ -9,15 +9,16 @@ from collections.abc import MutableMapping
 import torch
 import torch.nn as nn
 from torch.distributed.optim import ZeroRedundancyOptimizer
+from torch.distributed.tensor import DTensor
 from loongforge.embodied.distributed.utils import is_rank_zero, unwrap_model
 from loongforge.embodied.optimizer.lr_scheduler import build_param_groups
 from loongforge.embodied.optimizer.dmuon import build_dmuon_optimizer
 from loongforge.embodied.optimizer.muon_builder import build_muon_optimizer_from_args, muon_route
 
 try:
-    from transformer_engine.pytorch.optimizers import FusedAdam as _TEFusedAdam
+    from transformer_engine.pytorch.optimizers import FusedAdam as _TERawFusedAdam
 except ImportError:
-    _TEFusedAdam = None
+    _TERawFusedAdam = None
 
 try:
     from apex.optimizers import FusedAdam as _ApexFusedAdam
@@ -25,6 +26,49 @@ except ImportError:
     _ApexFusedAdam = None
 
 logger = logging.getLogger(__name__)
+
+
+def _local_numel(tensor: torch.Tensor) -> int:
+    """Element count of the rank-local shard (DTensor) or of the tensor itself."""
+    return tensor.to_local().numel() if isinstance(tensor, DTensor) else tensor.numel()
+
+
+if _TERawFusedAdam is not None:
+
+    class _TEFusedAdam(_TERawFusedAdam):
+        """TE FusedAdam that leaves parameters with an empty local shard out of the kernel.
+
+        Under FSDP2, small parameters can have a zero-element local shard on some ranks. TE's
+        multi-tensor Adam mis-updates a param group whose last tensor is such an empty shard
+        (TE 2.9.0). An empty shard has nothing to update, so it is hidden from ``step`` (its
+        optimizer state is still created so every rank holds the same state keys), matching
+        cosmos-framework's FusedAdam, which skips ``numel() == 0`` local tensors.
+        """
+
+        @torch.no_grad()
+        def step(self, closure=None, grad_scaler=None):
+            saved = []
+            for group in self.param_groups:
+                params = group["params"]
+                kept = [p for p in params if _local_numel(p) > 0]
+                if len(kept) == len(params):
+                    continue
+                for p in params:
+                    if _local_numel(p) == 0 and p.grad is not None and len(self.state[p]) == 0:
+                        self.initialize_state(p, False)
+                if not kept and not self.capturable:
+                    # TE skips an empty group; keep its step counter in sync with the other ranks.
+                    group["step"] = group.get("step", 0) + 1
+                saved.append((group, params))
+                group["params"] = kept
+            try:
+                return super().step(closure=closure, grad_scaler=grad_scaler)
+            finally:
+                for group, params in saved:
+                    group["params"] = params
+
+else:
+    _TEFusedAdam = None
 
 OPTIMIZER_REGISTRY = {
     "AdamW": torch.optim.AdamW,
@@ -328,7 +372,7 @@ def build_optimizer(model: nn.Module, training_args) -> torch.optim.Optimizer:
         kwargs.update(betas=(training_args.adam_beta1, training_args.adam_beta2), eps=training_args.adam_eps)
         if optimizer_name == "TorchFusedAdamW":
             kwargs["fused"] = True
-    elif optimizer_name in ("TEFusedAdamW", "ApexFusedAdamW"):
+    elif optimizer_name in ("TEFusedAdamW", "ApexFusedAdamW", "CapturableFusedAdamW"):
         kwargs.update(betas=(training_args.adam_beta1, training_args.adam_beta2), eps=training_args.adam_eps)
         kwargs["adam_w_mode"] = True
         logger.info("Using %s optimizer", optimizer_name)

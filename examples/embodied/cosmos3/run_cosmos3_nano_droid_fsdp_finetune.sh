@@ -60,12 +60,11 @@ DATA_ARGS=(
     --dataset-path "$DATA_PATH"
     --tokenizer-path "$TOKENIZER_PATH"
     --num-workers "$NUM_WORKERS"
-    #--no-sampler-shuffle
 )
 
 # ── Training params ───────────────────────────────────────────
 TRAIN_ITERS=${TRAIN_ITERS:-50}
-PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-4}
+PER_DEVICE_BATCH_SIZE=${PER_DEVICE_BATCH_SIZE:-2}
 GRADIENT_ACCUMULATION_STEPS=${GRADIENT_ACCUMULATION_STEPS:-1}
 SAVE_INTERVAL=${SAVE_INTERVAL:-0}
 SEED=${SEED:-42}
@@ -80,15 +79,15 @@ TRAINING_ARGS=(
     --gradient-accumulation-steps "$GRADIENT_ACCUMULATION_STEPS"
     --seed "$SEED"
     --set-seed-by-rank
-    #--deterministic-mode
     --disable-tf32
     --output-dir "$OUTPUT_DIR"
     # Learning rate
     --lr-group net.action2llm=1e-3,net.llm2action=1e-3,net.action_modality_embed=1e-3,net=2e-4
     --lr-decay-style lambda_linear
+    --lambda-cycle-length 100000
     --lr-warmup-iters 0
     # Optimizer
-    --optimizer TorchFusedAdamW
+    --optimizer CapturableFusedAdamW
     --clip-grad 1.0
     --weight-decay 0.05
     --adam-beta1 0.9
@@ -104,9 +103,8 @@ DISTRIBUTED_TRAINING_ARGS=(
     --dtype bfloat16
     --fsdp-reduce-dtype bf16
     --fsdp-wrap-modules MoTDecoderLayer
-    --fsdp-ignored-param-names embed_tokens lm_head \
-            mlp.gate_proj mlp.up_proj mlp.down_proj \
-            q_proj.weight k_proj.weight v_proj.weight
+    --fsdp-original-param-dtype fp32
+    --no-fsdp-cast-forward-inputs
 )
 
 # ── Logging params ────────────────────────────────────────────
