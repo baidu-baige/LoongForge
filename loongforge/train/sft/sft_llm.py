@@ -237,7 +237,7 @@ def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor):
     #
     # The D pre-compensation symmetrically applies to the reporting tensor so
     # that the post-aggregation report (sum-across-mbs → all-reduce-sum →
-    # divide-by-DPxCP-world-size in training_utils) recovers the same
+    # divide-by-DPxCP-world-size in the MCore runtime) recovers the same
     # (1/G_total) sum_g (1/N_g) sum_k S_{g,k} value. Using G_total instead of
     # G_local also fixes a latent precision bug in the equal-DP case where
     # LPT did not strictly guarantee G_local = G_total / D across ranks.
@@ -252,7 +252,7 @@ def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor):
 
         denom = N_g * G_total * cp
         scaled = loss * (D * M_raw / denom)
-        # Pre-compensate D*cp for the all_reduce + divide by (D*cp) in training_utils.py.
+        # Pre-compensate D*cp for the all_reduce + divide by (D*cp) in the MCore runtime.
         # Without cp factor, the logged loss would be 1/cp times smaller than correct value.
         reporting = (D * cp * loss / (N_g * G_total)).detach()
         loss_reduced_dict = {'lm loss': reporting}
@@ -263,7 +263,7 @@ def loss_func(loss_mask: torch.Tensor, output_tensor: torch.Tensor):
     # With context parallelism each CP rank only sees a shard of every sample,
     # and a contiguous-CP shard can contain zero valid tokens (all supervised
     # tokens live on the other rank). Reporting the local [S, n] pair would
-    # then make training_utils compute S/n = 0/0 = NaN and silently drop
+    # then make the loss reduction compute S/n = 0/0 = NaN and silently drop
     # 'lm loss' from the log line. Aggregate the reporting pair across the CP
     # group first (same as Megatron-LM's loss_func) so downstream reporting
     # always divides whole-sample sums. The backward `loss` and the returned
@@ -449,6 +449,8 @@ def get_embedding_ranks(pp_ranks: List[int]):
 )
 def default_sft_trainer(train_args):
     """build trainer"""
+    from loongforge.train.megatron_trainer import pretrain_with_mcore
+
     trainer = MegatronTrainer(
         train_args=train_args,
         train_valid_test_dataset_provider=train_valid_test_datasets_provider,
@@ -456,6 +458,7 @@ def default_sft_trainer(train_args):
         model_type=ModelType.encoder_or_decoder,
         forward_step_func=forward_step,
         get_embedding_ranks=get_embedding_ranks,
+        pretrain_func=pretrain_with_mcore,
     )
 
     return trainer
