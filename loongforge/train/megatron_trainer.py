@@ -37,6 +37,9 @@ def _load_hf_weights(context, *, args, model_config):
     from tools.mcore_bridge.checkpoint.hf_checkpoint_loader import load_hf_checkpoint_online
 
     layout = getattr(model_config, "pipeline_model_parallel_layout", None)
+    if layout is None:
+        foundation = getattr(model_config, "foundation", None)
+        layout = getattr(foundation, "pipeline_model_parallel_layout", None)
     if layout is not None and getattr(layout, "layout", None) is not None:
         args.convert_pp_layout = layout
     load_hf_checkpoint_online(
