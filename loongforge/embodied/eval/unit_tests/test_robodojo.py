@@ -1140,3 +1140,223 @@ def test_example_dreamzero_config_matches_official_adapter():
     if official:
         assert official["action_horizon"] == model["eval_action_horizon"] and official["video_history"] == model["eval_video_history"]
         assert official["skip_img_transform"] is False and official["native_dojo_action"] is False
+
+
+# ── eval_batch: several envs per Isaac Sim process (LoongForgeBatch plugin) ──
+_BATCH_PLUGIN_DIR = _EVAL_ROOT / "bridges" / "robodojo_xpolicylab_batch"
+
+
+class _FakeBatchEnv:
+    """Batched env: env i ends after ``lengths[i]`` actions; records the call order."""
+
+    def __init__(self, lengths):
+        self.lengths = list(lengths)
+        self.taken = [0] * len(lengths)
+        self.calls = []
+
+    def _running(self):
+        return [i for i, n in enumerate(self.lengths) if self.taken[i] < n]
+
+    def is_episode_end(self):
+        self.calls.append("end?")
+        return not self._running()
+
+    def get_running_env_idx_list(self):
+        return self._running()
+
+    def get_obs_batch(self, env_idx_list=None):
+        self.calls.append(("obs", tuple(env_idx_list)))
+        return [{"env_idx": i, "t": self.taken[i]} for i in env_idx_list]
+
+    def take_action_batch(self, actions, env_idx_list):
+        self.calls.append(("act", tuple(env_idx_list), tuple(a["i"] for a in actions)))
+        for i in env_idx_list:
+            if self.taken[i] < self.lengths[i]:
+                self.taken[i] += 1
+
+
+class _BatchChunkClient:
+    """Official-style client: ``get_action_batch`` returns ``chunk`` actions per env."""
+
+    def __init__(self, chunk=24):
+        self.chunk = chunk
+        self.step = {}
+
+    def call(self, func_name, obs=None):
+        if func_name != "get_action_batch":
+            return None
+        out = []
+        for idx in obs:
+            start = self.step.get(idx, 0)
+            out.append([{"i": start + k} for k in range(self.chunk)])
+            self.step[idx] = start + self.chunk
+        return out
+
+
+@pytest.mark.parametrize("lengths", [[5, 30, 48], [24, 24], [60, 1, 25, 49]])
+def test_batch_plugin_replays_official_fastwam_batch_call_order(lengths):
+    ours = _load_module(_BATCH_PLUGIN_DIR / "deploy.py", "lf_robodojo_batch_deploy")
+    env_ours = _FakeBatchEnv(lengths)
+    ours.eval_one_episode_batch(env_ours, _BatchChunkClient(24))
+    assert env_ours.taken == lengths
+    assert yaml.safe_load((_BATCH_PLUGIN_DIR / "deploy.yml").read_text())["eval_batch"] is True
+    official_path = _ROBODOJO_ROOT / "XPolicyLab" / "policy" / "FastWAM" / "deploy.py"
+    if not official_path.is_file():
+        pytest.skip("set ROBODOJO_ROOT to a RoboDojo checkout for the parity check")
+    official = _load_module(official_path, "official_fastwam_batch_deploy")
+    env_official = _FakeBatchEnv(lengths)
+    official.eval_one_episode_batch(env_official, _BatchChunkClient(24))
+    assert env_ours.calls == env_official.calls
+
+
+class _FakeChunkClient(_FakePolicyClient):
+    """Returns a whole 24-action chunk, as the server does for ``return_action_chunk``."""
+
+    def predict_action(self, **payload):
+        self.calls.append(payload)
+        chunk = np.tile(np.linspace(-1, 1, 14, dtype=np.float32), (24, 1))
+        return {"ok": True, "data": {"actions": chunk.tolist(), "inference_latency_ms": 5.0}}
+
+
+def test_bridge_batch_one_request_per_env_per_chunk(monkeypatch, tmp_path):
+    import loongforge.embodied.eval.transport as transport
+
+    monkeypatch.setattr(transport, "PolicyClient", _FakeChunkClient)
+    model = RoboDojoPolicyModel(
+        {"task_name": "stack_bowls", "action_bridge": "fastwam_joint14", "first_chunk_len": 24,
+         "chunk_len": 24, "lf_port": 1, "trace_dir": str(tmp_path / "trace")}
+    )
+    model.reset()
+    model.update_obs_batch([{**_obs(0), "env_idx": 0}, {**_obs(1), "env_idx": 2}])
+    out = model.get_action_batch([0, 2])
+    assert [len(actions) for actions in out] == [24, 24]
+    model.update_obs_batch([{**_obs(2), "env_idx": 2}])
+    out2 = model.get_action_batch([2])
+    assert len(out2[0]) == 24
+    calls = model.client.calls
+    assert len(calls) == 3 and sorted(call["episode_step"] for call in calls) == [0, 0, 24]
+    assert {call["episode_id"] for call in calls} == {
+        "robodojo/stack_bowls/seed0/b0000e00",
+        "robodojo/stack_bowls/seed0/b0000e02",
+    }
+    assert all(call["return_action_chunk"] for call in calls)
+    model.reset()  # the next batch runs new episodes
+    model.update_obs_batch([{**_obs(0), "env_idx": 0}])
+    model.get_action_batch([0])
+    assert any(
+        call["episode_id"].endswith("b0001e00") and call["episode_step"] == 0 for call in model.client.calls
+    )
+    assert sorted(p.name for p in (tmp_path / "trace").iterdir()) == [
+        "b0000e00.jsonl", "b0000e02.jsonl", "b0001e00.jsonl"
+    ]
+
+
+def test_bridge_batch_requires_an_observation(monkeypatch):
+    import loongforge.embodied.eval.transport as transport
+
+    monkeypatch.setattr(transport, "PolicyClient", _FakeChunkClient)
+    model = RoboDojoPolicyModel(
+        {"task_name": "stack_bowls", "action_bridge": "fastwam_joint14", "first_chunk_len": 24,
+         "chunk_len": 24, "lf_port": 1}
+    )
+    model.reset()
+    with pytest.raises(RuntimeError):
+        model.get_action_batch([0])
+
+
+def test_runner_eval_batch_plugin_and_deploy_config(tmp_path):
+    args = _runner_args(tmp_path)
+    args.eval_batch, args.num_envs = True, 6
+    args.policy_server_port = 62300
+    args.robodojo_root = str(tmp_path / "rd")
+    args.additional_info, args.run_id = "x", "rid"
+    cfg = robodojo_runner.write_policy_deploy_config(args, tmp_path / "deploy.yml")
+    assert cfg["policy_name"] == "LoongForgeBatch" and cfg["eval_batch"] is True
+    assert robodojo_runner.result_dir(args).parts[-4] == "LoongForgeBatch"
+    assert robodojo_runner.plugin_name(argparse.Namespace(eval_batch=False)) == "LoongForge"
+
+
+def _write_official_eval_policy(root: pathlib.Path) -> pathlib.Path:
+    script = root / "scripts" / "eval_policy.sh"
+    script.parent.mkdir(parents=True, exist_ok=True)
+    script.write_text(
+        "#!/bin/bash\n"
+        f"{robodojo_runner._EVAL_POLICY_ROOT_LINE}\n"
+        'sim_cfg_file="$PROJECT_ROOT/env_cfg/sim/sim_config.yml"\n'
+        f"{robodojo_runner._EVAL_POLICY_NUM_ENVS_PREFIX}\n"
+        'echo "$num_envs"\n',
+        encoding="utf-8",
+    )
+    return script
+
+
+def test_runner_eval_policy_copy_changes_only_two_lines(tmp_path):
+    args = _runner_args(tmp_path)
+    args.robodojo_root = str(tmp_path / "rd")
+    official = _write_official_eval_policy(pathlib.Path(args.robodojo_root))
+    args.eval_batch, args.num_envs, args.eval_num = True, 6, 0
+    copy = robodojo_runner.eval_policy_script(args)
+    assert copy.name == "eval_policy_num_envs.sh"
+    original_lines = official.read_text().splitlines()
+    copy_lines = copy.read_text().splitlines()
+    differing = [i for i, (a, b) in enumerate(zip(original_lines, copy_lines)) if a != b]
+    assert len(original_lines) == len(copy_lines) and len(differing) == 2
+    assert 'num_envs="6"' in copy_lines[differing[1]]
+    assert str((tmp_path / "rd").resolve()) in copy_lines[differing[0]]
+    # never more envs than the run has episodes
+    args.eval_num = 3
+    assert 'num_envs="3"' in robodojo_runner.eval_policy_script(args).read_text()
+    # one env per process keeps the official script
+    args.eval_batch = False
+    assert robodojo_runner.eval_policy_script(args) == official
+    # a changed official script fails instead of running something unintended
+    args.eval_batch = True
+    official.write_text("#!/bin/bash\necho hi\n", encoding="utf-8")
+    with pytest.raises(RuntimeError):
+        robodojo_runner.eval_policy_script(args)
+
+
+def test_runner_zenity_hang_needs_no_step_progress(tmp_path, monkeypatch):
+    clock = [1000.0]
+    monkeypatch.setattr(robodojo_runner.time, "time", lambda: clock[0])
+    log = tmp_path / "sim.log"
+    log.write_text("env0 step: 5 / 100\n", encoding="utf-8")
+    since: dict = {}
+    assert not robodojo_runner._zenity_hung(log, since)  # no crash dialog yet
+    with log.open("a", encoding="utf-8") as handle:
+        handle.write("/bin/bash: line 1: zenity: command not found\n")
+    assert not robodojo_runner._zenity_hung(log, since) and "t" in since
+    # the crash reporter keeps writing, but the sim makes no progress
+    with log.open("a", encoding="utf-8") as handle:
+        handle.write("[Warning] [carb.crashreporter-breakpad.plugin] Uploading minidump\n")
+    clock[0] += robodojo_runner.ZENITY_HANG_SEC + 1
+    assert robodojo_runner._zenity_hung(log, since)
+    # step progress after the dialog clears the watchdog
+    since.clear()
+    log.write_text("zenity: command not found\n", encoding="utf-8")
+    assert not robodojo_runner._zenity_hung(log, since)
+    with log.open("a", encoding="utf-8") as handle:
+        handle.write("env0 step: 6 / 100\n")
+    clock[0] += robodojo_runner.ZENITY_HANG_SEC + 1
+    assert not robodojo_runner._zenity_hung(log, since) and not since
+
+
+def test_runner_detects_kit_shutdown_hang(tmp_path, monkeypatch):
+    clock = [1000.0]
+    monkeypatch.setattr(robodojo_runner.time, "time", lambda: clock[0])
+    log = tmp_path / "sim.log"
+    log.write_text("env0 step: 5 / 100\n", encoding="utf-8")
+    since: dict = {}
+    assert not robodojo_runner._shutdown_hung(log, since)
+    log.write_text("Simulation App Shutting Down\n", encoding="utf-8")
+    assert not robodojo_runner._shutdown_hung(log, since)
+    clock[0] += robodojo_runner.SHUTDOWN_HANG_SEC + 1
+    assert robodojo_runner._shutdown_hung(log, since)
+
+
+def test_runner_client_completed_line(tmp_path):
+    log = tmp_path / "sim.log"
+    log.write_text("env0 step: 5 / 100\n", encoding="utf-8")
+    assert not robodojo_runner.client_completed(log)
+    log.write_text("all done (eval completed)\n", encoding="utf-8")
+    assert robodojo_runner.client_completed(log)

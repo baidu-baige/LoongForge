@@ -31,5 +31,5 @@ def eval_one_episode(TASK_ENV, model_client):
 
 
 def eval_one_episode_batch(TASK_ENV, model_client):
-    """Batched envs are not supported: the LoongForge model keeps per-episode state."""
-    raise NotImplementedError("LoongForge RoboDojo bridge evaluates one env per process; keep eval_batch: false.")
+    """Several envs per process use the ``LoongForgeBatch`` plugin (eval_batch: true)."""
+    raise NotImplementedError("LoongForge is the eval_batch: false plugin; use LoongForgeBatch for several envs per process.")

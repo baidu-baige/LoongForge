@@ -15,6 +15,12 @@ server. For one ``(task, layout seed)`` this runner
 3. runs the official sim client unchanged and waits for it;
 4. converts the official ``_result.json`` into ``results.jsonl`` / ``summary.csv`` rows
    (one row per episode, carrying RoboDojo's partial-progress ``score``).
+
+``benchmark.eval_batch: true`` switches to RoboDojo's own batched mode: the sim client runs
+``benchmark.num_envs`` envs in one Isaac Sim process and calls ``eval_one_episode_batch``. That
+needs the second plugin (``LoongForgeBatch``, whose static deploy.yml carries ``eval_batch``)
+and a copy of ``eval_policy.sh`` with the env count, since the official script takes it from
+the sim config and drops unknown flags (see ``eval_policy_script``).
 """
 
 from __future__ import annotations
@@ -37,8 +43,15 @@ import yaml
 from loongforge.embodied.eval.metrics.results import append_jsonl, write_suite_summary_csv, write_summary_csv
 
 PLUGIN_NAME = "LoongForge"
+BATCH_PLUGIN_NAME = "LoongForgeBatch"  # eval_batch: true (several envs per Isaac Sim process)
 BENCHMARK_DIR = "RoboDojo"
 _PLUGIN_SOURCE = pathlib.Path(__file__).resolve().parents[2] / "bridges" / "robodojo_xpolicylab"
+_BATCH_PLUGIN_SOURCE = pathlib.Path(__file__).resolve().parents[2] / "bridges" / "robodojo_xpolicylab_batch"
+
+
+def plugin_name(args: argparse.Namespace) -> str:
+    """XPolicyLab policy name the sim client runs: the batched plugin when ``eval_batch``."""
+    return BATCH_PLUGIN_NAME if getattr(args, "eval_batch", False) else PLUGIN_NAME
 
 
 def build_argparser() -> argparse.ArgumentParser:
@@ -72,6 +85,10 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--policy-server-start-timeout-sec", type=float, default=120.0)
     parser.add_argument("--lf-timeout-sec", type=float, default=600.0)
     parser.add_argument("--sim-env", type=json.loads, default=None, help="extra env vars for the sim client")
+    parser.add_argument("--eval-batch", action="store_true",
+                        help="several envs per Isaac Sim process (LoongForgeBatch plugin)")
+    parser.add_argument("--num-envs", type=int, default=0,
+                        help="envs per Isaac Sim process with --eval-batch (0: the sim config's own count)")
     return parser
 
 
@@ -95,6 +112,8 @@ def _apply_config(args: argparse.Namespace, config: Dict[str, Any]) -> argparse.
         (benchmark, "action_channel_ids", "action_channel_ids"),
         (benchmark, "first_chunk_len", "first_chunk_len"),
         (benchmark, "chunk_len", "chunk_len"),
+        (benchmark, "eval_batch", "eval_batch"),
+        (benchmark, "num_envs", "num_envs"),
         (server, "ckpt_path", "policy_ckpt_path"),
         (server, "host", "host"),
         (server, "port", "port"),
@@ -132,10 +151,12 @@ def _apply_config(args: argparse.Namespace, config: Dict[str, Any]) -> argparse.
     if not args.policy_python:
         args.policy_python = getattr(args, "server_python", "") or sys.executable
     return args
-def ensure_plugin_link(robodojo_root: pathlib.Path) -> pathlib.Path:
+
+
+def ensure_plugin_link(robodojo_root: pathlib.Path, batch: bool = False) -> pathlib.Path:
     """Link the LoongForge plugin into ``XPolicyLab/policy``; never replace a foreign entry."""
-    link = robodojo_root / "XPolicyLab" / "policy" / PLUGIN_NAME
-    target = _PLUGIN_SOURCE.resolve()
+    link = robodojo_root / "XPolicyLab" / "policy" / (BATCH_PLUGIN_NAME if batch else PLUGIN_NAME)
+    target = (_BATCH_PLUGIN_SOURCE if batch else _PLUGIN_SOURCE).resolve()
     if link.is_symlink() or link.exists():
         if link.resolve() != target:
             raise FileExistsError(f"{link} exists and does not point to {target}; refusing to replace it")
@@ -177,17 +198,94 @@ def _wait_port(host: str, port: int, timeout: float, process: subprocess.Popen) 
     raise TimeoutError(f"XPolicyLab policy server did not listen on {host}:{port} within {timeout}s")
 
 
+# Isaac Sim's crash reporter (Carbonite) keeps trying to open a ``zenity`` dialog after a GPU /
+# PhysX crash and the client never exits. Once a zenity attempt shows up, the client counts as
+# hung if no step progress (``step: `` lines) follows for this long. Progress, not "the last
+# lines are all zenity", is the test: the crash reporter interleaves its own lines (minidump
+# upload attempts) and the official eval_policy.sh relaunches the client after a crash, both of
+# which would reset a "last lines" check forever.
+ZENITY_HANG_SEC = 240.0
+
+
+def _zenity_hung(log_path: pathlib.Path, since: Dict[str, float]) -> bool:
+    """True once a zenity crash-dialog attempt has not been followed by step progress for ``ZENITY_HANG_SEC``."""
+    try:
+        size = log_path.stat().st_size
+        with log_path.open("rb") as handle:
+            if "t" not in since:
+                handle.seek(max(0, size - 4096))
+                if b"zenity" not in handle.read():
+                    return False
+                since["t"], since["pos"] = time.time(), size
+                return False
+            handle.seek(int(since["pos"]))
+            after = handle.read()
+    except OSError:
+        return False
+    if b"step: " in after:
+        since.clear()
+        return False
+    return time.time() - since["t"] >= ZENITY_HANG_SEC
+
+
+# Under load Isaac Sim sometimes never exits after "Simulation App Shutting Down", with the
+# results already written; such a process is stopped after this long.
+SHUTDOWN_HANG_SEC = 120.0
+
+
+def _shutdown_hung(log_path: pathlib.Path, since: Dict[str, float]) -> bool:
+    """True once the sim log has ended with the Kit shutdown line for ``SHUTDOWN_HANG_SEC``."""
+    try:
+        with log_path.open("rb") as handle:
+            handle.seek(0, os.SEEK_END)
+            handle.seek(max(0, handle.tell() - 2048))
+            tail = handle.read().decode("utf-8", errors="replace").strip().splitlines()[-3:]
+    except OSError:
+        return False
+    if not any("Simulation App Shutting Down" in line for line in tail):
+        since.pop("t", None)
+        return False
+    first = since.setdefault("t", time.time())
+    return time.time() - first >= SHUTDOWN_HANG_SEC
+
+
+def client_completed(sim_log: pathlib.Path) -> bool:
+    """True when the official client logged its normal completion."""
+    try:
+        return "(eval completed)" in sim_log.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+
+
 def _stop_process_group(process: Optional[subprocess.Popen], grace_sec: float = 10.0) -> None:
-    if process is None or process.poll() is not None:
+    """SIGTERM the process group, then SIGKILL whatever is left in it.
+
+    The group leader is ``bash eval_policy.sh``; it exits on SIGTERM while its Isaac Sim child
+    ignores SIGTERM, so stopping at the leader's exit leaves the sim running (seen: sims alive
+    an hour after their run finished). The group is always swept, also when the leader has
+    already exited.
+    """
+    if process is None:
         return
     try:
         os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    try:
         process.wait(timeout=grace_sec)
-    except (ProcessLookupError, subprocess.TimeoutExpired):
+    except subprocess.TimeoutExpired:
+        pass
+    deadline = time.time() + grace_sec
+    while time.time() < deadline:
         try:
-            os.killpg(process.pid, signal.SIGKILL)
+            os.killpg(process.pid, 0)  # anyone left in the group?
         except ProcessLookupError:
-            pass
+            return
+        time.sleep(0.5)
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
 
 
 def write_policy_deploy_config(args: argparse.Namespace, path: pathlib.Path) -> Dict[str, Any]:
@@ -195,9 +293,9 @@ def write_policy_deploy_config(args: argparse.Namespace, path: pathlib.Path) -> 
     if args.first_chunk_len is None or args.chunk_len is None:
         raise ValueError("benchmark.first_chunk_len / chunk_len (or model frame_chunk_size / action_per_frame) required")
     cfg = {
-        "policy_name": PLUGIN_NAME,
+        "policy_name": plugin_name(args),
         "protocol": "ws",
-        "eval_batch": False,
+        "eval_batch": bool(getattr(args, "eval_batch", False)),
         "host": "127.0.0.1",
         "port": int(args.policy_server_port),
         "task_name": args.task_name,
@@ -262,17 +360,50 @@ def start_policy_server(args: argparse.Namespace, deploy_cfg_path: pathlib.Path,
     )
 
 
+_EVAL_POLICY_ROOT_LINE = 'PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"'
+_EVAL_POLICY_NUM_ENVS_PREFIX = 'num_envs="$(python3 -c "import sys,yaml;print(yaml.safe_load(open(sys.argv[1])).get(\'scene\',{}).get(\'num_envs\',1))" "$sim_cfg_file")"'
+
+
+def eval_policy_script(args: argparse.Namespace) -> pathlib.Path:
+    """The official ``scripts/eval_policy.sh``, or a per-run copy that sets the env count.
+
+    The official script takes ``num_envs`` from the sim config (10 for arx_x5) and drops extra
+    flags before calling the client, so ``--num_envs`` cannot be passed through. With
+    ``eval_batch`` and an explicit ``num_envs`` the runner writes a copy into the run's output
+    dir with exactly two lines changed: the project root points at the checkout (the copy lives
+    elsewhere) and ``num_envs`` is the requested value. Both lines are matched verbatim; if the
+    official script changes, this fails instead of silently running something else.
+    """
+    official = pathlib.Path(args.robodojo_root).resolve() / "scripts" / "eval_policy.sh"
+    if not (getattr(args, "eval_batch", False) and getattr(args, "num_envs", 0)):
+        return official
+    num_envs = int(args.num_envs)
+    if args.eval_num:
+        # An env without an episode still simulates and renders (its seed is None, it is only
+        # marked done): never create more envs than the run has episodes.
+        num_envs = max(1, min(num_envs, int(args.eval_num)))
+    text = official.read_text(encoding="utf-8")
+    if _EVAL_POLICY_ROOT_LINE not in text or _EVAL_POLICY_NUM_ENVS_PREFIX not in text:
+        raise RuntimeError(f"{official} changed; cannot set num_envs (expected lines not found)")
+    text = text.replace(_EVAL_POLICY_ROOT_LINE, f'PROJECT_ROOT="{official.parent.parent}"', 1)
+    text = text.replace(_EVAL_POLICY_NUM_ENVS_PREFIX, f'num_envs="{num_envs}"', 1)
+    copy = pathlib.Path(args.output_dir) / "eval_policy_num_envs.sh"
+    copy.parent.mkdir(parents=True, exist_ok=True)
+    copy.write_text(text, encoding="utf-8")
+    return copy
+
+
 def build_sim_command(args: argparse.Namespace) -> List[str]:
-    """Official sim client entry (unchanged RoboDojo script)."""
+    """Official sim client entry (the RoboDojo script; see ``eval_policy_script``)."""
     robodojo_root = pathlib.Path(args.robodojo_root).resolve()
     return [
         "bash",
-        str(robodojo_root / "scripts" / "eval_policy.sh"),
+        str(eval_policy_script(args)),
         "--root_dir", str(robodojo_root),
         "--task_name", args.task_name,
         "--env_cfg_type", args.env_cfg_type,
         "--device_id", str(args.device_id),
-        "--policy_name", PLUGIN_NAME,
+        "--policy_name", plugin_name(args),
         "--port", str(args.policy_server_port),
         "--host", "127.0.0.1",
         "--protocol", "ws",
@@ -282,17 +413,19 @@ def build_sim_command(args: argparse.Namespace) -> List[str]:
 
 
 def result_dir(args: argparse.Namespace) -> pathlib.Path:
-    """``eval_result/RoboDojo/<task>/LoongForge/<env>/<seed>_<info>/<run_id>`` under the RoboDojo root."""
+    """``eval_result/RoboDojo/<task>/<plugin>/<env>/<seed>_<info>/<run_id>`` under the RoboDojo root."""
     return (
         pathlib.Path(args.robodojo_root).resolve()
         / "eval_result"
         / BENCHMARK_DIR
         / args.task_name
-        / PLUGIN_NAME
+        / plugin_name(args)
         / args.env_cfg_type
         / f"{args.seed}_{args.additional_info}"
         / args.run_id
     )
+
+
 def build_records(args: argparse.Namespace, result: Dict[str, Any], returncode: int, wall_sec: float) -> List[Dict[str, Any]]:
     """One record per evaluated episode from the official ``_result.json``.
 
@@ -367,13 +500,14 @@ def run_evaluation(args: argparse.Namespace) -> Dict[str, Any]:
     if not args.additional_info:
         args.additional_info = f"ckpt_name={pathlib.Path(args.policy_ckpt_path).name or 'loongforge'},action_type=joint"
 
-    ensure_plugin_link(robodojo_root)
+    ensure_plugin_link(robodojo_root, batch=bool(getattr(args, "eval_batch", False)))
     deploy_cfg_path = output_dir / "xpolicylab_deploy.yml"
     write_policy_deploy_config(args, deploy_cfg_path)
 
     policy_log = output_dir / "xpolicylab_policy_server.log"
     sim_log = output_dir / f"{args.task_name}_seed{args.seed}_official_eval.log"
     policy_proc: Optional[subprocess.Popen] = None
+    sim_proc: Optional[subprocess.Popen] = None
     start = time.time()
     returncode = 1
     try:
@@ -400,14 +534,52 @@ def run_evaluation(args: argparse.Namespace) -> Dict[str, Any]:
                 stderr=subprocess.STDOUT,
                 start_new_session=True,
             )
-            try:
-                returncode = sim_proc.wait(timeout=args.timeout_sec if args.timeout_sec and args.timeout_sec > 0 else None)
-            except subprocess.TimeoutExpired:
-                log_file.write(f"\nTIMEOUT after {args.timeout_sec} seconds\n")
-                _stop_process_group(sim_proc)
-                returncode = 124
+            deadline = start + args.timeout_sec if args.timeout_sec and args.timeout_sec > 0 else None
+            hang: Dict[str, float] = {}
+            shutdown: Dict[str, float] = {}
+            while True:
+                try:
+                    returncode = sim_proc.wait(timeout=15)
+                    break
+                except subprocess.TimeoutExpired:
+                    pass
+                if deadline is not None and time.time() > deadline:
+                    log_file.write(f"\nTIMEOUT after {args.timeout_sec} seconds\n")
+                    log_file.flush()
+                    _stop_process_group(sim_proc)
+                    returncode = 124
+                    break
+                if _zenity_hung(sim_log, hang):
+                    log_file.write(
+                        f"\nHUNG: no step progress for {ZENITY_HANG_SEC:.0f} s after a zenity crash-dialog attempt; stopping\n"
+                    )
+                    log_file.flush()
+                    _stop_process_group(sim_proc)
+                    returncode = 137
+                    break
+                if _shutdown_hung(sim_log, shutdown):
+                    log_file.write(
+                        f"\nSHUTDOWN HANG: still running {SHUTDOWN_HANG_SEC:.0f} s after Kit shutdown; stopping\n"
+                    )
+                    log_file.flush()
+                    _stop_process_group(sim_proc)
+                    # Results are written before shutdown: complete -> success, else a failure.
+                    try:
+                        done = json.loads((result_dir(args) / "_result.json").read_text()).get("eval_time", 0)
+                    except (OSError, ValueError):
+                        done = 0
+                    returncode = 0 if args.eval_num and int(done) >= int(args.eval_num) else 137
+                    break
     finally:
+        _stop_process_group(sim_proc, grace_sec=5.0)
         _stop_process_group(policy_proc)
+
+    if int(returncode) == 0 and not client_completed(sim_log):
+        # The official client also exits 0 when it fails while building the env, so rc alone
+        # does not mean "done": without its completion line the run counts as failed.
+        with sim_log.open("a", encoding="utf-8") as handle:
+            handle.write("\n[loongforge runner] client exited 0 without '(eval completed)'; counting as failed\n")
+        returncode = 1
 
     source = result_dir(args)
     artifacts = _collect_artifacts(args, source)

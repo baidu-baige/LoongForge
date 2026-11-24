@@ -57,10 +57,18 @@ Episode-end checks: ``is_episode_end()`` also latches success, so when it is cal
 The official LingBot_VA / Pi_05 / X_VLA ``deploy.py`` call it after every action; the official
 FastWAM ``deploy.py`` only at chunk ends (``_EPISODE_END_CHECK``). The bridge reports the mode
 with every action and the plugin ``deploy.py`` follows it.
+
+``eval_batch`` (several envs in one Isaac Sim process, plugin ``robodojo_xpolicylab_batch``):
+RoboDojo's client then calls ``update_obs_batch`` / ``get_action_batch`` instead, and expects a
+whole chunk per env (the official ``eval_one_episode_batch`` executes it step by step). Each env
+gets its own episode id, PayloadBuilder, ActionDecoder and trace file; one request per env per
+chunk, with the chunk returned by the server instead of cached there. One env per process
+(``eval_batch: false``) keeps the per-step protocol above unchanged.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import pathlib
 import time
@@ -140,6 +148,19 @@ class ChunkSchedule:
         return (step - self.first) % self.rest == self.rest - 1
 
 
+@dataclasses.dataclass
+class _EnvState:
+    """Per-env chain state for ``eval_batch``: episode id, step, its own builder / decoder / trace."""
+
+    idx: int
+    batch: int
+    episode_id: str
+    builder: Any
+    decoder: Any
+    step: int = 0
+    trace: List[Dict[str, Any]] = dataclasses.field(default_factory=list)
+
+
 class RoboDojoPolicyModel:
     """XPolicyLab ``Model`` that forwards RoboDojo env steps to a LoongForge policy server."""
 
@@ -167,6 +188,8 @@ class RoboDojoPolicyModel:
         builder_cfg = {**builder_defaults, **dict(cfg.get("payload_builder") or {})}
         self.payload_builder = build_payload_builder(model_type, yaml_model=builder_cfg)
         self.decoder = build_action_decoder(decoder_key)
+        # eval_batch builds one chain per env from the same spec.
+        self._chain_spec = (model_type, builder_cfg, decoder_key)
         # LingBot-VA must see every env step (closed loop within a chunk); chunked models keep it on.
         self.disable_action_cache = bool(
             cfg.get("disable_action_cache", False) or getattr(self.payload_builder, "disable_action_cache", False)
@@ -183,6 +206,11 @@ class RoboDojoPolicyModel:
             ping_timeout=None,
         )
         self.trace_dir = pathlib.Path(cfg["trace_dir"]) if cfg.get("trace_dir") else None
+
+        # eval_batch: one chain per env, keyed by the env index the client reports.
+        self._envs: Dict[int, _EnvState] = {}
+        self._batch_obs: Dict[int, Dict[str, Any]] = {}
+        self._batch_index = -1
 
         self.episode_index = -1
         self.episode_id: Optional[str] = None
@@ -258,8 +286,133 @@ class RoboDojoPolicyModel:
     def on_trial_end(self, result=None) -> None:
         """Run on_trial_end."""
         self._flush_trace()
+        for env in self._envs.values():
+            self._flush_env_trace(env)
+
+    # ── eval_batch (several envs in one Isaac Sim process) ──────────────
+    def update_obs_batch(self, obs: List[Dict[str, Any]]) -> None:
+        """Keep the latest observation of every env in the batch (keyed by ``env_idx``)."""
+        if self._new_episode_pending:
+            self._start_batch()
+        for item in obs:
+            self._batch_obs[int(item["env_idx"])] = item
+
+    def get_action_batch(self, obs: Sequence[int]) -> List[List[Dict[str, Any]]]:
+        """Per env in ``obs`` (env indices, the official call convention): the rest of its chunk.
+
+        One request per env per chunk: the official ``eval_one_episode_batch`` asks once at a
+        chunk start and executes the returned actions step by step. Every env of a batch starts
+        its episode together, so they all sit at the same step of the same chunk schedule.
+        """
+        env_idx_list = [int(i) for i in obs]
+        if self._new_episode_pending:
+            self._start_batch()
+        for idx in env_idx_list:
+            if idx not in self._envs or self._envs[idx].batch != self._batch_index:
+                self._envs[idx] = self._new_env(idx)
+        return [self._env_chunk(idx) for idx in env_idx_list]
+
+    def _start_batch(self) -> None:
+        for env in self._envs.values():
+            self._flush_env_trace(env)
+        self._batch_index += 1
+        self._batch_obs = {}
+        self._new_episode_pending = False
+
+    def _new_env(self, idx: int) -> _EnvState:
+        model_type, builder_cfg, decoder_key = self._chain_spec
+        env = _EnvState(
+            idx=idx,
+            batch=self._batch_index,
+            episode_id=f"robodojo/{self.task_name}/seed{self.seed}/b{self._batch_index:04d}e{idx:02d}",
+            builder=build_payload_builder(model_type, yaml_model=builder_cfg),
+            decoder=build_action_decoder(decoder_key),
+        )
+        env.builder.reset(env.episode_id)
+        env.decoder.reset()
+        self.client.reset(env.episode_id)
+        return env
 
     # ── internals ────────────────────────────────────────────────────
+    def _env_chunk(self, idx: int) -> List[Dict[str, Any]]:
+        """One request for env ``idx``: the server returns the chunk, decoded here action by action."""
+        env = self._envs[idx]
+        obs = self._batch_obs.get(idx)
+        if obs is None:
+            raise RuntimeError(f"get_action_batch: no observation for env {idx}")
+        step = env.step
+        instruction = str(obs.get("instruction") or "")
+        canonical = self.adapter.obs_to_canonical(
+            obs, {"instruction": instruction, "episode_id": env.episode_id, "episode_step": step}
+        )
+        ctx = {
+            "benchmark_name": "robodojo",
+            "episode_id": env.episode_id,
+            "episode_step": step,
+            "instruction": instruction,
+        }
+        model_kwargs = env.builder.build(canonical, ctx)
+        start = time.perf_counter()
+        response = self.client.predict_action(
+            episode_id=env.episode_id,
+            episode_step=step,
+            disable_action_cache=False,
+            return_action_chunk=True,
+            **model_kwargs,
+        )
+        if not response.get("ok", False):
+            raise RuntimeError(f"Policy error: {response}")
+        data = response["data"]
+        rows = np.asarray(data["actions"], dtype=np.float32)
+        rows = rows.reshape(-1, rows.shape[-1]) if rows.ndim > 1 else rows.reshape(1, -1)
+        n_exec = 1
+        while not self.schedule.is_chunk_end(step + n_exec - 1):
+            n_exec += 1
+        if rows.shape[0] < n_exec:
+            raise RuntimeError(f"server returned {rows.shape[0]} actions, chunk needs {n_exec}")
+        rtt = time.perf_counter() - start
+        actions = []
+        for k in range(n_exec):
+            raw = rows[k : k + 1]
+            decode_ctx = {
+                "current_joint": canonical["state_raw"]["joint"],
+                "pi_state": model_kwargs.get("state"),
+                "is_fresh_chunk": k == 0,
+            }
+            decoded = np.asarray(env.decoder(raw, decode_ctx), dtype=np.float32)
+            action = self.adapter.action_from_canonical(decoded[0])
+            env.builder.note_env_action(decoded[0])
+            self._record_env(env, step + k, instruction, raw[0], action, data if k == 0 else {}, rtt if k == 0 else 0.0)
+            actions.append(action)
+        env.step += n_exec
+        self._flush_env_trace(env)
+        return actions
+
+    def _record_env(self, env, step, instruction, raw, action, data, rtt_sec) -> None:
+        if self.trace_dir is None:
+            return
+        env.trace.append(
+            {
+                "step": int(step),
+                "instruction": instruction if step == 0 else None,
+                "raw_action": np.asarray(raw).tolist(),
+                "env_action": action,
+                "chunk_end": bool(self.schedule.is_chunk_end(step)),
+                "inference_latency_ms": data.get("inference_latency_ms"),
+                "rtt_ms": round(rtt_sec * 1000.0, 3),
+            }
+        )
+
+    def _flush_env_trace(self, env: _EnvState) -> None:
+        if self.trace_dir is None or not env.trace:
+            return
+        self.trace_dir.mkdir(parents=True, exist_ok=True)
+        path = self.trace_dir / f"b{env.batch:04d}e{env.idx:02d}.jsonl"
+        with path.open("a", encoding="utf-8") as handle:
+            for record in env.trace:
+                handle.write(json.dumps({"episode_id": env.episode_id, **record}, ensure_ascii=False) + "\n")
+        env.trace = []
+
     def _start_episode(self) -> None:
         self.episode_index += 1
         self.episode_id = f"robodojo/{self.task_name}/seed{self.seed}/ep{self.episode_index:04d}"
