@@ -377,6 +377,12 @@ def test_timestep_embed_width_is_declared_exactly_when_consumed(model_spec):
         assert stream.timestep_embed_width == 256, stream.name
 
 
+@pytest.mark.parametrize("model_type", ["vpp2", "fastwam"])
+def test_wan_providers_feed_the_1000_step_training_timestep(model_type):
+    """Master's Wan schedulers hand ``sigma * 1000`` to the time embeddings."""
+    assert get_provider(model_type)().diffusion.schedule.num_train_timesteps == 1000
+
+
 def test_disabled_condition_still_counts_toward_entry_channels():
     """Disabling a condition changes its value, not the entry conv's shape.
 

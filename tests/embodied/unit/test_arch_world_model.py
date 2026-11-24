@@ -214,6 +214,29 @@ def test_timestep_dtype_follows_the_raw_tensor(spec):
         assert value.shape == (BATCH,)
 
 
+def test_float32_sigma_runs_a_bf16_forward_without_promoting_x_t(spec):
+    """``sigma_dtype="float32"`` keeps sigma and t in float32 through a bf16 step.
+
+    x_t stays bf16, and the time embedding takes the float32 t the way master's
+    ``pre_dit`` does: cast to the weights' dtype.
+    """
+    timesteps = {name: replace(sampler, rng=RngPolicy(sigma_dtype="float32"))
+                 for name, sampler in spec.diffusion.timesteps.items()}
+    spec = replace(spec, diffusion=replace(spec.diffusion, timesteps=timesteps))
+    model = world(spec).to(torch.bfloat16)
+    batch = {key: (value.to(torch.bfloat16)
+                   if isinstance(value, torch.Tensor) and value.is_floating_point() else value)
+             for key, value in fake_batch(spec).items()}
+    seen = {}
+    model.register_step_hook(lambda m, event, value: seen.setdefault(event, value))
+    loss, _ = model(batch)
+    assert torch.isfinite(loss)
+    draw, runtime = seen["draw"], seen["runtime"]
+    for name in draw.sigma:
+        assert draw.sigma[name].dtype == draw.model_timesteps[name].dtype == torch.float32
+        assert runtime.noised[name].dtype == torch.bfloat16
+
+
 # ---- 2 / 3. loss weights and the metric key set ----
 
 

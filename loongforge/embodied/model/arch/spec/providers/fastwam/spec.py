@@ -220,7 +220,10 @@ def _fastwam(config: Any = None, *,
             LossSpec(name="video_flow", head="video_flow"),
             LossSpec(name="action_flow", head="action_flow"),
         ),
-        schedule=RectifiedFlow(),
+        # Both master schedulers use the 1000-step training timestep
+        # (``video/action_num_train_timesteps``, ``mot/fastwam.py:53-56``), and
+        # ``pre_dit`` receives ``sigma * 1000`` (``action/schedulers.py:51-58``).
+        schedule=RectifiedFlow(num_train_timesteps=1000),
         # Inference runs the action stream only: ``infer_action``
         # (``mot/fastwam.py:982``) calls ``mot.prefill_video_cache``
         # (``:1081``) once, then each step calls only
