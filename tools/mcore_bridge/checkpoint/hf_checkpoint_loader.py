@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirna
 import torch
 import torch.distributed as dist
 from megatron.training import print_rank_0
-from megatron.training.utils import unwrap_model
+from megatron.core.utils import unwrap_model
 
 # Import existing mcore_bridge modules
 from mcore_bridge.core.parser import Parser
@@ -97,7 +97,9 @@ def load_hf_checkpoint_online(
     model,
     optimizer,
     opt_param_scheduler,
-    args
+    args,
+    *,
+    model_config=None,
 ) -> Tuple[int, int]:
     """
     Load HF checkpoint online and shard to distributed model
@@ -113,6 +115,7 @@ def load_hf_checkpoint_online(
         optimizer: Optimizer
         opt_param_scheduler: Learning rate scheduler
         args: Command line arguments
+        model_config: Resolved model configuration used to construct the model
 
     Returns:
         (iteration, num_floating_point_operations_so_far)
@@ -139,7 +142,7 @@ def load_hf_checkpoint_online(
     parser = Parser(args)
 
     # Get parallel config
-    parallel_config = parser.get_parallel_config()
+    parallel_config = parser.get_parallel_config(model_config=model_config)
 
     print_rank_0(f"Model type: {parser.type}")
 

@@ -179,7 +179,7 @@ def save_hf_checkpoint_online(
 
     # Step 3: Extract model state_dict
     print_rank_0("Extracting model state_dict...")
-    from megatron.training.utils import unwrap_model
+    from megatron.core.utils import unwrap_model
 
     mem_before = 0.0
     if torch.cuda.is_available():
