@@ -70,11 +70,15 @@ def _dense_mlp_spec(backend: LocalSpecProvider) -> ModuleSpec:
 
 
 def _moe_spec(config, backend: LocalSpecProvider) -> ModuleSpec:
+    if config.moe_use_legacy_grouped_gemm:
+        raise NotImplementedError(
+            "MCore 0.20 removed moe_use_legacy_grouped_gemm; GLM5Next must use "
+            "the native grouped-MoE path"
+        )
     return get_moe_module_spec_for_backend(
         backend=backend,
         num_experts=config.num_moe_experts,
         moe_grouped_gemm=config.moe_grouped_gemm,
-        moe_use_legacy_grouped_gemm=config.moe_use_legacy_grouped_gemm,
         use_te_activation_func=False,
     )
 
