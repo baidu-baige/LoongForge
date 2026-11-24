@@ -18,23 +18,9 @@ from . import msgpack_numpy
 class PolicyClient:
     """Provide PolicyClient behavior."""
 
-    def __init__(
-        self,
-        host: str = "127.0.0.1",
-        port: int = 10093,
-        timeout: float = 300,
-        ping_interval: Optional[float] = 20,
-        ping_timeout: Optional[float] = 20,
-    ) -> None:
-        """Run __init__.
-
-        ``ping_interval`` / ``ping_timeout`` are the websockets keepalive settings (defaults are
-        the library's). Callers whose single requests can block longer than that (a long
-        chunk-boundary inference, or a sim that blocks between requests) pass ``None``.
-        """
+    def __init__(self, host: str = "127.0.0.1", port: int = 10093, timeout: float = 300) -> None:
+        """Run __init__."""
         self._uri = f"ws://{host}:{port}"
-        self._ping_interval = ping_interval
-        self._ping_timeout = ping_timeout
         self._packer = msgpack_numpy.Packer()
         self._ws, self._server_metadata = self._wait_for_server(timeout=timeout)
 
@@ -59,8 +45,6 @@ class PolicyClient:
                     compression=None,
                     max_size=None,
                     open_timeout=min(30.0, remaining),
-                    ping_interval=self._ping_interval,
-                    ping_timeout=self._ping_timeout,
                 )
             except (ConnectionRefusedError, TimeoutError, OSError):
                 # A server that is still loading (or briefly saturated by other

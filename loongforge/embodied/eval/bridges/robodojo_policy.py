@@ -200,10 +200,6 @@ class RoboDojoPolicyModel:
             host=str(cfg.get("lf_host", "127.0.0.1")),
             port=int(cfg["lf_port"]),
             timeout=float(cfg.get("lf_timeout_sec", 600)),
-            # A chunk-boundary call can exceed the 20 s keepalive (official recipe: VAE / T5 on
-            # CPU); the official LingBot_VA client also runs with keepalive off.
-            ping_interval=None,
-            ping_timeout=None,
         )
         self.trace_dir = pathlib.Path(cfg["trace_dir"]) if cfg.get("trace_dir") else None
 
