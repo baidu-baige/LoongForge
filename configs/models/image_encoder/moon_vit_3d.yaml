@@ -1,5 +1,6 @@
 # kimi k2.5 vit
 _target_: loongforge.models.encoder.MoonVisionModelConfig
+tensor_model_parallel_size: 1
 
 num_layers: 27
 hidden_size: 1152

@@ -1,4 +1,5 @@
 _target_: loongforge.models.encoder.RiceVisionConfig
+tensor_model_parallel_size: 1
 
 num_layers: 48
 hidden_size: 1664

@@ -1,4 +1,7 @@
 _target_: loongforge.models.encoder.RiceVisionConfig
+# LLaVA-OneVision 1.5 uses the old-stack vision TP2 topology. Other standard
+# visual encoders keep their recorded legacy TP1 default.
+tensor_model_parallel_size: 2
 
 num_layers: 24
 hidden_size: 1024
