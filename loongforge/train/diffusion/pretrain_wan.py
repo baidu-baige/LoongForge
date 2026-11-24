@@ -29,6 +29,7 @@ from loongforge.models.diffusion.wan.wan_flow_match import FlowMatchScheduler
 from megatron.core.packed_seq_params import PackedSeqParams
 
 from loongforge.train.megatron_trainer import MegatronTrainer
+from loongforge.train.training_utils import pretrain as legacy_pretrain
 from loongforge.train.trainer_builder import register_model_trainer
 from megatron.core import parallel_state
 import numpy as np
@@ -535,6 +536,7 @@ def default_pretrain_trainer(train_args):
         model_provider=model_provider,
         model_type=ModelType.encoder_or_decoder,
         forward_step_func=partial(forward_step, diffusion),
+        pretrain_func=legacy_pretrain,
     )
 
     return trainer
