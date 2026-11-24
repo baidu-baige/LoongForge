@@ -38,12 +38,22 @@ def validate_megatron_args(args):
     """Validate Megatron arguments"""
     _align_wan_packing_seq_length(args)
     _validate_legacy_pipeline_args(args)
+    _prepare_sft_chunkpipe_validation(args)
     validate_args(args)
 
 
 def validate_custom_model_args(name, args):
     """Validate non foundational model arguments"""
     _validate_custom_model_args(name, args)
+
+
+def _prepare_sft_chunkpipe_validation(args):
+    """Set the SFT phase flag before MCore derives ChunkPipe flags."""
+    if (
+        getattr(args, "training_phase", None) == constants.TrainingPhase.SFT
+        and getattr(args, "enable_chunkpipe", False)
+    ):
+        args.sft = True
 
 
 def _get_wan_packing_cp_alignment(cp_size):

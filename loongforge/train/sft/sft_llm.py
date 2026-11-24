@@ -458,7 +458,7 @@ def default_sft_trainer(train_args):
         model_type=ModelType.encoder_or_decoder,
         forward_step_func=forward_step,
         get_embedding_ranks=get_embedding_ranks,
-        pretrain_func=pretrain_with_mcore,
+        pretrain_func=partial(pretrain_with_mcore, allow_chunkpipe=True),
     )
 
     return trainer
