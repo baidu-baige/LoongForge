@@ -135,6 +135,11 @@ def get_tokenizer() -> Optional["MegatronTokenizerBase"]:
     return _GLOBAL_LOONGFORGE_TOKENIZER
 
 
+def is_tokenizer_initialized() -> bool:
+    """Return whether the LoongForge tokenizer is available."""
+    return _GLOBAL_LOONGFORGE_TOKENIZER is not None
+
+
 def get_chat_template() -> Optional["ChatTemplate"]:
     """Return chat template."""
     _ensure_var_is_initialized(_GLOBAL_CHAT_TEMPLATE, "loongforge-chat-template")
