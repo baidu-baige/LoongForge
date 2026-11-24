@@ -9,6 +9,7 @@ compute replica.
 
 from __future__ import annotations
 
+import inspect
 from dataclasses import dataclass
 
 import torch
@@ -53,15 +54,20 @@ def _fp8_quantizer():
     global _FP8_QUANTIZER
     if _FP8_QUANTIZER is None:
         Float8BlockQuantizer, tex = _import_te()
-        _FP8_QUANTIZER = Float8BlockQuantizer(
+        kwargs = dict(
             fp8_dtype=tex.DType.kFloat8E4M3,
             rowwise=True,
             columnwise=False,
             amax_epsilon=0.0,
             force_pow_2_scales=True,
             block_scaling_dim=1,
-            all_gather_usage=True,
         )
+        # Older TransformerEngine builds do not expose the compact all-gather
+        # scale layout. The codec slices to the compact scale count, so keep
+        # those builds usable instead of failing at construction time.
+        if "all_gather_usage" in inspect.signature(Float8BlockQuantizer).parameters:
+            kwargs["all_gather_usage"] = True
+        _FP8_QUANTIZER = Float8BlockQuantizer(**kwargs)
     return _FP8_QUANTIZER
 
 
@@ -130,7 +136,12 @@ def _quantize_flat(delta):
     data = quantized.get_data_tensors(
         rowwise_data=True, columnwise_data=False
     ).reshape(-1)[:numel]
-    scales = quantized._rowwise_scale_inv.reshape(-1).contiguous()
+    # Older TransformerEngine builds pad the scale buffer to a GEMM tile even
+    # when all_gather_usage is unavailable. Keep the communication payload at
+    # the compact wire size; compact builds are already this length.
+    scales = quantized._rowwise_scale_inv.reshape(-1)[
+        :_fp8_scale_count(numel)
+    ].contiguous()
     return data, scales
 
 
@@ -151,7 +162,11 @@ def _dequantize_flat(data, scales, numel):
         (rows, FP8_BLOCK), dtype=torch.float32, device=data.device
     )
     rebuilt._rowwise_data.view(-1)[:numel].copy_(data.reshape(-1))
-    rebuilt._rowwise_scale_inv.copy_(scales.reshape(rows, 1))
+    # The scale buffer may be GEMM-padded on older TE builds; only the compact
+    # prefix participates in the communication contract.
+    rebuilt._rowwise_scale_inv.view(-1)[:rows].copy_(
+        scales.reshape(-1)[:rows]
+    )
     return rebuilt.dequantize(dtype=torch.float32).reshape(-1)[:numel]
 
 
