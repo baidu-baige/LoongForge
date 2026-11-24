@@ -272,8 +272,9 @@ class GenericPredictActionPolicy:
                     )
         elif len(generations) != len(payloads):
             raise ValueError("generations length must match payloads length")
-        # No fixed seed by default:每一行各自采样（与官方 openpi 客户端一致）。
-        # 设置 ``metadata.noise_seed`` 时才退化为可复现模式（所有行共用该种子）。
+        # No fixed seed by default: each row samples its own noise (matching the
+        # official openpi client). Only when ``metadata.noise_seed`` is set do we
+        # fall back to a reproducible mode (all rows share that seed).
         base_seed = self._metadata.get("noise_seed")
 
         images = []
