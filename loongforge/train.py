@@ -9,6 +9,17 @@ separate torch-native (DDP/FSDP) subsystem with its own entry at
 """
 
 import logging
+import os
+import sys
+
+# `loongforge` imports the repository-level `tools.mcore_bridge` package at
+# runtime (HF checkpoint loading). Make the entrypoint self-contained even when
+# a launcher only puts the package directory on PYTHONPATH.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+for _path in (_REPO_ROOT, os.path.join(_REPO_ROOT, "tools")):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
+
 logging.basicConfig(level=logging.WARNING)
 from loongforge.train import parse_train_args
 from loongforge.train import build_model_trainer
