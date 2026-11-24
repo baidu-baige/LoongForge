@@ -23,7 +23,7 @@ from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.pipeline_parallel.fine_grained_activation_offload import (
     fine_grained_offloading_set_last_layer,
 )
-from megatron.core.transformer.hyper_connection import HyperConnectionModule, HyperHead
+from megatron.core.transformer.hyper_connection import HyperConnectionModule
 from megatron.core.utils import (
     WrappedTensor,
     deprecate_inference_params,
@@ -75,18 +75,6 @@ class TransformerBlock(MegatronTransformerBlock):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Replace parent's inline hc_head params with a HyperHead module.
-        # Remove duplicate parameters created by parent __init__ to avoid
-        # state_dict conflicts.
-        if self.config.enable_hyper_connections and self.has_final_layernorm_in_this_stage():
-            # Delete parent's inline parameters
-            if hasattr(self, 'hc_head_fn'):
-                del self.hc_head_fn
-            if hasattr(self, 'hc_head_base'):
-                del self.hc_head_base
-            if hasattr(self, 'hc_head_scale'):
-                del self.hc_head_scale
-            self.head_hyper_connection = HyperHead(self.config)
 
     def forward(
         self,
@@ -142,6 +130,24 @@ class TransformerBlock(MegatronTransformerBlock):
             Union[Tensor, Tuple[Tensor, Tensor]]: The output hidden states tensor of shape
             [s, b, h], and optionally the updated context tensor if cross-attention is used.
         """
+        if self.config.enable_mhc_connections:
+            return super().forward(
+                hidden_states=hidden_states,
+                attention_mask=attention_mask,
+                context=context,
+                context_mask=context_mask,
+                rotary_pos_emb=rotary_pos_emb,
+                rotary_pos_cos=rotary_pos_cos,
+                rotary_pos_sin=rotary_pos_sin,
+                rotary_pos_cos_sin=rotary_pos_cos_sin,
+                attention_bias=attention_bias,
+                inference_context=inference_context,
+                packed_seq_params=packed_seq_params,
+                sequence_len_offset=sequence_len_offset,
+                inference_params=inference_params,
+                dynamic_inference_decode_only=dynamic_inference_decode_only,
+                **kwargs,
+            )
 
         kwargs = self._prepare_index_share_kwargs(kwargs)
         inference_context = deprecate_inference_params(inference_context, inference_params)
@@ -175,7 +181,7 @@ class TransformerBlock(MegatronTransformerBlock):
         hidden_states = make_viewless_tensor(inp=hidden_states, requires_grad=True, keep_graph=True)
 
         # Expand hidden states for hyper connections at the start of the block
-        if self.config.enable_hyper_connections and self.pre_process:
+        if self.config.enable_mhc_connections and self.pre_process:
             hidden_states = HyperConnectionModule.input_expand(
                 hidden_states, self.config.num_residual_streams
             )  # [s, b, C] -> [s, b, n*C]
@@ -302,7 +308,7 @@ class TransformerBlock(MegatronTransformerBlock):
 
         # Contract hyper connections at the end of the block using learned HyperHead
         mhc_multistream = None
-        if self.config.enable_hyper_connections and self.has_final_layernorm_in_this_stage():
+        if self.config.enable_mhc_connections and self.has_final_layernorm_in_this_stage():
             # When MTP is enabled, save pre-contraction multi-stream for MTP input.
             if getattr(self.config, 'mtp_num_layers', None) and self.config.mtp_num_layers > 0:
                 mhc_multistream = hidden_states

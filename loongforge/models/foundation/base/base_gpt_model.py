@@ -24,7 +24,7 @@ from megatron.core.models.common.embeddings.rotary_pos_embedding import (
     RotaryEmbedding,
 )
 from megatron.core.pipeline_parallel.fine_grained_activation_offload import (
-    fine_grained_offloading_init_chunk_handler,
+    FineGrainedActivationOffloadingInterface as off_interface,
 )
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.process_groups_config import ProcessGroupCollection
@@ -35,6 +35,7 @@ from megatron.core.transformer.multi_token_prediction import (
     MTPLossAutoScaler,
     MTPLossLoggingHelper,
     MultiTokenPredictionBlock,
+    _compute_mtp_acceptance_counts,
     roll_tensor,
     tie_word_embeddings_state_dict,
 )
@@ -171,6 +172,7 @@ class BaseGPTModel(BaseMegatronLanguageModule):
                     position_embedding_type=position_embedding_type,
                     scatter_to_sequence_parallel=_scatter_sp,
                     tp_group=self.pg_collection.tp,
+                    pg_collection=self.pg_collection,
                 )
             else:
                 self.embedding = language_embedding
@@ -240,7 +242,10 @@ class BaseGPTModel(BaseMegatronLanguageModule):
 
         if self.mtp_process:
             self.mtp = MultiTokenPredictionBlock(
-                config=self.config, spec=self.mtp_block_spec, vp_stage=vp_stage
+                config=self.config,
+                spec=self.mtp_block_spec,
+                vp_stage=vp_stage,
+                pg_collection=self.pg_collection,
             )
 
         # Output
@@ -274,6 +279,7 @@ class BaseGPTModel(BaseMegatronLanguageModule):
                 embedding_activation_buffer=self.embedding_activation_buffer,
                 grad_output_buffer=self.grad_output_buffer,
                 tp_group=self.pg_collection.tp,
+                pg_collection=self.pg_collection,
             )
 
         if self.pre_process or self.post_process or self.mtp_process:
@@ -456,18 +462,24 @@ class BaseGPTModel(BaseMegatronLanguageModule):
 
     def preprocess_for_fine_grained_offloading(self):
         """Preprocess for fine-grained activation offloading."""
-        fine_grained_offloading_init_chunk_handler(
-            self.vp_stage, self.config.min_offloaded_tensor_size
+        off_interface.init_chunk_handler(
+            pp_rank=self.pg_collection.pp.rank(),
+            vp_size=self.config.virtual_pipeline_model_parallel_size,
+            vp_stage=self.vp_stage,
+            min_offloaded_tensor_size=self.config.min_offloaded_tensor_size,
+            delta_offload_bytes_across_pp_ranks=self.config.delta_offload_bytes_across_pp_ranks,
+            activation_offload_fraction=self.config.activation_offload_fraction,
+            max_inflight_offloads=self.config.fine_grained_offloading_max_inflight_offloads,
         )
         if self.disable_param_offloading:
             for param in self.decoder.parameters():
-                param.offloading_activation = False
+                off_interface.mark_not_offload(param)
             if self.mtp_process:
                 for param in self.mtp.parameters():
-                    param.offloading_activation = False
+                    off_interface.mark_not_offload(param)
             if self.post_process:
                 for param in self.output_layer.parameters():
-                    param.offloading_activation = False
+                    off_interface.mark_not_offload(param)
             self.disable_param_offloading = False
 
     def forward(
@@ -712,19 +724,23 @@ class BaseGPTModel(BaseMegatronLanguageModule):
                         self.config.chunk_sizes[self.config.chunkpipe_chunk_idx_in_group]
                         if self.config.enable_chunkpipe else None
                     )
-                    # Compute mtp loss without storing logits to save memory.
                     mtp_loss = self.compute_output_layer_and_language_model_loss(
                         hidden_states_list[mtp_layer_number + 1],
-                        labels=mtp_labels[:, :cur_chunk_len] if self.config.enable_chunkpipe else mtp_labels,
+                        labels=(
+                            mtp_labels[:, :cur_chunk_len]
+                            if self.config.enable_chunkpipe
+                            else mtp_labels
+                        ),
                         weight=self.shared_embedding_or_output_weight()
-                        if self.share_embeddings_and_output_weights else self.output_layer.weight,
+                        if self.share_embeddings_and_output_weights
+                        else self.output_layer.weight,
                         sequence_parallel_enabled=self.output_layer.sequence_parallel,
                         column_parallel_linear=self.output_layer,
                         col_linear_kwargs={
-                            'weight': output_weight,
-                            'runtime_gather_output': runtime_gather_output,
+                            "weight": output_weight,
+                            "runtime_gather_output": runtime_gather_output,
                         },
-                    )       
+                    )
                     
                     if self.config.enable_chunkpipe:
                         # Apply loss mask only within the current chunk range.
@@ -779,17 +795,30 @@ class BaseGPTModel(BaseMegatronLanguageModule):
                                 dp_size * get_num_microbatches() / step_num_groups
                             )
 
-                        MTPLossLoggingHelper.save_loss_to_tracker(
+                        correct, total = _compute_mtp_acceptance_counts(
+                            mtp_logits,
+                            mtp_labels,
+                            loss_mask,
+                            tp_group=self.pg_collection.tp,
+                        )
+                        MTPLossLoggingHelper.save_metrics_to_tracker(
                             mtp_log_loss,
-                            mtp_layer_number,
-                            self.config.mtp_num_layers,
+                            correct,
+                            total,
+                            layer_number=mtp_layer_number,
+                            num_layers=self.config.mtp_num_layers,
                             avg_group=parallel_state.get_data_parallel_group(
                                 with_context_parallel=True
                             ),
                         )
                     mtp_loss_scaling_factor = (
                         self.config.mtp_loss_scaling_factor
-                        * self.config.mtp_loss_scaling_factor_decay_ratio ** mtp_layer_number
+                        * getattr(
+                            self.config,
+                            "mtp_loss_scaling_factor_decay_ratio",
+                            1.0,
+                        )
+                        ** mtp_layer_number
                     )
                     mtp_loss_scale = mtp_loss_scaling_factor / self.config.mtp_num_layers
                     if self.config.calculate_per_token_loss:
@@ -868,41 +897,41 @@ class BaseGPTModel(BaseMegatronLanguageModule):
         if labels is None:
             # [s b h] => [b s h]
             return logits.transpose(0, 1).contiguous()
-        
-        if not getattr(self.config, 'enable_chunkpipe', False):
-            loss = self.compute_output_layer_and_language_model_loss(
-                hidden_states,
-                labels=labels,
-                weight=self.shared_embedding_or_output_weight()
-                if self.share_embeddings_and_output_weights else self.output_layer.weight,
-                sequence_parallel_enabled=self.output_layer.sequence_parallel,
-                column_parallel_linear=self.output_layer,
-                col_linear_kwargs={
-                    'weight': output_weight,
-                    'runtime_gather_output': runtime_gather_output,
-                },
-            )
-        else: # Chunkpipe: use fused output and loss computation
+        if getattr(self.config, "enable_chunkpipe", False):
             def _compute_output_layer_and_loss(hidden_states_, labels_):
                 return self.compute_output_layer_and_language_model_loss(
                     hidden_states_,
                     labels=labels_,
                     weight=self.shared_embedding_or_output_weight()
-                    if self.share_embeddings_and_output_weights else self.output_layer.weight,
+                    if self.share_embeddings_and_output_weights
+                    else self.output_layer.weight,
                     sequence_parallel_enabled=self.output_layer.sequence_parallel,
                     column_parallel_linear=self.output_layer,
                     col_linear_kwargs={
-                        'weight': output_weight,
-                        'runtime_gather_output': runtime_gather_output,
+                        "weight": output_weight,
+                        "runtime_gather_output": runtime_gather_output,
                     },
                 )
-
             loss = tensor_parallel.checkpoint(
                 _compute_output_layer_and_loss,
                 self.config.distribute_saved_activations,
-                hidden_states, labels
-            )           
-
+                hidden_states,
+                labels,
+            )
+        else:
+            loss = self.compute_output_layer_and_language_model_loss(
+                hidden_states,
+                labels=labels,
+                weight=self.shared_embedding_or_output_weight()
+                if self.share_embeddings_and_output_weights
+                else self.output_layer.weight,
+                sequence_parallel_enabled=self.output_layer.sequence_parallel,
+                column_parallel_linear=self.output_layer,
+                col_linear_kwargs={
+                    "weight": output_weight,
+                    "runtime_gather_output": runtime_gather_output,
+                },
+            )
         return loss
 
     def shared_embedding_or_output_weight(self) -> Tensor:
