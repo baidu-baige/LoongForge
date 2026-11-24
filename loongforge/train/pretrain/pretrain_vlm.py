@@ -530,19 +530,48 @@ def get_embedding_ranks(pp_ranks: List[int]):
     embedding_ranks = sorted(embedding_ranks)
     return embedding_ranks
 
+
+def vlm_model_provider(
+    pre_process: bool = True,
+    post_process: bool = True,
+    parallel_output: bool = True,
+    vp_stage: Optional[int] = None,
+):
+    """Resolve the configured VLM backend without duplicating the trainer."""
+    backend = getattr(get_model_config(), "model_backend", "omni")
+    if backend == "mimo":
+        from loongforge.models.mimo_models.mimo_vlm_provider import (
+            mimo_vlm_model_provider,
+        )
+
+        provider = mimo_vlm_model_provider
+    else:
+        provider = omni_model_provider
+    return provider(
+        pre_process=pre_process,
+        post_process=post_process,
+        parallel_output=parallel_output,
+        vp_stage=vp_stage,
+    )
+
+
 @register_model_trainer(
     model_family=constants.VisionLanguageModelFamilies.names(),
     training_phase=constants.TrainingPhase.PRETRAIN,
 )
 def default_vlm_pretrain_trainer(train_args):
     """build trainer"""
+    from loongforge.train.megatron_trainer import pretrain_with_mcore
+
+    runtime_kwargs = {"pretrain_func": pretrain_with_mcore}
     trainer = MegatronTrainer(
         train_args=train_args,
         train_valid_test_dataset_provider=train_valid_test_dataset_provider,
-        model_provider=omni_model_provider,
+        model_provider=vlm_model_provider,
         model_type=ModelType.encoder_or_decoder,  # TODO: Heterogeneous TP/PP not supported yet
         forward_step_func=forward_step,
         get_embedding_ranks=get_embedding_ranks,
+        **runtime_kwargs,
     )
 
     return trainer
