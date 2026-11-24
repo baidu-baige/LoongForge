@@ -15,7 +15,7 @@ in YAML, only its **parameters** are (the people tuning them sweep repeatedly).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol
 
 import torch
 from torch import Tensor
@@ -24,7 +24,7 @@ from .broadcast import DEFAULT_PER_SAMPLE, BroadcastSpec
 
 __all__ = [
     "TimestepDistribution", "UniformShift", "LogitNormal", "BetaDist",
-    "Constant", "TimestepSampler",
+    "Constant", "RngPolicy", "TimestepSampler",
 ]
 
 
@@ -212,6 +212,69 @@ class Constant:
 
 
 @dataclass(frozen=True)
+class RngPolicy:
+    """How one stream draws its randomness in a training step (Lane C v2 §1.1).
+
+    Two decisions here are numerical facts of the implementation being
+    reproduced, so they cannot be left to whatever order the code happens to
+    call ``torch.rand`` in: with one global generator, swapping the noise and
+    the timestep draw changes both values while the generator state after the
+    step stays the same, which no RNG-state check can catch.
+
+    Streams are drawn one after another in the key order of
+    ``DiffusionSpec.timesteps``; within a stream ``order`` decides which comes
+    first. The training timestep is ``t = sigma * num_train_timesteps`` (see
+    ``RectifiedFlow``), drawn in float32 whatever the sample dtype.
+
+    Attributes:
+        order: ``"noise_first"`` draws epsilon and then the timestep (the Wan
+            family: fastwam ``mot/fastwam.py:519-524``, VPP2
+            ``libero_action_model.py:578-610``); ``"t_first"`` the reverse.
+        sigma_dtype: ``"like_sample"`` casts t to the sample dtype and derives
+            the noising sigma back from that t, which is what the Wan family
+            does (``sample_training_t`` returns the cast t and ``add_noise``
+            divides it by ``num_train_timesteps`` again); ``"float32"`` keeps t
+            and sigma in float32, and sigma is cast to the sample dtype only
+            for the noising arithmetic.
+    """
+
+    order: Literal["noise_first", "t_first"] = "noise_first"
+    sigma_dtype: Literal["like_sample", "float32"] = "like_sample"
+
+    def __post_init__(self) -> None:
+        if self.order not in ("noise_first", "t_first"):
+            raise ValueError(f"RngPolicy.order must be noise_first or t_first, got {self.order!r}")
+        if self.sigma_dtype not in ("like_sample", "float32"):
+            raise ValueError(
+                f"RngPolicy.sigma_dtype must be like_sample or float32, got {self.sigma_dtype!r}")
+
+    @property
+    def draws(self) -> tuple[str, str]:
+        """The two draws of one stream, in order: ``"noise"`` and ``"timestep"``."""
+        return ("noise", "timestep") if self.order == "noise_first" else ("timestep", "noise")
+
+    def quantize(self, sigma: Tensor, *, num_train_timesteps: int,
+                 sample_dtype: torch.dtype) -> tuple[Tensor, Tensor]:
+        """Turn a float32 sigma into the step's ``(sigma, t)`` pair.
+
+        Args:
+            sigma: Float32 draw of the distribution, valued in [0, 1].
+            num_train_timesteps: Scale from sigma to the training timestep.
+            sample_dtype: Dtype of the stream's raw tensor.
+
+        Returns:
+            ``(sigma, t)``: sigma is the noising coefficient, t the training
+            timestep the time embeddings and the sigma-dimension loss weights
+            read. Under ``like_sample`` both are in ``sample_dtype``.
+        """
+        t = sigma * float(num_train_timesteps)
+        if self.sigma_dtype == "float32":
+            return sigma, t
+        t = t.to(dtype=sample_dtype)
+        return (t / float(num_train_timesteps)).to(dtype=sample_dtype), t
+
+
+@dataclass(frozen=True)
 class TimestepSampler:
     """Distribution plus broadcast spec. Step (1) of ``WorldModel.forward``
     calls it.
@@ -223,10 +286,13 @@ class TimestepSampler:
     Attributes:
         distribution: The timestep distribution to draw from.
         broadcast: Which label axes the drawn timesteps vary along.
+        rng: Draw order of this stream's noise and timestep, and the dtype of
+            the training timestep.
     """
 
     distribution: TimestepDistribution
     broadcast: BroadcastSpec = DEFAULT_PER_SAMPLE
+    rng: RngPolicy = RngPolicy()
 
     def sample(self, batch_size: int, *, device: torch.device,
                dtype: torch.dtype = torch.float32,

@@ -16,15 +16,19 @@ AW-0, and this layer deliberately does not copy it.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Protocol
 
 import torch
 from torch import Tensor
+from torch.nn import functional as F
 
 from .broadcast import DEFAULT_PER_SAMPLE, BroadcastSpec
+from .timesteps import Constant, TimestepSampler, UniformShift
 
 __all__ = ["WeightRamp", "LossSpec", "LossObjective", "MeanSquaredError",
-           "CosineDistance"]
+           "TokenMeanSquaredError", "CosineDistance", "TimestepWeight",
+           "UniformWeight", "Bsmntw"]
 
 
 class LossObjective(Protocol):
@@ -37,14 +41,26 @@ class LossObjective(Protocol):
     implementation site.
 
     Why it returns ``[B]`` rather than a scalar: besides ``LossSpec.weight_at``
-    there is per-sample weighting (the existing ``training_weight`` in
-    ``scheduler_continuous.py:73-83``), and applying that after the batch mean
-    is not equivalent.
+    there is per-sample weighting (``LossSpec.weight_of``), and applying that
+    after the batch mean is not equivalent.
     """
 
-    def __call__(self, prediction: Tensor, target: Tensor) -> Tensor:
-        """``[B, ...]`` x ``[B, ...]`` -> ``[B]``."""
+    def __call__(self, prediction: Tensor, target: Tensor, *,
+                 valid: Tensor | None = None) -> Tensor:
+        """``[B, ...]`` x ``[B, ...]`` -> ``[B]``.
+
+        ``valid`` is a bool ``[B, T]`` over axis 1 (True counts), from
+        ``DiffusionRuntime.loss_valid``; an objective without a masked
+        reduction raises when it is given one.
+        """
         ...
+
+
+def _reject_valid(valid: Tensor | None, *, objective: str) -> None:
+    if valid is not None:
+        raise ValueError(
+            f"{objective} has no masked reduction, but this loss's source stream "
+            "has a loss_valid mask; use TokenMeanSquaredError")
 
 
 def _check_same_shape(prediction: Tensor, target: Tensor, *,
@@ -90,10 +106,46 @@ class MeanSquaredError:
     the relative weight of two losses.
     """
 
-    def __call__(self, prediction: Tensor, target: Tensor) -> Tensor:
+    def __call__(self, prediction: Tensor, target: Tensor, *,
+                 valid: Tensor | None = None) -> Tensor:
+        _reject_valid(valid, objective="MeanSquaredError")
         _check_same_shape(prediction, target, objective="MeanSquaredError")
         error = (prediction.float() - target.float()).square()
         return error.flatten(1).mean(dim=1)
+
+
+@dataclass(frozen=True)
+class TokenMeanSquaredError:
+    """Per-token MSE, then the mean over each sample's valid tokens. ``[B]``.
+
+    For a ``[B, T, *features]`` prediction: float32 squared error, mean over
+    the feature axes, then the mean over axis 1 counting only ``valid``
+    positions (denominator clamped at 1, so a sample with no valid token
+    contributes 0, not NaN). Without ``valid`` every token counts.
+
+    The order of the two means is part of the number: averaging all ``T * D``
+    elements at once (``MeanSquaredError``) rounds differently. This is the
+    reduction of the Wan action losses (VPP2 ``_training_loss_action_only``,
+    fastwam ``mot/fastwam.py:613-628``) -- Lane C v2 ``PerSampleMean``.
+    """
+
+    def __call__(self, prediction: Tensor, target: Tensor, *,
+                 valid: Tensor | None = None) -> Tensor:
+        _check_same_shape(prediction, target, objective="TokenMeanSquaredError")
+        if prediction.ndim < 3 or not all(prediction.shape):
+            raise ValueError(
+                "TokenMeanSquaredError: expected a nonempty [B, T, *features] "
+                f"prediction, got {tuple(prediction.shape)}")
+        token_loss = F.mse_loss(prediction.float(), target.float(), reduction="none").mean(
+            dim=tuple(range(2, prediction.ndim)))
+        if valid is None:
+            return token_loss.mean(dim=1)
+        if tuple(valid.shape) != tuple(token_loss.shape):
+            raise ValueError(
+                f"TokenMeanSquaredError: valid {tuple(valid.shape)} must be "
+                f"[B, T] = {tuple(token_loss.shape)}")
+        counted = valid.to(device=token_loss.device, dtype=torch.bool).to(dtype=token_loss.dtype)
+        return (token_loss * counted).sum(dim=1) / counted.sum(dim=1).clamp(min=1.0)
 
 
 @dataclass(frozen=True)
@@ -116,7 +168,9 @@ class CosineDistance:
             raise ValueError(
                 f"CosineDistance.eps must be positive, got {self.eps}")
 
-    def __call__(self, prediction: Tensor, target: Tensor) -> Tensor:
+    def __call__(self, prediction: Tensor, target: Tensor, *,
+                 valid: Tensor | None = None) -> Tensor:
+        _reject_valid(valid, objective="CosineDistance")
         _check_same_shape(prediction, target, objective="CosineDistance")
         cos = torch.nn.functional.cosine_similarity(
             prediction.float(), target.float(), dim=-1, eps=self.eps)
@@ -126,6 +180,90 @@ class CosineDistance:
         if distance.ndim == 1:
             return distance
         return distance.flatten(1).mean(dim=1)
+
+
+class TimestepWeight(Protocol):
+    """Sigma-dimension loss weight: per-sample weight from the step's timestep.
+
+    The input is the training timestep ``DiffusionRuntime.model_timesteps``
+    (already cast per ``RngPolicy``), not sigma: the Wan family computes its
+    weight from the cast t in float32, and multiplying sigma back by
+    ``num_train_timesteps`` misses by one bf16 step (Lane C v2 §1.4).
+    """
+
+    def check(self, sampler: TimestepSampler, *, loss: str) -> None:
+        """Construction-time check against the source stream's sampler."""
+        ...
+
+    def __call__(self, t: Tensor, *, sampler: TimestepSampler,
+                 num_train_timesteps: int) -> Tensor | None:
+        """``[B]`` training timesteps -> ``[B]`` weights, or None for no weighting."""
+        ...
+
+
+@dataclass(frozen=True)
+class UniformWeight:
+    """No sigma-dimension weighting. The default."""
+
+    def check(self, sampler: TimestepSampler, *, loss: str) -> None:
+        del sampler, loss
+
+    def __call__(self, t: Tensor, *, sampler: TimestepSampler,
+                 num_train_timesteps: int) -> None:
+        # None, not ones: the reducer skips the multiply instead of running it.
+        del t, sampler, num_train_timesteps
+
+
+@lru_cache(maxsize=None)
+def _bsmntw_stats(shift: float, steps: int) -> tuple[float, float]:
+    """Minimum and mean-normalizer of the bell curve on the training grid.
+
+    Same grid as master ``WanContinuousFlowMatchScheduler``: descending fp64 u
+    excluding the endpoint 0, pushed through the shift and scaled to steps.
+    """
+    u = torch.linspace(1.0, 0.0, steps + 1, dtype=torch.float64)[:-1]
+    t = shift * u / (1.0 + (shift - 1.0) * u) * float(steps)
+    y = torch.exp(-2.0 * ((t - (steps / 2.0)) / steps) ** 2)
+    y_min = float(y.min().item())
+    return y_min, float((y - y_min).mean().item())
+
+
+@dataclass(frozen=True)
+class Bsmntw:
+    """Bell-shaped, mean-normalized timestep weight (DiffSynth ``bsmntw``).
+
+    ``exp(-2 * ((t - T/2) / T)^2)``, shifted so its minimum on the training
+    grid is 0 and divided by its mean there. The grid depends on the source
+    stream's ``UniformShift.shift``, which is read from the sampler rather
+    than written here a second time. Used by the VPP2 action loss and both
+    fastwam losses (master ``scheduler.py:training_weight``).
+
+    Attributes:
+        eps: Floor added to the normalizer; master uses 1e-10.
+    """
+
+    eps: float = 1e-10
+
+    def check(self, sampler: TimestepSampler, *, loss: str) -> None:
+        if isinstance(sampler.distribution, Constant):
+            # The grid minimum sits at u=1, so a Constant(1.0) stream would get
+            # weight 0 forever: a silently dead loss term (v2 T24).
+            raise ValueError(
+                f"LossSpec({loss!r}) weights a Constant timestep stream with Bsmntw, "
+                "whose weight at sigma=1 is exactly 0; use UniformWeight")
+        if not isinstance(sampler.distribution, UniformShift):
+            raise ValueError(
+                f"LossSpec({loss!r}): Bsmntw normalizes on the UniformShift training "
+                f"grid, but the source stream draws from {type(sampler.distribution).__name__}")
+
+    def __call__(self, t: Tensor, *, sampler: TimestepSampler,
+                 num_train_timesteps: int) -> Tensor:
+        y_min, norm = _bsmntw_stats(float(sampler.distribution.shift), int(num_train_timesteps))
+        t = t.to(dtype=torch.float32)
+        steps = float(num_train_timesteps)
+        y = torch.exp(-2.0 * ((t - (steps / 2.0)) / steps) ** 2)
+        weight = (y - y_min) / (norm + self.eps)
+        return weight.reshape(()) if weight.numel() == 1 else weight
 
 
 @dataclass(frozen=True)
@@ -216,6 +354,8 @@ class LossSpec:
         ramp: Step-dependent weight; overrides ``weight`` when not None.
         broadcast: Which label axes the per-sample weighting varies along.
         enabled: False forces the weight to 0 without removing the term.
+        weight_of: Sigma-dimension per-sample weight, read from the source
+            stream's training timestep; ``UniformWeight`` means none.
     """
 
     name: str
@@ -232,6 +372,8 @@ class LossSpec:
     # averaged": models with a per-frame timestep weight per frame, and the axis
     # names must come from the layout labels (I2)
     enabled: bool = True                    # [YAML] switch this loss off
+    weight_of: TimestepWeight = UniformWeight()
+    # Algorithm, not YAML (R5): which sigma weighting is part of the objective
 
     def __post_init__(self) -> None:
         if (self.stream is None) == (self.head is None):

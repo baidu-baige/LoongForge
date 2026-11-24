@@ -25,13 +25,13 @@ import torch
 
 from loongforge.embodied.model.arch.diffusion.broadcast import BroadcastSpec
 from loongforge.embodied.model.arch.diffusion.loss import (
-    CosineDistance, LossSpec, MeanSquaredError)
+    CosineDistance, LossSpec, MeanSquaredError, TokenMeanSquaredError)
 from loongforge.embodied.model.arch.diffusion.schedule import (
     ConstantSigma, RectifiedFlow)
 from loongforge.embodied.model.arch.diffusion.stepping import (
     EulerSampler, Trajectory, UniformSteps)
 from loongforge.embodied.model.arch.diffusion.timesteps import (
-    BetaDist, Constant, LogitNormal, TimestepSampler, UniformShift)
+    BetaDist, Constant, LogitNormal, RngPolicy, TimestepSampler, UniformShift)
 from loongforge.embodied.model.arch.geometry import GeometrySpec
 from loongforge.embodied.model.arch.layout import TokenLayout
 
@@ -391,3 +391,58 @@ def test_missing_prediction_for_an_active_stream_is_named():
                                "action": torch.ones(1, 2)})
     with pytest.raises(KeyError, match="action"):
         EulerSampler().step(traj, {"video": torch.ones(1, 3)}, gate=gate)
+
+
+# ---- training timestep: RngPolicy and num_train_timesteps ----
+
+
+def test_like_sample_casts_t_and_derives_sigma_back():
+    """The Wan scheduler: t = (sigma * 1000) cast to the sample dtype, sigma = t / 1000."""
+    sigma = torch.tensor([0.12345678, 0.5, 0.99999, 1.0])
+    s, t = RngPolicy().quantize(sigma, num_train_timesteps=1000, sample_dtype=torch.bfloat16)
+    assert s.dtype == t.dtype == torch.bfloat16
+    assert torch.equal(t, (sigma * 1000.0).to(torch.bfloat16))
+    assert torch.equal(s, (t / 1000.0).to(torch.bfloat16))
+    s32, t32 = RngPolicy(sigma_dtype="float32").quantize(
+        sigma, num_train_timesteps=1000, sample_dtype=torch.bfloat16)
+    assert s32 is sigma and t32.dtype == torch.float32
+    assert torch.equal(t32, sigma * 1000.0)
+
+
+@pytest.mark.parametrize("bad", [dict(order="random"), dict(sigma_dtype="bf16")])
+def test_rng_policy_rejects_unknown_values(bad):
+    with pytest.raises(ValueError):
+        RngPolicy(**bad)
+
+
+@pytest.mark.parametrize("bad", [0, -1000, 1000.0, True])
+def test_num_train_timesteps_must_be_a_positive_int(bad):
+    with pytest.raises(ValueError, match="num_train_timesteps"):
+        RectifiedFlow(num_train_timesteps=bad)
+    with pytest.raises(ValueError, match="num_train_timesteps"):
+        ConstantSigma(num_train_timesteps=bad)
+
+
+# ---- masked per-token reduction ----
+
+
+def test_token_mse_means_features_then_the_valid_tokens():
+    torch.manual_seed(0)
+    prediction, target = torch.randn(2, 4, 3), torch.randn(2, 4, 3)
+    token = (prediction - target).square().mean(dim=2)
+    valid = torch.tensor([[True, True, False, False], [False] * 4])
+    out = TokenMeanSquaredError()(prediction, target, valid=valid)
+    assert out.shape == (2,)
+    assert torch.allclose(out[0], token[0, :2].mean())
+    assert out[1].item() == 0.0          # no valid token: 0, not NaN
+    assert torch.allclose(TokenMeanSquaredError()(prediction, target), token.mean(dim=1))
+    with pytest.raises(ValueError, match=r"\[B, T\]"):
+        TokenMeanSquaredError()(prediction, target, valid=valid[:, :3])
+
+
+def test_objectives_without_masking_reject_a_valid_mask():
+    prediction = torch.randn(2, 4, 3)
+    valid = torch.ones(2, 4, dtype=torch.bool)
+    for objective in (MeanSquaredError(), CosineDistance()):
+        with pytest.raises(ValueError, match="TokenMeanSquaredError"):
+            objective(prediction, prediction, valid=valid)

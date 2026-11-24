@@ -532,14 +532,17 @@ class WorldModelSpec:
         forgotten config line into silent noise-free training that looks fine
         numerically.
 
-        V6: every loss term's source (a stream or a head) exists.
+        V6: every loss term's source (a stream or a head) exists, and its
+        sigma-dimension weight fits the source stream's timestep sampler.
 
         Raises:
             ValueError: V5 fails inside ``DiffusionSpec.validate_against``, or
-                a ``LossSpec.head`` names a head this model does not have.
+                a ``LossSpec.head`` names a head this model does not have, or
+                a ``LossSpec.weight_of`` cannot weight its source stream.
         """
         self.diffusion.validate_against(self.streams)
         head_names = {spec.name for spec in self.heads}
+        sources = {spec.name: spec.source_stream for spec in self.heads}
         for loss in self.diffusion.losses:
             if loss.head is not None and loss.head not in head_names:
                 raise ValueError(
@@ -547,6 +550,9 @@ class WorldModelSpec:
                     f"head of this model; its heads are "
                     f"{sorted(head_names)} (L3/V6)"
                 )
+            stream = loss.stream if loss.stream is not None else sources[loss.head]
+            if stream in self.diffusion.timesteps:
+                loss.weight_of.check(self.diffusion.sampler_for(stream), loss=loss.name)
 
     def _validate_head_layer(self) -> None:
         """L4: head names are unique and every head's source is reachable.

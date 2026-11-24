@@ -34,8 +34,8 @@ import torch
 
 from loongforge.embodied.model.arch.builder import DiffusionRuntime, WorldModel
 from loongforge.embodied.model.arch.diffusion.broadcast import BroadcastSpec
-from loongforge.embodied.model.arch.diffusion.loss import LossSpec, WeightRamp
-from loongforge.embodied.model.arch.diffusion.timesteps import TimestepSampler
+from loongforge.embodied.model.arch.diffusion.loss import Bsmntw, LossSpec, WeightRamp
+from loongforge.embodied.model.arch.diffusion.timesteps import RngPolicy, TimestepSampler
 from loongforge.embodied.model.arch.spec.world import WorldModelSpec
 from loongforge.embodied.model.arch.streams.conditions import InjectionKind
 from loongforge.embodied.model.arch.streams.engine import JointAttentionEngine
@@ -185,8 +185,7 @@ def test_head_outputs_have_the_shape_of_the_raw_tensor(spec):
     """
     model = world(spec)
     batch = fake_batch(spec)
-    timesteps = model.sample_timesteps(batch)
-    runtime = model.add_noise(batch, timesteps)
+    runtime = model.add_noise(batch, model.draw(batch))
     for head in spec.heads:
         assert head.source_stream in runtime.targets
     loss, _ = model(batch)
@@ -194,10 +193,11 @@ def test_head_outputs_have_the_shape_of_the_raw_tensor(spec):
 
 
 def test_timestep_dtype_follows_the_raw_tensor(spec):
-    """The timestep dtype follows the raw tensor's, here bfloat16, shape ``[B]``.
+    """Sigma and the training t follow the raw tensor's dtype (bf16), ``[B]``.
 
-    Otherwise ``(1-t) * x_0`` would silently promote a bf16 tensor to fp32.
-    Only streams with ``needs_timestep`` get a timestep at all.
+    Otherwise ``(1-t) * x_0`` would silently promote a bf16 tensor to fp32
+    (``RngPolicy.sigma_dtype="like_sample"``, the default). Only streams with
+    ``needs_timestep`` get a timestep at all.
     """
     model = world(spec)
     batch = fake_batch(spec)
@@ -205,10 +205,10 @@ def test_timestep_dtype_follows_the_raw_tensor(spec):
                    if isinstance(value, torch.Tensor)
                    and value.is_floating_point() else value)
              for key, value in batch.items()}
-    timesteps = model.sample_timesteps(batch)
-    assert set(timesteps) == {name for name in spec.stream_names
-                              if spec.stream(name).needs_timestep}
-    for value in timesteps.values():
+    draw = model.draw(batch)
+    expected = {name for name in spec.stream_names if spec.stream(name).needs_timestep}
+    assert set(draw.sigma) == set(draw.model_timesteps) == set(draw.noise) == expected
+    for value in (*draw.sigma.values(), *draw.model_timesteps.values()):
         assert value.dtype == torch.bfloat16
         assert value.shape == (BATCH,)
 
@@ -370,3 +370,95 @@ def test_internw0_delta_track_head_raises_at_build_time():
     """
     with pytest.raises(NotImplementedError, match="track_align"):
         world(tiny_spec("internw0_delta"))
+
+
+# ---- step 1: one draw, in the declared order ----
+
+
+def _replay(model: WorldModel, batch: dict, draws: tuple[str, str]) -> dict:
+    """Draw by hand, stream by stream in the declared key order."""
+    out = {}
+    for name, sampler in model.spec.diffusion.timesteps.items():
+        raw = batch[model.spec.stream(name).batch_key]
+        for kind in draws:
+            out[name, kind] = (torch.randn_like(raw) if kind == "noise" else
+                               sampler.sample(raw.shape[0], device=raw.device, dtype=torch.float32))
+    return out
+
+
+@pytest.mark.parametrize("order", ["noise_first", "t_first"])
+def test_draw_follows_the_declared_order(order):
+    """Streams in ``DiffusionSpec.timesteps`` key order, ``RngPolicy.order`` within.
+
+    Either order leaves the generator in the same state (same draws, other
+    sequence), so the values are compared, and the opposite order must miss.
+    """
+    spec = tiny_spec("vpp2")
+    rng = RngPolicy(order=order)
+    spec = replace(spec, diffusion=replace(spec.diffusion, timesteps={
+        name: replace(sampler, rng=rng) for name, sampler in spec.diffusion.timesteps.items()}))
+    model = world(spec)
+    batch = fake_batch(spec)
+    torch.manual_seed(3)
+    draw = model.draw(batch)
+    torch.manual_seed(3)
+    manual = _replay(model, batch, rng.draws)
+    torch.manual_seed(3)
+    swapped = _replay(model, batch, rng.draws[::-1])
+    steps = spec.diffusion.schedule.num_train_timesteps
+    for name in spec.diffusion.timesteps:
+        sigma, t = rng.quantize(manual[name, "timestep"], num_train_timesteps=steps,
+                                sample_dtype=batch[name].dtype)
+        assert torch.equal(draw.noise[name], manual[name, "noise"])
+        assert torch.equal(draw.sigma[name], sigma)
+        assert torch.equal(draw.model_timesteps[name], t)
+    assert not torch.equal(draw.noise["action"], swapped["action", "noise"])
+
+
+def test_add_noise_consumes_the_draw_and_draws_nothing(spec):
+    model = world(spec)
+    batch = fake_batch(spec)
+    draw = model.draw(batch)
+    state = torch.get_rng_state()
+    runtime = model.add_noise(batch, draw)
+    assert torch.equal(torch.get_rng_state(), state)
+    for name in draw.noise:
+        assert runtime.noise[name] is draw.noise[name]
+        assert runtime.timesteps[name] is draw.sigma[name]
+        assert runtime.model_timesteps[name] is draw.model_timesteps[name]
+
+
+def test_engine_receives_the_training_timestep_not_sigma():
+    """The time embeddings read ``sigma * num_train_timesteps`` (Wan: 0..1000)."""
+    spec = tiny_spec("vpp2")
+    model = world(spec)
+    seen = {}
+    for name, block in model.blocks.items():
+        def prepare(x, *, timestep=None, _name=name, _prepare=block.prepare, **kwargs):
+            seen[_name] = timestep
+            return _prepare(x, timestep=timestep, **kwargs)
+        block.prepare = prepare
+    batch = fake_batch(spec)
+    torch.manual_seed(1)
+    draw = model.draw(batch)
+    torch.manual_seed(1)
+    model(batch)
+    for name in spec.diffusion.timesteps:
+        assert torch.equal(seen[name], draw.model_timesteps[name])
+    assert bool((seen["video"] == 1000).all())
+
+
+def test_overriding_the_removed_sample_timesteps_is_rejected():
+    """forward no longer calls it, so an override would silently be dead code."""
+    with pytest.raises(TypeError, match="replaced by draw"):
+        class Legacy(WorldModel):  # noqa: F841 -- definition itself must fail
+            def sample_timesteps(self, batch):
+                return {}
+
+
+def test_bsmntw_on_a_constant_timestep_stream_is_rejected():
+    """At sigma=1 the bsmntw weight is exactly 0: a dead loss term (v2 T24)."""
+    with pytest.raises(ValueError, match="exactly 0"):
+        with_losses(tiny_spec("vpp2"),
+                    LossSpec(name="video_flow", head="video_flow", weight_of=Bsmntw()),
+                    LossSpec(name="action_flow", head="action_flow"))

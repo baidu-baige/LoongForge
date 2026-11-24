@@ -15,11 +15,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from ....diffusion.loss import LossSpec
+from ....diffusion.loss import Bsmntw, LossSpec, TokenMeanSquaredError
 from ....diffusion.schedule import RectifiedFlow
 from ....diffusion.spec import DiffusionSpec
 from ....diffusion.stepping import EulerSampler, UniformSteps
-from ....diffusion.timesteps import Constant, TimestepSampler, UniformShift
+from ....diffusion.timesteps import Constant, RngPolicy, TimestepSampler, UniformShift
 from ....heads.flow import build_flow_head
 from ....heads.hidden_ref import HiddenStateRef
 from ....heads.spec import HeadSpec
@@ -244,7 +244,12 @@ def _vpp2(config: Any = None, *,
                            num_layers=video.num_layers)
 
     # 3. L3. The two streams use different timestep distributions, which is
-    #    why ``timesteps`` is indexed by stream name.
+    #    why ``timesteps`` is indexed by stream name. The key order is the draw
+    #    order: master ``LiberoActionModel.training_loss`` draws video noise,
+    #    the (constant) video t, action noise, then the action t
+    #    (``libero_action_model.py:578-610``), and casts each t to the sample
+    #    dtype before noising (``scheduler.py:sample_training_t``).
+    master_rng = RngPolicy(order="noise_first", sigma_dtype="like_sample")
     diffusion = DiffusionSpec(
         timesteps={
             # video: ``train_sampling_strategy: pure_noise``
@@ -258,7 +263,7 @@ def _vpp2(config: Any = None, *,
             # section **takes no part in sampling** under pure_noise, so no
             # ``BetaDist`` is declared here; declaring one would add a knob
             # that appears to be in effect but is not.
-            "video": TimestepSampler(Constant(value=1.0)),
+            "video": TimestepSampler(Constant(value=1.0), rng=master_rng),
             # action: ``train_shift: 5.0`` (``train_action.yaml:211``), and
             # ``infer_shift`` in the same section is also 5.0, so training and
             # inference agree and one distribution slot suffices.
@@ -268,15 +273,20 @@ def _vpp2(config: Any = None, *,
             # "two distributions for one stream, train vs infer" would need
             # another field on DiffusionSpec; add it when some model actually
             # runs the video stream at inference.
-            "action": TimestepSampler(UniformShift(shift=action_shift)),
+            "action": TimestepSampler(UniformShift(shift=action_shift), rng=master_rng),
         },
         # ``lambda_video`` and ``lambda_action`` are both 1.0
         # (``train_action.yaml:217-218``)
+        # The action term is master ``_training_loss_action_only``: per-token MSE,
+        # mean over valid tokens, bsmntw weight on the shifted grid. The video
+        # term stays unweighted: bsmntw is exactly 0 at the pure-noise sigma=1.
         losses=(
             LossSpec(name="video_flow", head="video_flow"),
-            LossSpec(name="action_flow", head="action_flow"),
+            LossSpec(name="action_flow", head="action_flow",
+                     objective=TokenMeanSquaredError(), weight_of=Bsmntw()),
         ),
-        schedule=RectifiedFlow(),
+        # Wan's 1000-step training timestep (master ``num_train_timesteps``).
+        schedule=RectifiedFlow(num_train_timesteps=1000),
         # ``skip={"video"}`` is the ``HeadSpec(inference=False)`` of the §4.4
         # example: "drop the video stream at inference" is a stepping policy,
         # not a property of a head.
