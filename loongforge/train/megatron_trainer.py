@@ -96,6 +96,51 @@ def _sync_chunkpipe_model_config(model_config, enabled):
             target.sft_chunkpipe_mode = enabled
 
 
+def _validate_chunkpipe_entrypoint(train_args, model_config, *, allow_chunkpipe):
+    """Fail fast unless this is a supported chunkpipe entrypoint."""
+    if not getattr(train_args, "enable_chunkpipe", False):
+        return
+    if not allow_chunkpipe:
+        raise NotImplementedError(
+            "ChunkPipe is supported only by the LLM SFT trainer."
+        )
+    if getattr(train_args, "training_phase", None) != constants.TrainingPhase.SFT:
+        raise NotImplementedError("ChunkPipe is supported only for SFT.")
+    if _is_vlm_config(model_config):
+        raise NotImplementedError("ChunkPipe is supported only for LLM SFT.")
+    if getattr(train_args, "rerun_mode", None) != "disabled":
+        raise NotImplementedError(
+            "SFT ChunkPipe requires --rerun-mode disabled."
+        )
+    if getattr(train_args, "eval_iters", 0):
+        raise NotImplementedError("SFT ChunkPipe requires eval_iters=0.")
+    if getattr(train_args, "calculate_per_token_loss", False):
+        raise NotImplementedError(
+            "SFT ChunkPipe supports only the per-sample loss path."
+        )
+    if getattr(train_args, "tensor_model_parallel_size", 1) != 1:
+        raise NotImplementedError(
+            "SFT ChunkPipe requires tensor_model_parallel_size=1."
+        )
+    if getattr(train_args, "num_virtual_stages_per_pipeline_rank", 1) not in (None, 1):
+        raise NotImplementedError(
+            "SFT ChunkPipe requires virtual pipeline size 1."
+        )
+
+
+def _validate_linear_ce_entrypoint(train_args):
+    """Reject unsupported linear-CE + parameter-gather overlap."""
+    if not (
+        getattr(train_args, "cross_entropy_loss_fusion", False)
+        and getattr(train_args, "cross_entropy_fusion_impl", "native") == "linear"
+    ):
+        return
+    if getattr(train_args, "overlap_param_gather", False):
+        raise NotImplementedError(
+            "cross_entropy_fusion_impl='linear' requires overlap_param_gather=False."
+        )
+
+
 def _is_vlm_config(model_config):
     return getattr(model_config, "image_encoder", None) is not None
 
@@ -164,6 +209,10 @@ def pretrain_with_mcore(
     _normalize_sft_args(train_args)
     parse_args_from_config(train_args)
     model_config = get_model_config()
+    _validate_linear_ce_entrypoint(train_args)
+    _validate_chunkpipe_entrypoint(
+        train_args, model_config, allow_chunkpipe=allow_chunkpipe
+    )
 
     from megatron.core.optimizer.clip_grads import set_legacy_scalar_grad_norm
 
@@ -262,7 +311,6 @@ class MegatronTrainer(object):
                 "select pretrain_with_mcore or the diffusion legacy runtime."
             )
         self.train_valid_test_datasets_provider.is_distributed = True
-
         self.pretrain_func(
             train_args=self.train_args,
             train_valid_test_dataset_provider=self.train_valid_test_datasets_provider,
