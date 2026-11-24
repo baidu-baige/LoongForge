@@ -291,9 +291,10 @@ class ArchModelConfig:
             derived from the geometry.
         streams: ``{stream: {scalar: value}}``, flattened to
             ``<stream>_<scalar>`` provider arguments (widths, layer counts).
-        diffusion: ``{stream: {knob: value}}``, same flattening. Today the only
-            knob is ``shift``; a stream whose distribution has no scalar (vpp2's
-            constant video timestep) simply has no entry.
+        diffusion: ``{stream: {knob: value}}``, written after the provider onto
+            the fields the stream's declared objects mark with ``yaml_knob``
+            (``DiffusionSpec.with_yaml_knobs``), e.g. ``UniformShift.shift``.
+            A stream with no knob (vpp2's constant video timestep) takes no entry.
         heads: ``{head: {weight|warmup_steps|enabled}}``, applied to the loss
             term that consumes the head after the provider has run.
         attention_backend: Backend name, or ``None`` to keep the provider's
@@ -599,20 +600,56 @@ class ArchModelBase(nn.Module, ABC):
         """
 
     @abstractmethod
-    def forward(self, batch: Any) -> Tuple[Tensor, Dict[str, Any]]:
+    def forward(self, batch: Any, iteration: Optional[int] = None
+                ) -> Tuple[Tensor, Dict[str, Any]]:
         """Run one training step. Interface I4: ``(loss, metrics)``.
 
         Abstract rather than ``self.core(self.encode_batch(...))``: a family
         with a frozen tower inside the step, or with an auxiliary loss the core
         does not own, computes more than that, and a default would be silently
-        correct for one family only.
+        correct for one family only. Every implementation names ``iteration``
+        and passes the batch through ``_sample_at_step``.
 
         Args:
             batch: The trainer's batch object or a plain dict.
+            iteration: Optimizer steps completed before this one, from the
+                trainer (``_select_forward_kwargs`` passes it only to a forward
+                that names it). It becomes the core's ``global_step``, which
+                ``LossSpec.weight_at`` reads for ``WeightRamp``; without it
+                every ramped loss stays at its start value.
 
         Returns:
             The weighted total loss and the per-term metrics dict.
+
+        Raises:
+            ValueError: The sample already carries a different
+                ``global_step``; two step counters would disagree silently.
         """
+
+    @staticmethod
+    def _sample_at_step(batch: Any, iteration: Optional[int]) -> Dict[str, Any]:
+        """The batch as a sample dict, with the trainer's iteration as its step.
+
+        Args:
+            batch: The trainer's batch object (``to_sample()``) or a plain dict.
+            iteration: Optimizer steps completed before this one, or ``None``.
+
+        Returns:
+            The sample; ``global_step`` is set when ``iteration`` is given and
+            left as the batch has it otherwise.
+
+        Raises:
+            ValueError: The sample already carries a different ``global_step``.
+        """
+        sample = batch.to_sample() if hasattr(batch, "to_sample") else dict(batch)
+        if iteration is not None:
+            given = sample.get("global_step")
+            if given is not None and int(given) != int(iteration):
+                raise ValueError(
+                    f"batch global_step={int(given)} disagrees with the trainer "
+                    f"iteration={int(iteration)}")
+            sample = {**sample, "global_step": int(iteration)}
+        return sample
 
     @staticmethod
     def _require(sample: Mapping[str, Any], key: str) -> Tensor:

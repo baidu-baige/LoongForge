@@ -14,8 +14,8 @@ in YAML, only its **parameters** are (the people tuning them sweep repeatedly).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Literal, Protocol
+from dataclasses import dataclass, field
+from typing import Any, Literal, Protocol
 
 import torch
 from torch import Tensor
@@ -24,8 +24,32 @@ from .broadcast import DEFAULT_PER_SAMPLE, BroadcastSpec
 
 __all__ = [
     "TimestepDistribution", "UniformShift", "LogitNormal", "BetaDist",
-    "Constant", "RngPolicy", "TimestepSampler",
+    "Constant", "RngPolicy", "TimestepSampler", "YAML_KNOB", "yaml_knob",
 ]
+
+YAML_KNOB = "yaml_knob"
+"""Field metadata key marking a field YAML may set as ``diffusion.<stream>.<field>``."""
+
+
+def yaml_knob(default: Any) -> Any:
+    """Declare a numeric field that YAML may set as ``diffusion.<stream>.<field>``.
+
+    ``DiffusionSpec.with_yaml_knobs`` writes the ``diffusion:`` section after
+    the provider has built the spec, so a knob is read only where it is used
+    or in its own ``__post_init__``: a provider that derived another value from
+    it would keep the stale one. Only float, int and bool fields can be knobs;
+    strings and implementation choices stay in the provider (R5). Defined here
+    because the distributions are its first users; other L3 objects, including
+    a model's own implementations, import it from here.
+
+    Args:
+        default: The field default. A provider passing a value overrides it,
+            and a YAML key, applied after the provider, overrides both.
+
+    Returns:
+        A ``dataclasses.field`` whose metadata carries ``YAML_KNOB``.
+    """
+    return field(default=default, metadata={YAML_KNOB: True})
 
 
 class TimestepDistribution(Protocol):
@@ -54,7 +78,7 @@ class UniformShift:
         shift: Reparameterisation strength; must be positive.
     """
 
-    shift: float = 1.0          # [YAML]
+    shift: float = yaml_knob(1.0)   # [YAML] diffusion.<stream>.shift
 
     def __post_init__(self) -> None:
         if self.shift <= 0:
@@ -98,8 +122,8 @@ class LogitNormal:
         std: Standard deviation of the underlying normal; must be positive.
     """
 
-    mean: float = 0.0           # [YAML]
-    std: float = 1.0            # [YAML]
+    mean: float = yaml_knob(0.0)    # [YAML] diffusion.<stream>.mean
+    std: float = yaml_knob(1.0)     # [YAML] diffusion.<stream>.std
 
     def __post_init__(self) -> None:
         if self.std <= 0:
@@ -143,8 +167,8 @@ class BetaDist:
             existing scheduler.
     """
 
-    alpha: float = 1.0          # [YAML]
-    beta: float = 1.0           # [YAML]
+    alpha: float = yaml_knob(1.0)   # [YAML] diffusion.<stream>.alpha
+    beta: float = yaml_knob(1.0)    # [YAML] diffusion.<stream>.beta
     eps: float = 1e-6           # denominator floor; same as scheduler's ``eps``
 
     def __post_init__(self) -> None:
@@ -198,7 +222,7 @@ class Constant:
         value: The constant timestep; must lie in [0, 1].
     """
 
-    value: float = 0.0          # [YAML]
+    value: float = 0.0          # not a YAML knob: a constant timestep is the provider's choice (R5)
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.value <= 1.0:

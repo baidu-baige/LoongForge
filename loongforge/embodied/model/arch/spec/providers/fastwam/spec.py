@@ -105,8 +105,6 @@ def _fastwam_visibility(tokens_per_frame: int) -> dict[str, Visibility]:
 @register_provider("fastwam")
 def _fastwam(config: Any = None, *,
              geometry: Mapping[str, Any] | None = None,
-             video_shift: float = 5.0,
-             action_shift: float = 5.0,
              inference_steps: int = 20,
              action_width: int = 7,
              proprio_dim: int | None = 8,
@@ -153,8 +151,6 @@ def _fastwam(config: Any = None, *,
     Args:
         config: Positional config object, rejected (see ``reject_config``).
         geometry: The YAML ``geometry:`` section, merged over the defaults.
-        video_shift: ``shift`` of the video stream's ``UniformShift``.
-        action_shift: ``shift`` of the action stream's ``UniformShift``.
         inference_steps: Euler steps at inference.
         action_width: Packed action dimension; entry width of the action
             stream and output width of the ``action_flow`` head.
@@ -212,8 +208,10 @@ def _fastwam(config: Any = None, *,
 
     diffusion = DiffusionSpec(
         timesteps={
-            "video": TimestepSampler(UniformShift(shift=video_shift)),
-            "action": TimestepSampler(UniformShift(shift=action_shift)),
+            # YAML sets the two shifts as ``diffusion.<stream>.shift``
+            # (``DiffusionSpec.with_yaml_knobs``).
+            "video": TimestepSampler(UniformShift(shift=5.0)),
+            "action": TimestepSampler(UniformShift(shift=5.0)),
         },
         # ``lambda_video`` and ``lambda_action`` are both 1.0 (``:104-106``)
         losses=(

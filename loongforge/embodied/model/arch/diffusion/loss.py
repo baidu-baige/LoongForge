@@ -284,10 +284,10 @@ class WeightRamp:
         end_value: Weight at and after ``end_step``.
     """
 
-    start_step: int = 0         # [YAML] step where the ramp begins
-    end_step: int = 0           # [YAML] step reaching end value; == start => step
-    start_value: float = 1.0    # [YAML]
-    end_value: float = 1.0      # [YAML]
+    start_step: int = 0         # step where the ramp begins; 0 when YAML adds the ramp
+    end_step: int = 0           # step reaching end value; == start => step. YAML heads.<head>.warmup_steps
+    start_value: float = 1.0    # weight at and before start_step; 0.0 when YAML adds the ramp
+    end_value: float = 1.0      # weight at and after end_step. YAML heads.<head>.weight
 
     def __post_init__(self) -> None:
         if self.start_step < 0 or self.end_step < 0:
@@ -337,8 +337,7 @@ class WeightRamp:
 
 @dataclass(frozen=True)
 class LossSpec:
-    """One loss term. ``name`` is both the logging key and the key in the
-    ``metrics`` dict (I4).
+    """One loss term, logged as ``loss_<name>`` in the ``metrics`` dict (I4).
 
     Exactly **one** of ``stream`` and ``head`` may be set: a loss is computed
     either on the output of one stream (the video stream's flow matching loss)
@@ -346,7 +345,7 @@ class LossSpec:
     setting neither is a dead configuration.
 
     Attributes:
-        name: Logging / ``metrics`` key.
+        name: Term name; the ``metrics`` key is ``loss_<name>``.
         stream: Stream this loss is computed on, or None.
         head: Head this loss is computed on, or None.
         objective: What is computed between prediction and target.
@@ -365,13 +364,13 @@ class LossSpec:
     # What is computed. **Not YAML-overridable**: changing the objective is
     # changing the training problem (R5). It has a default because 12 of the 13
     # models use MSE, so writing it once is enough
-    weight: float = 1.0                     # [YAML] constant weight
-    ramp: WeightRamp | None = None          # [YAML] not None => overrides weight
+    weight: float = 1.0                     # [YAML] heads.<head>.weight: constant weight
+    ramp: WeightRamp | None = None          # [YAML] heads.<head>.warmup_steps: not None => overrides weight
     broadcast: BroadcastSpec = DEFAULT_PER_SAMPLE
     # broadcast decides "along which axes the loss is weighted before it is
     # averaged": models with a per-frame timestep weight per frame, and the axis
     # names must come from the layout labels (I2)
-    enabled: bool = True                    # [YAML] switch this loss off
+    enabled: bool = True                    # [YAML] heads.<head>.enabled: False => weight 0, term kept
     weight_of: TimestepWeight = UniformWeight()
     # Algorithm, not YAML (R5): which sigma weighting is part of the objective
 

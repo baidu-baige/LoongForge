@@ -14,16 +14,108 @@ today that shows up as two separately hard-coded sampling blocks.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields, is_dataclass, replace
 from types import MappingProxyType
+from typing import Any, NamedTuple
 
 from ..streams.spec import StreamSpec
 from .loss import LossSpec
 from .schedule import NoiseSchedule, RectifiedFlow
 from .stepping import Sampler, SteppingGate
-from .timesteps import TimestepSampler
+from .timesteps import YAML_KNOB, TimestepSampler
 
 __all__ = ["DiffusionSpec"]
+
+
+class _Knob(NamedTuple):
+    """Where one YAML knob of a stream lives."""
+
+    path: tuple[str, ...]   # attribute names from the stream's sampler to the field, e.g. ("distribution", "shift")
+    owner: str              # class declaring the field, named in error messages
+    kind: type              # float, int or bool: what a YAML value is checked against
+
+
+# Annotations are strings under ``from __future__ import annotations``; a
+# model's own class without that import hands over the type itself.
+_KNOB_KINDS: dict[Any, type] = {"float": float, "int": int, "bool": bool,
+                                float: float, int: int, bool: bool}
+
+
+def _collect_knobs(obj: Any, *, stream: str, path: tuple[str, ...] = (),
+                   into: dict[str, _Knob] | None = None) -> dict[str, _Knob]:
+    """Collect the ``yaml_knob`` fields reachable from ``obj`` through dataclass fields.
+
+    Only dataclass instances are walked; mappings, tuples and other objects are
+    not, so they contribute no knobs.
+
+    Args:
+        obj: Where to start, normally a stream's ``TimestepSampler``.
+        stream: Stream name, used in error messages.
+        path: Attribute path from the stream's sampler to ``obj``.
+        into: Accumulator shared by the recursive calls.
+
+    Returns:
+        Knob name (the field name) to its ``_Knob``, in declaration order.
+
+    Raises:
+        ValueError: Two fields of one stream share a knob name (L3/V10).
+        TypeError: A knob field is not annotated float, int or bool.
+    """
+    into = {} if into is None else into
+    if not is_dataclass(obj) or isinstance(obj, type):
+        return into
+    for item in fields(obj):
+        here = path + (item.name,)
+        if not item.metadata.get(YAML_KNOB):
+            _collect_knobs(getattr(obj, item.name), stream=stream, path=here, into=into)
+            continue
+        kind = _KNOB_KINDS.get(item.type)
+        if kind is None:
+            raise TypeError(
+                f"{type(obj).__name__}.{item.name} is a yaml_knob annotated "
+                f"{item.type!r}; YAML knobs are float, int or bool")
+        if item.name in into:
+            raise ValueError(
+                f"stream {stream!r}: YAML knob {item.name!r} is declared twice, at "
+                f"{'.'.join(into[item.name].path)} and {'.'.join(here)}; one stream's "
+                "knob names must be unique (L3/V10)")
+        into[item.name] = _Knob(here, type(obj).__name__, kind)
+    return into
+
+
+def _replace_at(obj: Any, path: tuple[str, ...], value: Any) -> Any:
+    """Rebuild ``obj`` with the field at ``path`` set to ``value``.
+
+    Every dataclass on the way is rebuilt with ``dataclasses.replace``, so each
+    one's ``__post_init__`` checks the new value.
+
+    Args:
+        obj: The dataclass instance at the start of ``path``.
+        path: Attribute names down to the field.
+        value: The new value of that field.
+    """
+    head, rest = path[0], path[1:]
+    new = _replace_at(getattr(obj, head), rest, value) if rest else value
+    return replace(obj, **{head: new})
+
+
+def _coerce(knob: _Knob, value: Any, *, key: str) -> Any:
+    """Check a YAML value against the knob's kind; float knobs accept an int.
+
+    Args:
+        knob: The knob being written.
+        value: The value YAML gave.
+        key: The full YAML key, used in the error message.
+    """
+    if isinstance(value, bool):
+        ok = knob.kind is bool
+    elif isinstance(value, int):
+        ok = knob.kind in (int, float)
+    else:
+        ok = isinstance(value, float) and knob.kind is float
+    if not ok:
+        raise TypeError(f"{key} must be {knob.kind.__name__}, got {type(value).__name__} {value!r}")
+    return float(value) if knob.kind is float else value
 
 
 @dataclass(frozen=True)
@@ -84,6 +176,8 @@ class DiffusionSpec:
             )
         object.__setattr__(self, "timesteps",
                            MappingProxyType(dict(self.timesteps)))
+        for stream, sampler in self.timesteps.items():
+            _collect_knobs(sampler, stream=stream)          # L3/V10: unique knob names per stream
 
     # ---- queries ----
 
@@ -119,6 +213,88 @@ class DiffusionSpec:
                 f"DiffusionSpec.timesteps has no entry for stream {stream!r}; "
                 f"configured: {sorted(self.timesteps)}"
             ) from None
+
+    def yaml_knobs(self, stream: str) -> dict[str, Any]:
+        """The YAML knobs of one stream and their current values.
+
+        Args:
+            stream: Stream name.
+
+        Returns:
+            Knob name to current value, in declaration order; empty when the
+            stream's sampler declares no knob.
+
+        Raises:
+            KeyError: The stream has no timestep entry; the message lists the
+                streams that have one.
+        """
+        sampler = self.sampler_for(stream)
+        values: dict[str, Any] = {}
+        for name, knob in _collect_knobs(sampler, stream=stream).items():
+            obj = sampler
+            for attr in knob.path:
+                obj = getattr(obj, attr)
+            values[name] = obj
+        return values
+
+    def with_yaml_knobs(self, section: Mapping[str, Any]) -> "DiffusionSpec":
+        """Write the YAML ``diffusion:`` section onto the declared objects.
+
+        Each ``diffusion.<stream>.<knob>`` lands on the field of that name
+        under the stream's sampler (``yaml_knob`` marks which fields qualify).
+        Applied after the provider has built the spec, which is why a knob
+        must not feed a value the provider derives.
+
+        Args:
+            section: ``{stream: {knob: value}}``; empty returns ``self``.
+
+        Returns:
+            A new ``DiffusionSpec``. ``timesteps`` keeps its key order, which is
+            the draw order.
+
+        Raises:
+            ValueError: A stream draws no timestep, a key is not one of the
+                stream's knobs, or the owning object rejects the value; the
+                message starts with the full YAML key.
+            TypeError: A stream block is not a mapping, or a value has the
+                wrong type.
+        """
+        if not section:
+            return self
+        timesteps = dict(self.timesteps)
+        # Replacing a value keeps every path, so the tables stay valid while writing.
+        tables = {name: _collect_knobs(sampler, stream=name) for name, sampler in timesteps.items()}
+        with_knobs = ", ".join(f"{name} ({', '.join(knobs)})"
+                               for name, knobs in tables.items() if knobs) or "none"
+        for stream, block in section.items():
+            if stream not in timesteps:
+                raise ValueError(
+                    f"diffusion.{stream}: stream {stream!r} draws no timestep; the streams "
+                    f"with diffusion knobs are: {with_knobs}")
+            if not block:
+                continue
+            if not isinstance(block, Mapping):
+                raise TypeError(f"diffusion.{stream} must be a mapping, got {type(block).__name__}")
+            knobs = tables[stream]
+            for key, value in block.items():
+                full = f"diffusion.{stream}.{key}"
+                if not knobs:
+                    raise ValueError(
+                        f"{full}: stream {stream!r} has no YAML knobs (its sampler draws "
+                        f"{type(getattr(timesteps[stream], 'distribution', timesteps[stream])).__name__}); "
+                        f"the streams with diffusion knobs are: {with_knobs}")
+                if key not in knobs:
+                    raise ValueError(
+                        f"{full} is not a knob of stream {stream!r}; its knobs are "
+                        f"{', '.join(f'{name} ({knob.owner})' for name, knob in knobs.items())}. "
+                        f"Stream sizes go under streams.{stream}")
+                knob = knobs[key]
+                checked = _coerce(knob, value, key=full)
+                try:
+                    timesteps[stream] = _replace_at(timesteps[stream], knob.path, checked)
+                except ValueError as exc:
+                    raise ValueError(f"{full}={value!r}: {exc}") from exc
+        return replace(self, timesteps=timesteps)
 
     def losses_of(self, *, stream: str | None = None,
                   head: str | None = None) -> tuple[LossSpec, ...]:

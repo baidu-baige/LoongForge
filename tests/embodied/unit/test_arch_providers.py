@@ -13,6 +13,7 @@ against what capability negotiation concludes.
 
 from __future__ import annotations
 
+import re
 from dataclasses import replace
 
 import pytest
@@ -381,6 +382,28 @@ def test_timestep_embed_width_is_declared_exactly_when_consumed(model_spec):
 def test_wan_providers_feed_the_1000_step_training_timestep(model_type):
     """Master's Wan schedulers hand ``sigma * 1000`` to the time embeddings."""
     assert get_provider(model_type)().diffusion.schedule.num_train_timesteps == 1000
+
+
+@pytest.mark.parametrize("model_type, knobs", [
+    ("vpp2", {"video": {}, "action": {"shift": 5.0}}),
+    ("fastwam", {"video": {"shift": 5.0}, "action": {"shift": 5.0}}),
+    ("internw0_delta", {"video": {"shift": 6.0}, "action": {"shift": 1.0}}),
+])
+def test_each_provider_declares_its_yaml_knobs(model_type, knobs):
+    """The ``diffusion:`` keys a provider accepts, with its defaults.
+
+    The keys come from the fields its samplers mark with ``yaml_knob``, not
+    from the provider's signature; vpp2's constant video timestep has none.
+    """
+    diffusion = get_provider(model_type)().diffusion
+    assert {name: diffusion.yaml_knobs(name) for name in diffusion.timesteps} == knobs
+
+
+@pytest.mark.parametrize("model_type", ["vpp2", "fastwam"])
+def test_shift_is_not_a_provider_argument(model_type):
+    """A shift reaches the sampler only through ``diffusion:``, never as ``<stream>_shift``."""
+    with pytest.raises(ValueError, match=re.escape("does not consume ['action_shift']")):
+        get_provider(model_type)(action_shift=3.0)
 
 
 def test_disabled_condition_still_counts_toward_entry_channels():

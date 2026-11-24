@@ -4,7 +4,7 @@
 """The gate: ``--model-name`` → YAML → typed config → arch model.
 
 Everything the other ``test_arch_*`` files check lives inside the ``arch``
-package. This file checks the four seams that connect it to the trainer, each of
+package. This file checks the five seams that connect it to the trainer, each of
 which fails silently rather than loudly when it breaks:
 
 1. ``MODEL_SCHEMA`` rows resolve to YAML files that exist and merge cleanly into
@@ -16,11 +16,16 @@ which fails silently rather than loudly when it breaks:
    steal ``fastwam`` from ``FastWAMPolicy``.
 4. The shell really converts a pixel batch into ``(loss, metrics)`` — with stub
    encoders, because the real VAE allocates its normalisation buffers on CUDA.
+5. Each ``diffusion:`` key lands on a field the provider declared with
+   ``yaml_knob``; a key that lands nowhere raises when the spec is built.
 """
 
 from __future__ import annotations
 
 import dataclasses
+import re
+from dataclasses import dataclass, replace
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -32,12 +37,16 @@ from loongforge.embodied.model.arch.factory import (ArchModelConfig,
                                                     DualStreamWanConfig,
                                                     InternW0DeltaArchModel,
                                                     Vpp2ArchModel, Vpp2Config)
+from loongforge.embodied.model.arch.diffusion.loss import WeightRamp
+from loongforge.embodied.model.arch.diffusion.timesteps import (
+    TimestepSampler, UniformShift, yaml_knob)
 from loongforge.embodied.model.arch.spec.core import Spec
 from loongforge.embodied.model.arch.spec.world import WorldModelSpec
 from loongforge.embodied.model.arch.streams.engine import JointAttentionEngine
 from loongforge.embodied.model.arch.towers import build_wan_clip, build_wan_vae
 from loongforge.embodied.model.registry import MODEL_REGISTRY
 from loongforge.embodied.train.config_map import get_config_path, get_model_schema
+from loongforge.embodied.train.trainers.supervised.finetune_trainer import FinetuneTrainer
 
 from test_arch_blocks import BATCH, CONTEXT_LEN, tiny_spec
 
@@ -223,6 +232,18 @@ class StubImageEncoder(torch.nn.Module):
         return torch.randn(frames.shape[0], CONTEXT_LEN, self.width)
 
 
+def make_shell(spec: WorldModelSpec) -> Vpp2ArchModel:
+    """A shell around ``spec``, wired to stub encoders."""
+    from loongforge.embodied.model.arch.factory import Vpp2Config
+
+    core = WorldModel(spec, engine=JointAttentionEngine(backend="dense"),
+                      layout=spec.build_layout())
+    return Vpp2ArchModel(
+        Vpp2Config(dtype="float32"), core,
+        vae=StubVAE(spec),
+        image_encoder=StubImageEncoder(spec.condition("clip_image").width))
+
+
 @pytest.fixture
 def shell() -> Vpp2ArchModel:
     """A vpp2 shell at test width, wired to stub encoders.
@@ -231,13 +252,7 @@ def shell() -> Vpp2ArchModel:
     and loss terms are the production ones) with the widths and geometry shrunk
     — the shell's job is tensor plumbing, which is width-independent.
     """
-    spec = tiny_spec("vpp2")
-    core = WorldModel(spec, engine=JointAttentionEngine(backend="dense"),
-                      layout=spec.build_layout())
-    return Vpp2ArchModel(
-        Vpp2Config(dtype="float32"), core,
-        vae=StubVAE(spec),
-        image_encoder=StubImageEncoder(spec.condition("clip_image").width))
+    return make_shell(tiny_spec("vpp2"))
 
 
 def pixel_batch(shell: Vpp2ArchModel) -> dict:
@@ -265,7 +280,7 @@ def test_shell_turns_a_pixel_batch_into_a_scalar_loss(shell):
     assert loss.ndim == 0
     assert torch.isfinite(loss)
     for term in shell.spec.diffusion.losses:
-        assert metrics[term.name].ndim == 0
+        assert metrics[f"loss_{term.name}"].ndim == 0
 
 
 def test_shell_fills_one_batch_key_per_stream_and_condition(shell):
@@ -473,3 +488,153 @@ def test_build_towers_refuses_a_video_stream_with_no_tower():
     spec = replace_video_stream(tiny_spec("vpp2"), source_encoder=None)
     with pytest.raises(ValueError, match="source_encoder"):
         Vpp2ArchModel.build_towers(Vpp2Config(), spec)
+
+
+def test_trainer_iteration_drives_the_loss_weight_ramp():
+    """The trainer's ``iteration`` is the core's ``global_step``.
+
+    ``_select_forward_kwargs`` passes ``iteration`` only to a forward that
+    names it, and nothing else writes ``global_step`` into the batch. Without
+    it every ``WeightRamp`` would stay at its start value: internw0_delta's
+    ``track_align`` (0.0 -> 0.1) and any YAML ``warmup_steps`` would never
+    train, so a training forward without it raises.
+    """
+    spec = tiny_spec("vpp2")
+    ramp = WeightRamp(start_step=0, end_step=10, start_value=0.0, end_value=1.0)
+    spec = replace(spec, diffusion=replace(spec.diffusion, losses=tuple(
+        replace(loss, ramp=ramp) if loss.head == "action_flow" else loss
+        for loss in spec.diffusion.losses)))
+    shell = make_shell(spec)
+    kwargs = FinetuneTrainer._select_forward_kwargs(SimpleNamespace(model=shell), iteration=5)
+    assert kwargs == {"iteration": 5}
+    _, metrics = shell(pixel_batch(shell), **kwargs)
+    assert metrics["action_flow/weight"] == 0.5
+    _, metrics = shell(pixel_batch(shell), iteration=10)
+    assert metrics["action_flow/weight"] == 1.0
+    with pytest.raises(ValueError, match="no global_step"):
+        shell(pixel_batch(shell))
+
+
+def test_batch_global_step_must_agree_with_the_trainer_iteration(shell):
+    """Two step counters that disagree raise instead of one winning silently."""
+    batch = {**pixel_batch(shell), "global_step": 3}
+    shell(batch, iteration=3)
+    with pytest.raises(ValueError, match="disagrees"):
+        shell(batch, iteration=4)
+
+
+# ---- 5. the diffusion: section lands on fields the provider declared ----
+
+
+def load_config_with(model_name: str, *dotlist: str, drop: tuple[str, ...] = ()):
+    """``load_config`` plus command-line overrides, as ``train/parser.py`` merges them.
+
+    Args:
+        model_name: A ``MODEL_SCHEMA`` key.
+        *dotlist: ``key=value`` overrides under ``model:``, as on the command line.
+        drop: ``model:`` sections emptied before merging, to build without them.
+
+    Returns:
+        The materialised model config instance.
+    """
+    schema = get_model_schema(model_name)
+    section = OmegaConf.load(get_config_path(model_name)).get("model", {})
+    for name in drop:
+        section[name] = {}
+    merged = OmegaConf.merge(OmegaConf.structured(schema.model_config_cls), section,
+                             OmegaConf.from_dotlist(list(dotlist)))
+    return OmegaConf.to_object(merged)
+
+
+@pytest.mark.parametrize("model_name", ARCH_MODELS)
+def test_shipped_diffusion_section_restates_the_provider_values(model_name):
+    """Writing the section after the provider changes nothing by itself.
+
+    Built with and without its ``diffusion:`` section, each model gets equal
+    samplers: the shipped YAML only restates the provider's numbers.
+    """
+    with_section = load_config_with(model_name).build_spec().diffusion
+    without = load_config_with(model_name, drop=("diffusion",)).build_spec().diffusion
+    assert dict(with_section.timesteps) == dict(without.timesteps)
+
+
+def test_yaml_shift_reaches_the_sampler_and_the_bsmntw_weight():
+    """``diffusion.action.shift`` moves the sampler, and bsmntw follows it.
+
+    Bsmntw normalizes on the shifted training grid and reads the shift off the
+    sampler when it is called, so no constant computed from the old shift is
+    left behind. An int in YAML lands as a float.
+    """
+    base = load_config("vpp2").build_spec().diffusion
+    moved = load_config_with("vpp2", "diffusion.action.shift=3").build_spec().diffusion
+    sampler = moved.sampler_for("action")
+    assert sampler.distribution == UniformShift(shift=3.0)
+    assert type(sampler.distribution.shift) is float
+    (loss,) = [loss for loss in moved.losses if loss.head == "action_flow"]
+    t = torch.tensor([500.0])
+    before = loss.weight_of(t, sampler=base.sampler_for("action"), num_train_timesteps=1000)
+    after = loss.weight_of(t, sampler=sampler, num_train_timesteps=1000)
+    assert not torch.equal(before, after)
+
+
+@pytest.mark.parametrize("override, error, message", [
+    ("diffusion.video.shift=3.0", ValueError, "diffusion.video.shift: stream 'video' has no YAML knobs"),
+    ("diffusion.action.num_layers=2", ValueError,
+     "diffusion.action.num_layers is not a knob of stream 'action'"),
+    ("diffusion.action.weight=0.5", ValueError, "diffusion.action.weight is not a knob of stream 'action'"),
+    ("diffusion.proprio.shift=1.0", ValueError, "diffusion.proprio: stream 'proprio' draws no timestep"),
+    ("diffusion.action.shift=true", TypeError, "diffusion.action.shift must be float, got bool"),
+    ("diffusion.action.shift=0", ValueError,
+     "diffusion.action.shift=0: UniformShift.shift must be positive"),
+    ("streams.action.shift=3.0", ValueError, "does not consume ['action_shift']"),
+])
+def test_a_diffusion_key_that_lands_nowhere_fails_at_build(override, error, message):
+    """Wrong section, wrong stream, wrong type or out of range: each one raises.
+
+    The two sections used to be flattened into one keyword table, so
+    ``streams.action.shift`` silently moved the action timesteps and a stream
+    size written under ``diffusion:`` silently changed the stream.
+    """
+    with pytest.raises(error, match=re.escape(message)):
+        load_config_with("vpp2", override).build_spec()
+
+
+@dataclass(frozen=True)
+class _CappedShift:
+    """Stand-in for a distribution a model writes in its own directory."""
+
+    shift: float = yaml_knob(3.0)    # diffusion.<stream>.shift
+    t_max: float = yaml_knob(0.95)   # diffusion.<stream>.t_max
+
+    def sample(self, shape, *, device, dtype):
+        u = torch.rand(shape, device=device, dtype=dtype)
+        return (self.shift * u / (1.0 + (self.shift - 1.0) * u)).clamp(max=self.t_max)
+
+
+def test_a_model_owned_distribution_gets_its_keys_without_common_code():
+    """Marking a field with ``yaml_knob`` is all a new distribution needs."""
+    diffusion = tiny_spec("fastwam").diffusion
+    diffusion = replace(diffusion, timesteps={**diffusion.timesteps,
+                                              "video": TimestepSampler(_CappedShift())})
+    assert diffusion.yaml_knobs("video") == {"shift": 3.0, "t_max": 0.95}
+    moved = diffusion.with_yaml_knobs({"video": {"t_max": 0.9}})
+    assert moved.sampler_for("video").distribution == _CappedShift(t_max=0.9)
+    assert list(moved.timesteps) == list(diffusion.timesteps)    # the draw order is kept
+
+
+@dataclass(frozen=True)
+class _TwoShifts:
+    """A distribution nesting two ``UniformShift``, so ``shift`` names two fields."""
+
+    first: UniformShift = UniformShift(2.0)
+    second: UniformShift = UniformShift(3.0)
+
+    def sample(self, shape, *, device, dtype):
+        return self.first.sample(shape, device=device, dtype=dtype)
+
+
+def test_one_stream_cannot_declare_a_knob_twice():
+    """``diffusion.<stream>.shift`` must name one field, checked at construction (V10)."""
+    diffusion = tiny_spec("fastwam").diffusion
+    with pytest.raises(ValueError, match=re.escape("knob 'shift' is declared twice")):
+        replace(diffusion, timesteps={**diffusion.timesteps, "video": TimestepSampler(_TwoShifts())})

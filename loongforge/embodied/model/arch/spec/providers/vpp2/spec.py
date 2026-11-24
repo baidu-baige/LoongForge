@@ -118,7 +118,6 @@ def _vpp2_visibility() -> dict[str, Visibility]:
 def _vpp2(config: Any = None, *,
           geometry: Mapping[str, Any] | None = None,
           video_prefix_frames: int = 3,
-          action_shift: float = 5.0,
           inference_steps: int = 10,
           action_width: int = 7,
           proprio_dim: int = 8,
@@ -174,7 +173,6 @@ def _vpp2(config: Any = None, *,
         geometry: The YAML ``geometry:`` section, merged over the provider's
             defaults before anything is derived from the geometry.
         video_prefix_frames: Leading video frames the action stream reads.
-        action_shift: ``shift`` of the action stream's ``UniformShift``.
         inference_steps: Euler steps at inference.
         action_width: Packed action dimension, both the action stream's entry
             width and the ``action_flow`` head's output width.
@@ -272,8 +270,9 @@ def _vpp2(config: Any = None, *,
             # (``skip={"video"}``), so that 3.0 has nowhere to land. Expressing
             # "two distributions for one stream, train vs infer" would need
             # another field on DiffusionSpec; add it when some model actually
-            # runs the video stream at inference.
-            "action": TimestepSampler(UniformShift(shift=action_shift), rng=master_rng),
+            # runs the video stream at inference. YAML sets this shift as
+            # ``diffusion.action.shift`` (``DiffusionSpec.with_yaml_knobs``).
+            "action": TimestepSampler(UniformShift(shift=5.0), rng=master_rng),
         },
         # ``lambda_video`` and ``lambda_action`` are both 1.0
         # (``train_action.yaml:217-218``)

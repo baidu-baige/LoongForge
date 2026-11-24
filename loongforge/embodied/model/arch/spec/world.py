@@ -28,7 +28,7 @@ from typing import Any
 
 from torch import Tensor
 
-from ..diffusion.loss import LossSpec, WeightRamp
+from ..diffusion.loss import LossSpec, UniformWeight, WeightRamp
 from ..diffusion.spec import DiffusionSpec
 from ..geometry import GeometrySpec
 from ..heads.spec import HeadSpec
@@ -553,12 +553,19 @@ class WorldModelSpec:
             stream = loss.stream if loss.stream is not None else sources[loss.head]
             if stream in self.diffusion.timesteps:
                 loss.weight_of.check(self.diffusion.sampler_for(stream), loss=loss.name)
+            elif not isinstance(loss.weight_of, UniformWeight):
+                # compute_losses would skip the weight without a word.
+                raise ValueError(
+                    f"LossSpec({loss.name!r}).weight_of={type(loss.weight_of).__name__} "
+                    f"weights by the source stream's timestep, but stream {stream!r} "
+                    "draws none; use UniformWeight (L3/V6)")
 
     def _validate_head_layer(self) -> None:
         """L4: head names are unique and every head's source is reachable.
 
-        Three checks: unique head names, the source stream exists, and when a
-        head reads an intermediate layer, that joint layer id is one the
+        Four checks: unique head names, ``HeadSpec.weight`` is 1.0 (the
+        coefficient lives on ``LossSpec``), the source stream exists, and when
+        a head reads an intermediate layer, that joint layer id is one the
         stream actually participates in.
 
         The last one is the easiest to get wrong today: intermediate layers
@@ -568,8 +575,9 @@ class WorldModelSpec:
         ``captures()`` are necessarily satisfiable.
 
         Raises:
-            ValueError: Duplicate head names, an unknown ``source_stream``, or
-                a capture layer the stream does not participate in.
+            ValueError: Duplicate head names, a ``HeadSpec.weight`` other than
+                1.0, an unknown ``source_stream``, or a capture layer the
+                stream does not participate in.
         """
         names = [spec.name for spec in self.heads]
         duplicates = sorted({name for name in names if names.count(name) > 1})
@@ -579,6 +587,14 @@ class WorldModelSpec:
             )
         known = set(self.stream_names)
         for spec in self.heads:
+            if spec.weight != 1.0:
+                raise ValueError(
+                    f"HeadSpec({spec.name!r}).weight={spec.weight}: loss "
+                    "coefficients live on LossSpec (YAML heads."
+                    f"{spec.name}.weight writes LossSpec.weight), so "
+                    "HeadSpec.weight must stay 1.0; a weight in two places "
+                    "with only one taking effect is a silent reweighting (L4/V8)"
+                )
             if spec.source_stream not in known:
                 raise ValueError(
                     f"HeadSpec({spec.name!r}).source points at stream "
@@ -665,8 +681,8 @@ _HEAD_KNOBS: frozenset[str] = frozenset({"weight", "warmup_steps", "enabled"})
 
 All three land on the ``LossSpec`` that consumes the head, never on the
 ``HeadSpec``: weight ownership is defined in exactly one place, and a head that
-also carried a weight would let two numbers disagree silently (``WorldModel``
-has a matching check that a weight has a single owner).
+also carried a weight would let two numbers disagree silently
+(``_validate_head_layer`` rejects a ``HeadSpec.weight`` other than 1.0).
 """
 
 
@@ -702,8 +718,10 @@ def _flatten_per_stream(section: str, body: dict[str, Any],
                         into: dict[str, Any]) -> None:
     """Flatten a ``<stream>: {<key>: value}`` section into provider kwargs.
 
-    The provider signature is flat (``video_num_layers=``, ``action_shift=``),
-    while the YAML is nested per stream. Flattening here rather than giving the
+    The provider signature is flat (``video_num_layers=``), while the YAML is
+    nested per stream. Only ``streams:`` goes through here; ``diffusion:`` is
+    written onto the declared objects after the provider
+    (``DiffusionSpec.with_yaml_knobs``). Flattening here rather than giving the
     providers a nested parameter keeps one invariant worth having: a typo in a
     YAML key becomes an unexpected keyword argument at the provider call, which
     names both the model and the key.
@@ -869,14 +887,15 @@ def build_world_model_spec(config: Any) -> WorldModelSpec:
        config whose ``model_type`` is this key. No YAML line says "this is
        VPP2" beyond that one field.
     2. Translate the config sections into **keyword arguments**: ``geometry:``
-       stays a mapping, ``streams:`` and ``diffusion:`` are flattened to
-       ``<stream>_<key>``, and the per-model subclass fields are passed by
-       name. The config object itself never reaches a provider (rule R5): a
+       stays a mapping, ``streams:`` is flattened to ``<stream>_<key>``, and
+       the per-model subclass fields are passed by name. The config object itself never reaches a provider (rule R5): a
        provider that could read it would be free to pull topology out of YAML.
     3. Call the provider. Everything structural — stream count, visibility,
        condition table, loss terms — is Python code there, so steps 1–2 can
        only move numbers, never shapes of the graph.
-    4. Apply the two overrides that are safe afterwards: loss weights and the
+    4. Apply the overrides that are safe afterwards: the ``diffusion:`` knobs
+       (``DiffusionSpec.with_yaml_knobs``; a knob is read only where it is
+       used, never to derive another declaration), the loss weights and the
        attention backend. Geometry is deliberately *not* here; it has to reach
        the provider as an argument because visibility and the flow heads are
        derived from it (see ``_resolve_geometry``).
@@ -912,8 +931,6 @@ def build_world_model_spec(config: Any) -> WorldModelSpec:
         kwargs["geometry"] = geometry
     _flatten_per_stream("streams", _plain(getattr(config, "streams", None)),
                         kwargs)
-    _flatten_per_stream("diffusion",
-                        _plain(getattr(config, "diffusion", None)), kwargs)
     extras = getattr(config, "provider_kwargs", None)
     if callable(extras):
         kwargs.update(extras())
@@ -924,6 +941,9 @@ def build_world_model_spec(config: Any) -> WorldModelSpec:
             f"provider(model_type={model_type!r}) returned "
             f"{type(spec).__name__}, it must return a WorldModelSpec"
         )
+    knobs = _plain(getattr(config, "diffusion", None))
+    if knobs:
+        spec = replace(spec, diffusion=spec.diffusion.with_yaml_knobs(knobs))
     spec = _apply_heads(spec, _plain(getattr(config, "heads", None)))
     return _apply_backend(spec, getattr(config, "attention_backend", None),
                           getattr(config, "attention_block_size", None))

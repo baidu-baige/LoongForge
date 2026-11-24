@@ -14,7 +14,7 @@ checks six things:
   3. ``WeightRamp`` reads ``global_step`` out of the batch, not from a counter
      the model keeps itself;
   4. weights live only on ``LossSpec``: a ``HeadSpec.weight`` other than 1.0
-     raises;
+     is rejected when the spec is built;
   5. raw tensors are keyed by ``StreamSpec.batch_key``, and a missing key names
      that key in the error message;
   6. three paths that **raise on purpose** (per-axis noising, stream-side loss,
@@ -120,9 +120,12 @@ def test_forward_returns_a_scalar_loss_and_one_metric_per_term(spec):
     assert loss.ndim == 0
     assert torch.isfinite(loss)
     for term in spec.diffusion.losses:
-        assert metrics[term.name].ndim == 0
+        assert metrics[f"loss_{term.name}"].ndim == 0
         assert metrics[f"{term.name}/weight"] == term.weight
     assert torch.equal(metrics["loss"], loss.detach())
+    # The trainer averages over ranks only the keys that contain "loss" (T23).
+    weights = {f"{term.name}/weight" for term in spec.diffusion.losses}
+    assert all("loss" in key for key in set(metrics) - weights)
 
 
 def test_metrics_hold_tensors_not_python_floats(spec):
@@ -133,7 +136,7 @@ def test_metrics_hold_tensors_not_python_floats(spec):
     """
     _, metrics = world(spec)(fake_batch(spec))
     for term in spec.diffusion.losses:
-        value = metrics[term.name]
+        value = metrics[f"loss_{term.name}"]
         assert isinstance(value, torch.Tensor)
         assert not value.requires_grad
 
@@ -252,12 +255,12 @@ def test_disabled_loss_keeps_its_metric_key_at_weight_zero():
         LossSpec(name="video_flow", head="video_flow", enabled=False),
         LossSpec(name="action_flow", head="action_flow"))
     loss, metrics = world(spec)(fake_batch(spec))
-    assert "video_flow" in metrics
+    assert "loss_video_flow" in metrics
     assert metrics["video_flow/weight"] == 0.0
     assert metrics["action_flow/weight"] == 1.0
     # The disabled term still enters the sum, at weight 0, so the total equals
     # the remaining term.
-    assert torch.allclose(loss, metrics["action_flow"])
+    assert torch.allclose(loss, metrics["loss_action_flow"])
 
 
 def test_weight_ramp_reads_the_global_step_from_the_batch():
@@ -280,8 +283,21 @@ def test_weight_ramp_reads_the_global_step_from_the_batch():
         assert metrics["video_flow/weight"] == pytest.approx(want)
     # No ``global_step`` means step 0, not an error: the evaluation path goes
     # through this same forward.
+    model.eval()
     _, metrics = model(batch)
     assert metrics["video_flow/weight"] == pytest.approx(0.0)
+
+
+def test_training_a_ramped_loss_without_a_step_is_rejected():
+    """Without ``global_step`` the ramp would stay at step 0, silently (v2 §1.9)."""
+    ramp = WeightRamp(start_step=0, end_step=10, start_value=0.0, end_value=1.0)
+    spec = with_losses(
+        tiny_spec("fastwam"),
+        LossSpec(name="video_flow", head="video_flow", ramp=ramp),
+        LossSpec(name="action_flow", head="action_flow"))
+    model = world(spec)
+    with pytest.raises(ValueError, match="no global_step"):
+        model(fake_batch(spec))
 
 
 def test_weight_written_on_the_head_is_rejected():
@@ -290,14 +306,14 @@ def test_weight_written_on_the_head_is_rejected():
 
     The providers already follow this ruling (all five weights live on
     ``LossSpec``). This test turns "somebody moved it back onto ``HeadSpec``"
-    into a failure instead of a silent reweighting.
+    into a failure when the spec is built, before any step runs, instead of a
+    silent reweighting.
     """
     base = tiny_spec("fastwam")
     heads = tuple(replace(head, weight=0.5) if head.name == "video_flow"
                   else head for head in base.heads)
-    spec = replace(base, heads=heads)
-    with pytest.raises(ValueError, match="weight ownership must be fixed in one place"):
-        world(spec)(fake_batch(spec))
+    with pytest.raises(ValueError, match="HeadSpec.weight must stay 1.0"):
+        replace(base, heads=heads)
 
 
 # ---- 5. the batch keys of the raw tensors ----
@@ -486,6 +502,22 @@ def test_bsmntw_on_a_constant_timestep_stream_is_rejected():
         with_losses(tiny_spec("vpp2"),
                     LossSpec(name="video_flow", head="video_flow", weight_of=Bsmntw()),
                     LossSpec(name="action_flow", head="action_flow"))
+
+
+def test_timestep_weight_on_a_stream_without_timesteps_is_rejected():
+    """compute_losses only weights a stream that draws a timestep; elsewhere the
+    weight would be skipped without a word."""
+    base = tiny_spec("fastwam")
+    group = base.attention_groups[0]
+    streams = tuple(replace(stream, needs_timestep=False, timestep_embed_width=None)
+                    if stream.name == "action" else stream for stream in group.streams)
+    timesteps = {name: sampler for name, sampler in base.diffusion.timesteps.items()
+                 if name != "action"}
+    losses = tuple(replace(loss, weight_of=Bsmntw()) if loss.head == "action_flow" else loss
+                   for loss in base.diffusion.losses)
+    with pytest.raises(ValueError, match="draws none"):
+        replace(base, attention_groups=(replace(group, streams=streams),),
+                diffusion=replace(base.diffusion, timesteps=timesteps, losses=losses))
 
 
 # ---- step hook: read-only observation of steps 1, 3, 6 and 7 ----
