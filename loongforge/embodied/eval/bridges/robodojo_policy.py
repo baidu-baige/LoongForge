@@ -5,11 +5,12 @@
 
 RoboDojo is a "form B" benchmark like RoboTwin: its official Isaac Sim client
 drives the episode and calls an XPolicyLab policy server, which instantiates
-``XPolicyLab.policy.<name>.model.Model(deploy_cfg)``. The LoongForge plugin
-directory (``bridges/robodojo_xpolicylab``) exposes :class:`RoboDojoPolicyModel`
-as that ``Model``; it hosts the shared 4-component chain
-(adapter -> PayloadBuilder -> PolicyClient -> ActionDecoder) and forwards every
-env step to the LoongForge policy server.
+``XPolicyLab.policy.<name>.model.Model(deploy_cfg)``. The robodojo runner
+generates that plugin package (``robodojo_runner.ensure_plugin``) with a ``model``
+module pointing at :class:`RoboDojoPolicyModel`; it hosts the shared 4-component
+chain (adapter -> PayloadBuilder -> PolicyClient -> ActionDecoder) and forwards
+every env step to the LoongForge policy server. The episode loops the sim process
+runs live in ``bridges/robodojo_deploy.py``.
 
 Per-model protocol wiring (``action_bridge`` -> model_type, decoder key,
 raw-action channels, RoboDojo action space, PayloadBuilder defaults):
@@ -58,7 +59,7 @@ The official LingBot_VA / Pi_05 / X_VLA ``deploy.py`` call it after every action
 FastWAM ``deploy.py`` only at chunk ends (``_EPISODE_END_CHECK``). The bridge reports the mode
 with every action and the plugin ``deploy.py`` follows it.
 
-``eval_batch`` (several envs in one Isaac Sim process, plugin ``robodojo_xpolicylab_batch``):
+``eval_batch`` (several envs in one Isaac Sim process):
 RoboDojo's client then calls ``update_obs_batch`` / ``get_action_batch`` instead, and expects a
 whole chunk per env (the official ``eval_one_episode_batch`` executes it step by step). Each env
 gets its own episode id, PayloadBuilder, ActionDecoder and trace file; one request per env per

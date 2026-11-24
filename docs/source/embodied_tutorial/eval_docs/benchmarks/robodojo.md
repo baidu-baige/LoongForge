@@ -28,7 +28,11 @@ The benchmark publishes its reference checkpoints under
 ## Step 1: Environment setup
 
 Install RoboDojo and its Isaac Sim 5.1 simulator following the official repository, then
-point the runner at the checkout with `env.robodojo_root` (or `ROBODOJO_ROOT`).
+point the runner at the checkout with `env.robodojo_root` (or `ROBODOJO_ROOT`). Nothing has to
+be copied into the checkout by hand: RoboDojo resolves `--policy_name` to a package under
+`XPolicyLab/policy/<name>/`, so the runner generates that package (episode loops, `Model`
+entry, `deploy.yml`) on every run and refreshes it when LoongForge changes. A package that
+LoongForge did not generate is left untouched and the run fails instead.
 
 Two Python environments are needed, and they are *not* interchangeable:
 
@@ -86,12 +90,12 @@ Key config fields:
 
 RoboDojo's own batched mode runs `num_envs` envs in one Isaac Sim process and calls
 `eval_one_episode_batch`. Set `benchmark.eval_batch: true` and `benchmark.num_envs: <k>`; the
-runner then links the second plugin (`LoongForgeBatch`, whose static `deploy.yml` is where
-RoboDojo reads `eval_batch`) and writes a copy of `scripts/eval_policy.sh` with the env count
-into the run directory — the official script takes `num_envs` from the sim config and drops
-unknown flags, so it cannot be passed through. Exactly two lines of the copy differ from the
-official script, both matched verbatim, so an upstream change fails the run instead of
-silently evaluating something else.
+runner then generates the plugin under the name `LoongForgeBatch` with `eval_batch: true` in its
+`deploy.yml` (RoboDojo reads it from there, in the sim process) and writes a copy of
+`scripts/eval_policy.sh` with the env count into the run directory — the official script takes
+`num_envs` from the sim config and drops unknown flags, so it cannot be passed through. Exactly
+two lines of the copy differ from the official script, both matched verbatim, so an upstream
+change fails the run instead of silently evaluating something else.
 
 The bridge keeps one episode id, PayloadBuilder, ActionDecoder and trace file per env, and
 asks the server for a whole chunk per env per chunk (the official batched loop executes it

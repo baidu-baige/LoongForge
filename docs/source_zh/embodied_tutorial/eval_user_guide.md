@@ -352,7 +352,9 @@ examples/embodied/lingbot_va/eval/run_robodojo_eval.sh    # CONFIG=... 选择配
 # 其余模型的示例配置：examples/embodied/{pi05,xvla,fastwam,gr00t_n1_7,gr00t_n1_6,dreamzero}/eval/configs/robodojo/
 ```
 
-一个 Isaac Sim 进程跑多个环境：置 `benchmark.eval_batch: true` 与 `benchmark.num_envs: <k>`。运行器会链接第二个插件 `LoongForgeBatch`（RoboDojo 从插件静态 `deploy.yml` 读 `eval_batch`），并在运行目录写一份只改两行的 `eval_policy.sh` 副本——官方脚本从仿真配置取 `num_envs` 且会丢掉多余参数，传不进去。限制来自显存：ARX X5 场景下每个 Isaac Sim 进程约 10 GB，96 GB 卡上大致是 2 进程 × 10 环境。
+RoboDojo 按 `--policy_name` 到自己的 `XPolicyLab/policy/<名字>/` 下找插件包，所以运行器会在每轮评测自动生成这个包（episode 循环、`Model` 入口、`deploy.yml`），不需要手动往 RoboDojo 检出里放文件；不是 LoongForge 生成的同名包会被原样保留并让本轮失败。
+
+一个 Isaac Sim 进程跑多个环境：置 `benchmark.eval_batch: true` 与 `benchmark.num_envs: <k>`。运行器会把插件按 `LoongForgeBatch` 这个名字生成、`deploy.yml` 里写 `eval_batch: true`（RoboDojo 在仿真进程里从这里读），并在运行目录写一份只改两行的 `eval_policy.sh` 副本——官方脚本从仿真配置取 `num_envs` 且会丢掉多余参数，传不进去。限制来自显存：ARX X5 场景下每个 Isaac Sim 进程约 10 GB，96 GB 卡上大致是 2 进程 × 10 环境。
 
 全量对齐（54 配置 × seed 0，2100 episode，与官方同布局运行对比，括号为差值的 95% CI）：Spatial_Forcing 9.29% vs 9.38%（−0.10 pp ±1.76）、pi0.5 8.43% vs 9.19%（−0.76 pp ±1.71）、X-VLA 7.05% vs 6.95%、FastWAM 1.43% vs 1.33%（+0.10 pp ±0.71）、GR00T-N1.7 0.76% vs 1.00%（−0.24 pp ±0.57）、LingBot-VA 0/2100 vs 1/2100（逐 episode 成功标记 2099/2100 一致）。GR00T-N1.6 与 DreamZero 没有官方 RoboDojo 策略可比（既无权重也无插件），只做冒烟与对官方同族源码的逐项单测。更多细节见 [RoboDojo 基准页](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/embodied_tutorial/eval_docs/benchmarks/robodojo.md)。
 

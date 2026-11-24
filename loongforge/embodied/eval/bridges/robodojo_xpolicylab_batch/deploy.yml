@@ -1,5 +1,0 @@
-# Static plugin metadata read by RoboDojo's sim client (eval_batch, protocol).
-# The policy server is started by the robodojo runner with a per-run deploy config.
-policy_name: LoongForgeBatch
-protocol: ws
-eval_batch: true

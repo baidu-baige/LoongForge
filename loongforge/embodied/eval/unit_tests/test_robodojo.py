@@ -33,7 +33,7 @@ from loongforge.embodied.eval.orchestrator.runners import robodojo_runner
 
 _EVAL_ROOT = pathlib.Path(__file__).resolve().parents[1]
 _REPO_ROOT = _EVAL_ROOT.parents[2]
-_PLUGIN_DIR = _EVAL_ROOT / "bridges" / "robodojo_xpolicylab"
+_DEPLOY_MODULE = _EVAL_ROOT / "bridges" / "robodojo_deploy.py"
 _CONFIG_DIR = _REPO_ROOT / "examples" / "embodied" / "lingbot_va" / "eval" / "configs" / "robodojo"
 # Optional: a RoboDojo checkout enables the parity tests against the official code.
 _ROBODOJO_ROOT = pathlib.Path(os.environ.get("ROBODOJO_ROOT", "/nonexistent"))
@@ -187,7 +187,7 @@ def _load_module(path: pathlib.Path, name: str):
 
 @pytest.mark.parametrize("n_actions", [5, 12, 13, 36, 50])
 def test_plugin_deploy_replays_official_env_call_order(n_actions):
-    ours = _load_module(_PLUGIN_DIR / "deploy.py", "lf_robodojo_deploy")
+    ours = _load_module(_DEPLOY_MODULE, "lf_robodojo_deploy")
     env_ours = _FakeEnv(n_actions)
     ours.eval_one_episode(env_ours, _StepClient())
 
@@ -306,25 +306,43 @@ def test_runner_records_from_official_result(tmp_path):
     assert np.mean([r["score"] for r in records]) * 100 == pytest.approx(result["score"])
 
 
-def test_plugin_link_refuses_foreign_entry(tmp_path):
-    policy_dir = tmp_path / "XPolicyLab" / "policy"
-    policy_dir.mkdir(parents=True)
-    link = robodojo_runner.ensure_plugin_link(tmp_path)
-    assert link.resolve() == _PLUGIN_DIR.resolve()
-    assert robodojo_runner.ensure_plugin_link(tmp_path) == link  # idempotent
-    link.unlink()
-    (policy_dir / "LoongForge").mkdir()
-    with pytest.raises(FileExistsError):
-        robodojo_runner.ensure_plugin_link(tmp_path)
-
-
-def test_plugin_files_are_import_free():
-    # The sim client imports the package and deploy.py; they must not pull LoongForge.
-    for name in ("__init__.py", "deploy.py"):
-        text = (_PLUGIN_DIR / name).read_text(encoding="utf-8")
+@pytest.mark.parametrize("batch,name", [(False, "LoongForge"), (True, "LoongForgeBatch")])
+def test_generated_plugin_is_complete_and_idempotent(tmp_path, batch, name):
+    package = robodojo_runner.ensure_plugin(tmp_path, batch=batch)
+    assert package == tmp_path / "XPolicyLab" / "policy" / name
+    assert sorted(p.name for p in package.iterdir()) == ["__init__.py", "deploy.py", "deploy.yml", "model.py"]
+    # RoboDojo reads eval_batch from this file, in the sim process, before any policy call.
+    meta = yaml.safe_load((package / "deploy.yml").read_text(encoding="utf-8"))
+    assert meta == {"policy_name": name, "protocol": "ws", "eval_batch": batch}
+    # deploy.py is the reviewed module, copied verbatim; the sim env has no LoongForge.
+    assert (package / "deploy.py").read_text(encoding="utf-8") == _DEPLOY_MODULE.read_text(encoding="utf-8")
+    for filename in ("__init__.py", "deploy.py"):
+        text = (package / filename).read_text(encoding="utf-8")
         assert "import loongforge" not in text and "from loongforge" not in text
-    meta = yaml.safe_load((_PLUGIN_DIR / "deploy.yml").read_text(encoding="utf-8"))
-    assert meta["eval_batch"] is False and meta["protocol"] == "ws"
+    assert "RoboDojoPolicyModel as Model" in (package / "model.py").read_text(encoding="utf-8")
+
+    stamps = {p.name: p.stat().st_mtime_ns for p in package.iterdir()}
+    assert robodojo_runner.ensure_plugin(tmp_path, batch=batch) == package  # idempotent
+    assert {p.name: p.stat().st_mtime_ns for p in package.iterdir()} == stamps  # no rewrite
+    # An upgraded LoongForge refreshes a stale file.
+    (package / "deploy.py").write_text("# stale\n", encoding="utf-8")
+    robodojo_runner.ensure_plugin(tmp_path, batch=batch)
+    assert (package / "deploy.py").read_text(encoding="utf-8") == _DEPLOY_MODULE.read_text(encoding="utf-8")
+
+
+def test_generated_plugin_refuses_a_foreign_package(tmp_path):
+    foreign = tmp_path / "XPolicyLab" / "policy" / "LoongForge"
+    foreign.mkdir(parents=True)
+    (foreign / "__init__.py").write_text("# someone else's plugin\n", encoding="utf-8")
+    with pytest.raises(FileExistsError):
+        robodojo_runner.ensure_plugin(tmp_path)
+    # A symlink (the pre-generation layout) is foreign too: its target is not managed here.
+    other = tmp_path / "elsewhere"
+    other.mkdir()
+    link = tmp_path / "XPolicyLab" / "policy" / "LoongForgeBatch"
+    link.symlink_to(other, target_is_directory=True)
+    with pytest.raises(FileExistsError):
+        robodojo_runner.ensure_plugin(tmp_path, batch=True)
 
 
 def test_orchestrator_dispatches_robodojo():
@@ -423,7 +441,7 @@ def test_xvla_ee20_action_dict_matches_official(seed):
 
 @pytest.mark.parametrize("n_actions", [5, 30, 31, 61, 100])
 def test_plugin_deploy_replays_official_xvla_env_call_order(n_actions):
-    ours = _load_module(_PLUGIN_DIR / "deploy.py", "lf_robodojo_deploy")
+    ours = _load_module(_DEPLOY_MODULE, "lf_robodojo_deploy")
     env_ours = _FakeEnv(n_actions)
     ours.eval_one_episode(env_ours, _StepClient(30, 30))
 
@@ -573,7 +591,7 @@ class _StepClientChunkCheck(_StepClient):
 
 @pytest.mark.parametrize("n_actions", [5, 23, 24, 25, 48, 60])
 def test_plugin_deploy_replays_official_fastwam_env_call_order(n_actions):
-    ours = _load_module(_PLUGIN_DIR / "deploy.py", "lf_robodojo_deploy")
+    ours = _load_module(_DEPLOY_MODULE, "lf_robodojo_deploy")
     env_ours = _FakeEnv(n_actions)
     ours.eval_one_episode(env_ours, _StepClientChunkCheck(24, 24))
 
@@ -698,7 +716,7 @@ def _official_gr00t_funcs():
 
 @pytest.mark.parametrize("n_actions", [5, 16, 17, 40])
 def test_plugin_deploy_replays_official_gr00t_env_call_order(n_actions):
-    ours = _load_module(_PLUGIN_DIR / "deploy.py", "lf_robodojo_deploy")
+    ours = _load_module(_DEPLOY_MODULE, "lf_robodojo_deploy")
     env_ours = _FakeEnv(n_actions)
     ours.eval_one_episode(env_ours, _StepClient(16, 16))
     official_path = _ROBODOJO_ROOT / "XPolicyLab" / "policy" / "GR00T_N17" / "deploy.py"
@@ -1150,9 +1168,6 @@ def test_example_dreamzero_config_matches_official_adapter():
 
 
 # ── eval_batch: several envs per Isaac Sim process (LoongForgeBatch plugin) ──
-_BATCH_PLUGIN_DIR = _EVAL_ROOT / "bridges" / "robodojo_xpolicylab_batch"
-
-
 class _FakeBatchEnv:
     """Batched env: env i ends after ``lengths[i]`` actions; records the call order."""
 
@@ -1202,11 +1217,10 @@ class _BatchChunkClient:
 
 @pytest.mark.parametrize("lengths", [[5, 30, 48], [24, 24], [60, 1, 25, 49]])
 def test_batch_plugin_replays_official_fastwam_batch_call_order(lengths):
-    ours = _load_module(_BATCH_PLUGIN_DIR / "deploy.py", "lf_robodojo_batch_deploy")
+    ours = _load_module(_DEPLOY_MODULE, "lf_robodojo_batch_deploy")
     env_ours = _FakeBatchEnv(lengths)
     ours.eval_one_episode_batch(env_ours, _BatchChunkClient(24))
     assert env_ours.taken == lengths
-    assert yaml.safe_load((_BATCH_PLUGIN_DIR / "deploy.yml").read_text())["eval_batch"] is True
     official_path = _ROBODOJO_ROOT / "XPolicyLab" / "policy" / "FastWAM" / "deploy.py"
     if not official_path.is_file():
         pytest.skip("set ROBODOJO_ROOT to a RoboDojo checkout for the parity check")
