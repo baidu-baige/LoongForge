@@ -146,6 +146,9 @@ class InternSelfAttention(Attention):
         attn_mask_type=AttnMaskType.padding,
         cp_comm_type: str = None,
         pg_collection: ProcessGroupCollection = None,
+        pp_layer_offset: int | None = None,
+        is_mtp_layer: bool = False,
+        name: str | None = None,
     ):
         super().__init__(
             config=config,
@@ -155,6 +158,9 @@ class InternSelfAttention(Attention):
             attention_type="self",
             cp_comm_type=cp_comm_type,
             pg_collection=pg_collection,
+            pp_layer_offset=pp_layer_offset,
+            is_mtp_layer=is_mtp_layer,
+            name=name,
         )
         self.config = config
         self.linear_qkv = build_module(

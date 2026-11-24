@@ -7,6 +7,7 @@ import torch
 from dataclasses import dataclass
 from ...common.base_model_config import BaseModelConfig
 from loongforge.utils import get_tokenizer
+from loongforge.utils.global_vars import is_tokenizer_initialized
 from loongforge.data.multimodal.internvl.internvl_constants import IMG_CONTEXT_TOKEN
 
 
@@ -54,12 +55,23 @@ class InternVisionConfig(BaseModelConfig):
 
     def __post_init__(self, **kwargs):
         super().__post_init__(**kwargs)
-        if self.image_token_id is None:
+        if self.image_token_id is None and is_tokenizer_initialized():
             # Unlike the other vision towers, InternVL's context-image token has no
             # fixed id: it is whatever the tokenizer in use assigns to IMG_CONTEXT_TOKEN.
             self.image_token_id = get_tokenizer().tokenizer.convert_tokens_to_ids(
                 IMG_CONTEXT_TOKEN
             )
+
+
+def resolve_image_token_id(config) -> None:
+    """Resolve InternVL's context-image token after the tokenizer is initialized."""
+    if config is None or getattr(config, "image_token_id", None) is not None:
+        return
+    if not str(getattr(config, "model_type", "")).startswith("intern_vit"):
+        return
+    config.image_token_id = get_tokenizer().tokenizer.convert_tokens_to_ids(
+        IMG_CONTEXT_TOKEN
+    )
 
 
 @dataclass
