@@ -30,6 +30,9 @@ def omni_model_provider(
     post_process: bool = True,
     parallel_output: bool = True,
     vp_stage: Optional[int] = None,
+    config=None,
+    pg_collection=None,
+    **kwargs,
 ) -> OmniCombinationModel:
     """
     Construct and return an Omni combination model instance.
@@ -51,6 +54,8 @@ def omni_model_provider(
         - Supports encoder pipeline parallel processing
         - Includes language model related parameter configuration
     """
+    # MCore's provider fallback passes its resolved config and process groups.
+    # LoongForge still owns the concrete model config and reads it globally.
     args = get_args()
     model_config = get_model_config()
     # check_model_config(model_config)

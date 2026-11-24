@@ -536,8 +536,15 @@ def vlm_model_provider(
     post_process: bool = True,
     parallel_output: bool = True,
     vp_stage: Optional[int] = None,
+    config=None,
+    pg_collection=None,
+    **kwargs,
 ):
-    """Resolve the configured VLM backend without duplicating the trainer."""
+    """Resolve the configured VLM backend without duplicating the trainer.
+
+    MCore's provider fallback supplies its resolved config and process groups;
+    LoongForge backends still read the concrete model config from global state.
+    """
     backend = getattr(get_model_config(), "model_backend", "omni")
     if backend == "mimo":
         from loongforge.models.mimo_models.mimo_vlm_provider import (
@@ -552,6 +559,8 @@ def vlm_model_provider(
         post_process=post_process,
         parallel_output=parallel_output,
         vp_stage=vp_stage,
+        config=config,
+        pg_collection=pg_collection,
     )
 
 
