@@ -126,6 +126,29 @@ def _requires_variable_seq_lengths(train_args, model_config):
     return False
 
 
+def _requires_legacy_scalar_grad_norm(train_args, model_config):
+    """Select the clip root used by the corresponding legacy trainer."""
+    training_phase = getattr(train_args, "training_phase", None)
+    if training_phase == constants.TrainingPhase.PRETRAIN:
+        if _is_mimo_or_omni_config(model_config):
+            return False
+        return _is_vlm_config(model_config) or _is_llava_ov_config(model_config)
+    if training_phase == constants.TrainingPhase.SFT:
+        return True
+    return False
+
+
+def _select_sft_clip_root(train_args, packed_seq_params):
+    """Packed VLM SFT needs tensor root; non-packed SFT keeps scalar root."""
+    if getattr(train_args, "training_phase", None) != constants.TrainingPhase.SFT:
+        return
+    if not _is_vlm_config(get_model_config()):
+        return
+    from megatron.core.optimizer.clip_grads import set_legacy_scalar_grad_norm
+
+    set_legacy_scalar_grad_norm(packed_seq_params is None)
+
+
 def pretrain_with_mcore(
     train_args,
     train_valid_test_dataset_provider,
@@ -142,6 +165,11 @@ def pretrain_with_mcore(
     parse_args_from_config(train_args)
     model_config = get_model_config()
 
+    from megatron.core.optimizer.clip_grads import set_legacy_scalar_grad_norm
+
+    set_legacy_scalar_grad_norm(
+        _requires_legacy_scalar_grad_norm(train_args, model_config)
+    )
     if _requires_variable_seq_lengths(train_args, model_config):
         train_args.variable_seq_lengths = True
         for target in (model_config, getattr(model_config, "foundation", None)):
