@@ -19,9 +19,9 @@
 #   2) set benchmark.offline_expert_check to that directory here.
 #
 # Measured on 8xA800-80GB with 8 CPU cores, official SFT weights (2026-11-24): N=4, 50 x 100 episodes,
-#   demo_clean      93.32%, 76.7 min end to end, validation.ok
-#   demo_randomized 92.90%, 94.5 min end to end, validation.ok
-# N is bounded by CPU on a small host (the N sweep plateaued at N~5); sampled peak VRAM 55 GB (clean) / 63 GB (randomized) per card at N=4.
+#   demo_clean      93.50% (published 93.52%), 88.9 min end to end, validation.ok
+#   demo_randomized 92.80% (published 92.80%), 104.3 min end to end, validation.ok
+# N is bounded by CPU on a small host (the N sweep plateaued at N~5); sampled peak VRAM 55 GB (clean) / 61 GB (randomized) per card at N=4.
 # On a host with many more cores raise N and re-measure with orchestrator/calibration/calibrate.py.
 
 benchmark:
