@@ -128,6 +128,8 @@ def apply_mrope(
     mrope_section=[16, 24, 24],
     mscale: float = 1.0,
     cp_group=None,
+    max_seqlen=None,
+    **kwargs,
 ):
     """mrope"""
     if cu_seqlens is not None:
