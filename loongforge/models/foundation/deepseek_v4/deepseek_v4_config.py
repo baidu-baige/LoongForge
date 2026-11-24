@@ -7,6 +7,10 @@ from typing import Optional, Union, List
 from dataclasses import dataclass
 
 from loongforge.models.common.base_model_config import BaseModelMLAConfig
+from loongforge.models.foundation.deepseek_v4.deepseek_v4_layer_spec import (
+    build_deepseek_v4_hybrid_layer_pattern,
+    expand_deepseek_v4_hybrid_compress_ratios,
+)
 from loongforge.utils.constants import LanguageModelFamilies
 
 
@@ -42,7 +46,7 @@ class DeepseekV4Config(BaseModelMLAConfig):
     num_experts: int = None
     moe_ffn_hidden_size: int = None
     moe_shared_expert_intermediate_size: int = None
-    moe_layer_freq: Optional[Union[int, List[int]]] = None
+    moe_layer_freq: Optional[Union[int, List[int]]] = 1
     moe_n_hash_layers: int = 0
     actual_vocab_size: Optional[int] = None
     moe_router_topk_scaling_factor: Optional[float] = None
@@ -60,8 +64,51 @@ class DeepseekV4Config(BaseModelMLAConfig):
             self.num_moe_experts = self.num_experts
         if self.moe_ffn_hidden_size is None:
             self.moe_ffn_hidden_size = self.ffn_hidden_size
+        if self.moe_layer_freq is None:
+            self.moe_layer_freq = 1
+
+        # Native MCore hash routing uses different public field names than the
+        # DeepSeek-V4 HF/config contract.
+        self.moe_num_hash_layers = self.moe_n_hash_layers
+        if self.actual_vocab_size is not None:
+            self.hash_moe_vocab_size = self.actual_vocab_size
+
+        # Map V4-specific HC fields to the MCore 0.20 mHC configuration.
+        self.enable_mhc_connections = self.hc_mult > 1
+        self.mhc_num_residual_streams = self.hc_mult
+        self.mhc_sinkhorn_iterations = self.hc_sinkhorn_iters
+        self.mhc_init_gating_factor = self.hc_eps
+        self.return_mhc_multistream_for_mtp = True
+
+        # W layers use full qk_pos_emb_dim RoPE. Yarn C/H layers encode their
+        # percent through YarnRotaryEmbedding and do not consume this value.
+        self.rotary_percent = 1.0
+
+        # Map V4-specific DSA indexer fields to Megatron TransformerConfig fields
+        self.dsa_indexer_head_dim = self.index_head_dim
+        self.dsa_indexer_n_heads = self.index_n_heads
+        self.dsa_indexer_topk = self.index_topk
+
+        # DeepSeek-V4 always uses qk_layernorm
+        self.qk_layernorm = True
+        # MCore encodes MLA as its own attention mode and rejects the legacy
+        # group-query flag even though the YAML keeps it for HF compatibility.
+        self.group_query_attention = False
+
+        # DSv4 hybrid derives MLA latent dimensions from the HF-style head dimensions.
+        self.qk_head_dim = self.v_head_dim - self.qk_pos_emb_head_dim
+        self.kv_lora_rank = self.qk_head_dim
+        self.hetereogenous_dist_checkpoint = True
+
+        # Native grouped low-rank output projection fields.
+        self.output_projection_groups = self.o_groups
+        self.output_projection_lora_rank = self.o_lora_rank
+
+        # Map swiglu_limit to activation_func_clamp_value for shared expert MLP
+        self.activation_func_clamp_value = self.swiglu_limit
 
         super().__post_init__(**kwargs)
+        self.rotary_percent = 1.0
 
         assert self.num_moe_experts and self.num_moe_experts > 0, "DeepSeek-V4 requires MoE."
         assert self.multi_latent_attention, "DeepSeek-V4 requires multi_latent_attention."
@@ -82,32 +129,43 @@ class DeepseekV4Config(BaseModelMLAConfig):
             "MLA down projection fusion must be disabled for DeepSeek-V4 hybrid attention."
         )
 
-        # Map V4-specific HC fields to Megatron TransformerConfig fields
-        self.enable_hyper_connections = True
-        self.num_residual_streams = self.hc_mult
-        self.mhc_sinkhorn_iterations = self.hc_sinkhorn_iters
-        self.mhc_init_gating_factor = self.hc_eps
-
-        # Map V4-specific DSA indexer fields to Megatron TransformerConfig fields
-        self.dsa_indexer_head_dim = self.index_head_dim
-        self.dsa_indexer_n_heads = self.index_n_heads
-        self.dsa_indexer_topk = self.index_topk
-
-        # DeepSeek-V4 always uses qk_layernorm
-        self.qk_layernorm = True
-
-        # DSv4 hybrid derives MLA latent dimensions from the HF-style head dimensions.
-        self.qk_head_dim = self.v_head_dim - self.qk_pos_emb_head_dim
-        self.kv_lora_rank = self.qk_head_dim
-        self.hetereogenous_dist_checkpoint = True
-
-        # Map swiglu_limit to activation_func_clamp_value for shared expert MLP
-        self.activation_func_clamp_value = self.swiglu_limit
-
         if self.moe_n_hash_layers > 0:
             assert self.actual_vocab_size is not None, (
                 "actual_vocab_size must be set when moe_n_hash_layers > 0."
             )
+            assert self.hash_moe_vocab_size == self.actual_vocab_size, (
+                "hash_moe_vocab_size must match actual_vocab_size for DeepSeek-V4."
+            )
+            assert self.moe_num_hash_layers == self.moe_n_hash_layers, (
+                "moe_num_hash_layers must match moe_n_hash_layers for DeepSeek-V4."
+            )
+
+        # HybridModel uses num_layers for physical main-pattern execution and
+        # metric slot sizing. Preserve the HF/checkpoint logical layer count for
+        # ratio derivation and checkpoint conversion.
+        logical_num_layers = self.num_layers
+        hybrid_layer_pattern = build_deepseek_v4_hybrid_layer_pattern(
+            csa_compress_ratios=self.csa_compress_ratios,
+            num_layers=logical_num_layers,
+            mtp_num_layers=mtp_layers,
+            moe_layer_freq=self.moe_layer_freq,
+        )
+        if (
+            self.hybrid_layer_pattern is not None
+            and self.hybrid_layer_pattern != hybrid_layer_pattern
+        ):
+            raise ValueError(
+                "hybrid_layer_pattern does not match csa_compress_ratios and "
+                f"moe_layer_freq: configured {self.hybrid_layer_pattern!r}, "
+                f"derived {hybrid_layer_pattern!r}."
+            )
+        self.hybrid_layer_pattern = hybrid_layer_pattern
+        self.csa_compress_ratios = expand_deepseek_v4_hybrid_compress_ratios(
+            hybrid_layer_pattern,
+            self.csa_compress_ratios,
+        )
+        self.num_attention_layers = logical_num_layers
+        self.num_layers = len(hybrid_layer_pattern.split("/")[0])
 
     # ── CSA / HCA (Compressed Sparse Attention) ──────────────────────────────
     csa_window_size: int = 128
@@ -156,9 +214,12 @@ class DeepseekV4Config(BaseModelMLAConfig):
     # ── MTP ────────────────────────────────────────────────────────────────────
     mtp_num_layers: int = 0
     mtp_loss_coef: float = 0.1
+    hybrid_layer_pattern: Optional[str] = None
+    num_attention_layers: Optional[int] = None
 
     model_spec = [
         "loongforge.models.foundation.deepseek_v4.deepseek_v4_layer_spec",
-        "get_deepseek_v4_decoder_block_and_mtp_spec",
+        "get_deepseek_v4_hybrid_stack_spec",
     ]
     model_type = LanguageModelFamilies.DEEPSEEK_V4
+    model_backend = "hybrid"

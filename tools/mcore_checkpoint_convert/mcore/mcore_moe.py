@@ -52,6 +52,7 @@ class McoreMoe(McoreBase):
         if name not in self.name_map or expert_name not in self.name_map:
             return None
 
+        name_prefix = self.resolve_mtp_name_prefix(name, name_prefix)
         layer_prefix = self.layer_prefix if layer_prefix is None else layer_prefix
         common_key = CommonCheckpoint.get_key(f"{expert_name}.{name}", layer_id=layer_id, expert_id=expert_id)
         (mcore_name, has_extra, is_layernorm), (is_fp8, fp8_ignore_tp), (is_direct_name, ignore_tp, dtype) = \

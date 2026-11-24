@@ -145,7 +145,6 @@ MODEL_PARALLEL_ARGS=(
   --use-distributed-optimizer
   --moe-permute-fusion
   --overlap-grad-reduce
-  --overlap-param-gather
 )
 
 MTP_ARGS=(

@@ -37,7 +37,7 @@ from mcore_checkpoint_convert.common.common_checkpoint import (
     MOE_EXPERT_H_TO_4H, MTP_WORD_EMBEDDING, LAYER_IS_DIRECT_NAME,
     LAYER_PREFIX, MTP_NAME_PREFIX_FOR_LAYER, EXTRA_DATA, LAYER_NAME, LAYER_EXTRA_DATA,
     LAYER_IS_LAYERNORM, LAYER_IS_FP8, LAYER_FP8_IGNORE_TP, LAYER_IGNORE_TP,
-    LAYER_DTYPE
+    LAYER_DTYPE, POST_ATTENTION_LAYERNORM
 )
 
 from mcore_checkpoint_convert.mcore.util.mcore_attn_converter import McoreAttnGateQkvConverter, McoreMixerAttnConverter
@@ -169,6 +169,15 @@ class McoreBase:
         return HuggingfaceBase.get_hf_output_dtype(self.c_config, self.args)
 
     @staticmethod
+    def resolve_mtp_name_prefix(name, name_prefix):
+        """Resolve category-specific prefixes for hybrid MTP inner layers."""
+        if not isinstance(name_prefix, (dict, DictConfig)):
+            return name_prefix
+        if name.startswith(("moe.", "mlp.")) or name == POST_ATTENTION_LAYERNORM:
+            return name_prefix.get("mlp")
+        return name_prefix.get("attention")
+
+    @staticmethod
     def get_mcore_name_and_extra(obj):
         if isinstance(obj, dict) or isinstance(obj, DictConfig):
             mcore_name = obj[LAYER_NAME]
@@ -219,6 +228,9 @@ class McoreBase:
         if name not in self.name_map:
             return None
 
+        # Hybrid MTP stacks split one logical Transformer layer into an
+        # attention layer and an MLP layer under different prefixes.
+        name_prefix = self.resolve_mtp_name_prefix(name, name_prefix)
         layer_prefix = self.layer_prefix if layer_prefix is None else layer_prefix
         if name == MTP_WORD_EMBEDDING:
             layer_id = None
