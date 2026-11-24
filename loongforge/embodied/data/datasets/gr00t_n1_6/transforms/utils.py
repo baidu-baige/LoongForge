@@ -461,9 +461,6 @@ EMBODIMENT_TAG_TO_PROJECTOR_INDEX = {
     "robodojo_arx_x5": 10,
 }
 
-# Eval-side tags whose checkpoint statistics are stored under another tag.
-STATISTICS_TAG_ALIASES = {"robodojo_arx_x5": "new_embodiment"}
-
 """SO100 modality metadata configuration"""
 SO100_MODALITY_META = {
     "state": {"single_arm": {"start": 0, "end": 5}, "gripper": {"start": 5, "end": 6}},

@@ -769,12 +769,17 @@ def test_gr00t_robodojo_modality_matches_official_checkpoint_layout():
         EMBODIMENT_STAT_CONFIGS,
         EMBODIMENT_TAG_TO_PROJECTOR_INDEX,
         MODALITY_CONFIGS,
-        STATISTICS_TAG_ALIASES,
     )
+    from loongforge.embodied.eval.factories.gr00t_n1_7_factory import _statistics_for_tag
 
     cfg = MODALITY_CONFIGS["robodojo_arx_x5"]
     assert EMBODIMENT_TAG_TO_PROJECTOR_INDEX["robodojo_arx_x5"] == EMBODIMENT_TAG_TO_PROJECTOR_INDEX["new_embodiment"]
-    assert STATISTICS_TAG_ALIASES["robodojo_arx_x5"] == "new_embodiment"
+    # The checkpoint trains under NEW_EMBODIMENT, so the eval factory exposes those statistics
+    # under the RoboDojo tag; a tag that is already present is passed through untouched.
+    stats = {"new_embodiment": {"state": {}, "action": {}}}
+    assert _statistics_for_tag(stats, "robodojo_arx_x5")["robodojo_arx_x5"] is stats["new_embodiment"]
+    assert _statistics_for_tag(stats, "new_embodiment") is stats
+    assert _statistics_for_tag({"libero_sim": {}}, "libero_sim") == {"libero_sim": {}}
     meta = EMBODIMENT_STAT_CONFIGS["robodojo_arx_x5"]["modality_meta"]
     assert meta["state"] == meta["action"] == {"left_arm": {"start": 0, "end": 7}, "right_arm": {"start": 7, "end": 14}}
     ckpt = os.environ.get("GR00T_N17_ROBODOJO_CKPT")
@@ -885,7 +890,11 @@ def test_gr00t_n16_robodojo_modality_matches_n17():
     from loongforge.embodied.data.datasets.gr00t_n1_7.transforms import gr00t_transform as n17
 
     assert n16.EMBODIMENT_TAG_TO_PROJECTOR_INDEX["robodojo_arx_x5"] == n16.EMBODIMENT_TAG_TO_PROJECTOR_INDEX["new_embodiment"]
-    assert n16.STATISTICS_TAG_ALIASES == n17.STATISTICS_TAG_ALIASES
+    from loongforge.embodied.eval.factories.gr00t_n1_6_factory import _statistics_for_tag as n16_alias
+    from loongforge.embodied.eval.factories.gr00t_n1_7_factory import _statistics_for_tag as n17_alias
+
+    stats = {"new_embodiment": {"state": {}, "action": {}}}
+    assert n16_alias(stats, "robodojo_arx_x5") == n17_alias(stats, "robodojo_arx_x5")
     assert n16.EMBODIMENT_STAT_CONFIGS["robodojo_arx_x5"]["modality_meta"] == n17.ROBODOJO_ARX_X5_MODALITY_META
     ours, ref = n16.MODALITY_CONFIGS["robodojo_arx_x5"], n17.MODALITY_CONFIGS["robodojo_arx_x5"]
     for modality in ("video", "state", "action", "language"):

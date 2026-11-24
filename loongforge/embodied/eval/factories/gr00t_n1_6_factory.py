@@ -57,6 +57,20 @@ def _load_statistics(path: str) -> Dict[str, Any]:
         return json.load(f)
 
 
+# Eval embodiments whose checkpoint stores its statistics under a different tag: the official
+# RoboDojo fine-tune trains under NEW_EMBODIMENT, so its statistics.json has no
+# ``robodojo_arx_x5`` entry even though the modality layout is registered under that tag.
+_STATISTICS_TAG_ALIASES = {"robodojo_arx_x5": "new_embodiment"}
+
+
+def _statistics_for_tag(statistics: Dict[str, Any], embodiment_tag: str) -> Dict[str, Any]:
+    """Expose the checkpoint's statistics under ``embodiment_tag`` when stored under its alias."""
+    alias = _STATISTICS_TAG_ALIASES.get(embodiment_tag)
+    if embodiment_tag in statistics or alias is None or alias not in statistics:
+        return statistics
+    return {**statistics, embodiment_tag: statistics[alias]}
+
+
 @register_factory("gr00tn1d6")
 class GrootN1d6ModelFactory:
     """Build a GR00T-N1.6 policy exposing the shared predict_action interface."""
@@ -96,7 +110,7 @@ class GrootN1d6ModelFactory:
         eagle_assets_path = model_cfg.vlm_tokenizer_path or model_cfg.model_name
         embodiment_tag = server_args.embodiment_tag
         model.configure_predict_action(
-            checkpoint_statistics=statistics,
+            checkpoint_statistics=_statistics_for_tag(statistics, embodiment_tag),
             eagle_assets_path=eagle_assets_path,
             embodiment_tag=embodiment_tag,
             use_bf16=server_args.use_bf16,

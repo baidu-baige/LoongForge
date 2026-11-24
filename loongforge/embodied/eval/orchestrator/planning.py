@@ -418,11 +418,6 @@ def _assert_per_task_not_split(config: Dict[str, Any], shards: List[Shard]) -> N
 def plan_shards(config: Dict[str, Any], total_workers: int) -> List[Shard]:
     """Shards for this config, via the planner for its benchmark family."""
     family = benchmark_family(config)
-    if family not in PLANNERS:
-        raise ValueError(
-            f"benchmark family {family!r} has no parallel planner; "
-            "run it without the coordinator / servers / pools sections"
-        )
     shards = PLANNERS[family](config, total_workers)
     if family == "libero":
         _assert_per_task_not_split(config, shards)

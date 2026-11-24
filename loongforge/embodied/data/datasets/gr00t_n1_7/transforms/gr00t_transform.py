@@ -66,9 +66,6 @@ EMBODIMENT_TAG_TO_PROJECTOR_INDEX = {
     "robodojo_arx_x5": 10,
 }
 
-# Eval-side tags whose checkpoint statistics are stored under another tag.
-STATISTICS_TAG_ALIASES = {"robodojo_arx_x5": "new_embodiment"}
-
 
 LIBERO_SIM_MODALITY_META = {
     "state": {

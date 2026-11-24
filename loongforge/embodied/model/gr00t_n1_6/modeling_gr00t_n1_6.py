@@ -44,7 +44,6 @@ from loongforge.embodied.data.datasets.gr00t_n1_6.transforms.utils import (
     EMBODIMENT_STAT_CONFIGS,
     EMBODIMENT_TAG_TO_PROJECTOR_INDEX,
     MODALITY_CONFIGS,
-    STATISTICS_TAG_ALIASES,
     convert_lerobot_stats_to_processor_format,
 )
 from loongforge.embodied.model.registry import register_model
@@ -1357,11 +1356,8 @@ class GrootN1d6Policy(nn.Module):
         return self._predict_action_processor_cache[cache_key]
 
     def _coerce_statistics(self, statistics: Dict[str, Any]) -> Dict[str, Any]:
-        stats_tag = self.embodiment_tag
-        if stats_tag not in statistics:
-            stats_tag = STATISTICS_TAG_ALIASES.get(stats_tag, stats_tag)
-        if stats_tag in statistics:
-            embodiment_stats = statistics[stats_tag]
+        if self.embodiment_tag in statistics:
+            embodiment_stats = statistics[self.embodiment_tag]
             if not {"state", "action"}.issubset(embodiment_stats):
                 raise ValueError(
                     f"Statistics for {self.embodiment_tag!r} must include 'state' and 'action'."

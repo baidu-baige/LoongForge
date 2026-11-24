@@ -207,6 +207,24 @@ class LingBotVAInferenceConfig:
         return max(1, self.action_per_frame // 4)
 
 
+class _Fp32StepScheduler(LingBotVAFlowMatchScheduler):
+    """``upstream_numerics``: take the Euler step size in fp32, as upstream ``wan_va_server`` does.
+
+    The shared scheduler casts both sigmas to the sample dtype first; upstream applies a 0-dim
+    fp32 CPU step size to the sample. Only the step differs, so the schedule itself is inherited.
+    """
+
+    def step(self, model_output: torch.Tensor, timestep: torch.Tensor, sample: torch.Tensor) -> torch.Tensor:
+        """Run one denoising step with the sigma difference taken in fp32."""
+        if not torch.is_tensor(timestep):
+            timestep = torch.tensor(timestep)
+        timesteps = self.timesteps.to(timestep.device)
+        index = int(torch.argmin((timesteps - timestep.reshape(-1)[0]).abs()))
+        sigma = self.sigmas[index]
+        sigma_next = self.sigmas[index + 1] if index + 1 < len(self.sigmas) else torch.zeros_like(sigma)
+        return sample + model_output * (sigma_next - sigma)
+
+
 class LingBotVAPredictActionModel(nn.Module):
     """Closed-loop LingBot-VA inference behind the shared ``predict_action`` contract.
 
@@ -263,12 +281,12 @@ class LingBotVAPredictActionModel(nn.Module):
         The video and action streams denoise on deliberately different schedules, so
         each gets its own instance built through this helper.
         """
-        return LingBotVAFlowMatchScheduler(
+        scheduler_cls = _Fp32StepScheduler if self.config.upstream_numerics else LingBotVAFlowMatchScheduler
+        return scheduler_cls(
             num_train_timesteps=self.config.num_train_timesteps,
             shift=shift,
             sigma_min=self.config.sigma_min,
             extra_one_step=self.config.extra_one_step,
-            fp32_step=self.config.upstream_numerics,
         )
 
     # ── construction / weights ───────────────────────────────────────

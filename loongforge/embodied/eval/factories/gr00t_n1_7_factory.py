@@ -62,6 +62,20 @@ def _load_statistics(path: str) -> Dict[str, Any]:
         return json.load(f)
 
 
+# Eval embodiments whose checkpoint stores its statistics under a different tag: the official
+# RoboDojo fine-tune trains under NEW_EMBODIMENT, so its statistics.json has no
+# ``robodojo_arx_x5`` entry even though the modality layout is registered under that tag.
+_STATISTICS_TAG_ALIASES = {"robodojo_arx_x5": "new_embodiment"}
+
+
+def _statistics_for_tag(statistics: Dict[str, Any], embodiment_tag: str) -> Dict[str, Any]:
+    """Expose the checkpoint's statistics under ``embodiment_tag`` when stored under its alias."""
+    alias = _STATISTICS_TAG_ALIASES.get(embodiment_tag)
+    if embodiment_tag in statistics or alias is None or alias not in statistics:
+        return statistics
+    return {**statistics, embodiment_tag: statistics[alias]}
+
+
 def _load_processor_kwargs(ckpt_path: str) -> Dict[str, Any]:
     """Read the checkpoint's ``processor_config.json`` ``processor_kwargs``.
 
@@ -132,7 +146,7 @@ class GrootN1d7ModelFactory:
         statistics = _load_statistics(server_args.dataset_statistics_path)
         embodiment_tag = server_args.embodiment_tag
         model.configure_predict_action(
-            checkpoint_statistics=statistics,
+            checkpoint_statistics=_statistics_for_tag(statistics, embodiment_tag),
             embodiment_tag=embodiment_tag,
             use_bf16=server_args.use_bf16,
             # Mirror the checkpoint's own processor spec (image crop/resize) verbatim
