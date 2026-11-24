@@ -126,6 +126,15 @@ def _validate_extra_model_args(args, config):
             "---------------- End of configuration ----------------", args.rank
         )
 
+    # DeepSeek-V4 keeps the legacy group-query field for checkpoint
+    # compatibility, while MCore 0.20 represents MLA as a separate mode and
+    # rejects both flags at once.
+    if (
+        args.model_family == constants.LanguageModelFamilies.DEEPSEEK_V4
+        and args.multi_latent_attention
+    ):
+        args.group_query_attention = False
+
     # Version guard for Qwen3-VL: transformers must be recent enough.
     if args.model_family == constants.VisionLanguageModelFamilies.QWEN3_VL:
         required = PkgVersion("4.57.1")
