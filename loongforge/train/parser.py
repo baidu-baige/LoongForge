@@ -101,12 +101,18 @@ def parse_megatron_arguments(extra_args_provider=None, parse_unknown_args=False)
     if args.world_size == -1:
         args.world_size = int(os.getenv("WORLD_SIZE", "1"))
 
-    # These three LoongForge checks read attributes that MCore 0.20 no longer
-    # defines. Keep their legacy defaults explicit; other defaults come from
-    # MCore's argument parser.
+    # MCore 0.20 removed these legacy-only attributes. Keep LoongForge's
+    # validators and the retained diffusion runtime deterministic while leaving
+    # every feature disabled unless it is explicitly configured.
     compatibility_defaults = {
         "async_tensor_model_parallel_allreduce": True,
+        "chunk_num_per_seq": 0,
+        "force_turn_on_bucketing": False,
         "preprocess_data_on_cpu": False,
+        "retro_add_retriever": False,
+        "retro_cyclic_train_iters": None,
+        "retro_project_dir": None,
+        "use_custom_fsdp": False,
         "use_legacy_models": False,
     }
     for key, value in compatibility_defaults.items():
