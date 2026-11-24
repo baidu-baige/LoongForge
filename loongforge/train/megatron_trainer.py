@@ -232,6 +232,15 @@ def pretrain_with_mcore(
         raise NotImplementedError("This MCore runtime adapter does not yet support EMA or PEFT")
 
     callbacks = CallbackManager()
+    if getattr(model_config, "image_encoder", None) is not None:
+        from loongforge.train.initialize import initialize_mimo_vision_parallel_state
+
+        callbacks.register(
+            "on_setup_start",
+            lambda _context: initialize_mimo_vision_parallel_state(
+                model_config.image_encoder
+            ),
+        )
     if _requires_variable_seq_lengths(train_args, model_config):
         callbacks.register(
             "on_data_init_start",
