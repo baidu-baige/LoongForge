@@ -17,6 +17,12 @@ Per-model protocol wiring:
 - ``fastwam_joint14`` -> FastWAMPayloadBuilder(state_encoding=
                          "robotwin_joint14") + IdentityDecoder (absolute
                          14D qpos, official client does no reorder)
+- ``lingbot_vla_v2_joint14`` -> LingBotVLAV2PayloadBuilder(state_encoding=
+                         "robotwin_joint14") + IdentityDecoder (absolute
+                         14D qpos). The community client replans once per
+                         50-step chunk, which the shared client-owned chunk
+                         path reproduces: set ``benchmark.return_action_chunk``
+                         and ``benchmark.skip_intra_chunk_obs``.
 """
 
 from __future__ import annotations
@@ -43,6 +49,9 @@ _BRIDGE_WIRING = {
     # actions; the official deploy_policy feeds the chunk straight to
     # take_action (identity decode, no reorder, no per-arm remap).
     "fastwam_joint14": ("fastwam", "robotwin_joint14", ""),
+    # LingBot-VLA v2 RoboTwin: raw 3-cam RGB + float64 14D joint state in,
+    # absolute 14D qpos chunk out (community client feeds take_action directly).
+    "lingbot_vla_v2_joint14": ("lingbot_vla_v2", "robotwin_joint14", ""),
 }
 
 
@@ -175,6 +184,11 @@ class ModelClient:
                 "episode_id": self.episode_id,
                 "episode_step": step,
                 "instruction": instruction,
+                # The canonical state is rounded to float32; some community clients send
+                # float64 proprio. Carry the unrounded vector so a PayloadBuilder can match
+                # it bit for bit. Built once per request, and ignored by builders that do
+                # not read it.
+                "joint_f64": np.asarray(observation["joint_action"]["vector"], dtype=np.float64).reshape(-1),
             }
             model_kwargs = self.payload_builder.build(canonical_obs, ctx)
             response = self.client.predict_action(
