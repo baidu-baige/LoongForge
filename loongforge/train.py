@@ -17,8 +17,11 @@ import sys
 # a launcher only puts the package directory on PYTHONPATH.
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 for _path in (_REPO_ROOT, os.path.join(_REPO_ROOT, "tools")):
-    if _path not in sys.path:
-        sys.path.insert(0, _path)
+    # An existing PYTHONPATH entry may otherwise make another repo's ``tools``
+    # package win before this checkout is imported.
+    while _path in sys.path:
+        sys.path.remove(_path)
+    sys.path.insert(0, _path)
 
 logging.basicConfig(level=logging.WARNING)
 from loongforge.train import parse_train_args

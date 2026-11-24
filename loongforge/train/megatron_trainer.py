@@ -39,8 +39,10 @@ def _load_hf_weights(context, *, args, model_config):
         os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     )
     for path in (repo_root, os.path.join(repo_root, "tools")):
-        if path not in sys.path:
-            sys.path.insert(0, path)
+        # Keep this checkout ahead of other repo roots that may define ``tools``.
+        while path in sys.path:
+            sys.path.remove(path)
+        sys.path.insert(0, path)
     from tools.mcore_bridge.checkpoint.hf_checkpoint_loader import load_hf_checkpoint_online
 
     layout = getattr(model_config, "pipeline_model_parallel_layout", None)
