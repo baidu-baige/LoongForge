@@ -19,7 +19,8 @@ from os.path import dirname
 SCRIPT_DIR = dirname(os.path.abspath(__file__))
 sys.path.append(dirname(dirname(SCRIPT_DIR)))
 
-from mcore_checkpoint_convert.huggingface.huggingface_checkpoint import HuggingFaceCheckpoint
+from mcore_checkpoint_convert.huggingface.huggingface_checkpoint import HuggingFaceCheckpoint, save_dsv41_hf_config
+from mcore_checkpoint_convert.huggingface.huggingface_base import is_dsv41_config
 from mcore_checkpoint_convert.huggingface.huggingface_config import HuggingFaceConfig
 from mcore_checkpoint_convert.mcore.mcore_checkpoint import McoreCheckpoint
 from mcore_checkpoint_convert.mcore.mcore_config import McoreConfig
@@ -338,6 +339,11 @@ def _convert_checkpoint(args):
         ep_expert_mapping = None
         if cur_ep_ids is not None:
             expert_local_mapping, expert_ep_mapping, ep_expert_mapping = get_ep_map(num_experts, ep)
+            if is_dsv41_config(c_config):
+                # Decode only the experts owned by this conversion rank.
+                ep_expert_mapping = {
+                    ep_id: ep_expert_mapping[ep_id] for ep_id in cur_ep_ids
+                }
 
         if (Model.check_done_files(args.save_platform, args.save_ckpt_path, layer_dict, expert_dict=ep_expert_mapping)):
             logging.info(f"{args.save_ckpt_path=}, {layer_dict=}, " \
@@ -384,6 +390,10 @@ def _convert_checkpoint(args):
                 time.sleep(10)
         if args.save_platform == "huggingface":
             make_hf_sub_checkpoints(args.save_ckpt_path)
+            if is_dsv41_config(c_config):
+                save_dsv41_hf_config(
+                    args.hf_official_config_file, args.save_ckpt_path, c_config.get_dtype()
+                )
 
     logging.info(f"Finished convert checkpoint {args.load_platform} -> {args.save_platform}")
 

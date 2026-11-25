@@ -87,6 +87,7 @@
 
 ## 🔥 最新动态
 
+- **[2026/11]** ✨ 新增 **[DeepSeek-V4.1-Flash](./examples/deepseek_v4.1/)** 训练支持。
 - **[2026/11]** 📄 发布 **[LoongForge-Embodied](https://arxiv.org/abs/2611.25460v1)** 技术报告 —— 面向异构具身模型的统一训练框架。
 - **[2026/11]** ✨ 新增 **[ERNIE-5.5-Flash-Base](./examples/ernie5.5/)** 的 BF16 预训练与监督微调（SFT）支持。
 - **[2026/10]** 🤖 新增 **[LingBot-VLA-v2](./examples/embodied/lingbot_vla_v2/)** VLA 训练支持，基于新的 tensor_wise 分布式优化器与 Muon；`--optimizer muon` 也可在普通 DDP 下用于任意模型。
@@ -360,6 +361,7 @@ bash examples/embodied/pi05/run_pi05_ddp_finetune.sh
 <li><a href="examples/llava_onevision_1.5/">LLaVA-OneVision-1.5</a></li>
 <li><a href="examples/internvl2.5/">InternVL2.5</a></li>
 <li><a href="examples/internvl3.5/">InternVL3.5</a></li>
+<li><a href="examples/deepseek_v4.1/">DeepSeek-V4.1-Flash</a></li>
 </ul>
 </td>
 <td valign="top">

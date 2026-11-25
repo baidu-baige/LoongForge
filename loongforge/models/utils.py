@@ -110,10 +110,7 @@ def build_model_config(args, config):
 
     model_cfgs = {}
 
-    if (hasattr(config, "model_type") and config.model_type in
-            (set(constants.LanguageModelFamilies.names()) |
-            set(constants.CustomModelFamilies.names()) |
-            set(constants.VisionLanguageActionModelFamilies.names()))):
+    if hasattr(config, "model_type") and config.model_type in constants.get_all_model_families():
         model_type = config.model_type
         model_config = config
     else:
@@ -124,7 +121,9 @@ def build_model_config(args, config):
 
     # assert hasattr(config.model, "model_type"), "model_type is required in model config"
     vision_custom_names = {*constants.VisionLanguageModelFamilies.names(), *constants.CustomModelFamilies.names()}
-    if model_type in vision_custom_names:
+    if model_type in vision_custom_names and (
+        model_type in constants.CustomModelFamilies.names() or "_target_" not in model_config
+    ):
         # get the global args dict which contains all model component args
         global_args_dict = get_args_dict()
         for name, config_values in model_config.items():
@@ -145,7 +144,8 @@ def build_model_config(args, config):
                 model_cfgs[name] = config_values
         model_cfgs = VLMModelConfig(**model_cfgs)
     elif model_type in (set(constants.LanguageModelFamilies.names())
-                        | set(constants.CustomModelFamilies.names())):
+                        | set(constants.CustomModelFamilies.names())
+                        | set(constants.VisionLanguageModelFamilies.names())):
         if "_target_" not in model_config:
             raise ValueError(
                 "Model config missing '_target_' field.\n"

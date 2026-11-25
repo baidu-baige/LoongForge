@@ -87,6 +87,7 @@ Since optimal training strategies differ across model families and scales, Loong
 
 ## 🔥 Latest News
 
+- **[2026/11]** ✨ Added training support for **[DeepSeek-V4.1-Flash](./examples/deepseek_v4.1/)**.
 - **[2026/11]** 📄 Released the **[LoongForge-Embodied](https://arxiv.org/abs/2611.25460v1)** technical report — a unified framework for training heterogeneous embodied models.
 - **[2026/11]** ✨ Added BF16 pretraining and supervised fine-tuning (SFT) support for **[ERNIE-5.5-Flash-Base](./examples/ernie5.5/)**.
 - **[2026/10]** 🤖 Added VLA training support for **[LingBot-VLA-v2](./examples/embodied/lingbot_vla_v2/)**, built on the new tensor_wise distributed optimizer with Muon. `--optimizer muon` also runs under plain DDP for any model.
@@ -361,6 +362,7 @@ Click any model for its training examples; see [`configs/models/`](./configs/mod
 <li><a href="examples/llava_onevision_1.5/">LLaVA-OneVision-1.5</a></li>
 <li><a href="examples/internvl2.5/">InternVL2.5</a></li>
 <li><a href="examples/internvl3.5/">InternVL3.5</a></li>
+<li><a href="examples/deepseek_v4.1/">DeepSeek-V4.1-Flash</a></li>
 </ul>
 </td>
 <td valign="top">

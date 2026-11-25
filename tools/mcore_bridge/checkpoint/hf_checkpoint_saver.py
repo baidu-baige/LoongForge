@@ -27,6 +27,8 @@ from mcore_bridge.utils import time_checkpoint_operation
 # Import the utility function for merging checkpoints
 from tools.mcore_checkpoint_convert.utils.utils import make_hf_sub_checkpoints, get_etp_map
 from tools.mcore_checkpoint_convert.utils.config_utils import get_yaml_config
+from tools.mcore_checkpoint_convert.huggingface.huggingface_base import is_dsv41_config
+from tools.mcore_checkpoint_convert.huggingface.huggingface_checkpoint import save_dsv41_hf_config
 
 
 def _consolidate_pp_checkpoints(save_hf_path: str, pp_size: int, original_hf_path: Optional[str] = None) -> None:
@@ -417,6 +419,14 @@ def save_hf_checkpoint_online(
             ]
             with open(config_path, "w") as stream:
                 json.dump(hf_config, stream, indent=2)
+        if is_dsv41_config(c_config):
+            source_hf_path = getattr(args, "pretrained_checkpoint", None) or args.load
+            config_file = (
+                os.path.join(source_hf_path, "config.json")
+                if source_hf_path is not None
+                else None
+            )
+            save_dsv41_hf_config(config_file, save_hf_path, args.params_dtype)
 
     print_rank_0("="*80)
     print_rank_0("HF checkpoint saved successfully!")
