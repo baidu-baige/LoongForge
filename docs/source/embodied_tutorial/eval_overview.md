@@ -66,10 +66,12 @@ To run several sim workers per GPU behind a global queue, add `servers:` and `po
 | **DreamZero-AgiBot** | | | | | smoke run only — no official RoboDojo checkpoint | |
 
 - **Task success**: at least one episode passed the benchmark's official success criterion.
+- **Weights**: parentheses show the Hugging Face weight (`org/name`) that achieved the run. RoboDojo
+  checkpoint directories are inside [RoboDojo-Benchmark/RoboDojo](https://huggingface.co/datasets/RoboDojo-Benchmark/RoboDojo).
 - **Connectivity only**: the pipeline runs with `random_init: true` and no score — either no domain weights are released, or the benchmark assets block a full run (e.g. xvla CALVIN: the weights are public, but the official online rollout needs the original-format validation dataset).
-- **—**: not supported yet — coming soon. Empty: the model runs on that benchmark but has no published result here.
-- Per-benchmark details: the [benchmark pages](eval_docs/benchmarks/index.md). RoboDojo checkpoint
-  directories are inside [RoboDojo-Benchmark/RoboDojo](https://huggingface.co/datasets/RoboDojo-Benchmark/RoboDojo).
+- **—**: not supported yet — coming soon.
+- **Empty**: the model runs on that benchmark but has no published result here.
+- **Detailed results**: see the per-benchmark [benchmark pages](eval_docs/benchmarks/index.md).
 
 ## Model Interface
 
