@@ -164,6 +164,23 @@ class Qwen2VLRotaryEmbedding(torch.nn.Module):
         return emb.transpose(0, 2).contiguous() # [3, bs, seq_len, dim] -> [seq_len, bs, 3, dim]
 
 
+def use_native_mrope_for_qwen2_vl(config) -> bool:
+    """Return whether the config explicitly selects MCore native mRoPE.
+
+    The legacy Qwen2-VL marker remains on the original
+    ``Qwen2VLRotaryEmbedding`` path until the native implementation has a
+    matching regression baseline.  Mapping it unconditionally changes the
+    numerical result for existing Qwen2.5-VL SFT checkpoints.
+    """
+    if (
+        config.rotary_emb_func == "Qwen2VLRotaryEmbedding"
+        and config.position_embedding_type == "rope"
+        and not config.multi_latent_attention
+    ):
+        return False
+    return config.position_embedding_type == "mrope"
+
+
 class Qwen2Model(BaseGPTModel):
     """Qwen Transformer language model.
 
@@ -212,18 +229,24 @@ class Qwen2Model(BaseGPTModel):
         else:
             model_spec = config.model_spec
         transformer_layer_spec = import_module(model_spec, config)
+        native_mrope = use_native_mrope_for_qwen2_vl(config)
         rotary_pos_emb = None
         if (
-            config.rotary_emb_func == "Qwen2VLRotaryEmbedding"
+            not native_mrope
+            and config.rotary_emb_func == "Qwen2VLRotaryEmbedding"
             and config.position_embedding_type == "rope"
             and not config.multi_latent_attention
         ):
+            # Keep the legacy Qwen2.5-VL mRoPE numerically aligned with the
+            # pre-0.20 stack.  Native mRoPE remains opt-in through an explicit
+            # ``position_embedding_type: mrope`` config.
             rotary_pos_emb = Qwen2VLRotaryEmbedding(
                 dim=config.hidden_size // config.num_attention_heads,
                 theta=config.rotary_base,
             )
         elif (
-            config.rotary_emb_func == "DynamicRotaryEmbedding"
+            not native_mrope
+            and config.rotary_emb_func == "DynamicRotaryEmbedding"
             and config.position_embedding_type == "rope"
             and not config.multi_latent_attention
         ):
@@ -303,9 +326,32 @@ class Qwen2Model(BaseGPTModel):
         # Rotary positional embeddings (embedding is None for PP intermediate devices)
         if (
             rotary_pos_emb is None
+            and self.config.rotary_emb_func == "Qwen2VLRotaryEmbedding"
             and self.position_embedding_type == "rope"
             and not self.config.multi_latent_attention
-            and self.config.rotary_emb_func != "Qwen2VLRotaryEmbedding"
+        ):
+            rotary_pos_emb = self.rotary_pos_emb(
+                position_ids,
+                packed_seq=packed_seq_params,
+            )
+        elif (
+            rotary_pos_emb is None
+            and self.position_embedding_type == "mrope"
+            and not self.config.multi_latent_attention
+        ):
+            rotary_pos_emb = self.rotary_pos_emb(
+                position_ids,
+                self.mrope_section,
+                cp_group=(
+                    packed_seq_params.cp_group
+                    if packed_seq_params is not None
+                    else None
+                ),
+            )
+        elif (
+            rotary_pos_emb is None
+            and self.position_embedding_type == "rope"
+            and not self.config.multi_latent_attention
         ):
             rotary_seq_len = self.rotary_pos_emb.get_rotary_seq_len(
                 inference_params,

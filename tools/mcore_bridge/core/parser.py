@@ -160,8 +160,8 @@ class Parser:
 
 
 
-    def get_parallel_config(self):
-        """Build ParallelConfig from param_dict."""
+    def get_parallel_config(self, *, model_config=None):
+        """Build ParallelConfig, using the resolved encoder TP for online loading."""
         parallel_params = {}
 
         parallel_fields = [
@@ -178,8 +178,16 @@ class Parser:
         for field in parallel_fields:
             if field in self.param_dict:
                 parallel_params[field] = self.param_dict[field]
+        image_encoder = getattr(model_config, 'image_encoder', None)
+        if self.type == 'vlm' and image_encoder is not None:
+            parallel_params['encoder_tp_size'] = image_encoder.tensor_model_parallel_size
         parallel_params['hf_checkpoint_device'] = f'cuda:{torch.cuda.current_device()}' if torch.cuda.is_available() else 'cpu'
-        if 'ep_size' in self.param_dict:
+        # Dense models have no expert-parallel sharding. Loading the complete
+        # HF state dict onto every GPU duplicates the full checkpoint before
+        # the topology sharder can split it, which OOMs 7B+ VLM/LM cases.
+        if self.param_dict.get('ep_size') is None:
+            parallel_params['hf_checkpoint_device'] = "cpu"
+        elif 'ep_size' in self.param_dict:
             etp_size = self.param_dict['etp_size'] if 'etp_size' in self.param_dict else self.param_dict['tp_size']
             if etp_size == 1:
                 parallel_params['hf_checkpoint_device'] = "cpu"

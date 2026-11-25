@@ -1,4 +1,5 @@
 _target_: loongforge.models.encoder.ErnieVisionConfig
+tensor_model_parallel_size: 1
 
 num_layers: 32
 embed_dim: 1280

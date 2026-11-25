@@ -389,12 +389,14 @@ def _launch_param_major_prime(
     return last_work
 
 
-def _delta_foreach_all_gather_copy_out(all_gather_result, fsdp_params, group):
+def _delta_foreach_all_gather_copy_out(
+    all_gather_result, fsdp_params, group, **kwargs
+):
     """Skip the stock copy when the result already owns FSDP output storage."""
     state = _ALIASED_RESULTS.get(id(all_gather_result.all_gather_output))
     if state is None or not state.fsdp_params:
         return _ORIGINAL_FOREACH_ALL_GATHER_COPY_OUT(
-            all_gather_result, fsdp_params, group
+            all_gather_result, fsdp_params, group, **kwargs
         )
     if not fsdp_params or id(fsdp_params[0]) != id(state.fsdp_params[0]):
         raise RuntimeError("delta-fp8 aliased AllGatherResult used by another FSDP group")

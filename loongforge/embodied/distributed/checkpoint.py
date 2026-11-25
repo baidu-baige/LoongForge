@@ -1256,11 +1256,18 @@ def _save_zero_optimizer_state(path, optimizer, ctx, async_save: bool = False):
     children = _zero_optimizer_children(optimizer)
     local_state = []
     for child in children:
-        # LR schedulers update ZeRO's public groups. The rank-local optimizer
-        # can retain the previous step's LR until the next ZeRO update, so
-        # checkpoint the public options that the next update will consume.
-        _copy_param_group_options(child.param_groups, child.optim.param_groups)
-        local_state.append(_local_optimizer_state_dict(child.optim))
+        if _owns_local_state(child):
+            # TensorWiseOptimizer owns its masters and exposes the complete
+            # rank-local payload itself; child.optim is only its inner
+            # optimizer and does not carry the backend marker.
+            local_state.append(_local_optimizer_state_dict(child))
+        else:
+            # LR schedulers update ZeRO's public groups. The rank-local
+            # optimizer can retain the previous step's LR until the next ZeRO
+            # update, so checkpoint the public options that the next update
+            # will consume.
+            _copy_param_group_options(child.param_groups, child.optim.param_groups)
+            local_state.append(_local_optimizer_state_dict(child.optim))
 
     rank_path = os.path.join(state_dir, f"rank_{ctx.rank}.pt")
     future = None

@@ -1,4 +1,5 @@
 _target_: loongforge.models.encoder.Qwen35VisionConfig
+tensor_model_parallel_size: 1
 
 num_layers: 27
 hidden_size: 1152

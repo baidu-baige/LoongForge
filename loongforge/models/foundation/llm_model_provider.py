@@ -22,6 +22,9 @@ def llm_model_provider(
     post_process: bool = True,
     parallel_output: bool = True,
     vp_stage: Optional[int] = None,
+    config=None,
+    pg_collection=None,
+    **kwargs,
 ):
     """Generic LLM model provider.
     
@@ -35,6 +38,8 @@ def llm_model_provider(
     """
     args = get_args()
 
+    # MCore's provider fallback passes its resolved config and process groups.
+    # LoongForge still owns the concrete model config and reads it globally.
     config = get_model_config()
 
     print_rank_0(f"Building {config.model_type} model...")

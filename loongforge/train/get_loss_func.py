@@ -12,6 +12,12 @@ from megatron.core import mpu
 import torch.distributed as dist
 
 
+def _masked_sum(losses: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
+    """Sum weighted losses after masking zero-weight positions."""
+    safe_losses = torch.where(weights != 0, losses, torch.zeros_like(losses))
+    return torch.sum(safe_losses * weights)
+
+
 def default_loss_func(
     loss_mask: torch.Tensor,
     output_tensor: torch.Tensor,
@@ -31,7 +37,7 @@ def default_loss_func(
     args = get_args()
 
     if (loss_weight is not None and loss_weight.sum() == 0) or (loss_mask.sum() == 0):
-        output_tensor = output_tensor * 0.0
+        output_tensor = torch.zeros_like(output_tensor)
         valid_mask = False
     else:
         valid_mask = True
@@ -53,9 +59,9 @@ def default_loss_func(
             shift_weights_sum = shift_weights_sum / mpu.get_data_parallel_world_size(
                 with_context_parallel=True
             )
-        loss = torch.sum(losses * shift_weights)
+        loss = _masked_sum(losses, shift_weights)
     else:
-        loss = torch.sum(losses * loss_mask)
+        loss = _masked_sum(losses, loss_mask)
 
     # Check individual rank losses are not NaN prior to DP all-reduce.
     if args.check_for_nan_in_loss_and_grad:
@@ -116,7 +122,7 @@ def loss_func_internvl(
     valid_mask = True
     if (loss_weight is not None and loss_weight.sum() == 0) or (loss_mask.sum() == 0):
         valid_mask = False
-        output_tensor = output_tensor * 0.0  # skip update current microbatch
+        output_tensor = torch.zeros_like(output_tensor)  # skip update current microbatch
 
     losses = output_tensor.view(-1).float()  # [B, s]
     loss_mask = loss_mask.view(-1).float()  # [B * s]
@@ -133,9 +139,9 @@ def loss_func_internvl(
             shift_weights_sum = shift_weights_sum / mpu.get_data_parallel_world_size(
                 with_context_parallel=True
             )
-        loss = torch.sum(losses * shift_weights)
+        loss = _masked_sum(losses, shift_weights)
     else:
-        loss = torch.sum(losses * loss_mask)
+        loss = _masked_sum(losses, loss_mask)
 
     # Check individual rank losses are not NaN prior to DP all-reduce.
     if args.check_for_nan_in_loss_and_grad:

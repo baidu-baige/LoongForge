@@ -39,6 +39,7 @@ from megatron.core.utils import (
     check_param_hashes_across_dp_replicas,
     get_model_config,
     StragglerDetector,
+    unwrap_model,
 )
 from megatron.core.num_microbatches_calculator import (
     get_num_microbatches,
@@ -72,7 +73,13 @@ from megatron.core.distributed.fsdp.mcore_fsdp_adapter import (
     FullyShardedDataParallel as megatron_FSDP,
 )
 from megatron.core.pipeline_parallel import get_forward_backward_func
-from megatron.core.optimizer import get_megatron_optimizer, OptimizerConfig
+from megatron.core.optimizer import (
+    OptimizerConfig,
+    ParamGroupOverride,
+    ParamKey,
+    get_megatron_optimizer,
+    get_standard_config_overrides,
+)
 from megatron.core.rerun_state_machine import get_rerun_state_machine, RerunDataIterator, RerunState
 from megatron.core.transformer.moe import upcycling_utils
 from megatron.core.transformer.moe.moe_utils import track_moe_metrics
@@ -99,7 +106,6 @@ from .checkpointing import (
 from megatron.training.utils import (
     calc_params_l2_norm,
     report_memory,
-    unwrap_model,
     update_use_dist_ckpt,
     logical_and_across_model_parallel_group,
     reduce_max_stat_across_model_parallel_group,
@@ -107,8 +113,8 @@ from megatron.training.utils import (
 )
 from megatron.training.theoretical_memory_usage import report_theoretical_memory
 from megatron.training.async_utils import maybe_finalize_async_save
+from megatron.training.utils.log_utils import append_to_progress_log
 from megatron.training.training import (
-    append_to_progress_log,
     print_datetime,
     build_train_valid_test_data_iterators,
     evaluate_and_print_results,
@@ -406,7 +412,7 @@ def pretrain(
     timers = get_timers()
 
     if args.log_progress:
-        append_to_progress_log("Starting job")
+        append_to_progress_log(args.save, "Starting job")
 
     # Initialize fault tolerance
     # NOTE: ft_integration functions other than `setup` are no-op if the FT is not initialized
@@ -875,7 +881,7 @@ def get_model(
 
     # Fp16 conversion.
     if args.fp16 or args.bf16:
-        param_pattern = args.use_fp32_dtype_for_param_pattern
+        param_pattern = getattr(args, "use_fp32_dtype_for_param_pattern", None)
         if param_pattern and not isinstance(param_pattern, list):
             param_pattern = [param_pattern]
 
@@ -954,7 +960,10 @@ def get_model(
             if args.use_megatron_fsdp and args.use_precision_aware_optimizer:
                 kwargs["preserve_fp32_weights"] = False
 
-            kwargs["force_turn_on_bucketing"] = args.force_turn_on_bucketing
+            if "force_turn_on_bucketing" in {
+                field.name for field in dataclasses.fields(DistributedDataParallelConfig)
+            }:
+                kwargs["force_turn_on_bucketing"] = args.force_turn_on_bucketing
             ddp_config = DistributedDataParallelConfig(**kwargs)
 
             # In the Megatron FSDP and DDP use path, we need to initialize the bucket size.
@@ -1054,26 +1063,19 @@ def setup_model_and_optimizer(
     config = OptimizerConfig(**kwargs)
     config.timers = timers
 
-    # If the user is asking for a non-zero embedding init std, skip weight decay for embeddings
-    # to avoid embeddings from shrinking to zero as recommended in https://arxiv.org/abs/2312.16903
-    # default_skip_embedding_weight_decay=args.embedding_init_method_std is not None,
-
-    # Control whether to force every parameter into the weight‑decay group.
-    # Legacy default (flag unset) keeps the old behavior: force everything.
-    # When --force-all-weight-decay true/false is provided, we respect that choice.
-    if getattr(args, "force_all_weight_decay", None):
-        no_wd_decay_cond = (False,)
+    # MCore 0.20 moved weight-decay grouping into config_overrides. Preserve the
+    # legacy LoongForge rule: a non-zero embedding init std excludes embedding
+    # weights from weight decay (https://arxiv.org/abs/2312.16903).
+    config_overrides = get_standard_config_overrides(config=config)
+    if getattr(args, "embedding_init_method_std", None) is not None:
+        config_overrides[ParamKey(name="*embedding*")] = ParamGroupOverride(wd_mult=0.0)
 
     optimizer = get_megatron_optimizer(
         config,
         model,
-        no_wd_decay_cond,
-        scale_lr_cond,
-        lr_mult,
-        use_gloo_process_groups=args.enable_gloo_process_groups,
-        # If the user is asking for a non-zero embedding init std, skip weight decay for embeddings
-        #  to avoid embeddings from shrinking to zero as recommended in https://arxiv.org/abs/2312.16903
-        default_skip_embedding_weight_decay=args.embedding_init_method_std is not None,
+        config_overrides=config_overrides,
+        use_gloo_process_groups=args.use_gloo_process_groups,
+        dump_param_to_param_group_map=args.dump_param_to_param_group_map,
     )
     opt_param_scheduler = get_optimizer_param_scheduler(optimizer)
 
@@ -1277,6 +1279,7 @@ def compute_throughputs_and_append_to_progress_log(
         "Saving async checkpoint" if args.async_save else "Saved checkpoint"
     )
     append_to_progress_log(
+        args.save,
         f"{saved_ckpt_prefix}\tIteration: {iteration}\t"
         f"Job throughput: {job_throughput:.1f} TFLOP/s/GPU\t"
         f"Cumulative throughput: {cumulative_throughput:.1f} TFLOP/s/GPU\t"
@@ -2485,7 +2488,10 @@ def train(
     # Setup some training config params.
     config.grad_scale_func = optimizer.scale_loss
     config.timers = timers
-    if isinstance(model[0], (megatron_FSDP, DDP)) and args.overlap_grad_reduce:
+    is_ddp_or_megatron_fsdp = isinstance(model[0], DDP) or (
+        isinstance(megatron_FSDP, type) and isinstance(model[0], megatron_FSDP)
+    )
+    if is_ddp_or_megatron_fsdp and args.overlap_grad_reduce:
         assert config.no_sync_func is None, (
             "When overlap_grad_reduce is True, config.no_sync_func must be None; "
             "a custom no_sync_func is not supported when overlapping grad-reduce"
@@ -2740,7 +2746,8 @@ def train(
             and args.timing_log_level < 1
             and (iteration + 1) % args.detail_log_interval == 0
         ):
-            timers.set_show_detail_log(True)
+            if hasattr(timers, "set_show_detail_log"):
+                timers.set_show_detail_log(True)
 
         args.curr_iteration = iteration
         ft_integration.on_training_step_start()
@@ -2935,7 +2942,8 @@ def train(
         # The timer will call cuda.sync, causing the asynchronous stream to be ineffective
         # and leading to a decrease in performance. Therefore, considering performance,
         # only the time of a single iteration is recorded to minimize the impact on performance.
-        timers.set_show_detail_log(False)
+        if hasattr(timers, "set_show_detail_log"):
+            timers.set_show_detail_log(False)
 
     # Flush TensorBoard, WandB writers and one-logger.
     writer = get_tensorboard_writer()

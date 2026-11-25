@@ -38,12 +38,32 @@ def validate_megatron_args(args):
     """Validate Megatron arguments"""
     _align_wan_packing_seq_length(args)
     _validate_legacy_pipeline_args(args)
+    _prepare_sft_chunkpipe_validation(args)
     validate_args(args)
 
 
 def validate_custom_model_args(name, args):
     """Validate non foundational model arguments"""
     _validate_custom_model_args(name, args)
+
+
+def _prepare_sft_chunkpipe_validation(args):
+    """Set the SFT phase flag before MCore derives ChunkPipe flags."""
+    if (
+        getattr(args, "training_phase", None) == constants.TrainingPhase.SFT
+        and getattr(args, "enable_chunkpipe", False)
+    ):
+        args.sft = True
+
+
+def _drop_custom_pipeline_recompute_layers(name, args):
+    """Keep a foundation-only pipeline option out of VLM submodels."""
+    if getattr(args, "custom_pipeline_recompute_layers", None) is not None:
+        warnings.warn(
+            f"WARNING: Now for {name}, custom_pipeline_recompute_layers is "
+            "only supported for the foundation model; ignoring it."
+        )
+        args.custom_pipeline_recompute_layers = None
 
 
 def _get_wan_packing_cp_alignment(cp_size):
@@ -559,6 +579,7 @@ def _check_arg_is_not_none(args, arg):
 # Adapted from megatron/training/arguments.py
 def _validate_custom_model_args(name, args, defaults={}):
     """Validate non foundational model arguments"""
+    _drop_custom_pipeline_recompute_layers(name, args)
     if args.custom_pipeline_recompute_layers is not None:
         assert args.recompute_granularity == "full", \
             "recompute-granularity should be full, when custom-pipeline-recompute-layers is set."
@@ -1220,7 +1241,7 @@ def _validate_custom_model_args(name, args, defaults={}):
         args.iterations_to_skip.extend(iterations_to_skip_from_file)
 
     # Make sure all functionality that requires Gloo process groups is disabled.
-    if not args.enable_gloo_process_groups:
+    if not args.use_gloo_process_groups:
         if args.use_distributed_optimizer:
             # If using distributed optimizer, must use distributed checkpointing.
             # Legacy checkpointing uses Gloo process groups to collect full distributed

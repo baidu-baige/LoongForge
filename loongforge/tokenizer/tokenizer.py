@@ -5,10 +5,11 @@
 
 from typing import TYPE_CHECKING, Optional
 
-from megatron.core.datasets.megatron_tokenizer import MegatronLegacyTokenizer
-
-from megatron.training.tokenizer.tokenizer import _vocab_size_with_padding
-from megatron.training.tokenizer import build_tokenizer as build_megatron_tokenizer
+from megatron.core.tokenizers.base_tokenizer import MegatronTokenizerBase
+from megatron.core.tokenizers.utils.build_tokenizer import (
+    build_tokenizer as build_megatron_tokenizer,
+    vocab_size_with_padding,
+)
 
 from loongforge.utils import constants, print_rank_0
 
@@ -78,7 +79,7 @@ def _update_tokenizer_with_template(
 
 def build_tokenizer(
     args, chat_template: Optional["ChatTemplate"] = None
-) -> Optional[MegatronLegacyTokenizer]:
+) -> Optional[MegatronTokenizerBase]:
     """Build tokenizer and chat template if needed."""
     if args.tokenizer_type == "HFTokenizer":
         print_rank_0(f"> Loongforge building {args.tokenizer_type} tokenizer ...", args.rank)
@@ -125,6 +126,6 @@ def build_tokenizer(
         ori_vocab_size = tokenizer.vocab_size
         if getattr(args, "vocab_size_in_config_file", None) is not None:
             ori_vocab_size = getattr(args, "vocab_size_in_config_file", None)
-        args.padded_vocab_size = _vocab_size_with_padding(ori_vocab_size, args)
+        args.padded_vocab_size = vocab_size_with_padding(ori_vocab_size, args)
 
     return tokenizer

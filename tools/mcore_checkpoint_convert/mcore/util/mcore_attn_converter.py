@@ -20,7 +20,7 @@ class McoreAttnGateQkvConverter():
         self.heads = cargs["num_attention_heads"]
         self.hidden_size = cargs["hidden_size"]
         self.head_dim = cargs.get("head_dim", self.hidden_size // self.heads)
-        self.num_key_value_heads = cargs.get("num_key_value_heads", self.heads)
+        self.num_key_value_heads = cargs.get("num_key_value_heads") or self.heads
         self.num_querys_per_group = self.heads // self.num_key_value_heads
 
         self.q_dim = 2 * self.num_querys_per_group * self.head_dim

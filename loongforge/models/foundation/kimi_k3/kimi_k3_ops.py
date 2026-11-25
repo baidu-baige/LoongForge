@@ -9,7 +9,22 @@ from functools import cache
 
 import torch
 from torch import nn
-from megatron.legacy.model.rms_norm import RMSNorm
+
+
+class RMSNorm(nn.Module):
+    """Kimi K3's legacy RMSNorm math, kept local to avoid megatron.legacy."""
+
+    def __init__(self, dim, eps=1e-6, sequence_parallel=False, config=None):
+        super().__init__()
+        self.eps = eps
+        self.weight = nn.Parameter(torch.ones(dim))
+        setattr(self.weight, "sequence_parallel", sequence_parallel)
+
+    def _norm(self, x):
+        return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
+
+    def forward(self, x):
+        return self._norm(x.float()).type_as(x) * self.weight
 
 
 def kda(
