@@ -17,16 +17,18 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = []
 
 [project.optional-dependencies]
-# The hardware backends are the public install entry points: each one carries
-# the complete LLM/VLM/VLA runtime for that backend. There is deliberately no
-# separate feature extra to layer on top, because installing one extra after
-# another silently overwrote the earlier pins.
+# These backend extras are consumed by source and Docker builds. They express
+# the Python dependency set for a backend, not the host driver, vendor runtime,
+# compiler stack, model assets, or a portable standalone training
+# environment. The versioned Docker image is the supported turnkey path.
 gpu = [
     # Core
     "packaging>=23.2,<25",
@@ -245,7 +247,7 @@ Documentation = "https://baidu-baige.github.io/LoongForge/"
 Changelog = "CHANGELOG.md"
 
 [project.scripts]
-LoongForge = "loongforge.train:main"
+LoongForge = "loongforge.cli:main"
 
 [dependency-groups]
 test = [
@@ -320,5 +322,18 @@ include = [
 packages = ["loongforge"]
 output-dir = "output/dist"
 
+[tool.hatch.build.targets.wheel.force-include]
+"configs" = "loongforge/_configs"
+
 [tool.hatch.build.targets.sdist]
+include = [
+    "LICENSE",
+    "README.md",
+    "configs",
+    "loongforge",
+    "pyproject.toml",
+]
 output-dir = "output/dist"
+
+[tool.hatch.build.targets.sdist.force-include]
+"configs" = "configs"

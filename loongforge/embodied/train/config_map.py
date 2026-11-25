@@ -9,9 +9,9 @@ MODEL_SCHEMA is the single place that binds a model name to:
 """
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Type
 
+from loongforge.config_paths import resolve_config
 from loongforge.embodied.model.pi05.model_configuration_pi05 import Pi05ModelConfig
 from loongforge.embodied.model.vlda.model_configuration_vlda import VLDAModelConfig
 from loongforge.embodied.data.datasets.vlda.transforms.data_configuration_vlda import VLDADataConfig
@@ -51,10 +51,7 @@ from loongforge.embodied.data.datasets.lingbot_vla_v2.transforms.data_configurat
     LingbotVLAV2DataConfig,
 )
 
-_CONFIGS_DIR = (
-    Path(__file__).resolve().parent.parent.parent.parent
-    / "configs" / "models" / "embodied"
-)
+_CONFIGS_DIR = resolve_config("configs/models/embodied")
 
 
 @dataclass(frozen=True)

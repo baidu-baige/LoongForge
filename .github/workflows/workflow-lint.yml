@@ -45,10 +45,12 @@ jobs:
             tests/test_ci_artifacts.py \
             tests/test_ci_command.py \
             tests/test_ci_summary.py \
+            tests/test_config_paths.py \
             tests/test_doc_links.py \
             tests/test_image_policy.py \
             tests/test_release_infrastructure.py \
             tests/test_release_request.py \
             tests/test_release_regression_harness.py \
             tests/test_sensitive_scan.py \
+            tests/test_training_cli.py \
             tests/test_vlm_dataloader_read_order.py
