@@ -15,9 +15,10 @@ AW-0, and this layer deliberately does not copy it.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Protocol
+from typing import Any, Protocol
 
 import torch
 from torch import Tensor
@@ -27,8 +28,8 @@ from .broadcast import DEFAULT_PER_SAMPLE, BroadcastSpec
 from .timesteps import Constant, TimestepSampler, UniformShift
 
 __all__ = ["WeightRamp", "LossSpec", "LossObjective", "MeanSquaredError",
-           "TokenMeanSquaredError", "CosineDistance", "TimestepWeight",
-           "UniformWeight", "Bsmntw"]
+           "TokenMeanSquaredError", "BatchPadding", "CosineDistance",
+           "TimestepWeight", "UniformWeight", "Bsmntw"]
 
 
 class LossObjective(Protocol):
@@ -49,9 +50,9 @@ class LossObjective(Protocol):
                  valid: Tensor | None = None) -> Tensor:
         """``[B, ...]`` x ``[B, ...]`` -> ``[B]``.
 
-        ``valid`` is a bool ``[B, T]`` over axis 1 (True counts), from
-        ``DiffusionRuntime.loss_valid``; an objective without a masked
-        reduction raises when it is given one.
+        ``valid`` is a bool ``[B, T]`` over the objective's token axis (True
+        counts), from ``DiffusionRuntime.loss_valid``; an objective without a
+        masked reduction raises when it is given one.
         """
         ...
 
@@ -118,26 +119,42 @@ class MeanSquaredError:
 class TokenMeanSquaredError:
     """Per-token MSE, then the mean over each sample's valid tokens. ``[B]``.
 
-    For a ``[B, T, *features]`` prediction: float32 squared error, mean over
-    the feature axes, then the mean over axis 1 counting only ``valid``
+    The tokens lie on ``axis``: float32 squared error, mean over every other
+    non-batch axis, then the mean over ``axis`` counting only ``valid``
     positions (denominator clamped at 1, so a sample with no valid token
     contributes 0, not NaN). Without ``valid`` every token counts.
 
     The order of the two means is part of the number: averaging all ``T * D``
     elements at once (``MeanSquaredError``) rounds differently. This is the
     reduction of the Wan action losses (VPP2 ``_training_loss_action_only``,
-    fastwam ``mot/fastwam.py:613-628``) -- Lane C v2 ``PerSampleMean``.
+    fastwam ``mot/fastwam.py:613-621``) and, with ``axis=2``, of fastwam's
+    per-frame video loss (``:476``, ``.mean(dim=(1, 3, 4))``) -- Lane C v2
+    ``PerSampleMean``.
+
+    Attributes:
+        axis: The token axis: 1 for actions ``[B, T, D]``, 2 for the latent
+            frames of a video ``[B, C, F, H, W]``.
     """
+
+    axis: int = 1
+
+    def __post_init__(self) -> None:
+        if self.axis < 1:
+            raise ValueError(
+                f"TokenMeanSquaredError.axis must be at least 1 (axis 0 is the "
+                f"batch), got {self.axis}")
 
     def __call__(self, prediction: Tensor, target: Tensor, *,
                  valid: Tensor | None = None) -> Tensor:
         _check_same_shape(prediction, target, objective="TokenMeanSquaredError")
-        if prediction.ndim < 3 or not all(prediction.shape):
+        if prediction.ndim < 3 or self.axis >= prediction.ndim or not all(prediction.shape):
             raise ValueError(
-                "TokenMeanSquaredError: expected a nonempty [B, T, *features] "
-                f"prediction, got {tuple(prediction.shape)}")
+                f"TokenMeanSquaredError(axis={self.axis}): expected a nonempty "
+                "[B, ...] prediction with the token axis and at least one "
+                f"feature axis, got {tuple(prediction.shape)}")
+        features = tuple(dim for dim in range(1, prediction.ndim) if dim != self.axis)
         token_loss = F.mse_loss(prediction.float(), target.float(), reduction="none").mean(
-            dim=tuple(range(2, prediction.ndim)))
+            dim=features)
         if valid is None:
             return token_loss.mean(dim=1)
         if tuple(valid.shape) != tuple(token_loss.shape):
@@ -146,6 +163,141 @@ class TokenMeanSquaredError:
                 f"[B, T] = {tuple(token_loss.shape)}")
         counted = valid.to(device=token_loss.device, dtype=torch.bool).to(dtype=token_loss.dtype)
         return (token_loss * counted).sum(dim=1) / counted.sum(dim=1).clamp(min=1.0)
+
+
+_PADDING_UNITS = ("step", "video_frame")
+
+
+@dataclass(frozen=True)
+class BatchPadding:
+    """Per-sample padding of one stream, read from the batch: padded units do
+    not count in that stream's flow losses.
+
+    The data pipelines pad an action chunk past the episode end and flag it in
+    ``action_is_pad``; fastwam flags padded video frames in ``image_is_pad``.
+    Both old implementations average only over the units that are not padding
+    (``model/fastwam/mot/fastwam.py:464-506``, ``:613-621``; master VPP2
+    ``_training_loss_action_only``). ``WorldModel.add_noise`` turns this
+    declaration into ``DiffusionRuntime.loss_valid``.
+
+    A batch without ``pad_key`` has no padding, as in the old code
+    (``sample.get("action_is_pad", None)``). The keys are batch bindings like
+    ``StreamSpec.batch_key``, so they are written in the provider, not YAML.
+
+    Attributes:
+        pad_key: Batch key of a bool ``[B, N]`` mask, True where the unit is
+            padding.
+        keep_key: Batch key of a bool ``[B, N]`` mask of padded units that
+            still count (VPP2's terminal steps); ``unit="step"`` only.
+        unit: ``"step"``: one column per unit on axis 1 of the raw tensor
+            (action steps). ``"video_frame"``: one column per pixel frame,
+            folded onto the latent frames on axis 2 by the VAE temporal stride:
+            column 0 is latent frame 0, each next ``stride`` columns one latent
+            frame, padded only when all its columns are (``:487-499``).
+    """
+
+    pad_key: str
+    keep_key: str | None = None
+    unit: str = "step"
+
+    def __post_init__(self) -> None:
+        if not self.pad_key or self.keep_key == "":
+            raise ValueError(
+                "BatchPadding: pad_key must be a nonempty batch key, and so must "
+                f"keep_key when given; got pad_key={self.pad_key!r}, "
+                f"keep_key={self.keep_key!r}")
+        if self.keep_key == self.pad_key:
+            raise ValueError(
+                f"BatchPadding: keep_key and pad_key are both {self.pad_key!r}")
+        if self.unit not in _PADDING_UNITS:
+            raise ValueError(
+                f"BatchPadding.unit must be one of {_PADDING_UNITS}, got {self.unit!r}")
+        if self.keep_key is not None and self.unit != "step":
+            raise ValueError(
+                f"BatchPadding.keep_key applies to unit='step' only; a padded "
+                f"{self.unit} has no counterpart of a kept terminal step")
+
+    @property
+    def axis(self) -> int:
+        """Axis of the raw tensor holding the units: 1 for steps, 2 for frames."""
+        return 2 if self.unit == "video_frame" else 1
+
+    @property
+    def batch_keys(self) -> tuple[str, ...]:
+        """The batch keys this declaration reads, in reading order."""
+        return (self.pad_key,) if self.keep_key is None else (self.pad_key, self.keep_key)
+
+    def padded(self, batch: Mapping[str, Any], raw: Tensor, *, stream: str,
+               temporal_stride: int) -> Tensor | None:
+        """Which units of ``raw`` are padding and do not count.
+
+        Only shapes are checked, never values, so this does not sync the host.
+
+        Args:
+            batch: The training batch.
+            raw: The stream's raw tensor; its batch size and the unit count on
+                ``self.axis`` are what the mask must match.
+            stream: Stream name, for error messages.
+            temporal_stride: ``GeometrySpec.vae_temporal_stride``, used by
+                ``unit="video_frame"``.
+
+        Returns:
+            bool ``[B, units]``, True where the unit is padding and not kept;
+            None when the batch has no ``pad_key``.
+
+        Raises:
+            ValueError: The batch has ``keep_key`` without ``pad_key``, or a
+                mask does not match the raw tensor.
+        """
+        pad = batch.get(self.pad_key)
+        keep = None if self.keep_key is None else batch.get(self.keep_key)
+        if pad is None:
+            if keep is not None:
+                raise ValueError(
+                    f"stream {stream!r}: the batch has {self.keep_key!r} but not "
+                    f"{self.pad_key!r}, so the padded units it keeps are undefined")
+            return None
+        if raw.ndim <= self.axis or (self.unit == "video_frame" and raw.ndim != 5):
+            raise ValueError(
+                f"stream {stream!r}: BatchPadding(unit={self.unit!r}) counts units "
+                f"on axis {self.axis} of a raw "
+                f"{'video [B, C, F, H, W]' if self.unit == 'video_frame' else 'tensor'}, "
+                f"but the raw tensor is {tuple(raw.shape)}")
+        units = int(raw.shape[self.axis])
+        pad = self._columns(pad, self.pad_key, raw, stream=stream)
+        if self.unit == "video_frame":
+            pad = self._fold_frames(pad, units, temporal_stride, stream=stream)
+        elif pad.shape[1] != units:
+            raise ValueError(
+                f"stream {stream!r}: batch[{self.pad_key!r}] has {pad.shape[1]} "
+                f"columns, the raw tensor {units} units on axis {self.axis}")
+        if keep is not None:
+            keep = self._columns(keep, self.keep_key, raw, stream=stream)
+            if keep.shape != pad.shape:
+                raise ValueError(
+                    f"stream {stream!r}: batch[{self.keep_key!r}] is "
+                    f"{tuple(keep.shape)}, batch[{self.pad_key!r}] {tuple(pad.shape)}")
+            pad = pad & ~keep
+        return pad
+
+    @staticmethod
+    def _columns(mask: Any, key: str, raw: Tensor, *, stream: str) -> Tensor:
+        if not isinstance(mask, Tensor) or mask.ndim != 2 or mask.shape[0] != raw.shape[0]:
+            shape = tuple(mask.shape) if isinstance(mask, Tensor) else type(mask).__name__
+            raise ValueError(
+                f"stream {stream!r}: batch[{key!r}] must be a [B={raw.shape[0]}, N] "
+                f"mask, got {shape}")
+        return mask.to(device=raw.device, dtype=torch.bool)
+
+    def _fold_frames(self, pad: Tensor, frames: int, stride: int, *, stream: str) -> Tensor:
+        columns = int(pad.shape[1])
+        if stride < 1 or columns != 1 + stride * (frames - 1):
+            raise ValueError(
+                f"stream {stream!r}: batch[{self.pad_key!r}] has {columns} pixel-frame "
+                f"columns, which do not fold onto {frames} latent frames with VAE "
+                f"temporal stride {stride} (that needs 1 + {stride} x ({frames} - 1))")
+        tail = pad[:, 1:].reshape(pad.shape[0], frames - 1, stride).all(dim=2)
+        return torch.cat([pad[:, :1], tail], dim=1)
 
 
 @dataclass(frozen=True)

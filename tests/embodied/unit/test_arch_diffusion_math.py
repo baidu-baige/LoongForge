@@ -25,7 +25,7 @@ import torch
 
 from loongforge.embodied.model.arch.diffusion.broadcast import BroadcastSpec
 from loongforge.embodied.model.arch.diffusion.loss import (
-    CosineDistance, LossSpec, MeanSquaredError, TokenMeanSquaredError)
+    BatchPadding, CosineDistance, LossSpec, MeanSquaredError, TokenMeanSquaredError)
 from loongforge.embodied.model.arch.diffusion.schedule import (
     ConstantSigma, RectifiedFlow)
 from loongforge.embodied.model.arch.diffusion.stepping import (
@@ -446,3 +446,81 @@ def test_objectives_without_masking_reject_a_valid_mask():
     for objective in (MeanSquaredError(), CosineDistance()):
         with pytest.raises(ValueError, match="TokenMeanSquaredError"):
             objective(prediction, prediction, valid=valid)
+
+
+def test_token_mse_on_the_frame_axis_is_the_fastwam_video_reduction():
+    """``axis=2`` on [B, C, F, H, W] is ``mot/fastwam.py:476-506``, bit for bit."""
+    torch.manual_seed(1)
+    prediction, target = torch.randn(2, 3, 4, 2, 2), torch.randn(2, 3, 4, 2, 2)
+    frame = torch.nn.functional.mse_loss(prediction, target, reduction="none").mean(dim=(1, 3, 4))
+    assert torch.equal(TokenMeanSquaredError(axis=2)(prediction, target), frame.mean(dim=1))
+    valid = torch.tensor([[True, True, True, False], [True, False, False, False]])
+    counted = valid.to(frame.dtype)
+    expected = (frame * counted).sum(dim=1) / counted.sum(dim=1).clamp(min=1.0)
+    assert torch.equal(TokenMeanSquaredError(axis=2)(prediction, target, valid=valid), expected)
+
+
+def test_token_mse_axis_is_validated():
+    with pytest.raises(ValueError, match="at least 1"):
+        TokenMeanSquaredError(axis=0)
+    with pytest.raises(ValueError, match=r"axis=3"):
+        TokenMeanSquaredError(axis=3)(torch.randn(2, 4, 3), torch.randn(2, 4, 3))
+
+
+# ---- per-sample padding read from the batch ----
+
+
+def _video(frames: int) -> torch.Tensor:
+    return torch.zeros(2, 3, frames, 2, 2)
+
+
+def test_video_frame_padding_folds_like_fastwam():
+    """Column 0 is latent frame 0; each next stride columns one latent frame,
+    padded only when all of them are (``mot/fastwam.py:487-499``)."""
+    pad = torch.tensor([[False] * 5 + [True] * 4,
+                        [False] * 3 + [True] * 6])
+    folded = BatchPadding("image_is_pad", unit="video_frame").padded(
+        {"image_is_pad": pad}, _video(3), stream="video", temporal_stride=4)
+    tail = pad[:, 1:].view(2, -1, 4).all(dim=2)
+    assert torch.equal(folded, torch.cat([pad[:, :1], tail], dim=1))
+    assert folded.tolist() == [[False, False, True], [False, False, True]]
+
+
+def test_kept_steps_count_although_padded():
+    pad = torch.tensor([[False, True, True, True]])
+    keep = torch.tensor([[False, False, True, False]])
+    padded = BatchPadding("action_is_pad", keep_key="action_terminal_mask").padded(
+        {"action_is_pad": pad, "action_terminal_mask": keep}, torch.zeros(1, 4, 6),
+        stream="action", temporal_stride=4)
+    assert padded.tolist() == [[False, True, False, True]]
+
+
+def test_a_batch_without_the_pad_key_has_no_padding():
+    padding = BatchPadding("action_is_pad", keep_key="action_terminal_mask")
+    raw = torch.zeros(2, 4, 6)
+    assert padding.padded({}, raw, stream="action", temporal_stride=4) is None
+    with pytest.raises(ValueError, match="'action_terminal_mask' but not 'action_is_pad'"):
+        padding.padded({"action_terminal_mask": torch.zeros(2, 4, dtype=torch.bool)}, raw,
+                       stream="action", temporal_stride=4)
+
+
+@pytest.mark.parametrize("kwargs, match", [
+    (dict(pad_key=""), "nonempty"),
+    (dict(pad_key="a", keep_key="a"), "both 'a'"),
+    (dict(pad_key="a", unit="frame"), "unit must be one of"),
+    (dict(pad_key="a", keep_key="b", unit="video_frame"), "unit='step' only"),
+])
+def test_batch_padding_declarations_are_validated(kwargs, match):
+    with pytest.raises(ValueError, match=match):
+        BatchPadding(**kwargs)
+
+
+@pytest.mark.parametrize("unit, raw, mask, match", [
+    ("step", torch.zeros(2, 4, 6), torch.zeros(3, 4, dtype=torch.bool), r"\[B=2, N\]"),
+    ("step", torch.zeros(2, 4, 6), torch.zeros(2, 5, dtype=torch.bool), "5 columns"),
+    ("video_frame", _video(3), torch.zeros(2, 8, dtype=torch.bool), "do not fold"),
+    ("video_frame", torch.zeros(2, 4, 6), torch.zeros(2, 4, dtype=torch.bool), "on axis 2"),
+])
+def test_padding_masks_must_match_the_raw_tensor(unit, raw, mask, match):
+    with pytest.raises(ValueError, match=match):
+        BatchPadding("pad", unit=unit).padded({"pad": mask}, raw, stream="s", temporal_stride=4)

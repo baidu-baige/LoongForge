@@ -15,7 +15,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from ....diffusion.loss import Bsmntw, LossSpec, TokenMeanSquaredError
+from ....diffusion.loss import BatchPadding, Bsmntw, LossSpec, TokenMeanSquaredError
 from ....diffusion.schedule import RectifiedFlow
 from ....diffusion.spec import DiffusionSpec
 from ....diffusion.stepping import EulerSampler, UniformSteps
@@ -298,6 +298,18 @@ def _vpp2(config: Any = None, *,
         # what makes the ``noise_gate`` rule usable, which the second rule in
         # ``_vpp2_visibility`` below depends on.
         noise_levels=(0.0, 1.0),
+        # Padded action steps do not count, except the tail padding of a
+        # terminal segment, which master's VPP2 video-event dataset flags in
+        # ``action_terminal_mask`` when ``supervise_terminal_action_padding``
+        # is on (``data/datasets/vpp2/video_event_dataset.py``,
+        # ``_terminal_action_mask``). The action loss then counts
+        # ``~(action_is_pad & ~action_terminal_mask)``
+        # (``model/vpp2/modules/libero_action_model.py:143-151`` on master
+        # 86a017bb). Master also checks that the terminal mask lies inside the
+        # padding; that check reads values and would sync the host, so it stays
+        # with the dataset. A batch without either key has no padding.
+        batch_padding={"action": BatchPadding("action_is_pad",
+                                              keep_key="action_terminal_mask")},
     )
 
     # 4. L0. The geometry is defined before the head table because the

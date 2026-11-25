@@ -208,8 +208,10 @@ class DiffusionRuntime:
             engine hands it to the time embeddings and ``LossSpec.weight_of``
             reads it (Lane C v2 ``NoisedStream.t``).
         loss_valid: Stream name to a bool [B, T] of positions that count in
-            that stream's losses (True counts). A recipe fills it from its own
-            padding policy; a stream without an entry counts everything.
+            that stream's flow losses (True counts), over the units left after
+            the clean prefix frames. ``add_noise`` fills it from
+            ``DiffusionSpec.batch_padding``; a stream without an entry counts
+            everything.
     """
 
     timesteps: dict[str, Tensor]
@@ -563,10 +565,20 @@ class WorldModel(nn.Module):
         line up. Token-shaped broadcasting only becomes meaningful after L2's
         ``prepare``. A per-frame timestep therefore raises explicitly here
         instead of being broadcast into a shape that happens to multiply.
+
+        Two declarations shape the result beyond the schedule:
+          - a stream whose ``StreamSpec.token_timestep`` pins a clean prefix
+            gets those latent frames back as x_0 after noising (fastwam
+            ``mot/fastwam.py:529``); L2 gives them timestep 0 from the same
+            declaration. Epsilon is still drawn for every frame, so the random
+            numbers consumed do not change;
+          - ``DiffusionSpec.batch_padding`` becomes ``loss_valid``: the units
+            that are not padding (or are kept), minus the clean prefix.
         """
         schedule = self.spec.diffusion.schedule
         noised: dict[str, Tensor] = {}
         targets: dict[str, Tensor] = {}
+        loss_valid: dict[str, Tensor] = {}
         for name, timestep_sampler in self.spec.diffusion.timesteps.items():
             if not timestep_sampler.broadcast.is_per_sample:
                 raise NotImplementedError(
@@ -591,11 +603,74 @@ class WorldModel(nn.Module):
                 )
             shaped = sigma.to(dtype=clean.dtype).view(-1, *([1] * (clean.ndim - 1)))
             eps = draw.noise[name]
-            noised[name] = schedule.add_noise(clean, eps, shaped)
+            x_t = schedule.add_noise(clean, eps, shaped)
+            prefix = self._clean_prefix(name, clean)
+            if prefix:
+                x_t = torch.cat([clean[:, :, :prefix], x_t[:, :, prefix:]], dim=2)
+            noised[name] = x_t
             targets[name] = schedule.target(clean, eps, shaped)
+            valid = self._loss_valid(batch, name, clean, prefix)
+            if valid is not None:
+                loss_valid[name] = valid
         return DiffusionRuntime(timesteps=dict(draw.sigma), noised=noised,
                                 noise=dict(draw.noise), targets=targets,
-                                model_timesteps=dict(draw.model_timesteps))
+                                model_timesteps=dict(draw.model_timesteps),
+                                loss_valid=loss_valid)
+
+    def _clean_prefix(self, stream: str, raw: Tensor) -> int:
+        """Leading latent frames of ``stream`` that are clean conditioning.
+
+        Read from ``StreamSpec.token_timestep``, the declaration L2 uses to pin
+        their timestep to 0, so the count has one source. Frames are axis 2 of
+        the raw video ``[B, C, F, H, W]``.
+
+        Args:
+            stream: Stream name.
+            raw: A raw-shaped tensor of that stream (x_0 or its target).
+
+        Returns:
+            The clean prefix length; 0 when the stream declares none.
+
+        Raises:
+            ValueError: The raw tensor is not ``[B, C, F, H, W]`` with
+                ``F = geometry.latent_grid[0]``, or the prefix leaves no
+                noised frame.
+        """
+        scope = self.spec.stream(stream).token_timestep
+        if scope is None or not scope.clean_prefix:
+            return 0
+        frames = self.spec.geometry.latent_grid[0]
+        if raw.ndim != 5 or raw.shape[2] != frames or scope.clean_prefix >= frames:
+            raise ValueError(
+                f"stream {stream!r} keeps its first {scope.clean_prefix} latent "
+                "frames clean (StreamSpec.token_timestep), which needs a raw "
+                f"video [B, C, F, H, W] with F = geometry.latent_grid[0] = {frames} "
+                f"> {scope.clean_prefix}; got {tuple(raw.shape)}")
+        return scope.clean_prefix
+
+    def _loss_valid(self, batch: Mapping[str, Any], stream: str, raw: Tensor,
+                    prefix: int) -> Tensor | None:
+        """``DiffusionSpec.batch_padding`` of ``stream`` as a ``loss_valid`` mask.
+
+        Args:
+            batch: The training batch.
+            stream: Stream name.
+            raw: The stream's raw tensor.
+            prefix: Its clean prefix length. Those columns are dropped: the
+                losses slice the prefix frames off before reducing.
+
+        Returns:
+            bool ``[B, units - prefix]``, True where the unit counts; None
+            when the stream declares no padding or the batch carries none.
+        """
+        padding = self.spec.diffusion.batch_padding.get(stream)
+        if padding is None:
+            return None
+        padded = padding.padded(batch, raw, stream=stream,
+                                temporal_stride=self.spec.geometry.vae_temporal_stride)
+        if padded is None:
+            return None
+        return ~padded[:, prefix:]
 
     def stream_inputs(self, runtime: DiffusionRuntime) -> dict[str, Tensor]:
         """Extension point 4, step 4. Picks the **raw tensor** each stream feeds.
@@ -723,15 +798,28 @@ class WorldModel(nn.Module):
                     outputs: Mapping[str, Tensor]) -> Tensor:
         """One head loss term before ``LossSpec.weight_at``.
 
-        The per-sample objective over the source stream's ``loss_valid``,
-        times ``LossSpec.weight_of`` at the stream's training timestep, then
-        the batch mean. Recipes that select their own terms call this so the
-        reduction has one implementation.
+        The per-sample objective, times ``LossSpec.weight_of`` at the stream's
+        training timestep, then the batch mean. Recipes that select their own
+        terms call this so the reduction has one implementation.
+
+        Against the source stream's own flow target, the clean prefix frames
+        are sliced off first (fastwam ``mot/fastwam.py:597-600``) and the
+        objective counts only ``loss_valid``. Slicing rather than masking keeps
+        the old ``mean`` over the remaining frames bit for bit. A target of
+        the head's own (keyed by head name) gets neither: the recipe that
+        wrote it owns its masking.
         """
         head = self.spec.head(str(loss.head))
         stream = head.source_stream
-        per_sample = loss.objective(outputs[head.name], self._loss_target(loss, head, runtime),
-                                    valid=runtime.loss_valid.get(stream))
+        prediction = outputs[head.name]
+        target = self._loss_target(loss, head, runtime)
+        valid = None
+        if target is runtime.targets.get(stream):
+            prefix = self._clean_prefix(stream, target)
+            if prefix:
+                prediction, target = prediction[:, :, prefix:], target[:, :, prefix:]
+            valid = runtime.loss_valid.get(stream)
+        per_sample = loss.objective(prediction, target, valid=valid)
         weight = None
         if stream in self.spec.diffusion.timesteps:
             weight = loss.weight_of(

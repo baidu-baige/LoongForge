@@ -298,6 +298,18 @@ def test_shell_fills_one_batch_key_per_stream_and_condition(shell):
             assert cond.source_key in encoded
 
 
+def test_shell_passes_the_declared_masks_through(shell):
+    """Mask keys come off the spec (``DiffusionSpec.batch_padding``), arrive as
+    bool, and stay absent when the sample has none."""
+    horizon = shell.spec.geometry.action_horizon
+    sample = pixel_batch(shell)
+    assert "action_is_pad" not in shell.encode_batch(sample)
+    sample["action_is_pad"] = torch.zeros(BATCH, horizon, dtype=torch.uint8)
+    encoded = shell.encode_batch(sample)
+    assert encoded["action_is_pad"].dtype is torch.bool
+    assert "action_terminal_mask" not in encoded
+
+
 def test_shell_checks_the_latent_grid_against_the_geometry(shell):
     """A VAE that disagrees with the geometry fails here, naming both grids.
 

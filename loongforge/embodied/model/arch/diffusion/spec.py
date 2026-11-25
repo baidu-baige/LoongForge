@@ -19,7 +19,7 @@ from types import MappingProxyType
 from typing import Any, NamedTuple
 
 from ..streams.spec import StreamSpec
-from .loss import LossSpec
+from .loss import BatchPadding, LossSpec
 from .schedule import NoiseSchedule, RectifiedFlow
 from .stepping import Sampler, SteppingGate
 from .timesteps import YAML_KNOB, TimestepSampler
@@ -136,6 +136,10 @@ class DiffusionSpec:
         sampling_gate: Which stream steps when during iterative sampling, or None.
         solver: The per-step numerical update rule, or None.
         noise_levels: Discrete noise levels, if any.
+        batch_padding: Stream name -> the per-sample padding read from the
+            batch; padded units do not count in that stream's flow losses.
+            Only streams with a timestep can have one. Frozen to a read-only
+            mapping at construction time.
     """
 
     timesteps: Mapping[str, TimestepSampler]
@@ -148,6 +152,8 @@ class DiffusionSpec:
     # They must be **discrete levels** rather than a continuous sigma: a
     # continuous value would make the structural mask per-sample (INV-1).
     # Full capability negotiation is tracked as a separate implementation item.
+    batch_padding: Mapping[str, BatchPadding] = field(default_factory=dict)
+    # Provider-only: the keys name batch entries, which YAML does not bind.
 
     def __post_init__(self) -> None:
         if not self.losses:
@@ -176,6 +182,19 @@ class DiffusionSpec:
             )
         object.__setattr__(self, "timesteps",
                            MappingProxyType(dict(self.timesteps)))
+        unknown = sorted(set(self.batch_padding) - set(self.timesteps))
+        if unknown:
+            raise ValueError(
+                f"DiffusionSpec.batch_padding names streams {unknown} that draw no "
+                "timestep; padding masks flow losses, which only such streams have "
+                f"(streams with a timestep: {list(self.timesteps)})")
+        for stream, padding in self.batch_padding.items():
+            if not isinstance(padding, BatchPadding):
+                raise TypeError(
+                    f"DiffusionSpec.batch_padding[{stream!r}] must be a BatchPadding, "
+                    f"got {type(padding).__name__}")
+        object.__setattr__(self, "batch_padding",
+                           MappingProxyType(dict(self.batch_padding)))
         for stream, sampler in self.timesteps.items():
             _collect_knobs(sampler, stream=stream)          # L3/V10: unique knob names per stream
 

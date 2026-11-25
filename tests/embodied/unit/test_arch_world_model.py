@@ -35,7 +35,7 @@ import torch
 from loongforge.embodied.model.arch.builder import (
     STEP_HOOK_EVENTS, DiffusionDraw, DiffusionRuntime, WorldModel)
 from loongforge.embodied.model.arch.diffusion.broadcast import BroadcastSpec
-from loongforge.embodied.model.arch.diffusion.loss import Bsmntw, LossSpec, WeightRamp
+from loongforge.embodied.model.arch.diffusion.loss import BatchPadding, Bsmntw, LossSpec, WeightRamp
 from loongforge.embodied.model.arch.diffusion.timesteps import RngPolicy, TimestepSampler
 from loongforge.embodied.model.arch.spec.world import WorldModelSpec
 from loongforge.embodied.model.arch.streams.conditions import InjectionKind
@@ -560,3 +560,97 @@ def test_step_hook_is_read_only_and_leaves_the_step_unchanged(spec):
     loss, _ = model(batch)
     assert torch.equal(loss, expected)
     assert torch.equal(torch.get_rng_state(), state)
+
+
+# ---- clean prefix frames and batch padding (Lane C v2 §1.3, §1.16, T36, T37) ----
+
+
+def _zero_outputs(runtime: DiffusionRuntime) -> dict:
+    return {"video_flow": torch.zeros_like(runtime.targets["video"]),
+            "action_flow": torch.zeros_like(runtime.targets["action"])}
+
+
+def _video_loss(model: WorldModel, runtime: DiffusionRuntime, outputs: dict) -> torch.Tensor:
+    return model.compute_losses(None, runtime, outputs, step=0)[1]["loss_video_flow"]
+
+
+def test_clean_prefix_frames_go_in_as_x0_and_stay_out_of_the_loss():
+    """fastwam's first latent frame (``TokenTimestep(clean_prefix=1)``): x_t is
+    x_0 there and the plain noising elsewhere, the target is untouched, and the
+    video loss never sees frame 0 (``mot/fastwam.py:529``, ``:597-600``)."""
+    spec = tiny_spec("fastwam")
+    assert spec.stream("video").token_timestep.clean_prefix == 1
+    model = world(spec)
+    batch = fake_batch(spec)
+    runtime = model.add_noise(batch, model.draw(batch))
+    clean, eps = batch["video"], runtime.noise["video"]
+    sigma = runtime.timesteps["video"].to(clean.dtype).view(-1, 1, 1, 1, 1)
+    schedule = spec.diffusion.schedule
+    assert torch.equal(runtime.noised["video"][:, :, :1], clean[:, :, :1])
+    assert torch.equal(runtime.noised["video"][:, :, 1:],
+                       schedule.add_noise(clean, eps, sigma)[:, :, 1:])
+    assert torch.equal(runtime.targets["video"], schedule.target(clean, eps, sigma))
+    outputs = _zero_outputs(runtime)
+    base = _video_loss(model, runtime, outputs)
+    outputs["video_flow"][:, :, :1] = 1e3
+    assert torch.equal(_video_loss(model, runtime, outputs), base)
+    outputs["video_flow"][:, :, 1:] = 1.0
+    assert not torch.equal(_video_loss(model, runtime, outputs), base)
+
+
+def test_clean_prefix_needs_the_raw_video_shape():
+    spec = tiny_spec("fastwam")
+    model = world(spec)
+    batch = fake_batch(spec)
+    batch["video"] = batch["video"][:, :, :1]
+    with pytest.raises(ValueError, match="keeps its first 1 latent frames clean"):
+        model.add_noise(batch, model.draw(batch))
+
+
+def test_padded_action_steps_drop_out_except_the_kept_ones():
+    """vpp2 counts ``~(action_is_pad & ~action_terminal_mask)`` (master
+    ``_training_loss_action_only``); a batch without the keys masks nothing."""
+    spec = tiny_spec("vpp2")
+    model = world(spec)
+    pad = torch.tensor([[False, False, True, True], [False, True, True, True]])
+    keep = torch.tensor([[False, False, True, False], [False] * 4])
+    batch = fake_batch(spec, action_is_pad=pad, action_terminal_mask=keep)
+    runtime = model.add_noise(batch, model.draw(batch))
+    assert torch.equal(runtime.loss_valid["action"], ~(pad & ~keep))
+    plain = fake_batch(spec)
+    assert model.add_noise(plain, model.draw(plain)).loss_valid == {}
+
+
+def test_all_padded_action_steps_give_a_zero_action_loss():
+    """A sample with no valid step contributes 0, not NaN (v2 T21)."""
+    spec = tiny_spec("vpp2")
+    pad = torch.ones(BATCH, spec.geometry.action_horizon, dtype=torch.bool)
+    _, metrics = world(spec)(fake_batch(spec, action_is_pad=pad))
+    assert metrics["loss_action_flow"].item() == 0.0
+
+
+def test_video_frame_padding_drops_the_clean_prefix_column():
+    """``image_is_pad`` folds onto latent frames, then the clean first frame's
+    column goes, as fastwam's video loss does (``mot/fastwam.py:487-499``).
+
+    13 pixel frames make 4 latent frames: the first alone, then 4 pixel frames
+    each. Padding pixel frames 7-12 pads only latent frame 3, since latent
+    frame 2 (pixel frames 5-8) is padding only when all of its frames are.
+    """
+    base = tiny_spec("fastwam")
+    padding = {"video": BatchPadding("image_is_pad", unit="video_frame")}
+    spec = replace(base, diffusion=replace(base.diffusion, batch_padding=padding))
+    model = world(spec)
+    assert (spec.geometry.num_frames, spec.geometry.latent_grid[0]) == (13, 4)
+    pad = torch.zeros(BATCH, spec.geometry.num_frames, dtype=torch.bool)
+    pad[1, 7:] = True
+    batch = fake_batch(spec, image_is_pad=pad)
+    runtime = model.add_noise(batch, model.draw(batch))
+    assert runtime.loss_valid["video"].tolist() == [[True, True, True], [True, True, False]]
+
+
+def test_padding_on_a_stream_without_a_timestep_is_rejected():
+    base = tiny_spec("vpp2")
+    with pytest.raises(ValueError, match="draw no timestep"):
+        replace(base.diffusion, batch_padding={"text": BatchPadding("context_mask")})
+

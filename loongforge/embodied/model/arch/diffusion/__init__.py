@@ -6,9 +6,9 @@
 from __future__ import annotations
 
 from .broadcast import DEFAULT_PER_SAMPLE, BroadcastSpec
-from .loss import (Bsmntw, CosineDistance, LossObjective, LossSpec,
-                   MeanSquaredError, TimestepWeight, TokenMeanSquaredError,
-                   UniformWeight, WeightRamp)
+from .loss import (BatchPadding, Bsmntw, CosineDistance, LossObjective,
+                   LossSpec, MeanSquaredError, TimestepWeight,
+                   TokenMeanSquaredError, UniformWeight, WeightRamp)
 from .schedule import ConstantSigma, NoiseSchedule, RectifiedFlow
 from .spec import DiffusionSpec
 from .stepping import (EulerSampler, Sampler, SteppingGate, Trajectory,
@@ -29,7 +29,7 @@ __all__ = [
     # loss
     "LossSpec", "WeightRamp",
     "LossObjective", "MeanSquaredError", "TokenMeanSquaredError", "CosineDistance",
-    "TimestepWeight", "UniformWeight", "Bsmntw",
+    "TimestepWeight", "UniformWeight", "Bsmntw", "BatchPadding",
     # broadcast
     "BroadcastSpec", "DEFAULT_PER_SAMPLE",
     # stepping

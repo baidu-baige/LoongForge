@@ -651,6 +651,20 @@ class ArchModelBase(nn.Module, ABC):
             sample = {**sample, "global_step": int(iteration)}
         return sample
 
+    def _mask_keys(self) -> tuple[str, ...]:
+        """Batch keys of the masks the spec reads, in declaration order.
+
+        ``DiffusionSpec.batch_padding`` names the per-sample padding of a
+        stream. An absent mask means nothing is padded, so the key is passed
+        on only when the sample has it.
+
+        Returns:
+            The mask keys, each once.
+        """
+        keys = [key for padding in self.spec.diffusion.batch_padding.values()
+                for key in padding.batch_keys]
+        return tuple(dict.fromkeys(keys))
+
     @staticmethod
     def _require(sample: Mapping[str, Any], key: str) -> Tensor:
         """Fetch a required tensor, naming the available keys when it is absent.

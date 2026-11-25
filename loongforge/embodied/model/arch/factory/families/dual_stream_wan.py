@@ -137,11 +137,13 @@ class DualStreamWanBase(ArchModelBase):
     def encode_batch(self, sample: Mapping[str, Any]) -> Dict[str, Any]:
         """Map a pixel-space sample onto the keys the spec declares.
 
-        Two kinds of keys come out: one raw tensor per stream, named by
-        ``StreamSpec.batch_key``, and one per enabled ``ConditionSpec``, named
-        by its ``source_key``. Both lists are read off the spec, so adding a
-        condition to a provider does not require editing this method unless the
-        new condition needs an encoder that does not exist yet.
+        Three kinds of keys come out: one raw tensor per stream, named by
+        ``StreamSpec.batch_key``; one per enabled ``ConditionSpec``, named by
+        its ``source_key``; and the masks the spec declares, passed through
+        as bool when the sample has them (see ``ArchModelBase._mask_keys``).
+        All three lists are read off the spec, so adding a condition to a
+        provider does not require editing this method unless the new
+        condition needs an encoder that does not exist yet.
 
         Args:
             sample: Collated batch in pixel space. ``video`` is
@@ -172,6 +174,11 @@ class DualStreamWanBase(ArchModelBase):
                 continue
             out[cond.source_key] = self._condition_value(cond, sample, video,
                                                          latents)
+        for key in self._mask_keys():
+            mask = sample.get(key)
+            if mask is not None:
+                out[key] = mask.to(device=latents.device, dtype=torch.bool,
+                                   non_blocking=True)
         return out
 
     @torch.no_grad()
