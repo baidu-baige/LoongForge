@@ -49,7 +49,7 @@ def convert_megatron_transformer_config_args(megatron_args, config_class=None):
         "apply_layernorm_1p", False
     )
     transformer_config_args["layernorm_epsilon"] = megatron_args.get(
-        "norm_epsilon", 1e-5
+        "layernorm_epsilon", megatron_args.get("norm_epsilon", 1e-5)
     )
     transformer_config_args["deallocate_pipeline_outputs"] = True
     transformer_config_args["pipeline_dtype"] = megatron_args["params_dtype"]
