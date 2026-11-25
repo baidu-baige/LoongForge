@@ -35,7 +35,6 @@ from megatron.core.transformer.multi_token_prediction import (
     MTPLossAutoScaler,
     MTPLossLoggingHelper,
     MultiTokenPredictionBlock,
-    _compute_mtp_acceptance_counts,
     roll_tensor,
     tie_word_embeddings_state_dict,
 )
@@ -795,18 +794,10 @@ class BaseGPTModel(BaseMegatronLanguageModule):
                                 dp_size * get_num_microbatches() / step_num_groups
                             )
 
-                        correct, total = _compute_mtp_acceptance_counts(
-                            mtp_logits,
-                            mtp_labels,
-                            loss_mask,
-                            tp_group=self.pg_collection.tp,
-                        )
-                        MTPLossLoggingHelper.save_metrics_to_tracker(
+                        MTPLossLoggingHelper.save_loss_to_tracker(
                             mtp_log_loss,
-                            correct,
-                            total,
-                            layer_number=mtp_layer_number,
-                            num_layers=self.config.mtp_num_layers,
+                            mtp_layer_number,
+                            self.config.mtp_num_layers,
                             avg_group=parallel_state.get_data_parallel_group(
                                 with_context_parallel=True
                             ),
