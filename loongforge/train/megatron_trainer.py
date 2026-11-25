@@ -282,14 +282,6 @@ def pretrain_with_mcore(
     runtime_args.model_type = model_type
     cfg = pretrain_cfg_container_from_args(runtime_args, None)
     set_global_variables(runtime_args, cfg, build_tokenizer=False)
-    if (
-        getattr(runtime_args, "training_phase", None) == constants.TrainingPhase.SFT
-        and _is_vlm_config(model_config)
-    ):
-        # MCore's SFT validation resets this flag; legacy VLM SFT needs the
-        # per-microbatch variable-length batch contract.
-        runtime_args.variable_seq_lengths = True
-        _restore_variable_seq_lengths(model_config)
     set_loongforge_extra_global_vars(runtime_args, build_tokenizer=True)
     if getattr(model_config, "image_encoder", None) is not None:
         from loongforge.models.encoder.internvl_vision_models.internvl_config import (
@@ -297,6 +289,14 @@ def pretrain_with_mcore(
         )
 
         resolve_image_token_id(model_config.image_encoder)
+    if (
+        getattr(runtime_args, "training_phase", None) == constants.TrainingPhase.SFT
+        and _is_vlm_config(model_config)
+    ):
+        # MCore's SFT setup resets this flag; legacy VLM SFT needs the
+        # per-microbatch variable-length batch contract.
+        runtime_args.variable_seq_lengths = True
+        _restore_variable_seq_lengths(model_config)
     return pretrain(
         cfg,
         train_valid_test_dataset_provider,
