@@ -245,11 +245,14 @@ def train_valid_test_datasets_provider(train_val_test_num_samples, vp_stage=None
     training_phase=TrainingPhase.SFT, override=True)
 def default_pretrain_trainer(train_args):
     """build trainer"""
+    from loongforge.train.megatron_trainer import pretrain_with_mcore
+
     trainer = MegatronTrainer(
         train_args=train_args,
         train_valid_test_dataset_provider=train_valid_test_datasets_provider,
         model_provider=omni_model_provider,
         model_type=ModelType.encoder_or_decoder,
         forward_step_func=forward_step,
+        pretrain_func=pretrain_with_mcore,
     )
     return trainer

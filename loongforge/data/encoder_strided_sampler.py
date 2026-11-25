@@ -15,7 +15,7 @@ step-relative position filtering logic.
 import threading
 import queue
 
-from megatron.legacy.data.data_samplers import MegatronPretrainingRandomSampler
+from megatron.training.datasets.data_samplers import MegatronPretrainingRandomSampler
 
 _SENTINEL = object()
 

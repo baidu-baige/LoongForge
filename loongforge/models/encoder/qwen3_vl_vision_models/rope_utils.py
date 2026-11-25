@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import inspect
 import logging
 from typing import TYPE_CHECKING, Optional
 
@@ -16,6 +17,13 @@ from torch import Tensor
 from transformer_engine.pytorch.attention.rope import (
     apply_rotary_pos_emb as te_apply_rotary_pos_emb,
 )
+
+try:
+    _TE_ROPE_HAS_MSCALE = "mscale" in inspect.signature(
+        te_apply_rotary_pos_emb
+    ).parameters
+except (TypeError, ValueError):
+    _TE_ROPE_HAS_MSCALE = True
 
 if TYPE_CHECKING:
     from megatron.core.transformer.transformer_config import TransformerConfig
@@ -88,6 +96,7 @@ def apply_rotary_pos_emb(
     rotary_interleaved: bool = False,
     mscale: float = 1.0,
     cp_group: torch.distributed.ProcessGroup = None,
+    max_seqlen: Optional[int] = None,
 ):
     """
     Reroute to the appropriate apply_rotary_pos_emb function depending on
@@ -95,17 +104,32 @@ def apply_rotary_pos_emb(
 
     NOTE: the RoPE of vision model should not be applied like thd-format because all
     freqs of each token have been computed.
+
+    ``max_seqlen`` is part of the MCore 0.20 ``apply_rotary_fn`` call contract.
+    Vision frequencies are already materialized per token, so no length-based
+    cache lookup is needed here; the argument is accepted explicitly rather
+    than dropped through ``**kwargs``.
     """
 
     if config.apply_rope_fusion:
-        return te_apply_rotary_pos_emb(
-            t.unsqueeze(1),
-            freqs,
-            tensor_format="sbhd",
-            interleaved=rotary_interleaved,
-            fused=True,
-            mscale=mscale,
-        ).squeeze(1)
+        kwargs = {
+            "tensor_format": "sbhd",
+            "interleaved": rotary_interleaved,
+            "fused": True,
+        }
+        if _TE_ROPE_HAS_MSCALE:
+            kwargs["mscale"] = mscale
+        elif mscale != 1.0:
+            # TE versions without the fused mscale argument cannot preserve
+            # non-unit scaling; use the legacy unfused path in that case.
+            return _apply_rotary_pos_emb_bshd(
+                t.unsqueeze(1),
+                freqs,
+                rotary_interleaved=config.rotary_interleaved,
+                multi_latent_attention=config.multi_latent_attention,
+                mscale=mscale,
+            ).squeeze(1)
+        return te_apply_rotary_pos_emb(t.unsqueeze(1), freqs, **kwargs).squeeze(1)
 
     return _apply_rotary_pos_emb_bshd(
         t.unsqueeze(1),

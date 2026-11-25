@@ -134,7 +134,6 @@ MODEL_PARALLEL_ARGS=(
   --moe-permute-fusion
   --cross-entropy-loss-fusion
   --overlap-grad-reduce
-  --overlap-param-gather
 )
 
 MTP_ARGS=(

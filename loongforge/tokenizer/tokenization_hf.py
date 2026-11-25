@@ -8,10 +8,10 @@ from typing import Dict, List, Union, Optional
 
 from transformers import AutoTokenizer
 
-from megatron.core.datasets.megatron_tokenizer import MegatronLegacyTokenizer
+from megatron.core.tokenizers.base_tokenizer import MegatronTokenizerBase
 
 
-class AutoTokenizerFromHF(MegatronLegacyTokenizer):
+class AutoTokenizerFromHF(MegatronTokenizerBase):
     """
     Here we adopt the approach of wrapping HF Tokenizer and inheriting from MegatronTokenizer. 
 	The purpose of this approach is:
@@ -31,7 +31,7 @@ class AutoTokenizerFromHF(MegatronLegacyTokenizer):
         split_special_tokens: bool,
         **kwargs,
     ):
-        super().__init__(name_or_path)
+        super().__init__(path=name_or_path, config={})
         self.tokenizer = AutoTokenizer.from_pretrained(
             name_or_path,
             use_fast=use_fast_tokenizer,
@@ -51,6 +51,18 @@ class AutoTokenizerFromHF(MegatronLegacyTokenizer):
         _mod_logger = logging.getLogger(self.tokenizer.__class__.__module__)
         if _mod_logger.level == logging.NOTSET:
             _mod_logger.setLevel(logging.ERROR)
+
+    def apply_chat_template(self, conversation, **kwargs):
+        """Apply the Hugging Face tokenizer chat template."""
+        return self.tokenizer.apply_chat_template(conversation, **kwargs)
+
+    @property
+    def unique_identifiers(self) -> Dict[str, str]:
+        """Identify the tokenizer in MCore dataset metadata."""
+        return {
+            "class": f"{type(self).__module__}.{type(self).__qualname__}",
+            "tokenizer_path": str(self.path),
+        }
 
     def tokenize(self, text: str, **kwargs) -> List[int]:
         """tokenize text

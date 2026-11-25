@@ -41,6 +41,15 @@ except ImportError as exc:
     raise ImportError(_DSA_FUSED_DEPS_HINT) from exc
 
 
+def _unscale_indexer_grad(grad, scale_inv):
+    """Dequantize an indexer grad while zeroing rows on the quantizer's eps floor."""
+    epsilon_scale_floor = 2.0 ** -48 * 1.5
+    scale_inv = scale_inv.unsqueeze(-1)
+    usable = torch.isfinite(scale_inv) & (scale_inv > epsilon_scale_floor)
+    safe_scale_inv = torch.where(usable, scale_inv, torch.ones_like(scale_inv))
+    return (grad / safe_scale_inv).masked_fill(~usable.expand_as(grad), 0.0)
+
+
 def _get_fp8_block_quantizer():
     """FP8 blockwise quantizer for the indexer, imported on demand.
 
@@ -2440,10 +2449,6 @@ class DSAIndexerKernelFunction(torch.autograd.Function):
             d_weights = d_weights * q_scale * ctx.softmax_scale
             # Same kernel + same blockwise FP8 dequant as the CSA indexer, hence
             # the same eps-floor hazard; reuse its unscale helper.
-            from loongforge.models.foundation.deepseek_v4.deepseek_v4_csa import (
-                _unscale_indexer_grad,
-            )
-
             d_q = _unscale_indexer_grad(d_q, q_scale)
             d_k = _unscale_indexer_grad(d_k, k_scale)
         else:

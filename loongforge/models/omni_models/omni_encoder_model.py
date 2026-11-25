@@ -28,6 +28,35 @@ from loongforge.data.dp_balance.vit_balance import dp_balance_vit_encoder
 from loongforge.utils import get_args
 
 
+def _filter_padded_images(images, image_grid_thw, image_flags):
+    """Drop image slots whose strict-mode padding flag is zero.
+
+    The InternVL task encoder pads the image dimension to a fixed
+    ``num_images_expected`` under ``strict_mode`` and marks padded slots with
+    ``image_flags == 0``. Those slots must not reach the vision encoder,
+    otherwise the encoder returns features for padding while input_ids contains
+    no corresponding ``<IMG_CONTEXT>`` tokens.
+    """
+    if not isinstance(images, torch.Tensor) or image_flags is None:
+        return images, image_grid_thw
+
+    flags = image_flags.reshape(-1)
+    if flags.numel() == 0 or flags.numel() != images.shape[0]:
+        return images, image_grid_thw
+    if bool(flags.all()):
+        return images, image_grid_thw
+
+    active = flags.to(dtype=torch.bool)
+    images = images[active]
+    if (
+        isinstance(image_grid_thw, torch.Tensor)
+        and image_grid_thw.ndim > 0
+        and image_grid_thw.shape[0] == flags.numel()
+    ):
+        image_grid_thw = image_grid_thw[active]
+    return images, image_grid_thw
+
+
 class _DummyEncoderPassthrough(torch.autograd.Function):
     """Ties encoder/projector params into the autograd graph without paying
     the cost of an out-of-place op on the full [seq, hidden] input_embeds.
@@ -151,6 +180,8 @@ class OmniEncoderModel(torch.nn.Module):
         **kwargs,
     ) -> None:
         super().__init__()
+        import loongforge.models.encoder  # noqa: F401
+
         self.config = config
         self.mix_used_vision_encoder = getattr(config, "mix_used_vision_encoder", True)
         self.mix_used_vision_projector = getattr(
@@ -348,10 +379,12 @@ class OmniEncoderModel(torch.nn.Module):
         input_embeds: torch.Tensor,
         images: Optional[Dict[str, torch.Tensor]] = None,
         image_grid_thw: Optional[torch.Tensor] = None,
+        image_flags: Optional[torch.Tensor] = None,
         inference_params: Optional[Dict] = None,
         **kwargs,
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         """Forward function for image encoding."""
+        images, image_grid_thw = _filter_padded_images(images, image_grid_thw, image_flags)
         args = get_args()
         if args.use_vit_dp_balance:
             if args.enable_encoder_hetero_dp or args.enable_full_hetero_dp:

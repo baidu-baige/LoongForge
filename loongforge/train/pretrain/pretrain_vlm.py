@@ -6,45 +6,20 @@
 
 """Pretrain traniner for omni models"""
 
-import os
-import torch
-from functools import partial
 import copy
+import os
+from functools import partial
+from typing import List, Optional
 
-from megatron.training import get_timers
-
-from typing import List
-from megatron.core.transformer.multi_token_prediction import get_mtp_ranks
-
-from megatron.core import mpu, tensor_parallel
-from megatron.core.enums import ModelType
-from megatron.core.packed_seq_params import PackedSeqParams
-from megatron.core.utils import StragglerDetector, get_attr_wrapped_model
-from megatron.core import parallel_state
-
-
-from transformers import DataCollatorForSeq2Seq
-
-from loongforge.utils import constants, get_args, get_model_config
-
-# from loongforge.models.qwen_vl.utils import get_inputs_on_this_cp_rank_by_tex # TODO:@yizhan
-from loongforge.train.megatron_trainer import MegatronTrainer
-from loongforge.train.trainer_builder import register_model_trainer
-from loongforge.train.training_utils import dump_model_input_example_once
-from loongforge.train.sft.utils import (
-    build_sft_data_collator,
-    build_sft_cyclic_iterators,
-)
-from loongforge.data.multimodal.dataloader_provider import (
-    get_train_dataset,
-    get_val_dataset,
-    get_train_loader,
-    VLMPretrainCollator,
-)
-from loongforge.data.multimodal import build_task_encoder
+import torch
 from datasets import load_from_disk
-
-
+from loongforge.data.multimodal import build_task_encoder
+from loongforge.data.multimodal.dataloader_provider import (
+    VLMPretrainCollator,
+    get_train_dataset,
+    get_train_loader,
+    get_val_dataset,
+)
 from loongforge.models.omni_models.omni_model_provider import (
     omni_model_provider,
 )
@@ -55,6 +30,23 @@ from loongforge.train.initialize import (
     get_encoder_dp_size,
     is_mock_microbatch,
 )
+
+# from loongforge.models.qwen_vl.utils import get_inputs_on_this_cp_rank_by_tex # TODO:@yizhan
+from loongforge.train.megatron_trainer import MegatronTrainer
+from loongforge.train.sft.utils import (
+    build_sft_cyclic_iterators,
+    build_sft_data_collator,
+)
+from loongforge.train.trainer_builder import register_model_trainer
+from loongforge.utils import constants, get_args, get_model_config
+from transformers import DataCollatorForSeq2Seq
+
+from megatron.core import mpu, parallel_state, tensor_parallel
+from megatron.core.enums import ModelType
+from megatron.core.packed_seq_params import PackedSeqParams
+from megatron.core.transformer.multi_token_prediction import get_mtp_ranks
+from megatron.core.utils import StragglerDetector, get_attr_wrapped_model
+from megatron.training import get_timers
 
 stimer = StragglerDetector()
 
@@ -67,6 +59,11 @@ def _batch_has_non_dummy_value(data, key):
     if isinstance(v, (list, tuple)):
         return bool(v)
     return v is not None
+
+
+def _packed_max_seqlen(cu_seqlens: torch.Tensor) -> int:
+    """Return the longest packed segment, including the padding segment."""
+    return (cu_seqlens[1:] - cu_seqlens[:-1]).max().item()
 
 
 def get_batch_on_this_tp_rank(data_iterator):
@@ -131,13 +128,14 @@ def get_batch_on_this_tp_rank(data_iterator):
     packed_seq_params = None
     if cu_lengths.shape != torch.Size([1, 1]):
         assert cu_lengths.shape[0] == 1, "micro-batch-size must be 1 for packing"
+        packed_max_seqlen = _packed_max_seqlen(cu_lengths[0])
         packed_seq_params = PackedSeqParams(
             qkv_format="thd",
             cu_seqlens_q=cu_lengths[0],
             cu_seqlens_kv=cu_lengths[0],
             cu_seqlens_cpu=cu_lengths_cpu[0],
-            max_seqlen_q=max_lengths[0].item(),
-            max_seqlen_kv=max_lengths[0].item(),
+            max_seqlen_q=packed_max_seqlen,
+            max_seqlen_kv=packed_max_seqlen,
         )
 
     batch = {
@@ -372,9 +370,9 @@ def forward_step(data_iterator, model, return_schedule_plan: bool = False):
             packed_seq_params,
         ) = batch_list[inner_group_id].values()
 
-        dump_model_input_example_once(
-            tokens, labels, attn_mask, cu_lengths, packed_seq_params,
-        )
+        from loongforge.train.megatron_trainer import _select_sft_clip_root
+
+        _select_sft_clip_root(args, packed_seq_params)
 
         loss_func = getattr(model_config, "loss_func", default_loss_func)
 
@@ -457,11 +455,12 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None)
 
         # Build encoder-specific iterator for full_hetero_dp
         if getattr(args, 'enable_full_hetero_dp', False):
+            from loongforge.train.initialize import (
+                get_model_size,
+                get_num_real_micro_batches_per_decoder_dp,
+            )
             from loongforge.train.sft.utils import (
                 build_full_hetero_encoder_data_iterator,
-            )
-            from loongforge.train.initialize import (
-                get_model_size, get_num_real_micro_batches_per_decoder_dp,
             )
             pp_rank = mpu.get_pipeline_model_parallel_rank()
             tp_size = mpu.get_tensor_model_parallel_world_size()
@@ -501,7 +500,8 @@ def train_valid_test_dataset_provider(train_val_test_num_samples, vp_stage=None)
                 build_full_hetero_encoder_energon_iterator,
             )
             from loongforge.train.initialize import (
-                get_model_size, get_num_real_micro_batches_per_decoder_dp,
+                get_model_size,
+                get_num_real_micro_batches_per_decoder_dp,
             )
             pp_rank = mpu.get_pipeline_model_parallel_rank()
             tp_size = mpu.get_tensor_model_parallel_world_size()
@@ -530,19 +530,57 @@ def get_embedding_ranks(pp_ranks: List[int]):
     embedding_ranks = sorted(embedding_ranks)
     return embedding_ranks
 
+
+def vlm_model_provider(
+    pre_process: bool = True,
+    post_process: bool = True,
+    parallel_output: bool = True,
+    vp_stage: Optional[int] = None,
+    config=None,
+    pg_collection=None,
+    **kwargs,
+):
+    """Resolve the configured VLM backend without duplicating the trainer.
+
+    MCore's provider fallback supplies its resolved config and process groups;
+    LoongForge backends still read the concrete model config from global state.
+    """
+    backend = getattr(get_model_config(), "model_backend", "omni")
+    if backend == "mimo":
+        from loongforge.models.mimo_models.mimo_vlm_provider import (
+            mimo_vlm_model_provider,
+        )
+
+        provider = mimo_vlm_model_provider
+    else:
+        provider = omni_model_provider
+    return provider(
+        pre_process=pre_process,
+        post_process=post_process,
+        parallel_output=parallel_output,
+        vp_stage=vp_stage,
+        config=config,
+        pg_collection=pg_collection,
+    )
+
+
 @register_model_trainer(
     model_family=constants.VisionLanguageModelFamilies.names(),
     training_phase=constants.TrainingPhase.PRETRAIN,
 )
 def default_vlm_pretrain_trainer(train_args):
     """build trainer"""
+    from loongforge.train.megatron_trainer import pretrain_with_mcore
+
+    runtime_kwargs = {"pretrain_func": pretrain_with_mcore}
     trainer = MegatronTrainer(
         train_args=train_args,
         train_valid_test_dataset_provider=train_valid_test_dataset_provider,
-        model_provider=omni_model_provider,
+        model_provider=vlm_model_provider,
         model_type=ModelType.encoder_or_decoder,  # TODO: Heterogeneous TP/PP not supported yet
         forward_step_func=forward_step,
         get_embedding_ranks=get_embedding_ranks,
+        **runtime_kwargs,
     )
 
     return trainer

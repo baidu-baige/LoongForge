@@ -26,5 +26,5 @@ num_experts: null
 moe_ffn_hidden_size: null
 rotary_emb_func: "RotaryEmbedding"
 rotary_base: 1000000
-model_type: "qwen"
+model_type: "qwen3"
 convert_file: ${oc.env:LOONGFORGE_PATH}/configs/models/qwen3/ckpt_convert/qwen3_convert.yaml

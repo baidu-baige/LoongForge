@@ -14,12 +14,12 @@ from .utils import get_inputs_on_this_cp_rank
 from transformers.models.auto.modeling_auto import AutoModel
 from loongforge.models.common import BaseMegatronModule, BaseModelConfig
 from megatron.core import InferenceParams, tensor_parallel
+from megatron.core.pipeline_parallel.fine_grained_activation_offload import (
+    FineGrainedActivationOffloadingInterface as off_interface,
+)
 from loongforge.train.initialize import (
     mpu,
     get_encoder_dp_size,
-)
-from megatron.core.pipeline_parallel.fine_grained_activation_offload import (
-    fine_grained_offloading_init_chunk_handler,
 )
 
 class OmniCombinationModel(BaseMegatronModule):
@@ -167,18 +167,29 @@ class OmniCombinationModel(BaseMegatronModule):
 
     def preprocess_for_fine_grained_offloading(self):
         """Preprocess for fine-grained activation offloading."""
-        fine_grained_offloading_init_chunk_handler(
-            self.vp_stage, self.config.min_offloaded_tensor_size
+        foundation = self.foundation_model
+        off_interface.init_chunk_handler(
+            pp_rank=foundation.pg_collection.pp.rank(),
+            vp_size=foundation.config.virtual_pipeline_model_parallel_size,
+            vp_stage=foundation.vp_stage,
+            min_offloaded_tensor_size=foundation.config.min_offloaded_tensor_size,
+            delta_offload_bytes_across_pp_ranks=(
+                foundation.config.delta_offload_bytes_across_pp_ranks
+            ),
+            activation_offload_fraction=foundation.config.activation_offload_fraction,
+            max_inflight_offloads=(
+                foundation.config.fine_grained_offloading_max_inflight_offloads
+            ),
         )
         if self.disable_param_offloading:
-            for param in self.foundation_model.decoder.parameters():
-                param.offloading_activation = False
-            if self.foundation_model.mtp_process:
-                for param in self.foundation_model.mtp.parameters():
-                    param.offloading_activation = False
-            if self.foundation_model.post_process:
-                for param in self.foundation_model.output_layer.parameters():
-                    param.offloading_activation = False
+            for param in foundation.decoder.parameters():
+                off_interface.mark_not_offload(param)
+            if foundation.mtp_process:
+                for param in foundation.mtp.parameters():
+                    off_interface.mark_not_offload(param)
+            if foundation.post_process:
+                for param in foundation.output_layer.parameters():
+                    off_interface.mark_not_offload(param)
             self.disable_param_offloading = False
 
     def hetero_dp_get_tensor_shape(

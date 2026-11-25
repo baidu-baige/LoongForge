@@ -199,8 +199,21 @@ def _apply_mrope_bshd(t, freq, config, cu_seqlens, mscale: float = 1.0):
     return t
 
 
-def apply_mrope(t, freq, config, cu_seqlens=None, mscale: float = 1.0, cp_group=None):
-    """mrope"""
+def apply_mrope(
+    t,
+    freq,
+    config,
+    cu_seqlens=None,
+    mscale: float = 1.0,
+    cp_group=None,
+    max_seqlen=None,
+):
+    """Apply Qwen3-VL multimodal RoPE.
+
+    ``max_seqlen`` is part of the MCore 0.20 ``apply_rotary_fn`` call contract.
+    The multimodal frequencies are precomputed, so this implementation does
+    not need a length-based cache lookup.
+    """
     if cu_seqlens is not None:
         cp_size = (
             cp_group.size()

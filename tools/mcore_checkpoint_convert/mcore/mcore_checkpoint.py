@@ -69,6 +69,34 @@ class McoreCheckpoint(AbstractCheckpoint):
             if MTP_NAME_PREFIX_FOR_LAYER in self.name_map
             else None
         )
+        module_args = c_config.get("module", {})
+        self.is_dsv4_hybrid = (
+            module_args.get("experimental_attention_variant") == "dsv4_hybrid"
+        )
+        self.dsv4_hybrid_has_mhc = int(module_args.get("hc_mult", 1) or 1) > 1
+
+    @staticmethod
+    def _dsv4_hybrid_name_is_ffn(name):
+        return (
+            name.startswith("hc_ffn_")
+            or name.startswith("moe.")
+            or name.startswith("mlp.")
+            or name.startswith("post_attention_")
+            or name.startswith("post_mlp_")
+        )
+
+    def _resolve_dsv4_hybrid_main_layer(self, name, local_layer_id):
+        """Map one logical V4 layer onto its native HybridStack physical layers."""
+        physical_layer_id = 2 * local_layer_id
+        if self._dsv4_hybrid_name_is_ffn(name):
+            physical_layer_id += 1
+
+        # HyperConnectionHybridLayer nests the actual attention/FFN under
+        # ``inner_layer``; the mHC connection parameters live one level above it.
+        name_prefix = None
+        if not name.startswith(("hc_attn_", "hc_ffn_")) and self.dsv4_hybrid_has_mhc:
+            name_prefix = "inner_layer"
+        return physical_layer_id, name_prefix
 
 
     @staticmethod
@@ -243,17 +271,33 @@ class McoreCheckpoint(AbstractCheckpoint):
                     for c_name in BASE_NAMES:
                         if layer_id >= num_layers and c_name in HC_NAMES:
                             continue
+                        item_m_layer_id = m_layer_id
+                        item_name_prefix = name_prefix
+                        if self.is_dsv4_hybrid and layer_id < num_layers:
+                            item_m_layer_id, item_name_prefix = (
+                                self._resolve_dsv4_hybrid_main_layer(
+                                    c_name, cur_layer_id
+                                )
+                            )
                         self.m_base.common_to_mcore(
-                            c_name, c_ckpt, m_dict, t_name, layer_id, m_layer_id,
+                            c_name, c_ckpt, m_dict, t_name, layer_id, item_m_layer_id,
                             layer_prefix=layer_prefix, ep_id=ep_id,
-                            name_prefix=name_prefix, clear_source=clear_source,
+                            name_prefix=item_name_prefix, clear_source=clear_source,
                         )
                     # ====moe shared_expert
                     for c_name in MOE_EXPERT_PROJS:
+                        item_m_layer_id = m_layer_id
+                        item_name_prefix = name_prefix
+                        if self.is_dsv4_hybrid and layer_id < num_layers:
+                            item_m_layer_id, item_name_prefix = (
+                                self._resolve_dsv4_hybrid_main_layer(
+                                    c_name, cur_layer_id
+                                )
+                            )
                         self.m_base.common_to_mcore(
-                            c_name, c_ckpt, m_dict, t_name, layer_id, m_layer_id,
+                            c_name, c_ckpt, m_dict, t_name, layer_id, item_m_layer_id,
                             layer_prefix=layer_prefix, ep_id=ep_id,
-                            expert_name=MOE_SHARED_EXPERT, name_prefix=name_prefix,
+                            expert_name=MOE_SHARED_EXPERT, name_prefix=item_name_prefix,
                             clear_source=clear_source,
                         )
 
@@ -261,10 +305,19 @@ class McoreCheckpoint(AbstractCheckpoint):
                     if expert_dict is not None:
                         for expert_id in expert_dict[ep_id]:
                             for c_name in MOE_EXPERT_PROJS:
+                                item_m_layer_id = m_layer_id
+                                item_name_prefix = name_prefix
+                                if self.is_dsv4_hybrid and layer_id < num_layers:
+                                    item_m_layer_id, item_name_prefix = (
+                                        self._resolve_dsv4_hybrid_main_layer(
+                                            c_name, cur_layer_id
+                                        )
+                                    )
                                 self.m_moe.common_e_to_mcore(
                                     MOE_EXPERT, c_name, c_ckpt, m_dict, t_name,
-                                    layer_id, m_layer_id, ep_id, expert_id,
-                                    layer_prefix=layer_prefix, name_prefix=name_prefix,
+                                    layer_id, item_m_layer_id, ep_id, expert_id,
+                                    layer_prefix=layer_prefix,
+                                    name_prefix=item_name_prefix,
                                 )
 
                     # MTP

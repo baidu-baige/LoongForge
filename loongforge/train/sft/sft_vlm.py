@@ -13,11 +13,6 @@ from megatron.core.transformer.multi_token_prediction import get_mtp_ranks
 from loongforge.utils import (
     constants
 )
-from loongforge.models.omni_models.omni_model_provider import (
-    omni_model_provider,
-)
-
-
 from loongforge.train.megatron_trainer import MegatronTrainer
 from loongforge.train.trainer_builder import register_model_trainer
 
@@ -43,13 +38,16 @@ def get_embedding_ranks(pp_ranks: List[int]):
 def default_pretrain_trainer(train_args):
     """build trainer"""
     from loongforge.train.pretrain import pretrain_vlm
+    from loongforge.train.megatron_trainer import pretrain_with_mcore
+
     trainer = MegatronTrainer(
         train_args=train_args,
         train_valid_test_dataset_provider=pretrain_vlm.train_valid_test_dataset_provider,
-        model_provider=omni_model_provider,
+        model_provider=pretrain_vlm.vlm_model_provider,
         model_type=ModelType.encoder_or_decoder,
         forward_step_func=pretrain_vlm.forward_step,
         get_embedding_ranks=get_embedding_ranks,
+        pretrain_func=pretrain_with_mcore,
     )
 
     return trainer

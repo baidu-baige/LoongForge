@@ -120,6 +120,7 @@ class Glm5NextConfig(BaseModelMLAConfig):
     attention_dropout: float = 0.0
     add_bias_linear: bool = False
     add_qkv_bias: bool = False
+    qk_layernorm: bool = True
     gated_linear_unit: bool = True
     activation_func: object = F.silu
     activation_func_clamp_value: float | None = 10.0
@@ -138,6 +139,7 @@ class Glm5NextConfig(BaseModelMLAConfig):
     moe_router_dtype: str | None = "fp32"
     moe_token_dispatcher_type: str = "allgather"
     moe_grouped_gemm: bool = False
+    moe_use_legacy_grouped_gemm: bool = False
     moe_layer_freq: list[int] | int | None = None
     enable_hyper_connections: bool = True
     num_residual_streams: int = 4

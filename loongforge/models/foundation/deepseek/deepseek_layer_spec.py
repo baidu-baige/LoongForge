@@ -188,7 +188,6 @@ def _get_mlp_module_spec(
         submodules=MoESubmodules(
             shared_experts=ModuleSpec(
                 module=SharedExpertMLP,
-                params={"gate": False},
                 submodules=MLPSubmodules(
                     linear_fc1=shared_linear_fc1,
                     linear_fc2=shared_linear_fc2,

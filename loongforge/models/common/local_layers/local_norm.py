@@ -8,6 +8,7 @@
 
 from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.fusions.fused_layer_norm import FusedLayerNorm
+import torch
 
 try:
     from apex.normalization.fused_layer_norm import FusedRMSNorm as ApexFusedRMSNorm
@@ -24,7 +25,10 @@ except Exception:
     HAVE_FUSED_LAYER_NORM = False
 
 
-class FusedRMSNorm(ApexFusedRMSNorm):
+_FusedRMSNormBase = ApexFusedRMSNorm if HAVE_FUSED_RMS_NORM else torch.nn.Module
+
+
+class FusedRMSNorm(_FusedRMSNormBase):
     """Fused RMS Norm"""
 
     def __init__(

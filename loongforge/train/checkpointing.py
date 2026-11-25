@@ -30,17 +30,17 @@ from megatron.core.dist_checkpointing.strategies.fully_parallel import (
     FullyParallelLoadStrategyWrapper,
     FullyParallelSaveStrategyWrapper,
 )
-from megatron.core.msc_utils import MultiStorageClientFeature, open_file
+from megatron.core.msc_utils import MultiStorageClientFeature, maybe_msc
 from megatron.core.num_microbatches_calculator import update_num_microbatches
 from megatron.core.optimizer import DistributedOptimizer
 from megatron.core.rerun_state_machine import get_rerun_state_machine
-from megatron.core.utils import get_torch_version, is_torch_min_version
+from megatron.core.utils import get_torch_version, is_torch_min_version, unwrap_model
 from megatron.core.dist_checkpointing.serialization import get_default_save_sharded_strategy
 from megatron.training import ft_integration, wandb_utils
 from megatron.training.async_utils import is_empty_async_queue, schedule_async_save
 from megatron.training.global_vars import get_args
 from megatron.training.one_logger_utils import on_save_checkpoint_start, on_save_checkpoint_success
-from megatron.training.utils import append_to_progress_log, is_last_rank, print_rank_0, unwrap_model
+from megatron.training.utils import append_to_progress_log, is_last_rank, print_rank_0
 
 from loongforge.models.common.peft.utils import apply_peft_adapter_filter_to_state_dict
 try:
@@ -318,7 +318,7 @@ def read_metadata(tracker_filename):
     iteration = 0
     release = False
 
-    with open_file(tracker_filename, 'r') as f:
+    with maybe_msc.open(tracker_filename, 'r') as f:
         metastring = f.read().strip()
         try:
             iteration = int(metastring)
@@ -374,7 +374,7 @@ def read_tracker_iteration(checkpoints_path: str) -> Optional[tuple]:
         return None
 
     try:
-        with open_file(tracker_filename, 'r') as f:
+        with maybe_msc.open(tracker_filename, 'r') as f:
             metastring = f.read().strip()
     except OSError:
         return None
@@ -905,6 +905,7 @@ def save_checkpoint(
                 )
                 if args.log_progress and args.async_save:
                     append_to_progress_log(
+                        args.save,
                         f'Saved async local checkpoint\tIteration: {iteration}', barrier=False
                     )
 
@@ -919,9 +920,9 @@ def save_checkpoint(
                     if os.path.exists(
                         tracker_filename
                     ):  # TODO: Make this work with MSC remote paths?
-                        with open_file(tracker_filename, 'r') as f:
+                        with maybe_msc.open(tracker_filename, 'r') as f:
                             prev_iteration = int(f.read().strip())
-                with open_file(tracker_filename, 'w') as f:
+                with maybe_msc.open(tracker_filename, 'w') as f:
                     f.write("release" if release else str(iteration))
                 tensor_rank_to_print = (
                     tensor_rank if tensor_rank is not None else mpu.get_tensor_model_parallel_rank()
@@ -938,6 +939,7 @@ def save_checkpoint(
                 )
                 if args.log_progress and args.async_save:
                     append_to_progress_log(
+                        args.save,
                         f'Saved async checkpoint\tIteration: {iteration}', barrier=False
                     )
 
@@ -955,6 +957,7 @@ def save_checkpoint(
                         )
                         if args.log_progress:
                             append_to_progress_log(
+                                args.save,
                                 f'Deleted checkpoint\tIteration: {iteration_to_delete}',
                                 barrier=False,
                             )
@@ -2224,7 +2227,7 @@ def load_biencoder_checkpoint(
 
     tracker_filename = get_checkpoint_tracker_filename(load_path)
 
-    with open_file(tracker_filename, 'r') as f:
+    with maybe_msc.open(tracker_filename, 'r') as f:
         iteration = int(f.read().strip())
 
     checkpoint_name = get_checkpoint_name(

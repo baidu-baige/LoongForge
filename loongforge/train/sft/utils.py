@@ -15,19 +15,44 @@ from transformers.utils import PaddingStrategy
 from datasets.distributed import split_dataset_by_node
 
 from megatron.core import mpu, tensor_parallel, parallel_state
+from megatron.core.msc_utils import maybe_msc
 from megatron.core.packed_seq_params import PackedSeqParams
 
-from megatron.legacy.data.data_samplers import MegatronPretrainingRandomSampler
+from megatron.training.checkpointing import (
+    get_checkpoint_name,
+    get_checkpoint_tracker_filename,
+)
+from megatron.training.datasets.data_samplers import MegatronPretrainingRandomSampler
 
 from loongforge.utils import get_args, get_model_config, get_tokenizer, constants
 from loongforge.data import DataCollatorForSupervisedDataset
 from loongforge.tokenizer import AutoTokenizerFromHF
-from loongforge.train.checkpointing import get_checkpoint_name, read_tracker_iteration
 
 
 if TYPE_CHECKING:
     from datasets import Dataset, IterableDataset
 logger = logging.getLogger(__name__)
+
+
+def read_tracker_iteration(checkpoints_path):
+    """Read a tracker without exiting on missing or malformed files."""
+    tracker_filename = get_checkpoint_tracker_filename(checkpoints_path)
+    if not os.path.isfile(tracker_filename):
+        return None
+    try:
+        with maybe_msc.open(tracker_filename, "r") as stream:
+            metastring = stream.read().strip()
+    except OSError:
+        return None
+    if metastring == "release":
+        return (0, True)
+    try:
+        iteration = int(metastring)
+    except ValueError:
+        return None
+    if iteration <= 0:
+        return None
+    return (iteration, False)
 
 
 # A scheduling slot consumed by `_schedule_step_aligned`. Each slot occupies
