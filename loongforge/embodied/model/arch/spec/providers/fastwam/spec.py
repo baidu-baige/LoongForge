@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from ....diffusion.loss import LossSpec
+from ....diffusion.loss import BatchPadding, Bsmntw, LossSpec, TokenMeanSquaredError
 from ....diffusion.schedule import RectifiedFlow
 from ....diffusion.spec import DiffusionSpec
 from ....diffusion.stepping import EulerSampler, UniformSteps
@@ -117,12 +117,13 @@ def _fastwam(config: Any = None, *,
     than contract changes:
 
     1. **The video timestep is not a constant.** fastwam really samples t for
-       both streams (``video_scheduler`` and ``action_scheduler`` carry the
-       **same numbers** at ``modeling_configuration_fastwam.py:98-103``:
-       ``train_shift: 5.0`` / ``infer_shift: 5.0``), so both get
-       ``UniformShift(5.0)`` rather than vpp2's ``Constant(1.0)``.
-       **Design doc §2's fastwam row says video 3.0 / action 1.0, which
-       contradicts the code**; the code wins and the mismatch is recorded.
+       both streams, so both get ``UniformShift`` rather than vpp2's
+       ``Constant(1.0)``: video ``train_shift: 5.0`` and action
+       ``train_shift: 1.0`` (``modeling_configuration_fastwam.py:108-115``;
+       the action value follows FastWAM's ``configs/model/fastwam.yaml``,
+       per the comment at ``:111-112``). Design doc §2's fastwam row says
+       video 3.0, which contradicts the code; the code wins and the mismatch
+       is recorded.
     2. **``seperated_timestep: True``** (``:82``). Its actual shape in code is
        ``token_timesteps = ones(B, F, tokens_per_frame) * t.view(B,1,1)``
        followed by ``token_timesteps[:, 0, :] = 0``
@@ -211,12 +212,20 @@ def _fastwam(config: Any = None, *,
             # YAML sets the two shifts as ``diffusion.<stream>.shift``
             # (``DiffusionSpec.with_yaml_knobs``).
             "video": TimestepSampler(UniformShift(shift=5.0)),
-            "action": TimestepSampler(UniformShift(shift=5.0)),
+            "action": TimestepSampler(UniformShift(shift=1.0)),
         },
-        # ``lambda_video`` and ``lambda_action`` are both 1.0 (``:104-106``)
+        # ``lambda_video`` and ``lambda_action`` are both 1.0 (``:116-118``).
+        # Both terms are master ``training_loss`` (``mot/fastwam.py:508-635``):
+        # per-frame video MSE (``.mean(dim=(1, 3, 4))``, ``:476``) and
+        # per-token action MSE (``:613-621``), each averaged over the units
+        # that are not padding, weighted by the shifted-grid bsmntw of its own
+        # scheduler (``:608``, ``:625``), then the batch mean. The clean first
+        # frame is sliced off the video term by L3 (``TokenTimestep`` below).
         losses=(
-            LossSpec(name="video_flow", head="video_flow"),
-            LossSpec(name="action_flow", head="action_flow"),
+            LossSpec(name="video_flow", head="video_flow",
+                     objective=TokenMeanSquaredError(axis=2), weight_of=Bsmntw()),
+            LossSpec(name="action_flow", head="action_flow",
+                     objective=TokenMeanSquaredError(), weight_of=Bsmntw()),
         ),
         # Both master schedulers use the 1000-step training timestep
         # (``video/action_num_train_timesteps``, ``mot/fastwam.py:53-56``), and
@@ -232,6 +241,13 @@ def _fastwam(config: Any = None, *,
         # Two levels = first latent frame clean, the rest noisy
         # (``wan/dit.py:645``).
         noise_levels=(0.0, 1.0),
+        # ``action_is_pad`` masks action steps (``:613-621``); ``image_is_pad``
+        # has one column per pixel frame and folds onto latent frames
+        # (``:464-506``). A batch without them has no padding (``:366``, ``:378``).
+        batch_padding={
+            "video": BatchPadding("image_is_pad", unit="video_frame"),
+            "action": BatchPadding("action_is_pad"),
+        },
     )
 
     heads = (

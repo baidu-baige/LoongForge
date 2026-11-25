@@ -515,9 +515,12 @@ def test_timestep_weight_on_a_stream_without_timesteps_is_rejected():
                  if name != "action"}
     losses = tuple(replace(loss, weight_of=Bsmntw()) if loss.head == "action_flow" else loss
                    for loss in base.diffusion.losses)
+    padding = {name: value for name, value in base.diffusion.batch_padding.items()
+               if name != "action"}
     with pytest.raises(ValueError, match="draws none"):
         replace(base, attention_groups=(replace(group, streams=streams),),
-                diffusion=replace(base.diffusion, timesteps=timesteps, losses=losses))
+                diffusion=replace(base.diffusion, timesteps=timesteps, losses=losses,
+                                  batch_padding=padding))
 
 
 # ---- step hook: read-only observation of steps 1, 3, 6 and 7 ----

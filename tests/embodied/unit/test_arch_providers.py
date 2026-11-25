@@ -386,7 +386,7 @@ def test_wan_providers_feed_the_1000_step_training_timestep(model_type):
 
 @pytest.mark.parametrize("model_type, knobs", [
     ("vpp2", {"video": {}, "action": {"shift": 5.0}}),
-    ("fastwam", {"video": {"shift": 5.0}, "action": {"shift": 5.0}}),
+    ("fastwam", {"video": {"shift": 5.0}, "action": {"shift": 1.0}}),
     ("internw0_delta", {"video": {"shift": 6.0}, "action": {"shift": 1.0}}),
 ])
 def test_each_provider_declares_its_yaml_knobs(model_type, knobs):
@@ -397,6 +397,24 @@ def test_each_provider_declares_its_yaml_knobs(model_type, knobs):
     """
     diffusion = get_provider(model_type)().diffusion
     assert {name: diffusion.yaml_knobs(name) for name in diffusion.timesteps} == knobs
+
+
+def test_fastwam_declares_the_losses_master_trains():
+    """``mot/fastwam.py:464-635``: per-frame video and per-token action MSE over
+    the units that are not padding, each weighted by its scheduler's bsmntw;
+    the action scheduler's shift is 1.0 (``modeling_configuration_fastwam.py:113-115``)."""
+    from loongforge.embodied.model.arch.diffusion.loss import (
+        BatchPadding, Bsmntw, TokenMeanSquaredError)
+
+    diffusion = get_provider("fastwam")().diffusion
+    losses = {loss.head: loss for loss in diffusion.losses}
+    assert losses["video_flow"].objective == TokenMeanSquaredError(axis=2)
+    assert losses["action_flow"].objective == TokenMeanSquaredError()
+    assert all(isinstance(loss.weight_of, Bsmntw) for loss in losses.values())
+    assert diffusion.sampler_for("action").distribution.shift == 1.0
+    assert dict(diffusion.batch_padding) == {
+        "video": BatchPadding("image_is_pad", unit="video_frame"),
+        "action": BatchPadding("action_is_pad")}
 
 
 @pytest.mark.parametrize("model_type", ["vpp2", "fastwam"])
