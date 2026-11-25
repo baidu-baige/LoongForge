@@ -23,16 +23,22 @@ def kda(
     lower_bound: float,
     *,
     cu_seqlens: torch.Tensor | None = None,
+    initial_state: torch.Tensor | None = None,
+    output_final_state: bool = False,
 ) -> torch.Tensor:
     """Run Kimi Delta Attention while preserving packed-sequence boundaries.
 
     The q/k L2 norm, the gate transform and sigmoid(beta) all happen inside the
     kernel, so callers must not apply them.
+
+    ``initial_state`` / ``output_final_state`` carry the recurrent boundary state
+    across ChunkPipe chunks.  When ``output_final_state`` is True, returns
+    ``(output, final_state)`` instead of just ``output``.
     """
     from fla.ops.kda import chunk_kda
 
     _drop_broken_hopper_autotune()
-    output, _ = chunk_kda(
+    output, final_state = chunk_kda(
         q=q,
         k=k,
         v=v,
@@ -40,8 +46,8 @@ def kda(
         beta=beta,
         A_log=a_log,
         dt_bias=dt_bias,
-        initial_state=None,
-        output_final_state=False,
+        initial_state=initial_state,
+        output_final_state=output_final_state,
         use_qk_l2norm_in_kernel=True,
         use_gate_in_kernel=True,
         safe_gate=True,
@@ -49,6 +55,8 @@ def kda(
         transpose_state_layout=True,
         cu_seqlens=cu_seqlens,
     )
+    if output_final_state:
+        return output, final_state
     return output
 
 

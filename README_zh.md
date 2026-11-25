@@ -88,6 +88,7 @@
 ## 🔥 最新动态
 
 - **[2026/11]** ✨ 新增 **[DeepSeek-V4.1-Flash](./examples/deepseek_v4.1/)** 训练支持。
+- **[2026/11]** 📄 发布 **[LoongForge-Embodied](https://arxiv.org/abs/2611.25460v1)** 技术报告 —— 面向异构具身模型的统一训练框架。
 - **[2026/11]** ✨ 新增 **[ERNIE-5.5-Flash-Base](./examples/ernie5.5/)** 的 BF16 预训练与监督微调（SFT）支持。
 - **[2026/10]** 🤖 新增 **[LingBot-VLA-v2](./examples/embodied/lingbot_vla_v2/)** VLA 训练支持，基于新的 tensor_wise 分布式优化器与 Muon；`--optimizer muon` 也可在普通 DDP 下用于任意模型。
 - **[2026/10]** 🤖 推出 **[LoongForge-VLDA](./cookbook/loongforge-vlda/)**，基于 LoongForge 训练的 Vision-Language-Delta-Action 模型：LIBERO **98.5%**，LIBERO-Plus 零样本 **84.5%**，真机实验较 π0.5 提升 **17–18 个百分点**。[[项目主页](https://baidu-baige.github.io/LoongForge/projects/vlda.html)] [[论文](https://arxiv.org/abs/2610.25874)]
@@ -479,6 +480,18 @@ LoongForge/
   journal = {arXiv preprint arXiv:2610.25874},
   year    = {2026},
   url     = {https://arxiv.org/abs/2610.25874}
+}
+```
+
+如果您觉得 LoongForge-Embodied 对您的工作有帮助，欢迎引用我们的论文：
+
+```bibtex
+@article{team2026loongforge,
+  title   = {LoongForge-Embodied: A Unified Framework for Training Heterogeneous Embodied Models},
+  author  = {Team, LoongForge},
+  journal = {arXiv preprint arXiv:2611.25460},
+  year    = {2026},
+  url     = {https://arxiv.org/abs/2611.25460}
 }
 ```
 
