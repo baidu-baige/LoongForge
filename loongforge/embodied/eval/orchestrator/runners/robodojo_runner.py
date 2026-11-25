@@ -309,6 +309,23 @@ def client_completed(sim_log: pathlib.Path) -> bool:
         return False
 
 
+def _shutdown_hang_returncode(args: argparse.Namespace, sim_log: pathlib.Path) -> int:
+    """0 when every episode finished before Kit hung on shutdown, else 137.
+
+    RoboDojo writes ``_result.json`` before shutting Kit down, so a hang afterwards is not a
+    failed run. ``eval_num`` names the expected episode count when it is set; a full sweep
+    leaves it unset (per-task native counts), and then the client's own completion line is what
+    says the sweep ran to the end.
+    """
+    try:
+        done = int(json.loads((result_dir(args) / "_result.json").read_text(encoding="utf-8")).get("eval_time", 0))
+    except (OSError, TypeError, ValueError):
+        return 137
+    if args.eval_num:
+        return 0 if done >= int(args.eval_num) else 137
+    return 0 if done > 0 and client_completed(sim_log) else 137
+
+
 def _stop_process_group(process: Optional[subprocess.Popen], grace_sec: float = 10.0) -> None:
     """SIGTERM the process group, then SIGKILL whatever is left in it.
 
@@ -615,12 +632,7 @@ def run_evaluation(args: argparse.Namespace) -> Dict[str, Any]:
                     )
                     log_file.flush()
                     _stop_process_group(sim_proc)
-                    # Results are written before shutdown: complete -> success, else a failure.
-                    try:
-                        done = json.loads((result_dir(args) / "_result.json").read_text()).get("eval_time", 0)
-                    except (OSError, ValueError):
-                        done = 0
-                    returncode = 0 if args.eval_num and int(done) >= int(args.eval_num) else 137
+                    returncode = _shutdown_hang_returncode(args, sim_log)
                     break
     finally:
         _stop_process_group(sim_proc, grace_sec=5.0)

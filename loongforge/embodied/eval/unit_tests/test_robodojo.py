@@ -1381,3 +1381,33 @@ def test_runner_client_completed_line(tmp_path):
     assert not robodojo_runner.client_completed(log)
     log.write_text("all done (eval completed)\n", encoding="utf-8")
     assert robodojo_runner.client_completed(log)
+
+
+def test_runner_shutdown_hang_verdict_uses_the_completion_line_without_eval_num(tmp_path):
+    """A shutdown hang after a finished run is a success, including on a full sweep."""
+    args = _runner_args(tmp_path)
+    args.robodojo_root = str(tmp_path / "rd")
+    args.additional_info = "ckpt_name=x,action_type=joint"
+    args.run_id = "rid"
+    results = robodojo_runner.result_dir(args)
+    results.mkdir(parents=True, exist_ok=True)
+    log = tmp_path / "sim.log"
+    log.write_text("env0 step: 5 / 100\n", encoding="utf-8")
+
+    # no results yet -> failure, whatever eval_num says
+    assert robodojo_runner._shutdown_hang_returncode(args, log) == 137
+    args.eval_num = None
+    assert robodojo_runner._shutdown_hang_returncode(args, log) == 137
+
+    (results / "_result.json").write_text(json.dumps({"eval_time": 50, "details": {}}), encoding="utf-8")
+    # eval_num set: the episode count decides
+    args.eval_num = 50
+    assert robodojo_runner._shutdown_hang_returncode(args, log) == 0
+    args.eval_num = 60
+    assert robodojo_runner._shutdown_hang_returncode(args, log) == 137
+
+    # eval_num unset (full sweep, native per-task counts): the client's completion line decides
+    args.eval_num = None
+    assert robodojo_runner._shutdown_hang_returncode(args, log) == 137
+    log.write_text("env0 step: 100 / 100\nstack_bowls (eval completed)\n", encoding="utf-8")
+    assert robodojo_runner._shutdown_hang_returncode(args, log) == 0
