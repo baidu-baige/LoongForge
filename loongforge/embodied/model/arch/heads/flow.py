@@ -67,6 +67,12 @@ class _HeadBase(nn.Module):
     stream's ``residual_width`` (the head reads exactly that stream's hidden
     state). Making it a field would create a second source of truth, and when
     the stream width changes only one of the two would get updated.
+
+    ``per_token_timestep`` is looked up from the same place for the same
+    reason: whether the timestep embedding arrives as ``[B, W]`` or
+    ``[B, L, W]`` is decided by the source stream's
+    ``StreamSpec.token_timestep``, so the head reads that declaration instead
+    of branching on the tensor's ``ndim``.
     """
 
     def __init__(self, *, spec: HeadSpec, geometry: GeometrySpec,
@@ -74,7 +80,9 @@ class _HeadBase(nn.Module):
         super().__init__()
         self.spec = spec
         self.geometry = geometry
-        self.input_width = world.stream(spec.source_stream).residual_width
+        source = world.stream(spec.source_stream)
+        self.input_width = source.residual_width
+        self.per_token_timestep = source.token_timestep is not None
 
     @property
     def output_width(self) -> int:
@@ -87,13 +95,17 @@ class _HeadBase(nn.Module):
     def _check_timestep_embedding(self, timestep_embedding: Tensor | None) -> Tensor | None:
         """``needs_timestep_embedding`` and the embedding actually received must agree.
 
-        What arrives is the timestep **embedding** -- the ``[B, residual_width]``
-        tensor that the source stream's ``prepare`` stored into
-        ``extras["timestep_embedding"]`` -- not the scalar in ``[0, 1]``. The ``t`` of the
-        existing ``Head.forward(x, t)`` is that embedding too
+        What arrives is the timestep **embedding** -- the tensor that the
+        source stream's ``prepare`` stored into ``extras["t_embed"]`` -- not
+        the scalar in ``[0, 1]``. The ``t`` of the existing
+        ``Head.forward(x, t)`` is that embedding too
         (``wan_video_dit.py:289-298`` adds it straight onto ``modulation``).
-        The two have different widths, and mixing them up broadcasts to a wrong
-        shape at the addition instead of raising.
+        The two have different widths, and mixing them up broadcasts to a
+        wrong shape at the addition instead of raising.
+
+        Its rank follows the source stream: ``[B, input_width]`` normally,
+        ``[B, L, input_width]`` when that stream declares per-token timestep
+        modulation.
 
         Args:
             timestep_embedding: The timestep embedding, or None.
@@ -110,13 +122,16 @@ class _HeadBase(nn.Module):
                     f"head {self.spec.name!r} has needs_timestep_embedding=True, "
                     "but forward received no timestep embedding"
                 )
-            if (timestep_embedding.ndim != 2
+            rank = 3 if self.per_token_timestep else 2
+            if (timestep_embedding.ndim != rank \
                     or timestep_embedding.shape[-1] != self.input_width):
+                expected = (f"[B, L, {self.input_width}]"
+                            if self.per_token_timestep
+                            else f"[B, {self.input_width}]")
                 raise ValueError(
                     f"head {self.spec.name!r} consumes the timestep "
-                    f"**embedding** [B, {self.input_width}] (the source "
-                    f"stream's extras['timestep_embedding']), got "
-                    f"{tuple(timestep_embedding.shape)}"
+                    f"**embedding** {expected} (the source stream's "
+                    f"extras['t_embed']), got {tuple(timestep_embedding.shape)}"
                 )
         elif timestep_embedding is not None:
             raise ValueError(
@@ -225,6 +240,10 @@ class PatchFlowHead(_HeadBase):
        zero. Switching to zero init would make the first step's output always
        ``head(norm(x))``, which differs from the behavior of the existing
        weights by a constant term.
+    4. The slot axis is pinned to ``-2``, which makes the per-sample and the
+       per-token timestep embedding one expression instead of two branches.
+       Only the final broadcast differs: a per-sample slot is ``[B, W]`` and
+       needs a token axis added, a per-token slot is already ``[B, L, W]``.
     """
 
     def __init__(self, *, spec: HeadSpec, geometry: GeometrySpec,
@@ -253,10 +272,11 @@ class PatchFlowHead(_HeadBase):
         assert timestep_embedding is not None            # guaranteed by needs_timestep_embedding=True
         self._check_hidden(hidden)
         slots = self.spec.modulation_slots.unpack(
-            self.modulation + timestep_embedding.unsqueeze(1), slot_axis=1)
-        tokens = self.head(modulate(self.norm(hidden),
-                                    slots["shift_out"].unsqueeze(1),
-                                    slots["scale_out"].unsqueeze(1)))
+            self.modulation + timestep_embedding.unsqueeze(-2), slot_axis=-2)
+        shift, scale = slots["shift_out"], slots["scale_out"]
+        if not self.per_token_timestep:
+            shift, scale = shift.unsqueeze(1), scale.unsqueeze(1)
+        tokens = self.head(modulate(self.norm(hidden), shift, scale))
         return self._unpatchify(tokens)
 
     def _unpatchify(self, tokens: Tensor) -> Tensor:

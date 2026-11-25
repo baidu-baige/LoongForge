@@ -18,9 +18,9 @@ really runs a forward/backward**. Three things are checked:
 
 The real providers are too large to instantiate here (vpp2 is 40 layers × 5120
 width), so every case shrinks the stream scalars to 16 layers × 32 width and the
-geometry to a (2, 2, 2) patch grid = 8 video tokens + 4 action tokens. Shrinking
-the geometry with ``dataclasses.replace`` is safe: no V validator ties the
-geometry to the head widths, so only token counts and grid sizes change.
+geometry to a (4, 2, 2) patch grid = 16 video tokens + 4 action tokens. The
+geometry shrink is handed to the provider rather than applied afterwards, since
+the provider derives token labels and head widths from it.
 """
 
 from __future__ import annotations
@@ -31,7 +31,6 @@ import pytest
 import torch
 
 from loongforge.embodied.model.arch.builder import join_stream_visibility
-from loongforge.embodied.model.arch.layout import TokenLayout
 from loongforge.embodied.model.arch.spec.core import build, get_provider
 from loongforge.embodied.model.arch.spec.world import WorldModelSpec
 from loongforge.embodied.model.arch.streams.blocks import (
@@ -39,6 +38,7 @@ from loongforge.embodied.model.arch.streams.blocks import (
 from loongforge.embodied.model.arch.streams.conditions import (
     ConditionBus, InjectionKind)
 from loongforge.embodied.model.arch.streams.engine import JointAttentionEngine
+from loongforge.embodied.model.arch.streams.spec import TokenTimestep
 from loongforge.embodied.model.arch.visibility.mask import AttentionPlan
 
 import loongforge.embodied.model.arch.spec.providers  # noqa: F401  registers on import
@@ -64,29 +64,50 @@ BATCH = 2
 CONTEXT_LEN = 3
 
 
-def tiny_spec(model_type: str) -> WorldModelSpec:
+def tiny_spec(model_type: str, **overrides: object) -> WorldModelSpec:
     """The real provider topology with shrunken widths and geometry.
 
     The condition table and the visibility rules are kept as the provider
     declares them.
+
+    The shrink goes **through the provider's** ``geometry=`` override rather
+    than ``dataclasses.replace``: the provider derives visibility, token
+    labels and the flow heads from the resolved geometry, so replacing the
+    geometry afterwards would leave those baked at full size.
+
+    Args:
+        model_type: A registered provider name.
+        **overrides: Further provider keyword arguments, for cases that need
+            to vary a topology parameter rather than take its default. Passing
+            ``geometry`` is a ``TypeError``, since the shrink owns it.
+
+    Returns:
+        The shrunken spec.
     """
-    spec = get_provider(model_type)(action_width=ACTION_DIM, **TINY_SCALARS)
-    geo = spec.geometry
-    # latent grid (2, 4, 4) / patch (1, 2, 2) => patch grid (2, 2, 2) = 8 tokens.
-    # The three models use different VAE strides (8 for vpp2, 16 for the other
-    # two), so the pixel sizes are derived from the stride instead of hardcoded;
-    # hardcoding would break the divisibility check for two of the three models.
-    tiny_geo = replace(
-        geo,
-        frame_height=4 * geo.vae_spatial_stride,
-        frame_width=4 * geo.vae_spatial_stride,
-        num_views=1,
-        num_frames=1 + geo.vae_temporal_stride,
-        action_horizon=4,
-        action_video_freq_ratio=2,
-        action_dim=ACTION_DIM,
-    )
-    return replace(spec, geometry=tiny_geo)
+    probe = get_provider(model_type)(action_width=ACTION_DIM, **TINY_SCALARS)
+    geo = probe.geometry
+    # latent grid (4, 4, 4) / patch (1, 2, 2) => patch grid (4, 2, 2) = 16
+    # tokens. The three models use different VAE strides (8 for vpp2, 16 for
+    # the other two), so the pixel sizes are derived from the stride instead of
+    # hardcoded; hardcoding would break the divisibility check for two of the
+    # three models.
+    # Four latent frames, not two: InternW0-Δ declares ``condition_frames=3``,
+    # so its video stream's ``TokenTimestep(clean_prefix=3)`` needs a fourth
+    # frame to carry noise. Two frames make that declaration contradict the
+    # geometry and construction fails, which is the right failure for a real
+    # config but is only an artefact of shrinking here.
+    return get_provider(model_type)(
+        action_width=ACTION_DIM,
+        geometry=dict(
+            frame_height=4 * geo.vae_spatial_stride,
+            frame_width=4 * geo.vae_spatial_stride,
+            num_views=1,
+            num_frames=1 + 3 * geo.vae_temporal_stride,
+            action_horizon=4,
+            action_video_freq_ratio=2,
+            action_dim=ACTION_DIM,
+        ),
+        **TINY_SCALARS, **overrides)
 
 
 @pytest.fixture(params=MODEL_TYPES)
@@ -149,8 +170,8 @@ def fake_bus(spec: WorldModelSpec, *, skip: str | None = None) -> ConditionBus:
 def run_engine(spec: WorldModelSpec, modules, bus: ConditionBus):
     """Run the engine once. The backend is always dense; backend negotiation is
     an L1 case (covered in the providers file)."""
-    group = spec.attention_groups[0]
-    layout = TokenLayout.from_geometry(spec.geometry, spec.streams)
+    group = spec.groups[0]
+    layout = spec.build_layout()
     plan = AttentionPlan.from_visibility(
         join_stream_visibility(spec.visibility), layout)
     engine = JointAttentionEngine(backend="dense")
@@ -388,7 +409,7 @@ def test_pure_condition_stream_runs_without_modulation(spec):
     state = module.prepare(fake_inputs(spec)["action"],
                            conditions=fake_bus(spec))
     assert state.modulation is None
-    assert "timestep_embedding" not in state.extras
+    assert "t_embed" not in state.extras
     qkv = module.pre_attn(state, local_layer_id=0)
     attn = torch.randn(BATCH, state.num_tokens, pure.num_heads, pure.head_dim)
     after = module.post_attn(state, attn, local_layer_id=0)
@@ -396,6 +417,164 @@ def test_pure_condition_stream_runs_without_modulation(spec):
                            pure.head_dim)
     assert after.hidden.shape == state.hidden.shape
     assert module.finalize(after) is after
+
+
+# ---- 4. per-token timestep modulation ----
+
+
+def _legacy_token_timesteps(geo, timestep: torch.Tensor,
+                            clean_prefix: int) -> torch.Tensor:
+    """fastwam's own formula, transcribed from ``wan/dit.py:762-779``.
+
+    ``ones(B, F, tokens_per_frame) * t.view(B, 1, 1)`` followed by assigning 0
+    into the clean prefix, then flattened. InternW0-Delta reaches the same
+    values the other way round (expand over the noised frames, concatenate the
+    zeros in front, ``wan_video_dit.py:820-840``), so one transcription covers
+    both.
+    """
+    frames, rows, cols = geo.patch_grid
+    tokens = torch.ones(timestep.shape[0], frames, rows * cols) \
+        * timestep.view(-1, 1, 1)
+    tokens[:, :clean_prefix, :] = 0
+    return tokens.reshape(timestep.shape[0], -1)
+
+
+def test_token_timestep_reproduces_the_legacy_token_timesteps(spec):
+    """The per-token expansion equals the formula in the source models.
+
+    fastwam declares ``clean_prefix=1`` and InternW0-Delta
+    ``clean_prefix=condition_frames``; vpp2 declares nothing and keeps the
+    per-sample path, where the timestep passes through untouched.
+    """
+    video = spec.stream("video")
+    module = build_streams(spec)["video"]
+    timestep = torch.rand(BATCH)
+    got = module._expand_timestep(timestep)
+    if video.token_timestep is None:
+        assert torch.equal(got, timestep)
+        return
+    assert torch.equal(got, _legacy_token_timesteps(
+        spec.geometry, timestep, video.token_timestep.clean_prefix))
+    assert got.shape == (BATCH, spec.geometry.padded_seq_len)
+
+
+def test_per_frame_and_per_sample_timesteps_agree(spec):
+    """``[B]`` and ``[B, noised frames]`` are two spellings of one tensor.
+
+    The second form is what an L3 ``BroadcastSpec(axes=("frame",))`` emits and
+    what InternW0-Delta's ``pre_dit`` takes; feeding the same value through
+    both must land on the same per-token vector, otherwise the two entry points
+    disagree about where the clean prefix sits.
+    """
+    video = spec.stream("video")
+    scope = video.token_timestep
+    if scope is None:
+        pytest.skip(f"{spec.model_type} has per-sample video modulation")
+    module = build_streams(spec)["video"]
+    noised = spec.geometry.patch_grid[0] - scope.clean_prefix
+    timestep = torch.rand(BATCH)
+    assert torch.equal(
+        module._expand_timestep(timestep),
+        module._expand_timestep(timestep[:, None].expand(BATCH, noised)))
+
+
+def test_token_timestep_gives_every_token_its_own_modulation(spec):
+    """``prepare`` grows a token axis on ``t_embed`` and on the modulation.
+
+    The slots that reach a layer must be ``[B, L, W]`` rather than the
+    per-sample ``[B, 1, W]``, and the clean prefix's slots must differ from the
+    noised frames' -- otherwise the whole per-token path would be a no-op that
+    still passes every shape check.
+    """
+    video = spec.stream("video")
+    scope = video.token_timestep
+    module = build_streams(spec)["video"]
+    state = module.prepare(fake_inputs(spec)["video"],
+                           timestep=torch.rand(BATCH),
+                           conditions=fake_bus(spec))
+    tokens = state.num_tokens
+    slot_count = video.modulation_slots.width
+    if scope is None:
+        assert state.extras["t_embed"].shape == (BATCH, video.residual_width)
+        assert state.modulation.shape == (BATCH, slot_count,
+                                          video.residual_width)
+    else:
+        assert state.extras["t_embed"].shape == (BATCH, tokens,
+                                                 video.residual_width)
+        assert state.modulation.shape == (BATCH, tokens, slot_count,
+                                          video.residual_width)
+    slots = module._modulation(module.blocks[0], state)
+    expected = (BATCH, tokens if scope else 1, video.residual_width)
+    for name, slot in slots.items():
+        assert slot.shape == expected, name
+    if scope is not None:
+        per_frame = spec.geometry.tokens_per_frame
+        clean = slots["shift_msa"][:, :per_frame]
+        noised = slots["shift_msa"][:, -per_frame:]
+        assert not torch.allclose(clean, noised)
+
+
+def test_per_token_modulation_needs_an_axis_to_broadcast_along(spec):
+    """An action stream cannot carry ``token_timestep``.
+
+    ``ActionStream`` has no frame axis, so the base ``_expand_timestep``
+    refuses instead of silently running the per-sample path and producing a
+    modulation one rank short of what ``_modulation`` then unpacks.
+    """
+    action = replace(spec.stream("action"),
+                     token_timestep=TokenTimestep(clean_prefix=1))
+    module = build(action.impl, spec=action, geometry=spec.geometry,
+                   world=spec)
+    with pytest.raises(ValueError, match="only per-sample"):
+        module.prepare(fake_inputs(spec)["action"],
+                       timestep=torch.rand(BATCH), conditions=fake_bus(spec))
+
+
+def test_token_timestep_rejects_a_wrong_timestep_shape(spec):
+    """A timestep that is neither ``[B]`` nor ``[B, noised frames]`` raises.
+
+    Without the check a ``[B, F]`` tensor (the per-frame vector *including* the
+    clean prefix, which is the easiest form to pass by mistake) would be
+    reshaped into the token axis and shift every frame's modulation by one.
+    """
+    video = replace(spec.stream("video"),
+                    token_timestep=TokenTimestep(clean_prefix=1))
+    module = build(video.impl, spec=video, geometry=spec.geometry, world=spec)
+    frames = spec.geometry.patch_grid[0]
+    with pytest.raises(ValueError, match="token_timestep"):
+        module.prepare(fake_inputs(spec)["video"],
+                       timestep=torch.rand(BATCH, frames),
+                       conditions=fake_bus(spec))
+
+
+def test_clean_prefix_must_leave_a_noised_frame(spec):
+    """A clean prefix as long as the latent stack is a contradiction.
+
+    It would mean no frame carries noise at all, so the sampled timestep would
+    never reach any token and the flow loss would have no signal.
+    """
+    video = replace(spec.stream("video"),
+                    token_timestep=TokenTimestep(
+                        clean_prefix=spec.geometry.patch_grid[0]))
+    module = build(video.impl, spec=video, geometry=spec.geometry, world=spec)
+    with pytest.raises(ValueError, match="no noised frame"):
+        module.prepare(fake_inputs(spec)["video"],
+                       timestep=torch.rand(BATCH), conditions=fake_bus(spec))
+
+
+def test_token_timestep_requires_a_timestep_at_all(spec):
+    """``token_timestep`` on a ``needs_timestep=False`` stream is rejected.
+
+    The pair describes "modulation that varies per token" and "no modulation at
+    all", which cannot both hold. Caught in ``StreamSpec.__post_init__`` so a
+    provider typo fails before any parameter is allocated.
+    """
+    with pytest.raises(ValueError, match="needs_timestep=False"):
+        replace(spec.stream("video"), needs_timestep=False,
+                timestep_embed_width=None,
+                token_timestep=TokenTimestep(clean_prefix=1))
+    with pytest.raises(ValueError, match="non-negative"):
+        TokenTimestep(clean_prefix=-1)
 
 
 def test_context_projector_rejects_unknown_form_and_slot(spec):

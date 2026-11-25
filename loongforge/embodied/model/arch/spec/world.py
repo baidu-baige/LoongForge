@@ -21,15 +21,18 @@ needs most.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import Any
+
+from torch import Tensor
 
 from ..diffusion.loss import LossSpec, WeightRamp
 from ..diffusion.spec import DiffusionSpec
 from ..geometry import GeometrySpec
 from ..heads.spec import HeadSpec
+from ..layout import TokenLayout
 from ..streams.conditions import ConditionSpec, InjectionKind
 from ..streams.engine import AttentionGroup
 from ..streams.spec import StreamSpec
@@ -38,12 +41,8 @@ from .core import get_provider
 
 __all__ = ["WorldModelSpec", "build_world_model_spec"]
 
-_KNOWN_BACKENDS = frozenset({"dense", "flex", "sdpa", "flash"})
-"""Known attention backends.
-
-``_validate_visibility_layer`` validates against this set. The full
-``CompiledMask.negotiate_capability`` negotiation is not wired here yet.
-"""
+LabelProducer = Callable[[TokenLayout], Mapping[str, Tensor]]
+"""Builds extra per-token labels from the geometry-derived layout."""
 
 
 @dataclass(frozen=True)
@@ -70,7 +69,12 @@ class WorldModelSpec:
         visibility: Keyed by **stream name**, the visibility on that stream's
             query side. A missing key means fully bidirectional
             (``structural=None``), which is what monolithic models and the
-            existing Motus code do.
+            existing motus code do.
+        token_labels: Optional producer of extra per-token labels, called with
+            the layout built from ``geometry`` and merged into it by
+            ``build_layout``. Labels a provider's visibility needs but
+            ``GeometrySpec.build_labels`` does not produce (``phase``) live
+            here, so the label and the rules that read it stay in one file.
         attention_backend: Concrete backend resolved from YAML; ``"auto"`` is
             rejected by the L1 check.
         attention_block_size: Only meaningful for ``backend="flex"``; it must
@@ -86,6 +90,7 @@ class WorldModelSpec:
     visibility: Mapping[str, Visibility] = field(default_factory=dict)
     # Keyed by **stream name**; value is that stream's query-side visibility.
     # Missing key => fully bidirectional (structural=None).
+    token_labels: LabelProducer | None = None
     attention_backend: str = "dense"    # [YAML] resolved backend, not "auto"
     attention_block_size: int | None = None
     # Only meaningful for backend="flex"; must match Scenario.block_size.
@@ -122,6 +127,22 @@ class WorldModelSpec:
             f"model {self.model_type!r} has no stream {name!r}; "
             f"it has {list(self.stream_names)}"
         )
+
+    def build_layout(self) -> TokenLayout:
+        """Build the token layout, including any provider-declared labels.
+
+        The single production site of the layout: ``WorldModel`` is handed the
+        result, and the parity harnesses and probes call this instead of
+        ``TokenLayout.from_geometry`` so a provider whose visibility reads
+        ``phase`` cannot be evaluated against a layout that lacks it.
+
+        Returns:
+            The layout for this spec's geometry and streams.
+        """
+        layout = TokenLayout.from_geometry(self.geometry, self.streams)
+        if self.token_labels is None:
+            return layout
+        return layout.with_labels(**dict(self.token_labels(layout)))
 
     def group_of(self, stream: str) -> AttentionGroup:
         """Find the attention group holding ``stream``.
@@ -574,30 +595,34 @@ class WorldModelSpec:
                 )
 
     def _validate_visibility_layer(self) -> None:
-        """L1: the backend is known, and ``flex`` carries a block size.
+        """L1: the backend is resolved, and ``flex`` carries a block size.
 
-        The full form of this check is the three-way negotiation
-        ``CompiledMask.negotiate_capability(vis, scenario)``, run once for training and
-        once for inference. The capability method exists, but this constructor
-        currently performs only the two backend field checks. What is reduced
-        is the **strictness**, not the timing: these checks still happen at
-        construction time rather than raising once inference starts.
+        **Whether an engine implements the named backend is not checked here.**
+        That question belongs to the engine, and the engine is chosen by the
+        model family (``ArchModelBase.engine_cls``), which does not exist at
+        spec-construction time. ``ArchModelBase.validate_spec`` asks it, right
+        after ``build_spec()``. A name whitelist at this layer would be a
+        second list that no engine consults, and the two drift: a backend in
+        the list with no implementation passes here and raises in the engine
+        constructor, while a backend an engine does implement is rejected
+        before it is ever asked.
+
+        What stays here is the pair of checks that hold for *every* engine,
+        because they are about the field pair rather than about any kernel.
+        The full form of the engine-side check is the three-way negotiation
+        ``CompiledMask.supports(vis, scenario)``, run once for training and
+        once for inference; that belongs to Lane A and ships with S4.
 
         Raises:
-            ValueError: ``attention_backend`` is ``"auto"`` or unknown,
-                ``"flex"`` without a positive ``attention_block_size``, or a
-                block size given for a non-flex backend.
+            ValueError: ``attention_backend`` is ``"auto"``, ``"flex"``
+                without a positive ``attention_block_size``, or a block size
+                given for a non-flex backend.
         """
         if self.attention_backend == "auto":
             raise ValueError(
                 f"model {self.model_type!r}: attention_backend does not "
                 "accept 'auto'; it must already be resolved to a concrete "
                 "backend at build time (L1/V9)"
-            )
-        if self.attention_backend not in _KNOWN_BACKENDS:
-            raise ValueError(
-                f"unknown attention backend {self.attention_backend!r}; "
-                f"known ones are {sorted(_KNOWN_BACKENDS)} (L1/V9)"
             )
         if self.attention_backend == "flex":
             if self.attention_block_size is None \
@@ -632,9 +657,10 @@ which is what ``provider_kwargs()`` returns.
 _HEAD_KNOBS: frozenset[str] = frozenset({"weight", "warmup_steps", "enabled"})
 """Keys a YAML ``heads.<name>:`` block may carry.
 
-All three land on the ``LossSpec`` that consumes the named output head.
-``WorldModel.compute_losses`` rejects non-default ``HeadSpec.weight`` values
-so that supervision weights have a single owner.
+All three land on the ``LossSpec`` that consumes the head, never on the
+``HeadSpec``: weight ownership is defined in exactly one place, and a head that
+also carried a weight would let two numbers disagree silently (``WorldModel``
+has a matching check that a weight has a single owner).
 """
 
 

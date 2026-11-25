@@ -25,6 +25,7 @@ from ....streams.blocks import ActionStream, WanVideoStream
 from ....streams.conditions import ConditionSpec, InjectionKind
 from ....streams.encoders import linear_token_encoder
 from ....streams.engine import AttentionGroup
+from ....streams.spec import TokenTimestep
 from ....visibility.combine import Visibility
 from ....visibility.presets import get_preset
 from ....visibility.rules import prefix_only, same_stream, stream_edge
@@ -127,14 +128,19 @@ def _fastwam(config: Any = None, *,
     2. **``seperated_timestep: True``** (``:82``). Its actual shape in code is
        ``token_timesteps = ones(B, F, tokens_per_frame) * t.view(B,1,1)``
        followed by ``token_timesteps[:, 0, :] = 0``
-       (``wan/dit.py:632-646``; the non-separated branch at ``:647`` raises
+       (``wan/dit.py:762-779``; the non-separated branch at ``:780`` raises
        NotImplementedError), that is **one ``[B]`` draw broadcast to all
        frames, with the first latent frame pinned clean**.
        So it is **not** ``BroadcastSpec(axes=("frame",))``, which would mean F
-       independent draws: each stream keeps the default per-sample broadcast,
-       and "first frame clean" is expressed by the two ``noise_levels`` plus
-       the ``prefix_only(tokens_per_frame)`` rule in L1. The sampling code at
-       ``action/schedulers.py:51-58`` indeed produces only ``[B]``.
+       independent draws -- the sampling code at
+       ``action/schedulers.py:51-58`` indeed produces only ``[B]``. What it is
+       instead is ``TokenTimestep(clean_prefix=1)`` on the video stream: the
+       single draw is broadcast over the frame axis inside L2 and the video
+       modulation becomes ``[B, S, 6, D]``. ``noise_levels`` and the
+       ``prefix_only(tokens_per_frame)`` rule in L1 stay, but they do not
+       stand in for this: they decide what attends to what, whereas this
+       decides the shift / scale / gate the clean frame's own residual gets.
+       The action stream stays per-sample.
     3. **Single condition frame, two cameras.** ``num_video_frames: 9`` is the
        frame count **after** subsampling (``observation_delta_indices`` in
        ``data_configuration_fastwam.py:64-73`` shows the raw count is
@@ -170,6 +176,7 @@ def _fastwam(config: Any = None, *,
     video, action = _dual_stream_wan_streams(
         video_impl=Spec(WanVideoStream),
         action_impl=Spec(ActionStream),
+        video_token_timestep=TokenTimestep(clean_prefix=1),
         **scalars,
     )
     group = AttentionGroup(streams=(video, action),

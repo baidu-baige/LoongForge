@@ -22,7 +22,7 @@ from torch import Tensor
 from ..spec.core import Spec
 
 __all__ = [
-    "LayerMapping", "StreamSpec", "ModulationSlots",
+    "LayerMapping", "StreamSpec", "ModulationSlots", "TokenTimestep",
     "DEFAULT_WAN_SLOTS", "HEAD_SLOTS",
 ]
 
@@ -157,6 +157,47 @@ class ModulationSlots:
         return packed.index_select(slot_axis, indices)
 
 
+@dataclass(frozen=True)
+class TokenTimestep:
+    """Per-token timestep modulation: one timestep per token, not per sample.
+
+    Two of the three dual-stream WAN models build the **video** stream's
+    modulation this way: the sampled per-sample timestep is broadcast along
+    the latent frame axis and the first ``clean_prefix`` frames are pinned to
+    0, because those frames carry the clean conditioning image instead of
+    noise (fastwam ``wan/dit.py:762-779``, InternW0-Delta
+    ``wan_video_dit.py:816-843``). In both files the per-sample branch is
+    unreachable, behind a ``raise NotImplementedError``. VPP2 keeps the
+    per-sample form, which is why this is a declaration with no default
+    rather than the behaviour of every stream.
+
+    Expressing "the first frame is clean" with ``noise_levels`` plus an L1
+    visibility rule is **not** the same computation: those two decide which
+    tokens attend to which, while this decides the shift / scale / gate the
+    clean frame's own residual receives. The difference is numerically
+    visible in the very first layer.
+
+    Both source models reduce to the same values. fastwam multiplies a
+    ``[B, F, tokens_per_frame]`` ones tensor by the timestep and then assigns
+    0 into frame 0; InternW0-Delta expands the timestep over ``F - 1`` frames
+    and concatenates a zero frame in front. With ``clean_prefix=1`` both read
+    "frame 0 gets 0, every later frame gets the sampled value".
+
+    Attributes:
+        clean_prefix: Number of leading latent frames whose timestep is
+            pinned to 0 instead of the sampled value.
+    """
+
+    clean_prefix: int = 0
+
+    def __post_init__(self) -> None:
+        if self.clean_prefix < 0:
+            raise ValueError(
+                "TokenTimestep.clean_prefix must be non-negative, got "
+                f"{self.clean_prefix}"
+            )
+
+
 # Two preset slot sets covering all 24 + 16 literal sites in the current code
 DEFAULT_WAN_SLOTS = ModulationSlots((
     "shift_msa", "scale_msa", "gate_msa",     # triple before self-attention
@@ -209,6 +250,10 @@ class StreamSpec:
         modulation_slots: Slot table for this stream. The slot set is
             algorithm: six slots for the WAN family, two for an action head.
             Changing the set changes the forward formula.
+        token_timestep: Per-token timestep modulation, or None for the
+            per-sample form. Algorithm, never YAML-visible: a stream whose
+            modulation varies per token runs a different forward formula, not
+            a differently shaped one.
         cross_kv_slots: Cross-attention slot names inside this stream's
             block. Empty means no cross-attention. Slot names line up with
             ConditionBus condition names (§4.4); this is where "the Nth
@@ -233,6 +278,15 @@ class StreamSpec:
             same thing appears as hardcoded ``batch["latents"]`` lookups
             inside ``training_loss``, so a new dataset forces a model code
             change. Topology and data contract, not YAML-visible.
+        source_encoder: The **frozen** tower that turns this stream's raw
+            modality into the tensor at ``source_key`` -- the Wan video VAE
+            for the video stream. ``None`` means the batch already holds the
+            tensor the stream reads. It is declared next to the key it feeds
+            so that the two cannot be mismatched, and it is a ``Spec`` rather
+            than a built module because the spec layer must stay allocation
+            free: the shell builds it, injecting the weight path its own
+            config carries. Distinct from ``ConditionSpec.encoder``, which is
+            a *trainable* projection living inside ``WorldModel``.
         param_prefix: state_dict prefix. Empty means use ``name``. INV-3:
             when migrating an existing checkpoint this must be set to the
             prefix that checkpoint already uses.
@@ -258,12 +312,15 @@ class StreamSpec:
     # would be another model, so none of them is YAML-visible.
     # ---- modulation ----
     modulation_slots: ModulationSlots = DEFAULT_WAN_SLOTS
+    token_timestep: TokenTimestep | None = None
     cross_kv_slots: tuple[str, ...] = ()
     # ---- behaviour ----
     needs_timestep: bool = True
     timestep_embed_width: int | None = None
     writable: bool = True
     source_key: str = ""
+    # ---- the frozen tower that produces this stream's input ----
+    source_encoder: Spec | None = None
     # ---- parameter governance ----
     param_prefix: str = ""
     lr_scale: float = 1.0
@@ -349,6 +406,13 @@ class StreamSpec:
             raise ValueError(
                 f"StreamSpec({self.name!r}).timestep_embed_width must be "
                 f"positive, got {self.timestep_embed_width}"
+            )
+        if self.token_timestep is not None and not self.needs_timestep:
+            raise ValueError(
+                f"StreamSpec({self.name!r}): token_timestep declares "
+                "per-token timestep modulation but needs_timestep=False, so "
+                "this stream has no time_embedding whose output could vary "
+                "per token"
             )
 
     # ---- Derived quantities are always properties, never fields

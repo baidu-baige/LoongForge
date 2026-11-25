@@ -234,7 +234,15 @@ class StreamEngine(Protocol):
       3. ``finalize`` on every stream.
     "All streams compute QKV before attention runs" is the part of step 2
     that cannot be reordered.
+
+    Attributes:
+        SUPPORTED_BACKENDS: Backend names this implementation accepts in its
+            constructor. It is part of the protocol because the model family
+            is validated against it (``ArchModelBase.validate_spec``) before
+            the engine is constructed.
     """
+
+    SUPPORTED_BACKENDS: tuple[str, ...]
 
     def run(self, group: AttentionGroup,
             inputs: Mapping[str, Tensor],
@@ -451,9 +459,16 @@ class JointAttentionEngine:
     time requires settling who owns key_valid first (master plan §10-5).
 
     Attributes:
+        SUPPORTED_BACKENDS: The backend names this engine implements. Read by
+            ``ArchModelBase.validate_spec`` so that a model family answers
+            "can this backend run here" with the engine it actually uses,
+            instead of a whitelist sitting next to the spec that no engine
+            consults.
         backend: ``"dense"``, ``"sdpa"`` or ``"flex"``.
         block_size: BlockMask block size, required by the flex backend.
     """
+
+    SUPPORTED_BACKENDS: tuple[str, ...] = ("dense", "sdpa", "flex")
 
     def __init__(self, *, backend: str = "dense",
                  block_size: int | None = None) -> None:
@@ -469,10 +484,11 @@ class JointAttentionEngine:
             ValueError: If the backend is unsupported, or if flex is chosen
                 without a ``block_size``.
         """
-        if backend not in ("dense", "sdpa", "flex"):
+        if backend not in self.SUPPORTED_BACKENDS:
             raise ValueError(
                 f"JointAttentionEngine: backend {backend!r} is not "
-                "supported; choose 'dense', 'sdpa' or 'flex'"
+                f"supported; choose one of "
+                f"{list(self.SUPPORTED_BACKENDS)}"
             )
         if backend == "flex" and block_size is None:
             raise ValueError(

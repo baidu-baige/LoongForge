@@ -534,7 +534,7 @@ class WorldModel(nn.Module):
 
         The timestep a head consumes is the **embedded**
         ``[B, residual_width]`` (from the source stream's
-        ``StreamState.extras["timestep_embedding"]``), not the scalar in [0, 1]: a head's
+        ``StreamState.extras["t_embed"]``), not the scalar in [0, 1]: a head's
         modulation shares one set of ``ModulationSlots`` with the in-stream
         modulation, and those slots take the embedding as input. Passing the
         scalar would pass the shape check by broadcasting and get every number
@@ -553,16 +553,16 @@ class WorldModel(nn.Module):
             timestep_embedding: Tensor | None = None
             if head.needs_timestep_embedding:
                 extras = output.require(head.source_stream).extras
-                if "timestep_embedding" not in extras:
+                if "t_embed" not in extras:
                     raise KeyError(
                         f"head {head.name!r} declares needs_timestep_embedding=True, "
                         f"but source stream {head.source_stream!r} has no "
-                        f"'timestep_embedding' in StreamState.extras; present: "
+                        f"'t_embed' in StreamState.extras; present: "
                         f"{sorted(extras)}. Head modulation consumes the "
                         "embedded [B, residual_width], not the scalar in "
                         "[0, 1]"
                     )
-                timestep_embedding = extras["timestep_embedding"]
+                timestep_embedding = extras["t_embed"]
             out[head.name] = self.heads[head.name](hidden, timestep_embedding=timestep_embedding,
                                                    conditions=None)
         return out

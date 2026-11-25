@@ -14,22 +14,34 @@ time.
 The V7-level reconciliation (does the host slot exist, are the widths equal)
 lives in ``test_arch_providers.py``: those checks need a whole
 ``WorldModelSpec``, while everything here needs a single declaration.
+
+The last section covers the slot-level key padding mask, which rides on
+``Condition`` rather than on a channel of its own. It is tested here because
+the mask has to be concatenated in exactly the same order as the value it
+belongs to, and that order is the ``APPEND_TO_SLOT`` order this file already
+pins down.
 """
 
 from __future__ import annotations
 
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
 import torch
 
 from loongforge.embodied.model.arch.spec.core import Spec, build, get_provider
+from loongforge.embodied.model.arch.streams.blocks.wan_dit import (
+    SlottedCrossAttention)
 from loongforge.embodied.model.arch.streams.conditions import (
-    ConditionSpec, InjectionKind)
+    Condition, ConditionSpec, InjectionKind)
 from loongforge.embodied.model.arch.streams.encoders import (
     TokenEncoder, linear_token_encoder)
 
 import loongforge.embodied.model.arch.spec.providers  # noqa: F401  registers on import
+
+from test_arch_blocks import (BATCH, CONTEXT_LEN, build_streams, fake_bus,
+                              fake_inputs, tiny_spec)
 
 SOURCE_WIDTH = 8
 SLOT_WIDTH = 4096
@@ -180,3 +192,115 @@ def test_rank_and_width_are_both_checked():
         encoder(torch.randn(2, 3, 4, SOURCE_WIDTH))
     with pytest.raises(ValueError, match="TokenEncoder input width is"):
         encoder(torch.randn(2, SOURCE_WIDTH + 1))
+
+
+# ---- the slot-level key padding mask ----
+
+CROSS = dict(name="text", kind=InjectionKind.CROSS_ATTENTION,
+             targets=frozenset({"video"}))
+
+
+def test_key_valid_is_checked_against_the_value_it_rides_on():
+    """Both a float mask and a wrong length are rejected at construction.
+
+    A float mask is read as an additive bias by one attention backend and as a
+    keep-flag by another, and a shorter mask would broadcast instead of
+    raising. Both symptoms are silent, which is why ``key_valid`` sits on the
+    condition: the value it must agree with is right there.
+    """
+    value = torch.randn(2, 5, 4)
+    with pytest.raises(ValueError, match="must be bool"):
+        Condition(**CROSS, value=value, key_valid=torch.ones(2, 5))
+    with pytest.raises(ValueError, match=r"expected \[B, Lc\]"):
+        Condition(**CROSS, value=value,
+                  key_valid=torch.ones(2, 4, dtype=torch.bool))
+    Condition(**CROSS, value=value,
+              key_valid=torch.ones(2, 5, dtype=torch.bool))
+
+
+def cross_attention() -> SlottedCrossAttention:
+    torch.manual_seed(0)
+    return SlottedCrossAttention(residual_width=8, num_heads=2, head_dim=4,
+                                 slots=("text",)).eval()
+
+
+def test_masking_the_padded_tail_equals_passing_a_shorter_context():
+    """The invariant that makes the mask worth having.
+
+    Without it the existing VPP2 behaviour (``ctx_mask[..., 257:]`` on the text
+    branch, ``wan_video_dit.py:194,202``) has no counterpart here, and padded
+    text tokens contribute real keys.
+    """
+    attn = cross_attention()
+    x = torch.randn(BATCH, 3, 8)
+    real = torch.randn(BATCH, 4, 8)
+    padded = torch.cat([real, torch.randn(BATCH, 2, 8)], dim=1)
+    mask = torch.zeros(BATCH, 6, dtype=torch.bool)
+    mask[:, :4] = True
+    with torch.no_grad():
+        want = attn(x, {"text": real})
+        got = attn(x, {"text": padded}, key_valid={"text": mask})
+    assert torch.allclose(got, want, atol=1e-6)
+
+
+def test_a_slot_left_out_of_key_valid_stays_maskless():
+    """Omitting a slot is not the same code path as an all-True mask.
+
+    The maskless call is the one the existing code makes, so keeping it
+    maskless is what makes the no-padding case bit-identical rather than
+    merely close.
+    """
+    attn = cross_attention()
+    x = torch.randn(BATCH, 3, 8)
+    ctx = {"text": torch.randn(BATCH, 4, 8)}
+    with torch.no_grad():
+        assert torch.equal(attn(x, ctx, key_valid={}), attn(x, ctx))
+
+
+def test_a_mask_for_an_undeclared_slot_and_a_wrong_length_both_raise():
+    attn = cross_attention()
+    x = torch.randn(BATCH, 3, 8)
+    ctx = {"text": torch.randn(BATCH, 4, 8)}
+    good = torch.ones(BATCH, 4, dtype=torch.bool)
+    with pytest.raises(KeyError, match="does not declare"):
+        attn(x, ctx, key_valid={"clip_image": good})
+    with pytest.raises(ValueError, match="expected the context's"):
+        attn(x, ctx, key_valid={"text": torch.ones(BATCH, 3,
+                                                   dtype=torch.bool)})
+
+
+def prepared_video_state(bus):
+    """Run vpp2's video stream entry once on the given bus."""
+    spec = tiny_spec("vpp2")
+    module = build_streams(spec)["video"]
+    return module.prepare(fake_inputs(spec)["video"],
+                          timestep=torch.rand(BATCH), conditions=bus)
+
+
+def test_the_appended_mask_follows_the_value_concatenation_order():
+    """proprio is appended to the tail of the text slot, so its mask lands at
+    the tail too, and the piece without a mask counts as all-valid.
+
+    The two concatenations run off the same ``appended_to`` order, which is why
+    they cannot drift apart.
+    """
+    spec = tiny_spec("vpp2")
+    bus = fake_bus(spec)
+    mask = torch.ones(BATCH, CONTEXT_LEN, dtype=torch.bool)
+    mask[:, -1] = False
+    bus.conditions["text"] = replace(bus.conditions["text"], key_valid=mask)
+    extras = prepared_video_state(bus).extras
+    assert set(extras["cross_kv_mask"]) == {"text"}
+    got = extras["cross_kv_mask"]["text"]
+    assert tuple(got.shape) == (BATCH, CONTEXT_LEN + 1)
+    assert tuple(extras["cross_kv"]["text"].shape[:2]) == tuple(got.shape)
+    assert torch.equal(got[:, :CONTEXT_LEN], mask)
+    # proprio declares no mask, so its one token is valid
+    assert got[:, -1].all()
+
+
+def test_a_bus_with_no_masks_puts_no_mask_key_in_extras():
+    """Absence rather than a dict of all-True masks, for the same reason the
+    per-slot omission stays maskless."""
+    assert "cross_kv_mask" not in prepared_video_state(
+        fake_bus(tiny_spec("vpp2"))).extras

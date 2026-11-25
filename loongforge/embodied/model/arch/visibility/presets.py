@@ -135,20 +135,3 @@ def _clean_conditioned(threshold: int) -> Visibility:
         The noise-gate visibility.
     """
     return noise_gate(threshold)
-
-
-@preset("noise_gated_history")
-def _noise_gated_history(window: int, threshold: int = 0) -> Visibility:
-    """History within the last ``window`` frames and noise step <= threshold.
-
-    ``noise_gated_history(3)`` as written by the VPP2 provider is exactly this:
-    action queries read only the clean video keys of the last 3 frames.
-
-    Args:
-        window: Number of most recent frames visible.
-        threshold: Highest noise step that stays visible.
-
-    Returns:
-        The combined visibility.
-    """
-    return frame_causal(window) & noise_gate(threshold)

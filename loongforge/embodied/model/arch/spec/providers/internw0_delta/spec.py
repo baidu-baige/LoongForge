@@ -27,9 +27,10 @@ from ....streams.blocks import ActionStream, WanVideoStream
 from ....streams.conditions import ConditionSpec, InjectionKind
 from ....streams.encoders import linear_token_encoder
 from ....streams.engine import AttentionGroup
+from ....streams.spec import TokenTimestep
 from ....visibility.combine import Visibility
-from ....visibility.rules import (frame_causal, prefix_only, same_stream,
-                                  stream_edge)
+from ....visibility.phases import (CONDITION, REAL_VIDEO, Phase, phase_labels)
+from ....visibility.rules import frame_causal, label_edge, same_stream
 from ...core import Spec, register_provider
 from ...overrides import reject_config, resolve_geometry, resolve_scalars
 from ...world import WorldModelSpec
@@ -45,7 +46,7 @@ def track_query_head(*, spec: HeadSpec, geometry: GeometrySpec,
 
     This is **not** a flow head, so it does not reuse ``build_flow_head``. The
     existing implementation is a student decoder with learned queries
-    (the legacy InternW0-Delta track bridge):
+    (``InternW0-Delta/src/wam/model/modules/distillation/track_bridge.py:14-54``):
     a ``video_to_track`` Linear, ``track_queries`` of shape
     ``[1, 16, hidden]``, a two-layer 16-head ``TrackQueryDecoder``, and a
     four-stage ``student_projector``, finally mean-pooled along the query axis
@@ -93,9 +94,8 @@ width have to be two separate fields.
 """
 
 
-def _internw0_delta_visibility(tokens_per_frame: int,
-                               condition_frames: int) -> dict[str, Visibility]:
-    """Build query-side visibility for the video and action streams.
+def _internw0_delta_visibility() -> dict[str, Visibility]:
+    """Build InternW0-Δ's L1 visibility.
 
     The visibility below follows the legacy InternW0-Delta frame-attention
     implementation.
@@ -104,53 +104,51 @@ def _internw0_delta_visibility(tokens_per_frame: int,
     anchor 0-95 + recent 96-191 + current-clean 192-287 +
     noisy-future 288-479; **delta 480-575**; action 576-607.
 
-    The legacy implementation applies these visibility rules: condition
-    video frames are frame-causal, noisy future video is fully bidirectional
-    over real video, delta reads recent and current-clean video but excludes
-    the anchor, action reads condition video only, action reads delta, and
-    action reads its own tokens.
+    The seven writes in the code: ``:27-31`` per-frame causality over the
+    three condition frames; ``:35`` ``mask[288:480, :480] = True`` (the noisy
+    future is **fully bidirectional** over all real video and sees neither
+    delta nor action); ``:38-46`` delta reads ``[96, 288)`` (recent plus
+    current-clean, **excluding anchor**); ``:47-50`` delta reads delta;
+    ``:52`` action reads ``[0, 288)`` (condition frames only, so it **never**
+    sees the noisy future); ``:53-54`` action reads delta; ``:55`` action
+    reads action.
 
-    **Four representation limits are handled explicitly. The provider uses the
-    stricter available approximation where necessary:**
+    Four of those seven are expressed here; the other three are the delta
+    rules, and they are **not** blocked by the algebra. §2.2.1 of the L0/L1
+    design doc measures all seven bit-exact against this builder once delta
+    tokens get a segment, with no further rule needed than the ``label_edge``
+    already used below. What is missing is addressability, not expressiveness:
 
-      1. **Delta tokens are not a stream.** Those 96 tokens are appended
+      1. **Delta tokens have nowhere to live.** Those 96 tokens are appended
          inside the video stream (appended once at
-         the legacy video path, where they are appended and later trimmed), so they
-         appear neither in ``GeometrySpec``'s token accounting nor as their
-         own ``StreamSpec``. The three delta rules and the action->delta edge
-         therefore have nowhere to land. The current abstraction has no
-         derived geometry field for these delta tokens, so the limitation
-         remains explicit here.
-      2. **``frame_causal()`` is too strict for the noisy future.** Rows
-         288-479 are fully bidirectional in the code; per-frame causality
-         would limit them to the past. Stricter is preferred: in an
-         equivalence test, "saw tokens it should not have" still converges
-         numerically and cannot be detected, while "saw too few" shows up
-         immediately.
-      3. **The action side can only be written ``prefix_only(3 x 96)``** for
-         "reads the three condition frames only". It happens to equal
-         ``[0, 288)`` because the condition frames sit at the front
-         of the sequence; the two facts diverge as soon as the layout
-         changes. ``history(policy)`` is where it really belongs.
-      4. The older names ``sees`` / ``reads`` / ``delta_reads_local`` have
-         no direct counterpart in ``visibility/rules.py``. The available
-         ``frame_causal`` rule takes ``window`` rather than
-         ``condition_frames``.
+         ``wan_video_dit.py:588-590``, trimmed off at ``:959-967``), so they
+         appear neither in ``GeometrySpec``'s token accounting nor as their own
+         segment. They are also not a ``StreamSpec``: they run on the video
+         expert's parameters, so the fix is to let one stream own several
+         segments, not to invent a stream. That is ruling 2 of §2.2.2 and is
+         still open; ``Phase.DELTA`` is reserved for the day it closes.
 
-    Args:
-        tokens_per_frame: Video tokens per latent frame (96 today).
-        condition_frames: Number of leading clean condition frames the action
-            stream may read.
+    Both halves of the mask are written as phase edges rather than as token
+    counts:
+
+      - the condition rows are causal among themselves while the noisy-future
+        rows are bidirectional over all real video. That is two different
+        intra-stream rules inside one stream, which needs a query-side
+        selector; ``frame_causal()`` alone measured 48/784 cells too strict;
+      - "the action rows read the condition frames" was previously
+        ``prefix_only(condition_frames x tokens_per_frame)``, equal to
+        ``[0, 288)`` only because the condition frames happen to sit at the
+        front of the joint sequence. The phase edge says what is meant, and
+        takes no token count, so the expression no longer depends on geometry.
 
     Returns:
         ``{"video": ..., "action": ...}`` visibility rules.
     """
     return {
-        "video": same_stream() & frame_causal(),
-        "action": same_stream() | (
-            stream_edge("video", "action")
-            & prefix_only(condition_frames * tokens_per_frame)
-        ),
+        "video": ((label_edge("phase", CONDITION, CONDITION) & frame_causal())
+                  | label_edge("phase", REAL_VIDEO, (Phase.FUTURE,))),
+        "action": (same_stream()
+                   | label_edge("phase", CONDITION, (Phase.ACTION,))),
     }
 
 
@@ -168,14 +166,14 @@ def _internw0_delta(config: Any = None, *,
 
     The family member with the most loss terms (**five**).
 
-    Its two streams use the dual-stream WAN family defaults. The provider
-    adds a specialized visibility pattern, a ``flex`` backend, five supervision
-    terms, and heads that read hidden states from **intermediate layers**.
-    The loss table is a tuple, while ``HiddenStateRef`` carries the optional
-    source layer needed by the intermediate-layer heads.
+    Its two streams are assembled with exactly the family default values (see
+    ``_INTERNW0_DELTA_STREAM_SCALARS``); all differences are in L3/L4: five
+    supervision terms plus two alignment heads that read hidden states from
+    **intermediate layers**. That is precisely why ``losses`` has to be a list
+    and ``HiddenStateRef`` has to carry a ``layer``.
 
-    The implementation reflects the legacy InternW0-Delta configuration and
-    model code.
+    First-hand facts live in ``projects/InternW0-Delta/``, cited by line
+    number at each use.
 
     Args:
         config: Positional config object, rejected (see ``reject_config``).
@@ -205,28 +203,34 @@ def _internw0_delta(config: Any = None, *,
     video, action = _dual_stream_wan_streams(
         video_impl=Spec(WanVideoStream),
         action_impl=Spec(ActionStream),
+        video_token_timestep=TokenTimestep(clean_prefix=condition_frames),
         **scalars,
     )
     group = AttentionGroup(streams=(video, action),
                            num_layers=video.num_layers)
 
-    # Geometry follows the legacy InternW0-Delta data and VAE setup: video
-    # size 384 x 256, one camera, action size 32, temporal ratio 4, latent
-    # channels 48, and patch size [1, 2, 2].
+    # Geometry. First-hand numbers: ``configs/data/pretrain.yaml:10``
+    # ``video_size (384, 256)`` = (H, W), ``:33`` ``num_output_cameras: 1``,
+    # ``configs/pretrain/dataset.yaml:320`` ``action_size 32`` and
+    # ``:322`` ``action_video_freq_ratio 4``. The VAE is the same as fastwam's,
+    # Wan2.2 ``WanVideoVAE38`` (``wan_video_vae.py:1358-1387``, 16/4/z_dim 48),
+    # with ``patch_size [1,2,2]`` (``configs/model/wam.yaml:16-19``).
     #
     # **``num_frames=17`` is not any number in the config; noting why**:
-    # the legacy data path uses ``num_frames=33`` and decodes 9 RGB frames
-    # with a temporal stride of 4, so the noised window is
+    # the config says ``num_frames 33`` (``dataset.yaml:319``) and decodes
+    # 9 RGB frames (``range(0, 33, 4)`` at
+    # ``robot_video_dataset.py:130``), so the noised window is
     # 1 + (9-1)/4 = **3 latent frames**. But the video prefix entering MoT is
     # ``cat([anchor_latents, recent_latents, noisy_window], dim=2)``
-    # (the legacy loss construction) = anchor 1 + recent 1 + window 3 = **5 latent
-    # frames** = 5 x 96 = **480 tokens** (the legacy video path).
-    # ``GeometrySpec`` has no separate field for extra condition latent
-    # frames, so the static token count is represented through ``num_frames``.
-    # Here 17 is an equivalent pre-compression count that yields 5 latent
-    # frames, because 1 + 16 / 4 = 5. It is a shape-adaptation value, not the
-    # number of video frames present in the input data. A dedicated geometry
-    # field for condition frames would make this representation clearer.
+    # (``losses.py:598-600``) = anchor 1 + recent 1 + window 3 = **5 latent
+    # frames** = 5 x 96 = **480 tokens** (``wan_video_dit.py:814``).
+    # ``GeometrySpec`` has **no field for "concatenate N extra condition latent
+    # frames"**, and ``padded_seq_len`` is the only source of the static shape
+    # (INV-2), so it has to come out as 480. 17 is the equivalent pre-
+    # compression frame count that yields 5 latent frames (1 + 16/4 = 5).
+    # Cost: ``num_frames`` in this provider no longer equals the frame count on
+    # the data side. The real fix is to give ``GeometrySpec`` a condition-frame
+    # count field so this contrived 17 disappears. That belongs to Lane A.
     # Derived: latent (5, 24, 16) -> patch (5, 12, 8), so 96 tokens per frame
     # and 480 tokens total; ``num_chunks = 32 / 4 = 8``.
     geometry = resolve_geometry("internw0_delta", dict(
@@ -401,14 +405,27 @@ def _internw0_delta(config: Any = None, *,
                           encoder=Spec(linear_token_encoder),
                           source_key="proprio"),
         ),
-        visibility=_internw0_delta_visibility(geometry.tokens_per_frame,
-                                              condition_frames),
-        # This provider uses the ``flex`` backend with block size 128. The
-        # value is selected because it is the effective block size in the
-        # legacy training path and must be supplied explicitly for this backend.
-        # The runtime attention implementation may still fall back to SDPA for
-        # unsupported masks, so the requested backend and the effective kernel
-        # are separate concerns.
+        visibility=_internw0_delta_visibility(),
+        # ``anchor_frames`` is deliberately left at 0. The model forces
+        # exactly one anchor frame (``world_action_model.py:302-305``), but
+        # every rule above reads the whole ``CONDITION`` set, so the
+        # anchor/recent split is invisible today. It gets declared together
+        # with the delta segment, whose R3 (``[recent, current] -> delta``) is
+        # the only rule that needs to tell them apart.
+        token_labels=phase_labels(condition_frames=condition_frames),
+        # The only member of the family that uses flex:
+        # ``mot_attention_backend: flex`` at ``wam.yaml:9``.
+        # Block size **128**: ``wam.yaml:10`` says 64, but
+        # ``configs/task/pretrain.yaml:17`` overrides it to 128, and the mask
+        # side has yet another hardcoded ``self.flex_mask_block_size = 128``
+        # (``:113``). Three places for one number, two distinct values; 128 is
+        # taken because it is the value that takes effect. Noted: this is
+        # exactly why V9 requires flex to be given an explicit positive
+        # block_size.
+        # Also noted: ``mixture_of_transformers.py:593-603`` has a **silent**
+        # fallback (``force_sdpa = not bool(key_mask_all.all().item())``),
+        # which is both a D2H sync and a way to make "which backend am I using"
+        # unknowable at runtime.
         attention_backend="flex",
         attention_block_size=128,
     )

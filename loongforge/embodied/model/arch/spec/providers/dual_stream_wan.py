@@ -15,7 +15,8 @@ first half of the three, and neither YAML nor the launch arguments can name it
 
 from __future__ import annotations
 
-from ...streams.spec import StreamSpec
+from ...streams.spec import StreamSpec, TokenTimestep
+from ...towers import build_wan_vae
 from ..core import Spec
 
 
@@ -34,6 +35,7 @@ def _dual_stream_wan_streams(
     action_ffn_width: int = 4096,
     cross_kv_slots: tuple[str, ...] = ("text",),
     video_cross_kv_slots: tuple[str, ...] | None = None,
+    video_token_timestep: TokenTimestep | None = None,
     timestep_embed_width: int = 256,
 ) -> tuple[StreamSpec, StreamSpec]:
     """Build the two streams shared by the three providers in the family.
@@ -95,6 +97,11 @@ def _dual_stream_wan_streams(
             ``o`` projection. That is two slots, not one slot holding two
             concatenated inputs; declaring it as two conditions removes the
             need for the ``ctx[:, :257]`` split point.
+        video_token_timestep: Per-token timestep modulation for the video
+            stream, or ``None`` for the per-sample form. Video-only: all
+            three action streams in the family are per-sample
+            (``action_dit.py`` builds ``t_mod`` with ``unflatten(1, ...)``),
+            while two of the three video streams are per-token.
         timestep_embed_width: 256 for both streams, the ``freq_dim`` at
             ``wan_video_dit.py:326`` and ``action_dit.py:259-260``, which both
             read from the same config entry. It is a family constant rather
@@ -130,8 +137,13 @@ def _dual_stream_wan_streams(
             ffn_width=video_ffn_width,
             cross_kv_slots=(cross_kv_slots if video_cross_kv_slots is None
                             else video_cross_kv_slots),
+            token_timestep=video_token_timestep,
             timestep_embed_width=timestep_embed_width,
             writable=True,
+            # All three family members read pixels, so the frozen Wan VAE is a
+            # family-level fact rather than a per-model one. Which generation
+            # gets built is decided inside the builder from the geometry.
+            source_encoder=Spec(build_wan_vae),
         ),
         StreamSpec(
             name="action",

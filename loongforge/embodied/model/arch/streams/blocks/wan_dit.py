@@ -440,7 +440,8 @@ class SlottedCrossAttention(nn.Module):
             for slot in self.slots
         })
 
-    def forward(self, x: Tensor, context: Mapping[str, Tensor]) -> Tensor:
+    def forward(self, x: Tensor, context: Mapping[str, Tensor],
+                key_valid: Mapping[str, Tensor] | None = None) -> Tensor:
         """Attend from the residual to every condition slot and sum.
 
         Args:
@@ -450,13 +451,21 @@ class SlottedCrossAttention(nn.Module):
                 weight group was not called this step (the loss still goes
                 down and its grads are None), an extra key means a condition
                 has nowhere to land.
+            key_valid: Optional slot name to ``[B, Lc]`` bool key padding
+                mask, True where the key is real. A slot absent from this
+                mapping is attended without a mask, which is not the same as
+                a mask of all True: the maskless call is the one the existing
+                code makes, and keeping it maskless is what makes the
+                no-padding case bit-identical.
 
         Returns:
             ``[B, L, W]`` to be added to the residual by the caller.
 
         Raises:
             KeyError: If a slot has no context, or if context has a slot this
+                layer does not declare, or if ``key_valid`` names a slot this
                 layer does not declare.
+            ValueError: If a mask's shape does not match its slot's context.
         """
         missing = [slot for slot in self.slots if slot not in context]
         if missing:
@@ -471,6 +480,13 @@ class SlottedCrossAttention(nn.Module):
                 f"SlottedCrossAttention: context has extra slots {stray}; "
                 f"this layer declares {list(self.slots)}"
             )
+        masks = dict(key_valid or {})
+        unknown = sorted(set(masks) - set(self.slots))
+        if unknown:
+            raise KeyError(
+                f"SlottedCrossAttention: key_valid has slots {unknown} that "
+                f"this layer does not declare; it declares {list(self.slots)}"
+            )
         shape = (self.num_heads, self.head_dim)
         q = self.norm_q(self.q(x)).unflatten(-1, shape).transpose(1, 2)
         total: Tensor | None = None
@@ -479,10 +495,39 @@ class SlottedCrossAttention(nn.Module):
             ctx = context[slot]
             k = kv.norm_k(kv.k(ctx)).unflatten(-1, shape).transpose(1, 2)
             v = kv.v(ctx).unflatten(-1, shape).transpose(1, 2)
-            out = F.scaled_dot_product_attention(q, k, v)
+            out = F.scaled_dot_product_attention(
+                q, k, v, attn_mask=self._slot_mask(slot, masks.get(slot), ctx))
             total = out if total is None else total + out
         assert total is not None            # slots non-empty per __init__
         return self.o(total.transpose(1, 2).flatten(2))
+
+    @staticmethod
+    def _slot_mask(slot: str, mask: Tensor | None,
+                   ctx: Tensor) -> Tensor | None:
+        """Reshape one slot's key padding mask for ``attn_mask``.
+
+        Args:
+            slot: Slot name, for the error message.
+            mask: ``[B, Lc]`` bool, or None for the maskless call.
+            ctx: ``[B, Lc, W]`` context of that slot.
+
+        Returns:
+            ``[B, 1, 1, Lc]`` bool broadcastable over heads and queries, or
+            None.
+
+        Raises:
+            ValueError: If the mask does not have the context's ``[B, Lc]``.
+        """
+        if mask is None:
+            return None
+        want = tuple(ctx.shape[:2])
+        if tuple(mask.shape) != want:
+            raise ValueError(
+                f"SlottedCrossAttention: key_valid[{slot!r}] has shape "
+                f"{tuple(mask.shape)}, expected the context's "
+                f"[B, Lc]={list(want)}"
+            )
+        return mask[:, None, None, :]
 
 
 class WanDiTBlock(nn.Module):
@@ -577,7 +622,9 @@ class WanDiTBlock(nn.Module):
     def post_attention(self, x: Tensor, attn_out: Tensor, *,
                        gate_msa: Tensor, shift_mlp: Tensor,
                        scale_mlp: Tensor, gate_mlp: Tensor,
-                       context: Mapping[str, Tensor]) -> Tensor:
+                       context: Mapping[str, Tensor],
+                       context_key_valid: Mapping[str, Tensor] | None = None
+                       ) -> Tensor:
         """Run the second half of the layer, after the joint attention call.
 
         The order is: o projection, gated residual, cross-attention, FFN,
@@ -595,6 +642,8 @@ class WanDiTBlock(nn.Module):
             scale_mlp: Multiplicative modulation for the FFN branch.
             gate_mlp: Gate on the FFN branch.
             context: Slot name to condition tensor for cross-attention.
+            context_key_valid: Optional slot name to ``[B, Lc]`` bool key
+                padding mask, forwarded to the cross-attention unchanged.
 
         Returns:
             ``[B, L, W]`` updated residual.
@@ -612,6 +661,7 @@ class WanDiTBlock(nn.Module):
                 )
         else:
             assert self.norm3 is not None
-            x = x + self.cross_attn(self.norm3(x), context)
+            x = x + self.cross_attn(self.norm3(x), context,
+                                    key_valid=context_key_valid)
         gated = self.ffn(modulate(self.norm2(x), shift_mlp, scale_mlp))
         return x + gate_mlp * gated

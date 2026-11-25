@@ -36,7 +36,6 @@ from loongforge.embodied.model.arch.builder import DiffusionRuntime, WorldModel
 from loongforge.embodied.model.arch.diffusion.broadcast import BroadcastSpec
 from loongforge.embodied.model.arch.diffusion.loss import LossSpec, WeightRamp
 from loongforge.embodied.model.arch.diffusion.timesteps import TimestepSampler
-from loongforge.embodied.model.arch.layout import TokenLayout
 from loongforge.embodied.model.arch.spec.world import WorldModelSpec
 from loongforge.embodied.model.arch.streams.conditions import InjectionKind
 from loongforge.embodied.model.arch.streams.engine import JointAttentionEngine
@@ -61,8 +60,7 @@ def world(spec: WorldModelSpec) -> WorldModel:
     The backend is dense; backend negotiation is covered by the L1 cases.
     """
     return WorldModel(spec, engine=JointAttentionEngine(backend="dense"),
-                      layout=TokenLayout.from_geometry(spec.geometry,
-                                                       spec.streams))
+                      layout=spec.build_layout())
 
 
 def fake_batch(spec: WorldModelSpec, **extra) -> dict:

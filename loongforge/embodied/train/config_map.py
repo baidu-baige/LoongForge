@@ -49,7 +49,7 @@ from loongforge.embodied.data.datasets.lingbot_vla_v2.transforms.data_configurat
     LingbotVLAV2DataConfig,
 )
 
-from loongforge.embodied.model.arch.model_configuration_arch import (
+from loongforge.embodied.model.arch.factory import (
     InternW0DeltaConfig,
     Vpp2Config,
 )
