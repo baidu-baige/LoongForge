@@ -96,6 +96,7 @@ class LanguageModelFamilies(_BaseFamilies):
 class VisionLanguageModelFamilies(_BaseFamilies):
     """Vision language model families"""
 
+    DEEPSEEK_V41 = "deepseek_v41"
     QWEN2_VL = "qwen2_vl"
     QWEN2_5_VL = "qwen2_5_vl"
     QWEN3_VL = "qwen3_vl"

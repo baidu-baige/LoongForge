@@ -4,7 +4,7 @@
 """Base utilities for converting common checkpoints to and from Megatron Core format."""
 
 from typing import Any, Optional
-from mcore_checkpoint_convert.huggingface.huggingface_base import HuggingfaceBase
+from mcore_checkpoint_convert.huggingface.huggingface_base import HuggingfaceBase, is_dsv41_config
 import torch
 import logging
 from omegaconf.dictconfig import DictConfig
@@ -39,6 +39,7 @@ from mcore_checkpoint_convert.common.common_checkpoint import (
     LAYER_IS_LAYERNORM, LAYER_IS_FP8, LAYER_FP8_IGNORE_TP, LAYER_IGNORE_TP,
     LAYER_DTYPE, LAYER_DEPEND_ON_KEY
 )
+from mcore_checkpoint_convert.common.common_checkpoint import ENGRAM_EMBED
 
 from mcore_checkpoint_convert.mcore.util.mcore_attn_converter import McoreAttnGateQkvConverter, McoreMixerAttnConverter
 
@@ -349,10 +350,15 @@ class McoreBase:
             weight = add_embedding_padding(weight, self.divisible_by, self.vocab_size, self.tp, self.padded_vocab_size)
         if name in EMBED_NAMES:
             clear_source = False
+        etp_to_tp = self.etp_to_tp_mapping[ep_id] if self.etp is not None and ep_id is not None else None
+        tp_ranks = [
+            etp_to_tp[rank] if etp_to_tp is not None else rank
+            for rank in m_dict
+        ]
         weight_list, bias_list = self.get_chunked_weight(
                 name, self.tp, mcore_weight_path, mcore_bias_path, weight, bias, weight_scale,
-                is_fp8, fp8_ignore_tp, ignore_tp=ignore_tp, quant_type=quant_type, clear_source=clear_source)
-        etp_to_tp = self.etp_to_tp_mapping[ep_id] if self.etp is not None and ep_id is not None else None
+                is_fp8, fp8_ignore_tp, ignore_tp=ignore_tp, quant_type=quant_type,
+                clear_source=clear_source, tp_ranks=tp_ranks)
         self.update_mcore_weight(
                 m_dict, t_name, mcore_weight_path, mcore_bias_path, extra_path,
                 weight_list, bias_list=bias_list, etp_to_tp=etp_to_tp, has_extra=has_extra)
@@ -416,9 +422,45 @@ class McoreBase:
 
     def get_chunked_weight(self, name, m_tp, weight_path, bias_path, weight, bias=None,
                            weight_scale=None, is_fp8=False, fp8_ignore_tp=False, log_flag=True,
-                           ignore_tp=False, quant_type=None, clear_source=True):
+                           ignore_tp=False, quant_type=None, clear_source=True, tp_ranks=None):
         if weight is None:
             return None, None
+        if name == ENGRAM_EMBED:
+            rows, columns = weight.shape
+            if weight_scale is not None and (
+                weight.dtype != torch.float8_e4m3fn
+                or columns % 32
+                or weight_scale.shape != (rows, columns // 32)
+            ):
+                raise ValueError("Engram requires E4M3 weights and [rows, columns // 32] scales")
+            if weight.dtype == torch.float8_e4m3fn and weight_scale is None:
+                raise ValueError("FP8 Engram checkpoint weight is missing its scale tensor")
+            local_rows = (rows + m_tp - 1) // m_tp
+            rows_per_chunk = max(1, (4 * 1024 * 1024) // columns)
+            weight_list = [None] * m_tp
+            for rank in range(m_tp) if tp_ranks is None else tp_ranks:
+                local = torch.zeros(
+                    (local_rows, columns), dtype=self.dtype, device=weight.device
+                )
+                start = rank * local_rows
+                stop = min(start + local_rows, rows)
+                for offset in range(start, stop, rows_per_chunk):
+                    end = min(offset + rows_per_chunk, stop)
+                    values = weight[offset:end].float()
+                    if weight_scale is not None:
+                        values = (
+                            values.unflatten(-1, (-1, 32))
+                            * weight_scale[offset:end].float().unsqueeze(-1)
+                        ).flatten(-2)
+                    local[offset - start:end - start].copy_(values)
+                weight_list[rank] = local
+            if clear_source:
+                weight.data = torch.empty(0, dtype=weight.dtype, device=weight.device)
+                if weight_scale is not None:
+                    weight_scale.data = torch.empty(
+                        0, dtype=weight_scale.dtype, device=weight_scale.device
+                    )
+            return weight_list, None
         # Online loading follows the destination model's parameter storage.
         # None keeps the standalone converter's YAML-driven behavior.
         target_uses_fp8_params = getattr(self.args, "fp8_param_gather", None)
@@ -427,7 +469,10 @@ class McoreBase:
                 source_weight = weight
                 source_scale = weight_scale
                 target_dtype = getattr(self.args, "params_dtype", None) or self.dtype
-                weight = convert_fp8_to_bf16(weight, weight_scale, dtype=target_dtype)
+                weight = convert_fp8_to_bf16(
+                    weight, weight_scale, dtype=target_dtype,
+                    block_size=32 if is_dsv41_config(self.c_config) else 128,
+                )
                 if clear_source:
                     source_weight.data = torch.empty(
                         0, dtype=source_weight.dtype, device=source_weight.device
@@ -471,8 +516,13 @@ class McoreBase:
                     )
         else:
             # fp8 chunk
-            if (self.args.fp8_force_no_requant \
-                    or is_power_of_two(weight_scale) == self.args.force_pow_2_scales):
+            if (
+                not is_dsv41_config(self.c_config)
+                and (
+                    self.args.fp8_force_no_requant
+                    or is_power_of_two(weight_scale) == self.args.force_pow_2_scales
+                )
+            ):
                 if fp8_ignore_tp or ignore_tp:
                     weight_s = [weight] * m_tp
                     weight_scale_s = [weight_scale] * m_tp
@@ -487,7 +537,10 @@ class McoreBase:
                         )
             else:
                 # First do dequantization then re-quantize back to FP8
-                weight_bf16 = convert_fp8_to_bf16(weight, weight_scale, dtype=torch.float32)
+                weight_bf16 = convert_fp8_to_bf16(
+                    weight, weight_scale, dtype=torch.float32,
+                    block_size=32 if is_dsv41_config(self.c_config) else 128,
+                )
                 weight_s, weight_scale_s = self.convert_bf16_to_fp8s(
                         name, m_tp, chunk_dim, weight_bf16, fp8_ignore_tp, ignore_tp, need_transpose=need_transpose)
             weight_list = []
@@ -577,6 +630,10 @@ class McoreBase:
             name, self.tp, weight_list, bias_list, weight_scale_list,
             is_fp8, fp8_ignore_tp, ignore_tp=ignore_tp, quant_type=quant_type,
         )
+        if name == ENGRAM_EMBED and weight is not None:
+            module = self.c_config.get("module")
+            table_index = list(module["engram_layer_ids"]).index(layer_id)
+            weight = weight[:module["engram_num_embeddings"][table_index]]
         if lora_in_weight_list is not None and lora_out_weight_list is not None:
             # Merge lora weight
             lora_out_weight, _, _ = self.get_cat_weight(
@@ -657,6 +714,11 @@ class McoreBase:
 
     def get_cat_weight(self, name, m_tp, weight_list, bias_list, weight_scale_list,
                        is_fp8, fp8_ignore_tp, ignore_tp=False, chunk_dim=None, quant_type=None):
+        if name == ENGRAM_EMBED:
+            if weight_list is None:
+                return None, None, None
+            weight = torch.cat(weight_list, dim=0) if m_tp > 1 else weight_list[0]
+            return weight, None, None
         need_transpose = (m_tp > 1 and self.transpose_mlp_dense and \
                 name in [MLP_DENSE_H_TO_4H, MOE_EXPERT_H_TO_4H])
         chunk_dim = self.tensor_parallel_dim.get(f"{name}.{WEIGHT}", None) if chunk_dim is None else chunk_dim

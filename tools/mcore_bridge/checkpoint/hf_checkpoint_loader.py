@@ -81,7 +81,11 @@ def _log_loaded_param_stats(unwrapped_model):
             n = p.numel()
             total += n
             if p.is_floating_point():
-                total_nonzero += int((p != 0).sum().item())
+                # Large Engram tables must not allocate a full-size reduction temporary.
+                total_nonzero += sum(
+                    int(torch.count_nonzero(chunk).item())
+                    for chunk in p.detach().reshape(-1).split(16 * 1024 * 1024)
+                )
             for tgt in sample_targets:
                 if name.endswith(tgt) and len(samples) < 16:
                     pf = p.detach().float()
@@ -90,6 +94,30 @@ def _log_loaded_param_stats(unwrapped_model):
     print_rank_0(f"[CKPT_LOAD] total params={total:,}, nonzero floats={total_nonzero:,}")
     for name, n, norm, mean_abs in samples:
         print_rank_0(f"[CKPT_LOAD]   {name}: numel={n:,} norm={norm:.4f} mean_abs={mean_abs:.6f}")
+
+
+def _adapt_sequential_moe_expert_keys(model, model_state_dict):
+    """Accept converter keys for both grouped and SequentialMLP expert containers."""
+
+    target_keys = model.state_dict().keys()
+    if not any(".mlp.experts.local_experts." in key for key in target_keys):
+        return model_state_dict
+    adapted = dict(model_state_dict)
+    for key, value in list(model_state_dict.items()):
+        marker = ".mlp.experts."
+        if marker not in key or ".local_experts." in key:
+            continue
+        prefix, suffix = key.split(marker, 1)
+        if "." not in suffix:
+            continue
+        expert_id, remainder = suffix.split(".", 1)
+        if not expert_id.isdigit():
+            continue
+        target = f"{prefix}{marker}local_experts.{expert_id}.{remainder}"
+        if target in target_keys:
+            adapted[target] = value
+            adapted.pop(key, None)
+    return adapted
 
 
 @time_checkpoint_operation
@@ -233,6 +261,7 @@ def load_hf_checkpoint_online(
     # (q_layernorm / kv_layernorm / hc_*_scale / tid2eid / expert_bias)
     # and letting training run with randomly-initialized shards.
     if len(unwrapped_model) == 1:
+        model_state_dict = _adapt_sequential_moe_expert_keys(unwrapped_model[0], model_state_dict)
         unwrapped_model[0].load_state_dict(model_state_dict, strict=True)
     else:  # vpp
         for i in range(len(unwrapped_model)):

@@ -53,6 +53,10 @@ MODEL_CONFIG_REGISTRY = {
         "config_path": "configs/models/deepseek4",
         "config_name": "deepseek_v4_pro_base",
     },
+    "deepseek-v4.1-flash": {
+        "config_path": "configs/models/deepseek4.1",
+        "config_name": "deepseek_v41_flash",
+    },
     # internlm2.5
     "internlm2.5-8b": {
         "config_path": "configs/models/internlm2.5",

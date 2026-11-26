@@ -26,6 +26,9 @@ TASK_ENCODER_REGISTRY = {
     "minicpmv46taskencoder": (
         "loongforge.data.multimodal.minicpm_v_4_6_task_encoder.MiniCPMV46TaskEncoder"
     ),
+    "deepseekv41taskencoder": (
+        "loongforge.data.multimodal.deepseek_v41_task_encoder.DeepseekV41TaskEncoder"
+    ),
 }
 
 

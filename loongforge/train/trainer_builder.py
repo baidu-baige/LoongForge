@@ -64,10 +64,7 @@ def build_model_trainer(args):
     """create model trainer"""
     config = get_hydra_config()
     
-    if hasattr(config, "model_type") and config.model_type in \
-            (set(constants.LanguageModelFamilies.names()) |
-             set(constants.CustomModelFamilies.names()) |
-             set(constants.VisionLanguageActionModelFamilies.names())):
+    if hasattr(config, "model_type") and config.model_type in constants.get_all_model_families():
         model_family = config.model_type
     else:
         if not hasattr(config, 'model'):

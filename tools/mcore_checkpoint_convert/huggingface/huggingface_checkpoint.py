@@ -8,6 +8,7 @@ import torch
 import json
 import re
 import logging
+import shutil
 
 import concurrent.futures
 from mcore_checkpoint_convert.common.abstact_checkpoint import AbstractCheckpoint
@@ -31,7 +32,11 @@ from mcore_checkpoint_convert.common.common_checkpoint import (
     MTP_MOE_EXPERT_H_TO_4H, MTP_MOE_EXPERT_4H_TO_H, MTP_MOE_SHARED_EXPERT_H_TO_4H, MTP_MOE_SHARED_EXPERT_4H_TO_H
 )
 
-from mcore_checkpoint_convert.huggingface.huggingface_base import HuggingfaceBase, is_dsv4_hybrid_config
+from mcore_checkpoint_convert.huggingface.huggingface_base import (
+    HuggingfaceBase,
+    is_dsv4_hybrid_config,
+    is_dsv41_config,
+)
 from mcore_checkpoint_convert.huggingface.huggingface_moe import HuggingfaceMoe
 from mcore_checkpoint_convert.huggingface.compressed_tensors_dequant import (
     DTYPE_MAP as HF_DEQUANT_DTYPE_MAP,
@@ -52,6 +57,30 @@ from mcore_checkpoint_convert.ernie5_5 import (
 )
 
 logging.basicConfig(level=logging.INFO)
+
+
+def save_dsv41_hf_config(config_file, save_path, dtype):
+    """Write metadata for the exported floating-point V4.1 main model."""
+    if config_file is None:
+        raise ValueError("DeepSeek-V4.1 HF export requires the source native config.json")
+    with open(config_file, encoding="utf-8") as stream:
+        config = json.load(stream)
+    if config.get("model_type") != "deepseek_v41":
+        raise ValueError("DeepSeek-V4.1 HF export requires a native deepseek_v41 config")
+    text = config["text_config"]
+    for section in (config, text):
+        section.pop("quantization_config", None)
+        section["dtype"] = str(dtype).removeprefix("torch.")
+    text["num_nextn_predict_layers"] = 0
+    text["dspark_target_layer_ids"] = []
+    os.makedirs(save_path, exist_ok=True)
+    with open(os.path.join(save_path, "config.json"), "w", encoding="utf-8") as stream:
+        json.dump(config, stream, indent=2)
+    for name in ("tokenizer.json", "tokenizer_config.json", "special_tokens_map.json", "chat_template.jinja"):
+        source = os.path.join(os.path.dirname(config_file), name)
+        target = os.path.join(save_path, name)
+        if os.path.isfile(source) and os.path.realpath(source) != os.path.realpath(target):
+            shutil.copy2(source, target)
 
 
 def _hf_dequantize_int4_enabled(args):
@@ -112,6 +141,7 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mt
     mtp_transformer = name_map.get(MTP_TRANSFORMER, None)
     mtp_layer_id = hargs.get("mtp_layer_id", None)
     is_dsv4_hybrid = is_dsv4_hybrid_config(c_config)
+    is_dsv41 = is_dsv41_config(c_config)
 
     filenames_in_the_layer = set()
     dequant_weight_keys = set()
@@ -127,6 +157,19 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mt
                     _add_hf_weight_file(
                         weight_map, filenames_in_the_layer, name, args=args, dequant_weight_keys=dequant_weight_keys
                     )
+                    if is_dsv41:
+                        variants = {
+                            name.replace("embed", "model.embed_tokens", 1),
+                            name.replace("head", "lm_head", 1),
+                        }
+                        for variant in variants:
+                            _add_hf_weight_file(
+                                weight_map,
+                                filenames_in_the_layer,
+                                variant,
+                                args=args,
+                                dequant_weight_keys=dequant_weight_keys,
+                            )
 
     if args is not None and args.enable_full_hetero_dp:
         c_name = VISION_WORD_EMBEDDINGS
@@ -159,6 +202,14 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mt
             for key, fname in weight_map.items():
                 if key.startswith("model.visual."):
                     filenames_in_the_layer.add(fname)
+        if is_dsv41:
+            for key, fname in weight_map.items():
+                if key.startswith(("vision.", "aligner.")) or key in (
+                    "image_start",
+                    "image_end",
+                    "image_newline",
+                ):
+                    filenames_in_the_layer.add(fname)
 
 
 
@@ -174,6 +225,18 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mt
                         weight_map, filenames_in_the_layer, name, args=args,
                         dequant_weight_keys=dequant_weight_keys
                     )
+                    if is_dsv41:
+                        for variant in {
+                            name.replace("embed", "model.embed_tokens", 1),
+                            name.replace("head", "lm_head", 1),
+                        }:
+                            _add_hf_weight_file(
+                                weight_map,
+                                filenames_in_the_layer,
+                                variant,
+                                args=args,
+                                dequant_weight_keys=dequant_weight_keys,
+                            )
         if mtp_num_layers > 0:
             for c_name in MTP_NAMES:
                 if c_name in name_map:
@@ -212,6 +275,10 @@ def get_hf_checkpoint_names(c_config, weight_map, layer_ids, expert_ids=None, mt
         name_prefix = ".".join([p for p in [transformer, cur_layer_prefix, str(cur_layer_id)] if p]) + "."
         alt_prefixes = set()
         alt_prefixes.add(name_prefix)
+        if is_dsv41:
+            alt_prefixes.add(f"model.{name_prefix}")
+            alt_prefixes.add(name_prefix.replace(".attn.", ".self_attn."))
+            alt_prefixes.add(f"model.{name_prefix.replace('.attn.', '.self_attn.')}")
         if is_dsv4_hybrid and is_mtp_layer:
             mtp_relative_id = layer_id - ori_num_layers
             # For DSV4 MTP layers, also try alternative prefixes that match original HF naming
@@ -370,6 +437,10 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 # `model.visual.*` tensors unchanged into the HF checkpoint.
                 for key in [k for k in c_ckpt.model_dict if k.startswith("model.visual.")]:
                     self.state_dict[key] = c_ckpt.model_dict[key]
+            if is_dsv41_config(self.c_config):
+                for key, value in c_ckpt.model_dict.items():
+                    if key.startswith("model.dsv41."):
+                        self.state_dict[key.removeprefix("model.dsv41.")] = value
 
         for layer_id in layer_ids:
             hf_layer_id = (
@@ -515,6 +586,12 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                     c_ckpt.model_dict[key] = self.state_dict.pop(key)
                 if vision_keys:
                     logging.info("passed through %d GLM-5.3 vision tensors", len(vision_keys))
+            if is_dsv41_config(self.c_config):
+                vision_keys = [
+                    key for key in self.state_dict if key.startswith(("vision.", "aligner."))
+                ]
+                for key in vision_keys:
+                    c_ckpt.model_dict[f"model.dsv41.{key}"] = self.state_dict.pop(key)
         elif self.args.enable_full_hetero_dp:
             self.h_base.hf_to_common(VISION_WORD_EMBEDDINGS, c_ckpt, self.state_dict)
 
@@ -665,6 +742,144 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 f"{_MTP_KEY_PREFIX}* tensor(s)"
             )
 
+    def _validate_dsv41_checkpoint_keys(self, c_config, layer_ids, expert_ids):
+        """Reject a partial V4.1 checkpoint before common conversion can hide it."""
+        module = c_config.get("module", {})
+        num_layers = int(module.get("num_layers", 0))
+        num_experts = int(module.get("num_experts", 0))
+        ratios = list(module.get("csa_compress_ratios", []))
+        kv_sources = set(module.get("kv_source_layer_ids", []))
+        index_sources = set(module.get("index_source_layer_ids", []))
+        engram_layers = set(module.get("engram_layer_ids", []))
+        expert_ids = (
+            list(range(num_experts))
+            if expert_ids is None
+            else sorted({int(expert_id) for expert_id in expert_ids})
+        )
+
+        required = set()
+
+        def add(key):
+            required.add(key)
+
+        def add_weight(key, *, scale=True):
+            add(f"{key}.weight")
+            weight = self.state_dict.get(f"{key}.weight")
+            if scale and weight is not None and (
+                weight.dtype == torch.float8_e4m3fn or not torch.is_floating_point(weight)
+            ):
+                add(f"{key}.weight_scale_inv")
+
+        def add_linear(key, *, bias=False):
+            add_weight(key, scale=False)
+            if bias:
+                add(f"{key}.bias")
+
+        if 0 in layer_ids:
+            add("embed.weight")
+            add("image_start")
+            add("image_end")
+            add("image_newline")
+            vision = module.get("vision_config") or {}
+            vision_layers = int(vision.get("num_hidden_layers", 0))
+            if vision_layers:
+                add_linear("vision.patch_embed.proj", bias=True)
+                for layer_id in range(vision_layers):
+                    prefix = f"vision.blocks.{layer_id}"
+                    add(f"{prefix}.norm1.weight")
+                    add_linear(f"{prefix}.attn.wqkv", bias=True)
+                    add_linear(f"{prefix}.attn.wo", bias=True)
+                    add(f"{prefix}.norm2.weight")
+                    add_linear(f"{prefix}.mlp.w1")
+                    add_linear(f"{prefix}.mlp.w2")
+                add("vision.norm.weight")
+                add_linear("aligner.w1", bias=True)
+                add_linear("aligner.w2", bias=True)
+
+        for layer_id in layer_ids:
+            if layer_id >= num_layers:
+                continue
+            prefix = f"layers.{layer_id}"
+            add(f"{prefix}.hc_attn_base")
+            add(f"{prefix}.hc_attn_fn")
+            add(f"{prefix}.hc_attn_scale")
+            add(f"{prefix}.hc_ffn_base")
+            add(f"{prefix}.hc_ffn_fn")
+            add(f"{prefix}.hc_ffn_scale")
+
+            add(f"{prefix}.attn.attn_sink")
+            add_weight(f"{prefix}.attn.wq_a")
+            add_weight(f"{prefix}.attn.wq_b")
+            add(f"{prefix}.attn.q_norm.weight")
+            add_weight(f"{prefix}.attn.wo_a")
+            add_weight(f"{prefix}.attn.wkv")
+            add(f"{prefix}.attn.kv_norm.weight")
+            add_weight(f"{prefix}.attn.wo_b")
+
+            ratio = int(ratios[layer_id])
+            if ratio and layer_id in kv_sources:
+                add_weight(f"{prefix}.attn.compressor.wkv", scale=False)
+                add(f"{prefix}.attn.compressor.norm.weight")
+                if ratio > 1:
+                    add_weight(f"{prefix}.attn.compressor.wgate", scale=False)
+            if ratio and layer_id in index_sources:
+                add_weight(f"{prefix}.attn.indexer.wq_b")
+                add_weight(f"{prefix}.attn.indexer.weights_proj", scale=False)
+                if layer_id in kv_sources:
+                    add_weight(f"{prefix}.attn.indexer.wk", scale=False)
+                    add(f"{prefix}.attn.indexer.k_norm.weight")
+
+            add(f"{prefix}.ffn.gate.bias")
+            add(f"{prefix}.ffn.gate.bias_vl")
+            add_weight(f"{prefix}.ffn.gate", scale=False)
+            for projection in ("w1", "w2", "w3"):
+                add_weight(f"{prefix}.ffn.shared_experts.{projection}")
+            for expert_id in expert_ids:
+                for projection in ("w1", "w2", "w3"):
+                    expert_key = (
+                        f"{prefix}.ffn.experts.{expert_id}.{projection}"
+                    )
+                    # MXFP4 dequantization consumes the packed `.scale` pair
+                    # and leaves an ordinary floating-point weight. Validate
+                    # the post-dequantization representation instead of
+                    # relying only on the CLI flag.
+                    weight = self.state_dict.get(f"{expert_key}.weight")
+                    scale_required = (
+                        f"{expert_key}.weight_scale_inv" in self.state_dict
+                        or (
+                            weight is not None
+                            and not torch.is_floating_point(weight)
+                        )
+                    )
+                    add_weight(expert_key, scale=scale_required)
+
+            if layer_id in engram_layers:
+                add_weight(f"{prefix}.engram.embed", scale=False)
+                table = self.state_dict.get(f"{prefix}.engram.embed.weight")
+                if table is not None and table.dtype == torch.float8_e4m3fn:
+                    add(f"{prefix}.engram.embed.scale")
+                add_weight(f"{prefix}.engram.wkv")
+                add(f"{prefix}.engram.q_weight")
+                add(f"{prefix}.engram.k_weight")
+
+        if num_layers - 1 in layer_ids:
+            add("norm.weight")
+            add("head.weight")
+
+        missing = sorted(required.difference(self.state_dict))
+        if missing:
+            raise KeyError(
+                "DeepSeek-V4.1 checkpoint is missing required tensors after "
+                "normalization: "
+                + ", ".join(missing[:32])
+                + (f" ... ({len(missing)} missing)" if len(missing) > 32 else "")
+            )
+        logging.info(
+            "DeepSeek-V4.1 key validation passed: %d required tensors, %d loaded tensors.",
+            len(required),
+            len(self.state_dict),
+        )
+
     def dequantize_mxfp4_if_needed(self, target_weight_keys=None):
         """On-the-fly MXFP4 (E2M1 + E8M0) packed FP4 -> floating-point materialization."""
         if not _hf_dequantize_mxfp4_enabled(self.args):
@@ -709,6 +924,15 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 checkpoint_names, dequant_weight_keys = get_hf_checkpoint_names(
                     c_config, weight_map, layer_ids, expert_ids=expert_ids, mtp_num_layers=mtp_num_layers,
                     args=self.args, return_dequant_weight_keys=True)
+                missing = [
+                    name for name in checkpoint_names
+                    if not os.path.isfile(os.path.join(load_path, name))
+                ]
+                if missing:
+                    raise FileNotFoundError(
+                        "HF checkpoint is incomplete; missing shard(s): "
+                        + ", ".join(sorted(missing))
+                    )
                 logging.info(
                     "Selected %d HuggingFace shard(s), %d packed INT4 target weight(s).",
                     len(checkpoint_names),
@@ -735,6 +959,15 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 checkpoint_names, dequant_weight_keys = get_hf_checkpoint_names(
                     c_config, weight_map, layer_ids, expert_ids=expert_ids, mtp_num_layers=mtp_num_layers,
                     args=self.args, return_dequant_weight_keys=True)
+                missing = [
+                    name for name in checkpoint_names
+                    if not os.path.isfile(os.path.join(load_path, name))
+                ]
+                if missing:
+                    raise FileNotFoundError(
+                        "HF checkpoint is incomplete; missing shard(s): "
+                        + ", ".join(sorted(missing))
+                    )
                 logging.info(
                     "Selected %d HuggingFace shard(s), %d packed INT4 target weight(s).",
                     len(checkpoint_names),
@@ -788,18 +1021,27 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
 
         module_args = c_config.get("module", {}) if c_config is not None else {}
         is_glm5_next = module_args.get("model_type") == "glm5_next"
-        if ((is_dsv4_hybrid_config(c_config) or is_glm5_next) and self.state_dict
+        is_dsv41 = is_dsv41_config(c_config)
+        if ((is_dsv4_hybrid_config(c_config) or is_dsv41 or is_glm5_next) and self.state_dict
                 and any(_strip_model_prefix(k).startswith(('layers.', 'mtp.'))
                         or k.startswith('model.language_model.layers.')
-                        or _strip_model_prefix(k) == 'embed.weight'
+                        or _strip_model_prefix(k) in ('embed.weight', 'embed_tokens.weight')
                         for k in self.state_dict.keys())):
             new_sd = {}
             for key, value in self.state_dict.items():
                 # GLM-5.3 keeps the multimodal model.language_model prefix in
                 # its name map; only DeepSeek-V4 uses the stripped layout.
                 new_key = key if is_glm5_next else _strip_model_prefix(key)
-                # Rename FP8 scale keys: *.scale -> *.weight_scale_inv
-                if new_key.endswith('.scale'):
+                if is_dsv41:
+                    if new_key.startswith("embed_tokens."):
+                        new_key = "embed." + new_key.removeprefix("embed_tokens.")
+                    elif new_key.startswith("lm_head."):
+                        new_key = "head." + new_key.removeprefix("lm_head.")
+                    new_key = new_key.replace(".self_attn.", ".attn.")
+                # TE linear layers consume ``weight_scale_inv``.  The native
+                # row-sharded Engram table keeps its checkpoint scale as
+                # ``scale`` because it is decoded explicitly during lookup.
+                if new_key.endswith('.scale') and ".engram.embed." not in new_key:
                     new_key = new_key[:-len('.scale')] + '.weight_scale_inv'
                 # Restructure MTP keys: mtp.{j}.* -> mtp.layers.{j}.*
                 if new_key.startswith('mtp.'):
@@ -809,13 +1051,13 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                         rest = m.group(2)
                         new_key = f"mtp.layers.{j}.{rest}"
                 # Split per-layer hc_*_scale (shape [3]) into alpha_pre/alpha_post/alpha_res
-                if new_key.endswith('.hc_attn_scale'):
+                if not is_dsv41 and new_key.endswith('.hc_attn_scale'):
                     prefix = new_key.rsplit('.', 1)[0]
                     new_sd[f"{prefix}.hc_attn_alpha_pre"] = value[0:1]
                     new_sd[f"{prefix}.hc_attn_alpha_post"] = value[1:2]
                     new_sd[f"{prefix}.hc_attn_alpha_res"] = value[2:3]
                     continue
-                elif new_key.endswith('.hc_ffn_scale'):
+                elif not is_dsv41 and new_key.endswith('.hc_ffn_scale'):
                     prefix = new_key.rsplit('.', 1)[0]
                     new_sd[f"{prefix}.hc_ffn_alpha_pre"] = value[0:1]
                     new_sd[f"{prefix}.hc_ffn_alpha_post"] = value[1:2]
@@ -826,6 +1068,37 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 new_sd[new_key] = value
             # MTP e_proj and h_proj kept separate for mcore (upstream uses them independently)
             self.state_dict = new_sd
+
+        if is_dsv41:
+            # DSpark/MTP tensors share sharded files with the backbone. The
+            # current integration deliberately excludes that branch, so make
+            # the boundary explicit before common conversion.
+            deferred = [key for key in self.state_dict if key.startswith("mtp.")]
+            for key in deferred:
+                self.state_dict.pop(key)
+            if deferred:
+                logging.info(
+                    "DeepSeek-V4.1 DSpark/MTP deferred: ignored %d checkpoint tensor(s).",
+                    len(deferred),
+                )
+            allowed_prefixes = ("embed.", "layers.", "vision.", "aligner.", "norm.", "head.")
+            allowed_direct = {"image_start", "image_end", "image_newline"}
+            unexpected = sorted(
+                key
+                for key in self.state_dict
+                if not key.startswith(allowed_prefixes) and key not in allowed_direct
+            )
+            if unexpected:
+                raise ValueError(
+                    "DeepSeek-V4.1 checkpoint contains unsupported tensor root(s): "
+                    + ", ".join(unexpected[:20])
+                    + (" ..." if len(unexpected) > 20 else "")
+                )
+            self._validate_dsv41_checkpoint_keys(
+                c_config,
+                layer_ids=layer_ids,
+                expert_ids=expert_ids,
+            )
 
     def print_memory_usage(self, desc):
         import psutil

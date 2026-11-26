@@ -15,6 +15,7 @@ from mcore_checkpoint_convert.common.common_checkpoint import (
     CommonCheckpoint,
     is_glm5_next_config,
 )
+from mcore_checkpoint_convert.huggingface.huggingface_base import is_dsv41_config
 from mcore_checkpoint_convert.mcore.mcore_base import McoreBase
 from mcore_checkpoint_convert.mcore.mcore_moe import McoreMoe
 from mcore_checkpoint_convert.utils.utils import (
@@ -218,6 +219,14 @@ class McoreCheckpoint(AbstractCheckpoint):
                         for rank in m_dict:
                             m_dict[rank]["model.visual"] = dict(stripped)
                         logging.info("passed through %d GLM-5.3 vision tensors to mcore", len(visual))
+                if is_dsv41_config(self.c_config):
+                    for rank in m_dict:
+                        for key, value in c_ckpt.model_dict.items():
+                            if not key.startswith("model.dsv41."):
+                                continue
+                            raw_key = key.removeprefix("model.dsv41.")
+                            m_dict[rank].setdefault(t_name, {})[raw_key] = value
+                    logging.info("passed through DeepSeek-V4.1 native vision tensors to mcore")
             elif self.args.enable_full_hetero_dp:
                 t_name = self.get_transformer_name(0)
                 self.m_base.common_to_mcore(
@@ -532,6 +541,14 @@ class McoreCheckpoint(AbstractCheckpoint):
                         for key, value in visual_root.items():
                             c_ckpt.model_dict[f"model.visual.{key}"] = value
                         logging.info("read back %d GLM-5.3 vision tensors from mcore", len(visual_root))
+                if is_dsv41_config(self.c_config):
+                    model_state = self.m_dict.get(0, {}).get(t_name, {})
+                    for root in ("vision", "aligner"):
+                        prefix = f"{root}."
+                        for key, value in model_state.items():
+                            if key.startswith(prefix):
+                                c_ckpt.model_dict[f"model.dsv41.{key}"] = value
+                    logging.info("read back DeepSeek-V4.1 native vision tensors from mcore")
 
             for stage_index in range(stage):
                 virtual_p, mcore_layer_offset = get_virtual_partition(
