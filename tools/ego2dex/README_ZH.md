@@ -81,7 +81,7 @@ export PYTHONPATH=$EGO2ROBOT_SHARPA_UPSTREAM/retargeting:$PYTHONPATH
 原始 zarr、load、align、mask、inpaint 各步的输出和一份手臂种子。重定向到某只手：
 
 ```bash
-bash examples/run_case_01.sh allegro        # 输出：examples/output/case_01_allegro/
+bash tools/ego2dex/examples/run_case_01.sh allegro   # 输出：tools/ego2dex/examples/output/case_01_allegro/
 ```
 
 结果目录里的主要文件：

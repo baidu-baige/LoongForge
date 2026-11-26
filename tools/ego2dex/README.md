@@ -91,7 +91,7 @@ zarr episode in `input/`, the outputs of the load, align, mask and inpaint
 steps, and an arm seed. Retarget it onto one hand:
 
 ```bash
-bash examples/run_case_01.sh allegro        # output: examples/output/case_01_allegro/
+bash tools/ego2dex/examples/run_case_01.sh allegro   # output: tools/ego2dex/examples/output/case_01_allegro/
 ```
 
 Main outputs in the result directory:
