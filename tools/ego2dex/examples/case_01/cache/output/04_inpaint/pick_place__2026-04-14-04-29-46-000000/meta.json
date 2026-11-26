@@ -1,0 +1,26 @@
+{
+  "episode": "pick_place__2026-04-14-04-29-46-000000",
+  "n_frames": 183,
+  "width": 640,
+  "height": 480,
+  "mean_mask_area": 0.036942932462431695,
+  "mask_dilation": 4,
+  "chunks": [
+    [
+      0,
+      120,
+      "79.6s"
+    ],
+    [
+      120,
+      183,
+      "122.4s"
+    ]
+  ],
+  "fp16": true,
+  "ref_stride": 10,
+  "neighbor_length": 10,
+  "subvideo_length": 80,
+  "raft_iter": 20,
+  "elapsed_sec": 131.2
+}

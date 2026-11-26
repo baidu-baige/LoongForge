@@ -1,0 +1,11 @@
+{
+  "case": "case_01",
+  "passed": true,
+  "frames": 183,
+  "task_tcp_position_max_m": 0.0012352591867548929,
+  "task_tcp_rotation_max_rad": 0.02010156451058793,
+  "arm_speed_max_rad_s": 2.99996998934618,
+  "arm_collision_samples": 0,
+  "joint_limit_violation_max_rad": 0.0,
+  "source": "Sharpa result for this episode (static Panda bases + arm joints only)"
+}

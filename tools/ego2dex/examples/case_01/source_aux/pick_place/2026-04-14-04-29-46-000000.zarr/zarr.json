@@ -1,0 +1,153 @@
+{
+  "attributes": {
+    "embodiment": "human_bimanual",
+    "total_frames": 183,
+    "fps": 30,
+    "task_name": "pick_place",
+    "task_description": "set2_pair_2",
+    "features": {
+      "left.obs_ee_pose": {
+        "dtype": "float64",
+        "shape": [
+          7
+        ],
+        "names": [
+          "dim_0"
+        ]
+      },
+      "left.obs_wrist_pose": {
+        "dtype": "float64",
+        "shape": [
+          7
+        ],
+        "names": [
+          "dim_0"
+        ]
+      },
+      "left.obs_aria_keypoints": {
+        "dtype": "float64",
+        "shape": [
+          63
+        ],
+        "names": [
+          "dim_0"
+        ]
+      },
+      "left.obs_keypoints": {
+        "dtype": "float64",
+        "shape": [
+          63
+        ],
+        "names": [
+          "dim_0"
+        ]
+      },
+      "right.obs_ee_pose": {
+        "dtype": "float64",
+        "shape": [
+          7
+        ],
+        "names": [
+          "dim_0"
+        ]
+      },
+      "right.obs_wrist_pose": {
+        "dtype": "float64",
+        "shape": [
+          7
+        ],
+        "names": [
+          "dim_0"
+        ]
+      },
+      "right.obs_aria_keypoints": {
+        "dtype": "float64",
+        "shape": [
+          63
+        ],
+        "names": [
+          "dim_0"
+        ]
+      },
+      "right.obs_keypoints": {
+        "dtype": "float64",
+        "shape": [
+          63
+        ],
+        "names": [
+          "dim_0"
+        ]
+      },
+      "obs_head_pose": {
+        "dtype": "float64",
+        "shape": [
+          7
+        ],
+        "names": [
+          "dim_0"
+        ]
+      },
+      "obs_eye_gaze": {
+        "dtype": "float64",
+        "shape": [
+          3
+        ],
+        "names": [
+          "dim_0"
+        ]
+      },
+      "obs_rgb_timestamps_ns": {
+        "dtype": "int64",
+        "shape": [],
+        "names": []
+      },
+      "images.front_1": {
+        "dtype": "jpeg",
+        "shape": [
+          480,
+          640,
+          3
+        ],
+        "names": [
+          "height",
+          "width",
+          "channel"
+        ]
+      },
+      "annotations": {
+        "dtype": "json",
+        "shape": [
+          0
+        ],
+        "names": [
+          "json"
+        ],
+        "format": "annotation_v1"
+      }
+    },
+    "intrinsics": {
+      "front_1": [
+        [
+          266.50860444,
+          0.0,
+          320.0,
+          0.0
+        ],
+        [
+          0.0,
+          266.50860444,
+          240.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ]
+      ]
+    }
+  },
+  "zarr_format": 3,
+  "node_type": "group"
+}

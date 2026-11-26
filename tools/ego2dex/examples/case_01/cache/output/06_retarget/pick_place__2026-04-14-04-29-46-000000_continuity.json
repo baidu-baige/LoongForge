@@ -1,0 +1,84 @@
+{
+  "position_mean_mm": [
+    0.010196525293401535,
+    0.026885315973341112
+  ],
+  "position_max_m": 0.0001226690038862309,
+  "position_failed_frames": 0,
+  "orientation_mean_deg": [
+    4.564251969307367,
+    12.47998215038284
+  ],
+  "max_joint_step_rad": 0.09999052078528203,
+  "max_velocity_rad_s": 2.999715623558461,
+  "velocity_rms_rad_s": 0.6086050160323535,
+  "acceleration_rms_rad_s2": 8.220178776395198,
+  "max_acceleration_rad_s2": 63.25346323855743,
+  "self_collision_frames": 0,
+  "cross_arm_collision_frames": 0,
+  "midpoint_collision_intervals": 0,
+  "joint_limit_violation_frames": 0,
+  "accepted": true,
+  "anchor_frame": 45,
+  "seed_attempts": [
+    {
+      "position_mean_mm": [
+        0.00027668598712458263,
+        0.12964327328904116
+      ],
+      "position_max_m": 0.017378919327434756,
+      "position_failed_frames": 2,
+      "orientation_mean_deg": [
+        0.18328800044342972,
+        1.7434731721404317
+      ],
+      "max_joint_step_rad": 0.09999999999999987,
+      "max_velocity_rad_s": 2.999999999999996,
+      "velocity_rms_rad_s": 0.5461668503976245,
+      "acceleration_rms_rad_s2": 5.254542363822026,
+      "max_acceleration_rad_s2": 82.09491575222549,
+      "self_collision_frames": 0,
+      "cross_arm_collision_frames": 0,
+      "midpoint_collision_intervals": 0,
+      "joint_limit_violation_frames": 0,
+      "accepted": false,
+      "anchor_frame": 91
+    },
+    {
+      "position_mean_mm": [
+        0.010196525293401535,
+        0.026885315973341112
+      ],
+      "position_max_m": 0.0001226690038862309,
+      "position_failed_frames": 0,
+      "orientation_mean_deg": [
+        4.564251969307367,
+        12.47998215038284
+      ],
+      "max_joint_step_rad": 0.09999052078528203,
+      "max_velocity_rad_s": 2.999715623558461,
+      "velocity_rms_rad_s": 0.6086050160323535,
+      "acceleration_rms_rad_s2": 8.220178776395198,
+      "max_acceleration_rad_s2": 63.25346323855743,
+      "self_collision_frames": 0,
+      "cross_arm_collision_frames": 0,
+      "midpoint_collision_intervals": 0,
+      "joint_limit_violation_frames": 0,
+      "accepted": true,
+      "anchor_frame": 45
+    }
+  ],
+  "config": {
+    "max_velocity": 3.0,
+    "position_tolerance": 0.005,
+    "clearance": 0.003,
+    "position_weight": 100.0,
+    "orientation_weight": 0.5,
+    "velocity_weight": 0.12,
+    "acceleration_weight": 0.35,
+    "collision_weight": 1000.0,
+    "max_nfev": 60,
+    "max_seeds": 3
+  },
+  "fps": 30.0
+}
