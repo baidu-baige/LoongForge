@@ -35,9 +35,7 @@ def convert_ernie55_hf_tensors(state_dict, module, hf_config, to_hf=False):
     nope = module["d_qk_head_dim"]
     value_dim = module["d_v_head_dim"]
     rope_dim = module["d_qk_pos_emb_head_dim"]
-    adjacent = hf_config.get(
-        "mqa_latent_rope_adjacent_pairing", hf_config.get("rope_interleave", False)
-    )
+    adjacent = hf_config.get("mqa_latent_rope_adjacent_pairing", hf_config.get("rope_interleave", False))
     for layer_id, ratio in enumerate(module["compress_ratios"]):
         if ratio != -2:
             continue
@@ -64,9 +62,7 @@ def convert_ernie55_hf_tensors(state_dict, module, hf_config, to_hf=False):
         for leaf, offset in (("q_b_proj.weight", nope), ("kv_a_proj_with_mqa.weight", latent)):
             name = prefix + leaf
             if name in state_dict:
-                state_dict[name] = _permute_rope_rows(
-                    state_dict[name], offset, rope_dim, inverse=to_hf
-                )
+                state_dict[name] = _permute_rope_rows(state_dict[name], offset, rope_dim, inverse=to_hf)
 
 
 def normalize_ernie55_mxfp4_state_dict(state_dict, c_config, args=None):

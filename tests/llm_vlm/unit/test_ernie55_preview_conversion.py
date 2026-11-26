@@ -31,8 +31,8 @@ CONVERT_CONFIG = ROOT / "configs/models/ernie5_5/ckpt_convert/ernie5_5_convert.y
 ERNIE_CONFIG = {"module": {"model_type": "ernie5_5"}}
 
 
-def _preview_config():
-    c_config = get_yaml_config(str(PREVIEW_CONFIG), str(CONVERT_CONFIG))
+def _preview_config(config_path=PREVIEW_CONFIG):
+    c_config = get_yaml_config(str(config_path), str(CONVERT_CONFIG))
     c_config.data.module.update({
         "num_layers": 1,
         "compress_ratios": [128],
@@ -300,12 +300,23 @@ def test_preview_single_file_load_without_c_config_still_normalizes(tmp_path, mo
     )
 
 
-def test_preview_drops_shared_shard_mtp_tensors_before_mxfp4_dequant(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    "common_mtp_num_layers,load_mtp_num_layers,drops_mtp",
+    [
+        (0, 0, True),
+        (0, 1, False),
+        (1, 0, True),
+    ],
+)
+def test_preview_drops_shared_shard_mtp_tensors_before_mxfp4_dequant(
+    tmp_path, monkeypatch, common_mtp_num_layers, load_mtp_num_layers, drops_mtp
+):
     # Preview's layer-42 trunk tensors share a shard with model.mtp.0 experts.
-    # Shards are read whole, so both land in the state_dict even though
-    # mtp_num_layers=0 never exports the MTP ones.
+    # Shards are read whole, so both land in the state_dict; whether the MTP
+    # tensors are dropped must follow the load() argument, not common's config.
     monkeypatch.setenv("LOONGFORGE_PATH", str(ROOT))
-    c_config = _preview_config()
+    config_path = BASE_CONFIG if common_mtp_num_layers else PREVIEW_CONFIG
+    c_config = _preview_config(config_path)
     (tmp_path / "config.json").write_text(json.dumps(_preview_hf_config()))
 
     trunk_base = "model.layers.0.block_sparse_moe.experts.0.w1"
@@ -337,21 +348,57 @@ def test_preview_drops_shared_shard_mtp_tensors_before_mxfp4_dequant(tmp_path, m
 
     monkeypatch.setattr(hf_checkpoint_module, "dequantize_mxfp4_state_dict", spy)
     checkpoint = HuggingFaceCheckpoint(c_config, _preview_load_args())
-    checkpoint.load(str(tmp_path), True, c_config, [0], mtp_num_layers=0)
+    checkpoint.load(str(tmp_path), True, c_config, [0], mtp_num_layers=load_mtp_num_layers)
 
     # Dropped before dequantization, so the discarded DSpark experts are never
-    # materialized: the dequant hook saw no model.mtp.* key at all.
-    assert not any(key.startswith("model.mtp.") for key in dequant_keys["seen"])
+    # materialized: the dequant hook sees no model.mtp.* key at all. When the
+    # load() call keeps MTP, the same hook must see and materialize the pair.
+    assert any(key.startswith("model.mtp.") for key in dequant_keys["seen"]) != drops_mtp
+    assert ((mtp_base + ".weight") in dequant_keys["seen"]) != drops_mtp
     assert trunk_base + ".weight" in dequant_keys["seen"]
-    assert set(checkpoint.state_dict) == {
+    mtp_key_exists = (mtp_base + ".weight") in checkpoint.state_dict
+    assert mtp_key_exists != drops_mtp
+    assert ("model.mtp.0.enorm.weight" in checkpoint.state_dict) != drops_mtp
+    expected_keys = {
         "model.layers.0.input_layernorm.weight",
         trunk_base + ".weight",
     }
+    if not drops_mtp:
+        expected_keys |= {"model.mtp.0.enorm.weight", mtp_base + ".weight"}
+    assert set(checkpoint.state_dict) == expected_keys
     assert checkpoint.state_dict[trunk_base + ".weight"].dtype == torch.bfloat16
     assert torch.equal(
         checkpoint.state_dict[trunk_base + ".weight"],
         dequantize_mxfp4(trunk[trunk_base + ".weight"], trunk[trunk_base + ".weight_scale_inv"], dtype=torch.bfloat16),
     )
+    if not drops_mtp:
+        assert checkpoint.state_dict[mtp_base + ".weight"].dtype == torch.bfloat16
+        assert torch.equal(
+            checkpoint.state_dict[mtp_base + ".weight"],
+            dequantize_mxfp4(
+                mtp[mtp_base + ".weight"], mtp[mtp_base + ".weight_scale_inv"], dtype=torch.bfloat16
+            ),
+        )
+
+
+def test_non_ernie_load_keeps_model_mtp_tensors(tmp_path, monkeypatch):
+    # Only the ernie5_5 branch drops model.mtp.*: DeepSeek-V4's HF layout uses
+    # the same prefix for MTP layers it does export, so the filter must not run
+    # for other model types even when loaded with mtp_num_layers=0.
+    monkeypatch.setenv("LOONGFORGE_PATH", str(ROOT))
+    c_config = get_yaml_config(
+        str(ROOT / "configs/models/qwen3/qwen3_0_6b.yaml"),
+        str(ROOT / "configs/models/qwen3/ckpt_convert/qwen3_convert.yaml"),
+    )
+    mtp_key = "model.mtp.0.enorm.weight"
+    save_file({mtp_key: torch.zeros(4, dtype=torch.bfloat16)}, tmp_path / "model.safetensors")
+
+    args = _preview_load_args()
+    args.hf_dequantize_mxfp4 = False
+    checkpoint = HuggingFaceCheckpoint(c_config, args)
+    checkpoint.load(str(tmp_path), True, c_config, [0], mtp_num_layers=0)
+
+    assert mtp_key in checkpoint.state_dict
 
 
 def test_preview_selection_skips_dspark_mtp_and_flashindexer_shards(monkeypatch):

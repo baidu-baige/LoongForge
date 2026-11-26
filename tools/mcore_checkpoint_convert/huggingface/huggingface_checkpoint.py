@@ -632,23 +632,27 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 f"by this rank, kept experts {min(map(int, keep))}..{max(map(int, keep))}"
             )
 
-    def _drop_unused_mtp_tensors(self, c_config):
-        """Drop ``model.mtp.*`` tensors when the model builds no MTP layer.
+    def _drop_unused_mtp_tensors(self, mtp_num_layers):
+        """Drop ``model.mtp.*`` tensors when the run exports no MTP layer.
 
-        ``expert_ids`` narrows which shard FILES are read, but shards are read
-        whole: Preview's layer-42 ``input_layernorm.weight`` shares
-        ``model-00119-of-00128.safetensors`` with the DSpark ``model.mtp.0``
-        experts, so the merge holds MTP tensors this run never exports. With
-        ``mtp_num_layers=0`` they must go before the MXFP4 dequant hook, or
-        every discarded expert is still materialized to BF16 only to be thrown
-        away, at full per-rank expert memory cost.
+        ``mtp_num_layers`` is the same ``load()`` argument that selects the
+        shard files, so dropping and loading share one source of truth instead
+        of reading the run's config separately. ``expert_ids`` narrows which
+        shard FILES are read, but shards are read whole: Preview's layer-42
+        ``input_layernorm.weight`` shares ``model-00119-of-00128.safetensors``
+        with the DSpark ``model.mtp.0`` experts, so the merge holds MTP tensors
+        this run never exports. With ``mtp_num_layers=0`` they must go before
+        the MXFP4 dequant hook, or every discarded expert is still materialized
+        to BF16 only to be thrown away, at full per-rank expert memory cost.
+
+        Only the ``ernie5_5`` branch calls this: Preview co-shards trunk and
+        DSpark tensors and the converter already knows its layout, while
+        DeepSeek-V4's HF checkpoints legitimately use ``model.mtp.*`` names for
+        the MTP layers they do export.
         """
-        c_config = c_config or self.c_config
-        if c_config is None or not self.state_dict:
+        if not self.state_dict:
             return
-        # Only an explicit ``mtp_num_layers: 0`` means the run exports no MTP
-        # layer; a config that does not model MTP keeps its state_dict intact.
-        if c_config.get_args("common").get("mtp_num_layers") != 0:
+        if mtp_num_layers != 0:
             return
         dropped = 0
         for key in list(self.state_dict.keys()):
@@ -746,10 +750,10 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
         # EP filter must run before the dequant hooks so per-rank memory and
         # dequant work scale with 1/EP.
         self._drop_unowned_expert_tensors(c_config, expert_ids)
-        # Drop MTP tensors the run will not export before MXFP4 dequant, so
-        # dequantizing them is not paid for just to throw them away.
-        self._drop_unused_mtp_tensors(c_config)
         if self.module.get("model_type") == "ernie5_5":
+            # Drop the MTP tensors this run will not export before MXFP4 dequant,
+            # so dequantizing them is not paid for just to throw them away.
+            self._drop_unused_mtp_tensors(mtp_num_layers)
             convert_ernie55_hf_tensors(self.state_dict, self.module, self.hf_config)
             # Preview stores MXFP4 scales as `weight_scale_inv`; the rename has to
             # precede dequantize_mxfp4_if_needed(), which only looks for `.scale`
