@@ -51,7 +51,10 @@ from mcore_checkpoint_convert.huggingface.mxfp4_dequant import (
     progress_print,
 )
 from mcore_checkpoint_convert.kimi_k3 import normalize_kimi_k3_state_dict
-from mcore_checkpoint_convert.ernie5_5 import convert_ernie55_hf_tensors
+from mcore_checkpoint_convert.ernie5_5 import (
+    convert_ernie55_hf_tensors,
+    normalize_ernie55_mxfp4_state_dict,
+)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -82,6 +85,11 @@ def save_dsv41_hf_config(config_file, save_path, dtype):
 
 def _hf_dequantize_int4_enabled(args):
     return bool(args is not None and getattr(args, "hf_dequantize_int4", False))
+
+
+# HF-Transformers MTP keys (``model.mtp.0.*`` etc.) the trunk converter never exports
+# when ``mtp_num_layers=0``.
+_MTP_KEY_PREFIX = "model.mtp."
 
 
 def _hf_dequantize_mxfp4_enabled(args):
@@ -701,6 +709,39 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
                 f"by this rank, kept experts {min(map(int, keep))}..{max(map(int, keep))}"
             )
 
+    def _drop_unused_mtp_tensors(self, mtp_num_layers):
+        """Drop ``model.mtp.*`` tensors when the run exports no MTP layer.
+
+        ``mtp_num_layers`` is the same ``load()`` argument that selects the
+        shard files, so dropping and loading share one source of truth instead
+        of reading the run's config separately. ``expert_ids`` narrows which
+        shard FILES are read, but shards are read whole: Preview's layer-42
+        ``input_layernorm.weight`` shares ``model-00119-of-00128.safetensors``
+        with the DSpark ``model.mtp.0`` experts, so the merge holds MTP tensors
+        this run never exports. With ``mtp_num_layers=0`` they must go before
+        the MXFP4 dequant hook, or every discarded expert is still materialized
+        to BF16 only to be thrown away, at full per-rank expert memory cost.
+
+        Only the ``ernie5_5`` branch calls this: Preview co-shards trunk and
+        DSpark tensors and the converter already knows its layout, while
+        DeepSeek-V4's HF checkpoints legitimately use ``model.mtp.*`` names for
+        the MTP layers they do export.
+        """
+        if not self.state_dict:
+            return
+        if mtp_num_layers != 0:
+            return
+        dropped = 0
+        for key in list(self.state_dict.keys()):
+            if key.startswith(_MTP_KEY_PREFIX):
+                del self.state_dict[key]
+                dropped += 1
+        if dropped:
+            progress_print(
+                f"[hf-load] mtp_num_layers=0: dropped {dropped} unused "
+                f"{_MTP_KEY_PREFIX}* tensor(s)"
+            )
+
     def _validate_dsv41_checkpoint_keys(self, c_config, layer_ids, expert_ids):
         """Reject a partial V4.1 checkpoint before common conversion can hide it."""
         module = c_config.get("module", {})
@@ -943,7 +984,17 @@ class HuggingFaceCheckpoint(AbstractCheckpoint):
         # dequant work scale with 1/EP.
         self._drop_unowned_expert_tensors(c_config, expert_ids)
         if self.module.get("model_type") == "ernie5_5":
+            # Drop the MTP tensors this run will not export before MXFP4 dequant,
+            # so dequantizing them is not paid for just to throw them away.
+            self._drop_unused_mtp_tensors(mtp_num_layers)
             convert_ernie55_hf_tensors(self.state_dict, self.module, self.hf_config)
+            # Preview stores MXFP4 scales as `weight_scale_inv`; the rename has to
+            # precede dequantize_mxfp4_if_needed(), which only looks for `.scale`
+            # companions of int8 weights and would otherwise leave them packed.
+            # `load()` also accepts c_config=None (single-file checkpoints); fall
+            # back to the config this checkpoint was built with so the rename still
+            # runs instead of silently returning with int8 weights left packed.
+            normalize_ernie55_mxfp4_state_dict(self.state_dict, c_config or self.c_config, self.args)
 
         # K3 names MXFP4 pairs as ``weight_packed``/``weight_scale``. Rename
         # them before dequantization so the shared path can consume the pair.
