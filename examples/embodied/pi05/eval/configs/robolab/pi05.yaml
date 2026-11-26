@@ -1,0 +1,186 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+# pi05 (pi05_droid_jointpos) x RoboLab full benchmark: 120 tasks x 10 episodes (official protocol).
+# 8 GPUs, each hosting one policy server and one Isaac Sim worker (co_locate): the 3.3B model is
+# ~13 GB in fp32, so no GPU needs to be dedicated to serving.
+# Replace the /path/to placeholders, then run examples/embodied/pi05/eval/run_robolab_eval.sh.
+
+benchmark:
+  name: robolab
+  tasks:
+  - AnimalsInBinTask
+  - AppleAndYogurtInBowlTask
+  - BagelsOnPlateTask
+  - BananaInBowlTask
+  - BananaOnPlateTask
+  - BananasInBinOneMoreTask
+  - BananasInBinThreeTotalTask
+  - BananasInCrateTask
+  - BananasOutOfBinTask
+  - BananaThenRubiksCubeTask
+  - BBQSauceInBinTask
+  - BigPumpkinInBinTask
+  - BlackItemsInBinTask
+  - BlocksInBinTask
+  - BlockStackingOrderAgnosticTask
+  - BlockStackingSpecifiedOrderTask
+  - BowlInBinTask
+  - BowlStackingLeftOnRightTask
+  - BowlStackingRightOnLeftTask
+  - ButterAboveRaisinTask
+  - CannedFoodInBinTask
+  - ClampInRightBinTask
+  - CleanUpToysTask
+  - ClearOrganicObjectsTask
+  - ClutterPlasticTask
+  - ClutterPumpkinTask
+  - CoffeePotInBinTask
+  - CondimentsInBinTask
+  - CookingClearPlateTask
+  - CookingPickPastaToolTask
+  - CubesAndBlocksInBinTask
+  - DishesInBinTask
+  - ElectronicsInBinTask
+  - FoodPacking1BoxesTask
+  - FoodPacking1CansTask
+  - FoodPacking2BoxesTask
+  - FoodPacking2CansTask
+  - FoodPacking3BoxesTask
+  - FoodPacking3CansTask
+  - FoodPackingByColorTask
+  - FruitsGreenLimesOnPlateTask
+  - FruitsMovingOrangeOrLimeTask
+  - FruitsMovingTask
+  - FruitsOnionTask
+  - FruitsOnionToPlateTask
+  - FruitsOnPlate3Task
+  - FruitsOnPlateTask
+  - FruitsOrangesOnPlateTask
+  - GrabABagelTask
+  - GrabAFruitTask
+  - GreenSpoonsInPotTask
+  - HammersInLeftBinTask
+  - JugsOnShelfTask
+  - KeyboardOutOfBinTask
+  - LargerObjectRaisinBoxInBinTask
+  - MarkerInMugTask
+  - MouseOnKeyboardTask
+  - MoveBananaToBagelPlateTask
+  - MustardAboveRaisinTask
+  - MustardInLeftBinTask
+  - MustardInRightBinTask
+  - NonHammerToolsInRightBinTask
+  - OneBottleInSquarePailTask
+  - OneBottleOnShelfTask
+  - PhoneOrRemoteInBinTask
+  - PickDrillTask
+  - PickGlassesTask
+  - PickOrangeObjectTask
+  - PickUpBluePitcherTask
+  - PickUpGreenObjectTask
+  - PinkSpoonInPotTask
+  - PlasticBottlesInSquarePailTask
+  - PutBowlOnShelfTopTask
+  - PutMugsOnShelfTask
+  - PutTwoMugsOnShelfTask
+  - RecycleCartonsOnBoxTask
+  - RecycleCartonsVerticalCrateTask
+  - RecycleCartonTask
+  - RedDishesInBinTask
+  - RedItemsInBinTask
+  - ReorientAllMugsTask
+  - ReorientJugTask
+  - ReorientRedMugTask
+  - ReorientWhiteMugsTask
+  - RubiksCubeAndBananaTask
+  - RubiksCubeBehindBowlTask
+  - RubiksCubeInFrontOfBowlTask
+  - RubiksCubeLeftOfBowlTask
+  - RubiksCubeOrBananaTask
+  - RubiksCubeRightOfBowlTask
+  - RubiksCubesInBinTask
+  - RubiksCubeTask
+  - RubiksCubeThenBananaTask
+  - SauceBottlesCrateTask
+  - SmallerObjectButterInBinTask
+  - SmallPumpkinInBinTask
+  - SmartphoneInBinTask
+  - SpoonInMugTask
+  - SpoonsInPotTask
+  - Stack3RubiksCubeTask
+  - StackWhiteMugsTask
+  - StackYellowOnRedTask
+  - TakeMeasuringSpoonOutTask
+  - TakeMugsOffOfShelfTask
+  - TakeSpatulaOffShelfTask
+  - ThrowAwayAppleTask
+  - ThrowAwaySnacksTask
+  - ToolOrganizationBothTask
+  - ToolOrganizationTask
+  - ToolsPickingAllHammersTask
+  - ToolsPickingDrillTask
+  - ToolsPickingHammerTask
+  - ToyInBinTask
+  - UnstackRubiksCubeTask
+  - UtensilsInMugTask
+  - WhiteMugInCenterOfTableTask
+  - WhiteMugsInBinTask
+  - WoodSpatulaToBowlTask
+  - YellowAndWhiteObjectsInBinTask
+  - YogurtInBowlTask
+  num_envs: 10
+  episodes_per_task: 10
+  max_steps: 0
+  headless: true
+  device: cuda:0
+  return_action_chunk: true
+model:
+  backend: loongforge
+  model_type: pi05
+  name: pi05-droid-jointpos
+  action_dim: 8
+  state_dim: 8
+  action_horizon: 15
+  max_action_dim: 32
+  max_state_dim: 32
+  delta_action_dims: 7
+  state_encoding: passthrough
+  action_encoding: joint_pos
+  view_layout: droid
+  empty_cameras: 1
+  eval_image_normalize_mode: siglip
+  eval_normalization_mode: q99
+servers:
+  - gpus: [0, 1, 2, 3, 4, 5, 6, 7]
+
+pools:
+  gpu_sim:
+    n_sims_per_server: 1
+    placement: co_locate
+server:
+  port: 61300
+  health_port: 61301
+  start_timeout_sec: 600
+  python: /usr/bin/python3
+  ckpt_path: /path/to/ckpt/pi05_droid_jointpos_pytorch
+  tokenizer_path: /path/to/paligemma-3b-pt-224
+  dataset_statistics_path: /path/to/LoongForge/examples/embodied/pi05/eval/assets/pi05_droid_jointpos_dataset_stats.json
+  chunk_execute_steps: 15
+  use_bf16: false
+  loongforge_root: /path/to/LoongForge
+  log: /path/to/output/robolab_pi05/policy_server.log
+timeouts:
+  policy_call_ms: 180000
+  per_step_sec: 300
+  per_episode_sec: 900
+run:
+  seed: 0
+  output_dir: /path/to/output/robolab_pi05
+  timestamped_output: false
+  max_retries: 2
+  unit_timeout_sec: 21600
+env:
+  ld_library_path: <site-packages>/torch/lib:<site-packages>/nvidia/cudnn/lib
+  eval_root: /path/to/LoongForge/loongforge/embodied/eval
+  loongforge_root: /path/to/LoongForge

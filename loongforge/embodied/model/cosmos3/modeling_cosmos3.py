@@ -17,6 +17,7 @@ import logging
 import os
 import pathlib as _pathlib_mod
 import pickle
+import re
 import sys
 import types
 from typing import Dict
@@ -25,6 +26,7 @@ import numpy as np
 import torch
 import torch.distributed.checkpoint as dcp
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.distributed.checkpoint import FileSystemReader
 from transformers import AutoTokenizer
 from accelerate import init_on_device
@@ -36,6 +38,7 @@ from loongforge.embodied.model.cosmos3.cosmos3_vfm_network import (
 from loongforge.embodied.model.registry import register_model
 from loongforge.embodied.model.cosmos3.modeling_configuration_cosmos3 import Cosmos3ModelConfig
 from loongforge.embodied.model.cosmos3.flow_matching import compute_flow_matching_loss
+from loongforge.embodied.model.cosmos3.fm_solvers_unipc import FlowUniPCMultistepScheduler
 from loongforge.embodied.model.cosmos3.modeling_utils import has_noisy_tokens
 from loongforge.embodied.model.cosmos3.rectified_flow import RectifiedFlow
 from loongforge.embodied.model.cosmos3.sequence_packing import (
@@ -48,6 +51,42 @@ from loongforge.embodied.data.datasets.cosmos3.transforms.cosmos3_preprocessor i
 from loongforge.embodied.train.utils.utils import resolve_dtype
 
 logger = logging.getLogger(__name__)
+
+# Diffusers-layout checkpoint (e.g. nvidia/Cosmos3-Nano-Policy-DROID): the MoT weights live
+# under ``transformer/``; the key renames below map them onto ``Cosmos3VFMNetwork``
+# (ported from cosmos_framework/inference/model.py ``_DIFFUSERS_KEY_MAPPING_RES``).
+_HF_TRANSFORMER_INDEX = os.path.join("transformer", "diffusion_pytorch_model.safetensors.index.json")
+_HF_KEY_MAPPING: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"^action_proj_in\."), "action2llm."),
+    (re.compile(r"^action_proj_out\."), "llm2action."),
+    (re.compile(r"^proj_in\."), "vae2llm."),
+    (re.compile(r"^proj_out\."), "llm2vae."),
+    (re.compile(r"^time_embedder\.linear_1\."), "time_embedder.mlp.0."),
+    (re.compile(r"^time_embedder\.linear_2\."), "time_embedder.mlp.2."),
+    (re.compile(r"\.self_attn\.to_q\."), ".self_attn.q_proj."),
+    (re.compile(r"\.self_attn\.to_k\."), ".self_attn.k_proj."),
+    (re.compile(r"\.self_attn\.to_v\."), ".self_attn.v_proj."),
+    (re.compile(r"\.self_attn\.to_out\."), ".self_attn.o_proj."),
+    (re.compile(r"\.self_attn\.norm_q\."), ".self_attn.q_norm."),
+    (re.compile(r"\.self_attn\.norm_k\."), ".self_attn.k_norm."),
+    (re.compile(r"\.self_attn\.add_q_proj\."), ".self_attn.q_proj_moe_gen."),
+    (re.compile(r"\.self_attn\.add_k_proj\."), ".self_attn.k_proj_moe_gen."),
+    (re.compile(r"\.self_attn\.add_v_proj\."), ".self_attn.v_proj_moe_gen."),
+    (re.compile(r"\.self_attn\.to_add_out\."), ".self_attn.o_proj_moe_gen."),
+    (re.compile(r"\.self_attn\.norm_added_q\."), ".self_attn.q_norm_moe_gen."),
+    (re.compile(r"\.self_attn\.norm_added_k\."), ".self_attn.k_norm_moe_gen."),
+    (re.compile(r"^lm_head\."), "language_model.lm_head."),
+    (re.compile(r"^(embed_tokens\.|layers\.|norm(?:_moe_gen)?\.)"), r"language_model.model.\1"),
+)
+# Buffers recomputed at init rather than stored in the checkpoint.
+_HF_NON_PERSISTENT_SUFFIXES = ("rotary_emb.inv_freq",)
+
+
+def _hf_to_net_key(name: str) -> str:
+    """Rename a diffusers ``transformer/`` key to its ``Cosmos3VFMNetwork`` key."""
+    for pattern, replacement in _HF_KEY_MAPPING:
+        name = pattern.sub(replacement, name)
+    return name
 
 
 @register_model("cosmos3")
@@ -84,6 +123,10 @@ class Cosmos3(nn.Module):
     def __init__(self, config: Cosmos3ModelConfig):
         """__init__."""
         super().__init__()
+        self.cfg = config
+        # Inference state, built lazily on the first predict_action call.
+        self._seed_rng = None
+        self._policy_transform = None
         # Build language model (MoT-wrapped Qwen3-VL)
         qwen3_vl_path = config.qwen3_vl_path
         with open(os.path.join(qwen3_vl_path, "config.json")) as f:
@@ -221,7 +264,11 @@ class Cosmos3(nn.Module):
         logger.info("Cosmos3 materialized on %s", device)
 
     def load_pretrained(self, path: str, device=None):
-        """Load pretrained weights from DCP or standard format."""
+        """Load pretrained weights from DCP or a diffusers-layout HF checkpoint."""
+        if os.path.exists(os.path.join(path, _HF_TRANSFORMER_INDEX)):
+            self._load_hf_transformer(path)
+            return
+
         # Resolve model subdir
         model_dir = os.path.join(path, "model")
 
@@ -256,6 +303,46 @@ class Cosmos3(nn.Module):
         if unexpected:
             logger.warning(f"DCP: {len(unexpected)} unexpected keys (first 5: {unexpected[:5]})")
         logger.info("Cosmos3 DCP checkpoint loaded successfully")
+
+    @torch.no_grad()
+    def _load_hf_transformer(self, path: str) -> None:
+        """Copy ``transformer/*.safetensors`` into the materialized ``self.net``.
+
+        Every checkpoint tensor must land on a network tensor of the same shape, and every
+        network tensor except recomputed buffers must be covered; anything else is an error.
+        """
+        from safetensors import safe_open
+
+        with open(os.path.join(path, _HF_TRANSFORMER_INDEX)) as f:
+            weight_map: Dict[str, str] = json.load(f)["weight_map"]
+        targets = dict(self.net.state_dict(keep_vars=True))
+        files: Dict[str, list] = {}
+        for key, rel in weight_map.items():
+            files.setdefault(rel, []).append(key)
+
+        loaded = set()
+        for rel, keys in sorted(files.items()):
+            with safe_open(os.path.join(path, "transformer", rel), framework="pt", device="cpu") as reader:
+                for key in keys:
+                    net_key = _hf_to_net_key(key)
+                    if net_key not in targets:
+                        raise KeyError(f"checkpoint key {key!r} -> {net_key!r} has no target in Cosmos3VFMNetwork")
+                    target = targets[net_key]
+                    tensor = reader.get_tensor(key)
+                    if tuple(tensor.shape) != tuple(target.shape):
+                        raise ValueError(
+                            f"shape mismatch for {net_key!r}: checkpoint {tuple(tensor.shape)} vs "
+                            f"network {tuple(target.shape)}"
+                        )
+                    target.data.copy_(tensor.to(dtype=target.dtype))
+                    loaded.add(net_key)
+
+        missing = sorted(
+            k for k in targets if k not in loaded and not k.endswith(_HF_NON_PERSISTENT_SUFFIXES)
+        )
+        if missing:
+            raise KeyError(f"{len(missing)} network tensors not in checkpoint (first 5: {missing[:5]})")
+        logger.info("Cosmos3 HF checkpoint loaded: %d tensors from %s", len(loaded), path)
 
     def encode(self, images, instructions, **kwargs):
         """Not implemented; call ``forward`` directly during training."""
@@ -479,6 +566,185 @@ class Cosmos3(nn.Module):
         return loss, {"vision_loss": loss_vision, "action_loss": loss_action, "total_loss": loss}
 
 
-    def predict_action(self, **kwargs) -> Dict[str, np.ndarray]:
-        """Action prediction (inference) - not yet implemented for Cosmos3."""
-        raise NotImplementedError("Cosmos3 predict_action not yet implemented.")
+    @torch.no_grad()
+    def predict_action(self, images, instructions, state=None, **kwargs) -> np.ndarray:
+        """Return ``[action_horizon, action_dim]`` RoboLab joint actions for one observation.
+
+        Mirrors the official RoboLab policy path (``action_policy_server_robolab`` +
+        ``OmniMoTModel.generate_samples_from_batch`` on one GPU): the observation becomes a
+        ``wam`` sample whose frame 0 and state row are clean, both streams are denoised with
+        CFG + flow UniPC, and the state/history rows are trimmed from the output.
+
+        Args:
+            images: Batch-of-1 view list; the single view is the 3-view mosaic
+                (``payload_builders/cosmos3.py``).
+            instructions: Batch-of-1 task strings.
+            state: DROID 8D state (7 arm joints + gripper, 0 = open).
+        """
+        cfg = self.cfg
+        if state is None:
+            raise ValueError("cosmos3 predict_action needs the DROID 8D state")
+        view = images[0][0] if isinstance(images[0], (list, tuple)) else images[0]
+        sample = self._build_policy_sample(np.asarray(view), str(instructions[0]), state)
+        action = self._generate_action(sample, self._next_seed())  # [T, max_action_dim]
+
+        action = action[:, : cfg.action_dim][cfg.history_length :].cpu().numpy()
+        # The model works in "1 = open" gripper space; flip back and binarize for the
+        # BinaryJointPositionZeroToOneAction controller (0 = open, 1 = close).
+        action[:, -1] = 1.0 - action[:, -1]
+        action[:, -1] = (action[:, -1] > cfg.gripper_threshold).astype(np.float32)
+        return action
+
+    def _next_seed(self) -> int:
+        """Per-request noise seed, same policy as the official server."""
+        if self.cfg.deterministic_seed:
+            return int(self.cfg.seed)
+        if self._seed_rng is None:
+            self._seed_rng = np.random.default_rng(self.cfg.seed)
+        return int(self._seed_rng.integers(0, 2**31))
+
+    def _build_policy_sample(self, image: np.ndarray, instruction: str, state) -> Dict:
+        """Observation -> transformed ``wam`` sample (official ``RobolabPolicyService._build_sample``)."""
+        cfg = self.cfg
+        if not cfg.use_state or cfg.history_length != 1:
+            raise NotImplementedError("cosmos3 inference supports use_state=True, history_length=1 only")
+        if self._policy_transform is None:
+            from loongforge.embodied.data.datasets.cosmos3.droid_lerobot_dataset import (
+                _CONCAT_VIEW_DESCRIPTION,
+                _domain_id_from_name,
+            )
+            from loongforge.embodied.data.datasets.cosmos3.transforms.cosmos3_action_transform import (
+                Cosmos3ActionTransform,
+            )
+
+            self._policy_transform = Cosmos3ActionTransform(
+                tokenizer_path=self._tokenizer_path,
+                max_action_dim=cfg.max_action_dim,
+                resolution=cfg.resolution,
+                action_chunk_length=cfg.action_horizon,
+                temporal_compression=cfg.vae_temporal_compression,
+                cfg_dropout_rate=0.0,
+            )
+            self._view_description = _CONCAT_VIEW_DESCRIPTION
+            self._domain_id = _domain_id_from_name(cfg.domain_name)
+
+        image = np.ascontiguousarray(image.astype(np.uint8))
+        frame = torch.from_numpy(image).permute(2, 0, 1)  # [3,H,W]
+        if tuple(frame.shape[1:]) != (cfg.image_height, cfg.image_width):
+            frame = F.interpolate(
+                frame.unsqueeze(0).float(), size=(cfg.image_height, cfg.image_width),
+                mode="bilinear", align_corners=False,
+            ).squeeze(0).to(torch.uint8)
+        num_frames = cfg.action_horizon + 1
+        video = torch.zeros((3, num_frames, cfg.image_height, cfg.image_width), dtype=torch.uint8)
+        video[:, 0] = frame
+
+        flat = np.asarray(state, dtype=np.float32).reshape(-1)
+        if flat.size != cfg.state_dim:
+            raise ValueError(f"cosmos3 expects a {cfg.state_dim}D DROID state, got {flat.size}D")
+        action = torch.zeros((num_frames, cfg.action_dim), dtype=torch.float32)
+        # Row 0 is the clean current state; the gripper is fed in "1 = open" space.
+        action[0] = torch.from_numpy(np.concatenate([flat[:-1], 1.0 - flat[-1:]]))
+
+        return self._policy_transform.apply({
+            "video": video,
+            "action": action,
+            "ai_caption": instruction,
+            "viewpoint": "concat_view",
+            "additional_view_description": self._view_description,
+            "conditioning_fps": torch.tensor(cfg.conditioning_fps),
+            "domain_id": torch.tensor(self._domain_id, dtype=torch.long),
+            "mode": "wam",
+        })
+
+    def _encode_condition_latent(self, video: torch.Tensor, image_size: torch.Tensor, device) -> torch.Tensor:
+        """VAE-encode only the clean frame 0 and zero-fill the remaining latent frames."""
+        vae = self._get_vae_encoder()
+        frame0 = video[:, :1].to(device=device, dtype=torch.float32) / 127.5 - 1.0  # [3,1,H,W]
+        latent0 = vae.encode(frame0.unsqueeze(0)).contiguous().float()  # [1,C,1,h,w]
+        num_latent = 1 + (video.shape[1] - 1) // self.cfg.vae_temporal_compression
+        latent = latent0.new_zeros(latent0.shape[:2] + (num_latent,) + latent0.shape[3:])
+        latent[:, :, :1] = latent0
+        return self._remove_padding_from_latent([latent], [image_size])[0]  # [1,C,T,h',w']
+
+    def _generate_action(self, sample: Dict, seed: int) -> torch.Tensor:
+        """CFG + flow UniPC joint denoising of vision and action; returns ``[T, max_action_dim]``."""
+        cfg = self.cfg
+        param = next(self.net.parameters())
+        device, dtype = param.device, param.dtype
+        special_tokens = self._get_special_tokens()
+        plan = sample["sequence_plan"]
+        raw_dim = int(sample["raw_action_dim"])
+        fps = torch.tensor([sample["fps"]], dtype=torch.float32)
+        domain_id = sample["domain_id"]
+
+        x0_vision = self._encode_condition_latent(sample["video"], sample["image_size"], device)
+        x0_action = sample["action"].to(device=device, dtype=torch.float32)  # [T,max_action_dim]
+        cm_vision = torch.zeros(x0_vision.shape[2], 1, 1, device=device)
+        cm_vision[plan.condition_frame_indexes_vision] = 1.0
+        cm_action = torch.zeros(x0_action.shape[0], 1, device=device)
+        cm_action[plan.condition_frame_indexes_action] = 1.0
+
+        # NumPy RNG with a fresh stream per modality (cosmos ``misc.arch_invariant_rand``).
+        def _noise(shape) -> torch.Tensor:
+            array = np.random.RandomState(seed).standard_normal(tuple(shape)).astype(np.float32)
+            return torch.from_numpy(array).to(device)
+
+        x_vision = cm_vision * x0_vision + (1.0 - cm_vision) * _noise(x0_vision.shape)
+        x_action = cm_action * x0_action + (1.0 - cm_action) * _noise(x0_action.shape)
+        x_action[:, raw_dim:] = 0
+        num_vision = x_vision.numel()
+        latent = torch.cat([x_vision.reshape(-1), x_action.reshape(-1)])
+
+        cond_tokens = sample["text_token_ids"]
+        uncond_tokens = self._policy_transform.tokenizer.apply_chat_template(
+            [{"role": "user", "content": ""}], tokenize=True, add_generation_prompt=True,
+            add_vision_id=False, return_dict=False,
+        )
+
+        def _velocity(state: torch.Tensor, timestep: float, text_tokens) -> torch.Tensor:
+            gen = GenerationDataClean(
+                batch_size=1,
+                is_image_batch=False,
+                x0_tokens_vision=[state[:num_vision].view(x0_vision.shape).to(dtype)],
+                fps_vision=fps,
+                x0_tokens_action=[state[num_vision:].view(x0_action.shape).to(dtype)],
+                fps_action=fps,
+                action_domain_id=[domain_id],
+                raw_action_dim=[torch.tensor(raw_dim)],
+            )
+            packed = pack_input_sequence(
+                sequence_plans=[plan],
+                input_text_indexes=[list(text_tokens)],
+                gen_data_clean=gen,
+                input_timesteps=torch.tensor([[timestep]], dtype=torch.float32),
+                special_tokens=special_tokens,
+                latent_patch_size=self.latent_patch_size,
+                position_embedding_type=self.position_embedding_type,
+                unified_3d_mrope_reset_spatial_ids=self.unified_3d_mrope_reset_spatial_ids,
+                unified_3d_mrope_temporal_modality_margin=self.unified_3d_mrope_temporal_modality_margin,
+                enable_fps_modulation=self.enable_fps_modulation,
+                base_fps=self.base_fps,
+                temporal_compression_factor=cfg.vae_temporal_compression,
+                action_dim=cfg.max_action_dim,
+            )
+            packed.to_cuda()
+            out = self.net(packed, fps_vision=fps.to(device), fps_action=fps.to(device))
+            v_vision = out["preds_vision"][0].float().reshape(x0_vision.shape) * (1.0 - cm_vision)
+            v_action = out["preds_action"][0].float().reshape(x0_action.shape) * (1.0 - cm_action)
+            v_action[:, raw_dim:] = 0
+            return torch.cat([v_vision.reshape(-1), v_action.reshape(-1)])
+
+        scheduler = FlowUniPCMultistepScheduler(num_train_timesteps=1000, shift=1.0, use_dynamic_shifting=False)
+        scheduler.set_timesteps(cfg.num_steps, device=device, shift=cfg.inference_shift)
+        for timestep in scheduler.timesteps:
+            t = float(timestep)
+            velocity = _velocity(latent, t, cond_tokens)
+            if cfg.guidance != 1.0:
+                uncond = _velocity(latent, t, uncond_tokens)
+                velocity = uncond + cfg.guidance * (velocity - uncond)
+            latent = scheduler.step(
+                model_output=velocity, timestep=timestep, sample=latent.unsqueeze(0), return_dict=False
+            )[0].squeeze(0)
+
+        return latent[num_vision:].view(x0_action.shape)

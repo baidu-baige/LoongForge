@@ -15,6 +15,29 @@ from __future__ import annotations
 
 from typing import Any, Dict, Mapping, Optional
 
+import numpy as np
+
+
+def resize_with_pad(image: np.ndarray, height: int, width: int) -> np.ndarray:
+    """Aspect-preserving PIL bilinear resize of an HWC uint8 image, zero-padded and centered.
+
+    Same algorithm as openpi_client ``image_tools.resize_with_pad``, which the official
+    RoboLab clients apply before sending frames.
+    """
+    from PIL import Image
+
+    pil = Image.fromarray(np.ascontiguousarray(image))
+    cur_width, cur_height = pil.size
+    if (cur_width, cur_height) == (width, height):
+        return image
+    ratio = max(cur_width / width, cur_height / height)
+    resized_w = max(1, int(cur_width / ratio))
+    resized_h = max(1, int(cur_height / ratio))
+    resized = pil.resize((resized_w, resized_h), resample=Image.BILINEAR)
+    canvas = Image.new(resized.mode, (width, height), 0)
+    canvas.paste(resized, (max(0, int((width - resized_w) / 2)), max(0, int((height - resized_h) / 2))))
+    return np.array(canvas)
+
 
 class PayloadBuilder:
     """Convert canonical eval dicts into model-specific predict_action kwargs.

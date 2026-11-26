@@ -269,6 +269,27 @@ def _run_maniskill_once(config: Dict[str, Any], config_path: str = "") -> Dict[s
         server.stop()
 
 
+def _run_robolab_once(config: Dict[str, Any], config_path: str = "") -> Dict[str, Any]:
+    """Run one RoboLab episode (Isaac Sim runs in-process in the runner)."""
+    from loongforge.embodied.eval.orchestrator.runners import robolab_runner
+
+    args = robolab_runner.build_argparser().parse_args([])
+    args = robolab_runner._apply_config(args, config)
+    args.config = config_path
+    args.raw_config = config
+    if not args.task_name:
+        raise ValueError("task name must be set by benchmark.task_name in YAML")
+
+    server = ManagedServer(_server_args(config, config_path))
+    try:
+        server.start()
+        result = robolab_runner.run_evaluation(args)
+        print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+        return result
+    finally:
+        server.stop()
+
+
 def _run_once(config: Dict[str, Any], config_path: str = "") -> Dict[str, Any]:
     """Run _run_once."""
     family = _benchmark_family(config)
@@ -282,6 +303,8 @@ def _run_once(config: Dict[str, Any], config_path: str = "") -> Dict[str, Any]:
         return _run_robotwin_once(config, config_path)
     if family == "maniskill":
         return _run_maniskill_once(config, config_path)
+    if family == "robolab":
+        return _run_robolab_once(config, config_path)
     raise AssertionError(f"unreachable benchmark family: {family}")
 
 

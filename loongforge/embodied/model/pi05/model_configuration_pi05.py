@@ -65,6 +65,11 @@ class Pi05ModelConfig:
     # noise per request, matching the official openpi client. Set it only for
     # reproducible / noise-aligned experiments; batching then shares that seed.
     noise_seed: Optional[int] = None
+    # Leading action dims the checkpoint predicts relative to the current state
+    # (openpi ``AbsoluteActions`` output transform). After unnormalization the
+    # raw state is added back to the first ``delta_action_dims`` dims, e.g. 7 for
+    # ``pi05_droid_jointpos`` (7 joint deltas + absolute gripper). 0 = absolute.
+    delta_action_dims: int = 0
 
     # Training-time model switches
     freeze_vision_encoder: bool = False
