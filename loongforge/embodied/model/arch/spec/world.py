@@ -719,9 +719,10 @@ def _flatten_per_stream(section: str, body: dict[str, Any],
     """Flatten a ``<stream>: {<key>: value}`` section into provider kwargs.
 
     The provider signature is flat (``video_num_layers=``), while the YAML is
-    nested per stream. Only ``streams:`` goes through here; ``diffusion:`` is
-    written onto the declared objects after the provider
-    (``DiffusionSpec.with_yaml_knobs``). Flattening here rather than giving the
+    nested per stream. Only ``streams:`` goes through here; ``diffusion:``
+    reaches the provider whole, as ``diffusion=`` (``resolve_diffusion``),
+    because its keys belong to the objects the provider builds, not to the
+    provider's signature. Flattening ``streams:`` rather than giving the
     providers a nested parameter keeps one invariant worth having: a typo in a
     YAML key becomes an unexpected keyword argument at the provider call, which
     names both the model and the key.
@@ -887,16 +888,18 @@ def build_world_model_spec(config: Any) -> WorldModelSpec:
        config whose ``model_type`` is this key. No YAML line says "this is
        VPP2" beyond that one field.
     2. Translate the config sections into **keyword arguments**: ``geometry:``
-       stays a mapping, ``streams:`` is flattened to ``<stream>_<key>``, and
-       the per-model subclass fields are passed by name. The config object itself never reaches a provider (rule R5): a
-       provider that could read it would be free to pull topology out of YAML.
+       stays a mapping, ``streams:`` is flattened to ``<stream>_<key>``,
+       ``diffusion:`` stays a mapping and is passed as ``diffusion=``, which
+       the provider resolves over its own defaults before it builds its
+       samplers (``resolve_diffusion``, where a key outside the provider's
+       table raises), and the per-model subclass fields are passed by name. The config
+       object itself never reaches a provider (rule R5): a provider that
+       could read it would be free to pull topology out of YAML.
     3. Call the provider. Everything structural — stream count, visibility,
        condition table, loss terms — is Python code there, so steps 1–2 can
        only move numbers, never shapes of the graph.
-    4. Apply the overrides that are safe afterwards: the ``diffusion:`` knobs
-       (``DiffusionSpec.with_yaml_knobs``; a knob is read only where it is
-       used, never to derive another declaration), the loss weights and the
-       attention backend. Geometry is deliberately *not* here; it has to reach
+    4. Apply the overrides that are safe after the provider: the loss
+       weights and the attention backend. Geometry is deliberately *not* here; it has to reach
        the provider as an argument because visibility and the flow heads are
        derived from it (see ``_resolve_geometry``).
 
@@ -934,6 +937,9 @@ def build_world_model_spec(config: Any) -> WorldModelSpec:
     extras = getattr(config, "provider_kwargs", None)
     if callable(extras):
         kwargs.update(extras())
+    diffusion = _plain(getattr(config, "diffusion", None))
+    if diffusion:
+        kwargs["diffusion"] = diffusion
 
     spec = provider(**kwargs)
     if not isinstance(spec, WorldModelSpec):
@@ -941,9 +947,6 @@ def build_world_model_spec(config: Any) -> WorldModelSpec:
             f"provider(model_type={model_type!r}) returned "
             f"{type(spec).__name__}, it must return a WorldModelSpec"
         )
-    knobs = _plain(getattr(config, "diffusion", None))
-    if knobs:
-        spec = replace(spec, diffusion=spec.diffusion.with_yaml_knobs(knobs))
     spec = _apply_heads(spec, _plain(getattr(config, "heads", None)))
     return _apply_backend(spec, getattr(config, "attention_backend", None),
                           getattr(config, "attention_block_size", None))

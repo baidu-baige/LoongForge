@@ -291,10 +291,11 @@ class ArchModelConfig:
             derived from the geometry.
         streams: ``{stream: {scalar: value}}``, flattened to
             ``<stream>_<scalar>`` provider arguments (widths, layer counts).
-        diffusion: ``{stream: {knob: value}}``, written after the provider onto
-            the fields the stream's declared objects mark with ``yaml_knob``
-            (``DiffusionSpec.with_yaml_knobs``), e.g. ``UniformShift.shift``.
-            A stream with no knob (vpp2's constant video timestep) takes no entry.
+        diffusion: ``{stream: {knob: value}}``, passed to the provider as
+            ``diffusion=`` and resolved over its defaults before it builds the
+            stream's objects (``resolve_diffusion``), e.g. the shift of
+            ``UniformShift``. A stream with no knob (vpp2's constant video
+            timestep) takes no entry.
         heads: ``{head: {weight|warmup_steps|enabled}}``, applied to the loss
             term that consumes the head after the provider has run.
         attention_backend: Backend name, or ``None`` to keep the provider's

@@ -14,8 +14,8 @@ in YAML, only its **parameters** are (the people tuning them sweep repeatedly).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Literal, Protocol
+from dataclasses import dataclass
+from typing import Literal, Protocol
 
 import torch
 from torch import Tensor
@@ -24,32 +24,8 @@ from .broadcast import DEFAULT_PER_SAMPLE, BroadcastSpec
 
 __all__ = [
     "TimestepDistribution", "UniformShift", "LogitNormal", "BetaDist",
-    "Constant", "RngPolicy", "TimestepSampler", "YAML_KNOB", "yaml_knob",
+    "Constant", "RngPolicy", "TimestepSampler",
 ]
-
-YAML_KNOB = "yaml_knob"
-"""Field metadata key marking a field YAML may set as ``diffusion.<stream>.<field>``."""
-
-
-def yaml_knob(default: Any) -> Any:
-    """Declare a numeric field that YAML may set as ``diffusion.<stream>.<field>``.
-
-    ``DiffusionSpec.with_yaml_knobs`` writes the ``diffusion:`` section after
-    the provider has built the spec, so a knob is read only where it is used
-    or in its own ``__post_init__``: a provider that derived another value from
-    it would keep the stale one. Only float, int and bool fields can be knobs;
-    strings and implementation choices stay in the provider (R5). Defined here
-    because the distributions are its first users; other L3 objects, including
-    a model's own implementations, import it from here.
-
-    Args:
-        default: The field default. A provider passing a value overrides it,
-            and a YAML key, applied after the provider, overrides both.
-
-    Returns:
-        A ``dataclasses.field`` whose metadata carries ``YAML_KNOB``.
-    """
-    return field(default=default, metadata={YAML_KNOB: True})
 
 
 class TimestepDistribution(Protocol):
@@ -78,7 +54,7 @@ class UniformShift:
         shift: Reparameterisation strength; must be positive.
     """
 
-    shift: float = yaml_knob(1.0)   # [YAML] diffusion.<stream>.shift
+    shift: float = 1.0   # [YAML] diffusion.<stream>.shift, resolved by the provider (resolve_diffusion)
 
     def __post_init__(self) -> None:
         if self.shift <= 0:
@@ -122,8 +98,8 @@ class LogitNormal:
         std: Standard deviation of the underlying normal; must be positive.
     """
 
-    mean: float = yaml_knob(0.0)    # [YAML] diffusion.<stream>.mean
-    std: float = yaml_knob(1.0)     # [YAML] diffusion.<stream>.std
+    mean: float = 0.0    # [YAML] diffusion.<stream>.mean, read by the provider
+    std: float = 1.0     # [YAML] diffusion.<stream>.std, read by the provider
 
     def __post_init__(self) -> None:
         if self.std <= 0:
@@ -167,8 +143,8 @@ class BetaDist:
             existing scheduler.
     """
 
-    alpha: float = yaml_knob(1.0)   # [YAML] diffusion.<stream>.alpha
-    beta: float = yaml_knob(1.0)    # [YAML] diffusion.<stream>.beta
+    alpha: float = 1.0   # [YAML] diffusion.<stream>.alpha, read by the provider
+    beta: float = 1.0    # [YAML] diffusion.<stream>.beta, read by the provider
     eps: float = 1e-6           # denominator floor; same as scheduler's ``eps``
 
     def __post_init__(self) -> None:

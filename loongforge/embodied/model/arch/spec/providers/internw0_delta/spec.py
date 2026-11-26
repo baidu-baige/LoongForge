@@ -32,7 +32,7 @@ from ....visibility.combine import Visibility
 from ....visibility.phases import (CONDITION, REAL_VIDEO, Phase, phase_labels)
 from ....visibility.rules import frame_causal, label_edge, same_stream
 from ...core import Spec, register_provider
-from ...overrides import reject_config, resolve_geometry, resolve_scalars
+from ...overrides import reject_config, resolve_diffusion, resolve_geometry, resolve_scalars
 from ...world import WorldModelSpec
 from ..dual_stream_wan import STREAM_SCALAR_KEYS, _dual_stream_wan_streams
 
@@ -156,11 +156,10 @@ def _internw0_delta_visibility() -> dict[str, Visibility]:
 def _internw0_delta(config: Any = None, *,
                     geometry: Mapping[str, Any] | None = None,
                     condition_frames: int = 3,
-                    video_shift: float = 6.0,
-                    action_shift: float = 1.0,
                     inference_steps: int = 10,
                     action_width: int = 80,
                     proprio_dim: int = 80,
+                    diffusion: Mapping[str, Any] | None = None,
                     **stream_scalars: Any) -> WorldModelSpec:
     """Build the InternW0-Δ spec; ``--model-name internw0_delta``.
 
@@ -180,11 +179,12 @@ def _internw0_delta(config: Any = None, *,
         geometry: The YAML ``geometry:`` section, merged over the defaults.
         condition_frames: Leading clean condition frames, 3 today; the action
             stream reads ``condition_frames x tokens_per_frame`` video tokens.
-        video_shift: ``shift`` of the video ``UniformShift`` (6.0).
-        action_shift: ``shift`` of the action ``UniformShift`` (1.0).
         inference_steps: Euler steps at inference.
         action_width: Packed action dimension, 80 = 20 DoF x 4 chunks.
         proprio_dim: Raw proprioception width, 80 here.
+        diffusion: The YAML ``diffusion:`` section, resolved over this
+            provider's defaults before the samplers are built
+            (``resolve_diffusion``); ``None`` when YAML has none.
         **stream_scalars: Per-stream width and depth overrides.
 
     Returns:
@@ -264,10 +264,15 @@ def _internw0_delta(config: Any = None, *,
     # level to each token remains part of the training data path.
     # A separate ``[B, T]`` per-action-token path exists in the legacy RTC
     # branch, but it is disabled in the default topology.
+    #
+    # YAML may set the two shifts as ``diffusion.<stream>.shift``; any other
+    # key raises (§1.15).
+    diffusion_values = resolve_diffusion(
+        "internw0_delta", {"video": {"shift": 6.0}, "action": {"shift": 1.0}}, diffusion)
     diffusion = DiffusionSpec(
         timesteps={
-            "video": TimestepSampler(UniformShift(shift=video_shift)),
-            "action": TimestepSampler(UniformShift(shift=action_shift)),
+            "video": TimestepSampler(UniformShift(shift=diffusion_values["video"]["shift"])),
+            "action": TimestepSampler(UniformShift(shift=diffusion_values["action"]["shift"])),
         },
         # Five terms with weights 0.5, 1.0, 0.5, 0.1, and a 0.1 track
         # weight after warmup. The names below are the loss table keys.

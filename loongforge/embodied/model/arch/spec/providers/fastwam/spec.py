@@ -30,7 +30,7 @@ from ....visibility.combine import Visibility
 from ....visibility.presets import get_preset
 from ....visibility.rules import prefix_only, same_stream, stream_edge
 from ...core import Spec, register_provider
-from ...overrides import reject_config, resolve_geometry, resolve_scalars
+from ...overrides import reject_config, resolve_diffusion, resolve_geometry, resolve_scalars
 from ...world import WorldModelSpec
 from ..dual_stream_wan import STREAM_SCALAR_KEYS, _dual_stream_wan_streams
 
@@ -108,6 +108,7 @@ def _fastwam(config: Any = None, *,
              inference_steps: int = 20,
              action_width: int = 7,
              proprio_dim: int | None = 8,
+             diffusion: Mapping[str, Any] | None = None,
              **stream_scalars: Any) -> WorldModelSpec:
     """Build the fastwam spec; ``--model-name fastwam``.
 
@@ -157,6 +158,9 @@ def _fastwam(config: Any = None, *,
             stream and output width of the ``action_flow`` head.
         proprio_dim: Raw proprioception width, or ``None`` to drop the
             proprioception condition entirely.
+        diffusion: The YAML ``diffusion:`` section, resolved over this
+            provider's defaults before the samplers are built
+            (``resolve_diffusion``); ``None`` when YAML has none.
         **stream_scalars: Per-stream width and depth overrides.
 
     Returns:
@@ -207,12 +211,13 @@ def _fastwam(config: Any = None, *,
         action_dim=action_width,
     ), geometry)
 
+    # YAML may set the two shifts as ``diffusion.<stream>.shift``; any other
+    # key raises (§1.15).
+    diffusion_values = resolve_diffusion("fastwam", {"video": {"shift": 5.0}, "action": {"shift": 1.0}}, diffusion)
     diffusion = DiffusionSpec(
         timesteps={
-            # YAML sets the two shifts as ``diffusion.<stream>.shift``
-            # (``DiffusionSpec.with_yaml_knobs``).
-            "video": TimestepSampler(UniformShift(shift=5.0)),
-            "action": TimestepSampler(UniformShift(shift=1.0)),
+            "video": TimestepSampler(UniformShift(shift=diffusion_values["video"]["shift"])),
+            "action": TimestepSampler(UniformShift(shift=diffusion_values["action"]["shift"])),
         },
         # ``lambda_video`` and ``lambda_action`` are both 1.0 (``:116-118``).
         # Both terms are master ``training_loss`` (``mot/fastwam.py:508-635``):

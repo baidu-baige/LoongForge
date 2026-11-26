@@ -32,7 +32,7 @@ from ....visibility.combine import Visibility
 from ....visibility.phases import CONDITION, Phase, phase_labels
 from ....visibility.rules import label_edge, same_stream
 from ...core import Spec, register_provider
-from ...overrides import reject_config, resolve_geometry, resolve_scalars
+from ...overrides import reject_config, resolve_diffusion, resolve_geometry, resolve_scalars
 from ...world import WorldModelSpec
 from ..dual_stream_wan import STREAM_SCALAR_KEYS, _dual_stream_wan_streams
 
@@ -121,6 +121,7 @@ def _vpp2(config: Any = None, *,
           inference_steps: int = 10,
           action_width: int = 7,
           proprio_dim: int = 8,
+          diffusion: Mapping[str, Any] | None = None,
           **stream_scalars: Any) -> WorldModelSpec:
     """Build the VPP2 spec; this is what ``--model-name vpp2`` resolves to.
 
@@ -177,6 +178,9 @@ def _vpp2(config: Any = None, *,
         action_width: Packed action dimension, both the action stream's entry
             width and the ``action_flow`` head's output width.
         proprio_dim: Raw proprioception width before the token encoder.
+        diffusion: The YAML ``diffusion:`` section, resolved over this
+            provider's defaults before the samplers are built
+            (``resolve_diffusion``); ``None`` when YAML has none.
         **stream_scalars: Per-stream width and depth overrides, validated
             against ``STREAM_SCALAR_KEYS``.
 
@@ -248,6 +252,10 @@ def _vpp2(config: Any = None, *,
     #    (``libero_action_model.py:578-610``), and casts each t to the sample
     #    dtype before noising (``scheduler.py:sample_training_t``).
     master_rng = RngPolicy(order="noise_first", sigma_dtype="like_sample")
+    # YAML may set the action shift as ``diffusion.action.shift``; any other
+    # key raises (§1.15). The video timestep is the constant below, so the
+    # table has no ``video`` entry.
+    diffusion_values = resolve_diffusion("vpp2", {"action": {"shift": 5.0}}, diffusion)
     diffusion = DiffusionSpec(
         timesteps={
             # video: ``train_sampling_strategy: pure_noise``
@@ -271,8 +279,8 @@ def _vpp2(config: Any = None, *,
             # "two distributions for one stream, train vs infer" would need
             # another field on DiffusionSpec; add it when some model actually
             # runs the video stream at inference. YAML sets this shift as
-            # ``diffusion.action.shift`` (``DiffusionSpec.with_yaml_knobs``).
-            "action": TimestepSampler(UniformShift(shift=5.0), rng=master_rng),
+            # ``diffusion.action.shift`` (the table above).
+            "action": TimestepSampler(UniformShift(shift=diffusion_values["action"]["shift"]), rng=master_rng),
         },
         # ``lambda_video`` and ``lambda_action`` are both 1.0
         # (``train_action.yaml:217-218``)

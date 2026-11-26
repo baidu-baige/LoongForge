@@ -16,8 +16,8 @@ which fails silently rather than loudly when it breaks:
    steal ``fastwam`` from ``FastWAMPolicy``.
 4. The shell really converts a pixel batch into ``(loss, metrics)`` — with stub
    encoders, because the real VAE allocates its normalisation buffers on CUDA.
-5. Each ``diffusion:`` key lands on a field the provider declared with
-   ``yaml_knob``; a key that lands nowhere raises when the spec is built.
+5. Each ``diffusion:`` key is one the provider lists for ``resolve_diffusion``
+   before it builds the object; any other key raises when the spec is built.
 """
 
 from __future__ import annotations
@@ -38,9 +38,9 @@ from loongforge.embodied.model.arch.factory import (ArchModelConfig,
                                                     InternW0DeltaArchModel,
                                                     Vpp2ArchModel, Vpp2Config)
 from loongforge.embodied.model.arch.diffusion.loss import WeightRamp
-from loongforge.embodied.model.arch.diffusion.timesteps import (
-    TimestepSampler, UniformShift, yaml_knob)
+from loongforge.embodied.model.arch.diffusion.timesteps import UniformShift
 from loongforge.embodied.model.arch.spec.core import Spec
+from loongforge.embodied.model.arch.spec.overrides import resolve_diffusion
 from loongforge.embodied.model.arch.spec.world import WorldModelSpec
 from loongforge.embodied.model.arch.streams.engine import JointAttentionEngine
 from loongforge.embodied.model.arch.towers import build_wan_clip, build_wan_vae
@@ -590,14 +590,15 @@ def test_yaml_shift_reaches_the_sampler_and_the_bsmntw_weight():
 
 
 @pytest.mark.parametrize("override, error, message", [
-    ("diffusion.video.shift=3.0", ValueError, "diffusion.video.shift: stream 'video' has no YAML knobs"),
+    ("diffusion.video.shift=3.0", ValueError, "diffusion.video.shift: stream 'video' has no diffusion keys"),
     ("diffusion.action.num_layers=2", ValueError,
-     "diffusion.action.num_layers is not a knob of stream 'action'"),
-    ("diffusion.action.weight=0.5", ValueError, "diffusion.action.weight is not a knob of stream 'action'"),
-    ("diffusion.proprio.shift=1.0", ValueError, "diffusion.proprio: stream 'proprio' draws no timestep"),
+     "diffusion.action.num_layers is not a diffusion key of stream 'action'"),
+    ("diffusion.action.weight=0.5", ValueError,
+     "diffusion.action.weight is not a diffusion key of stream 'action'"),
+    ("diffusion.proprio.shift=1.0", ValueError, "diffusion.proprio.shift: stream 'proprio' has no diffusion keys"),
     ("diffusion.action.shift=true", TypeError, "diffusion.action.shift must be float, got bool"),
     ("diffusion.action.shift=0", ValueError,
-     "diffusion.action.shift=0: UniformShift.shift must be positive"),
+     "UniformShift.shift must be positive, got 0.0"),
     ("streams.action.shift=3.0", ValueError, "does not consume ['action_shift']"),
 ])
 def test_a_diffusion_key_that_lands_nowhere_fails_at_build(override, error, message):
@@ -615,8 +616,8 @@ def test_a_diffusion_key_that_lands_nowhere_fails_at_build(override, error, mess
 class _CappedShift:
     """Stand-in for a distribution a model writes in its own directory."""
 
-    shift: float = yaml_knob(3.0)    # diffusion.<stream>.shift
-    t_max: float = yaml_knob(0.95)   # diffusion.<stream>.t_max
+    shift: float = 3.0
+    t_max: float = 0.95
 
     def sample(self, shape, *, device, dtype):
         u = torch.rand(shape, device=device, dtype=dtype)
@@ -624,29 +625,50 @@ class _CappedShift:
 
 
 def test_a_model_owned_distribution_gets_its_keys_without_common_code():
-    """Marking a field with ``yaml_knob`` is all a new distribution needs."""
-    diffusion = tiny_spec("fastwam").diffusion
-    diffusion = replace(diffusion, timesteps={**diffusion.timesteps,
-                                              "video": TimestepSampler(_CappedShift())})
-    assert diffusion.yaml_knobs("video") == {"shift": 3.0, "t_max": 0.95}
-    moved = diffusion.with_yaml_knobs({"video": {"t_max": 0.9}})
-    assert moved.sampler_for("video").distribution == _CappedShift(t_max=0.9)
-    assert list(moved.timesteps) == list(diffusion.timesteps)    # the draw order is kept
+    """A new distribution needs no marker: its provider lists the keys for ``resolve_diffusion``.
+
+    YAML overrides the provider's value before the one construction, and the
+    provider's table is left as it was.
+    """
+    defaults = {"video": {"shift": 2.0, "t_max": 0.95}}
+    values = resolve_diffusion("toy", defaults, {"video": {"t_max": 0.9}})
+    assert _CappedShift(**values["video"]) == _CappedShift(shift=2.0, t_max=0.9)
+    assert defaults == {"video": {"shift": 2.0, "t_max": 0.95}}
+    assert resolve_diffusion("toy", defaults, None) == defaults
 
 
-@dataclass(frozen=True)
-class _TwoShifts:
-    """A distribution nesting two ``UniformShift``, so ``shift`` names two fields."""
+def test_a_key_type_follows_its_default():
+    """The default's type is the key's type: an int key refuses a float, a float key takes an int."""
+    defaults = {"action": {"num_steps": 10, "shift": 5.0}}
+    with pytest.raises(TypeError, match=re.escape("diffusion.action.num_steps must be int, got float 4.0")):
+        resolve_diffusion("toy", defaults, {"action": {"num_steps": 4.0}})
+    assert resolve_diffusion("toy", defaults, {"action": {"shift": 3}})["action"]["shift"] == 3.0
+    with pytest.raises(TypeError, match=re.escape("default for diffusion.action.other: a diffusion key is float")):
+        resolve_diffusion("toy", {"action": {"other": None}}, None)
 
-    first: UniformShift = UniformShift(2.0)
-    second: UniformShift = UniformShift(3.0)
 
-    def sample(self, shape, *, device, dtype):
-        return self.first.sample(shape, device=device, dtype=dtype)
+def test_diffusion_blocks_reject_unknown_empty_streams_and_non_mappings():
+    """Stream-block shape and empty-block rules match ``streams:`` and ``heads:``.
 
-
-def test_one_stream_cannot_declare_a_knob_twice():
-    """``diffusion.<stream>.shift`` must name one field, checked at construction (V10)."""
-    diffusion = tiny_spec("fastwam").diffusion
-    with pytest.raises(ValueError, match=re.escape("knob 'shift' is declared twice")):
-        replace(diffusion, timesteps={**diffusion.timesteps, "video": TimestepSampler(_TwoShifts())})
+    An empty block on a valid stream keeps its defaults, whereas an empty block
+    on an unknown or key-free stream still raises so ``diffusion: {actoin: {}}``
+    cannot pass silently. ``None`` and lists are rejected as non-mappings, and
+    unknown or legal key lists are sorted deterministically.
+    """
+    defaults = {"video": {"t_max": 0.95, "shift": 2.0}, "action": {"shift": 5.0}}
+    assert resolve_diffusion("toy", defaults, {"action": {}}) == defaults
+    assert load_config_with("vpp2", "diffusion.action={}").build_spec().diffusion.sampler_for(
+        "action").distribution == UniformShift(shift=5.0)
+    with pytest.raises(ValueError, match=re.escape("diffusion.actoin: stream 'actoin' has no diffusion keys")):
+        resolve_diffusion("toy", defaults, {"actoin": {}})
+    with pytest.raises(ValueError, match=re.escape("diffusion.video: stream 'video' has no diffusion keys")):
+        load_config_with("vpp2", "diffusion.video={}").build_spec()
+    for bad in (None, [1.0], True):
+        with pytest.raises(TypeError, match=re.escape(f"diffusion.action must be a mapping, got {type(bad).__name__}")):
+            resolve_diffusion("toy", defaults, {"action": bad})
+    with pytest.raises(TypeError, match=re.escape("diffusion must be a mapping, got list")):
+        resolve_diffusion("toy", defaults, ["action"])  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match=re.escape(
+            "diffusion.video got unknown keys ['alpha', 'zeta'] of stream 'video'; "
+            "legal diffusion keys are ['shift', 't_max']")):
+        resolve_diffusion("toy", defaults, {"video": {"zeta": 1.0, "alpha": 2.0}})

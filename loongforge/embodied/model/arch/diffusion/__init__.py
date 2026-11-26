@@ -15,7 +15,7 @@ from .stepping import (EulerSampler, Sampler, SteppingGate, Trajectory,
                        UniformSteps)
 from .timesteps import (
     BetaDist, Constant, LogitNormal, RngPolicy, TimestepDistribution,
-    TimestepSampler, UniformShift, yaml_knob,
+    TimestepSampler, UniformShift,
 )
 
 __all__ = [
@@ -23,7 +23,7 @@ __all__ = [
     "DiffusionSpec",
     # timesteps
     "TimestepDistribution", "TimestepSampler", "RngPolicy",
-    "UniformShift", "LogitNormal", "BetaDist", "Constant", "yaml_knob",
+    "UniformShift", "LogitNormal", "BetaDist", "Constant",
     # schedule
     "NoiseSchedule", "RectifiedFlow", "ConstantSigma",
     # loss

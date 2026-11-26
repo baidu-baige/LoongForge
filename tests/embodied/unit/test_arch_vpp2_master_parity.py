@@ -87,11 +87,11 @@ def _tiny_spec(action_shift: float, horizon: int = HORIZON):
     spec = get_provider("vpp2")(action_width=ACTION_DIM, **SCALARS, geometry=dict(
         frame_height=4 * geo.vae_spatial_stride, frame_width=4 * geo.vae_spatial_stride,
         num_frames=1 + geo.vae_temporal_stride, action_horizon=horizon,
-        action_video_freq_ratio=2 if horizon % 2 == 0 else 1, action_dim=ACTION_DIM))
+        action_video_freq_ratio=2 if horizon % 2 == 0 else 1, action_dim=ACTION_DIM),
+        diffusion={"action": {"shift": action_shift}})
     losses = tuple(replace(loss, enabled=False) if loss.head == "video_flow" else loss
                    for loss in spec.diffusion.losses)
-    diffusion = spec.diffusion.with_yaml_knobs({"action": {"shift": action_shift}})
-    return replace(spec, diffusion=replace(diffusion, losses=losses))
+    return replace(spec, diffusion=replace(spec.diffusion, losses=losses))
 
 
 def _tiny_model(action_shift: float, horizon: int = HORIZON) -> WorldModel:
