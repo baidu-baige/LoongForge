@@ -49,6 +49,10 @@ from loongforge.embodied.data.datasets.lingbot_vla_v2.transforms.data_configurat
     LingbotVLAV2DataConfig,
 )
 
+from loongforge.embodied.data.datasets.vpp2.transforms.data_configuration_vpp2 import (
+    VPP2DataConfig,
+)
+
 from loongforge.embodied.model.arch.factory import (
     InternW0DeltaConfig,
     Vpp2Config,
@@ -111,10 +115,12 @@ MODEL_SCHEMA = {
     "giga_brain07": ModelSchema(
         "giga_brain07.yaml", GigaBrain07ModelConfig, GigaBrain07DataConfig
     ),
-    # Five-layer ``arch`` world models. They reuse FastWAMDataConfig because
-    # they consume the same pixel-space batch; what differs is the model side,
-    # and that difference is entirely inside the per-model config subclass.
-    "vpp2": ModelSchema("arch/vpp2.yaml", Vpp2Config, FastWAMDataConfig),
+    # Five-layer ``arch`` world models. InternW0Delta reuses FastWAMDataConfig
+    # because it consumes the same pixel-space batch. VPP2 now runs master's
+    # data package, so it takes master's VPP2DataConfig: raw-frame/ratio
+    # geometry, text-embedding cache and norm stats live there, not in the
+    # FastWAM config.
+    "vpp2": ModelSchema("arch/vpp2.yaml", Vpp2Config, VPP2DataConfig),
     "internw0_delta": ModelSchema(
         "arch/internw0_delta.yaml", InternW0DeltaConfig, FastWAMDataConfig
     ),
