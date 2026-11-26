@@ -1,6 +1,6 @@
 # RoboTwin Evaluation
 
-RoboTwin is a dual-arm tabletop manipulation benchmark. The LoongForge eval module reuses RoboTwin's official evaluator, which calls the policy through a plugin (the `action_bridge` protocol). Three model × bridge combinations reach task success.
+RoboTwin is a dual-arm tabletop manipulation benchmark. The LoongForge eval module reuses RoboTwin's official evaluator, which calls the policy through a plugin (the `action_bridge` protocol). Four model × bridge combinations reach task success.
 
 ## Step 0: Download weights
 
@@ -9,6 +9,7 @@ RoboTwin is a dual-arm tabletop manipulation benchmark. The LoongForge eval modu
 | pi05 | [motus-robotics/pi0.5_robotwin2](https://huggingface.co/motus-robotics/pi0.5_robotwin2) (openpi `norm_stats`, see §2 Run evaluation below) |
 | xvla | [2toINF/X-VLA-RoboTwin2](https://huggingface.co/2toINF/X-VLA-RoboTwin2) |
 | LingBot-VA | [robbyant/lingbot-va-posttrain-robotwin](https://huggingface.co/robbyant/lingbot-va-posttrain-robotwin) (one root with `transformer/` + `vae/` + `text_encoder/` + `tokenizer/`) |
+| LingBot-VLA v2 | [robbyant/lingbot-vla-v2-6b-robotwin](https://huggingface.co/robbyant/lingbot-vla-v2-6b-robotwin) (`checkpoints/global_step_<n>/hf_ckpt` + `lingbotvla_cli.yaml` three levels up) plus [Qwen/Qwen3-VL-4B-Instruct](https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct) for the tokenizer/processor config |
 
 ## Step 1: Environment setup
 
@@ -36,6 +37,7 @@ cd /path/to/LoongForge-VLA
 examples/embodied/pi05/eval/run_robotwin_eval.sh    # pi05, action_bridge: pi05_aloha_14d
 examples/embodied/xvla/eval/run_robotwin_eval.sh    # xvla, action_bridge: ee6d_dual
 examples/embodied/lingbot_va/eval/run_robotwin_eval.sh    # LingBot-VA, action_bridge: lingbot_va_ee_quat_16d (default config: robotwin_50tasks.yaml)
+examples/embodied/lingbot_vla_v2/eval/run_robotwin_eval.sh    # LingBot-VLA v2, action_bridge: lingbot_vla_v2_joint14 (default config: adjust_bottle_smoke.yaml)
 ```
 
 Environment variables: `CONFIG`, `BENCHMARK_PYTHON`, `CUDA_VISIBLE_DEVICES`, plus the SAPIEN Vulkan variables (`LD_LIBRARY_PATH` / `VK_ICD_FILENAMES`).
@@ -49,6 +51,7 @@ Key config fields (see `examples/embodied/<model>/eval/configs/robotwin/adjust_b
 | `pi05_aloha_14d` | pi05 | openpi Aloha joint protocol; `model.action_dim: 14`, `action_horizon: 32` |
 | `ee6d_dual` | xvla | X-VLA dual-arm end-effector protocol; `model.domain_id: 6` |
 | `lingbot_va_ee_quat_16d` | LingBot-VA | 16-D dual-arm end-effector pose relative to the episode's initial pose, no proprio input; the community protocol also needs `benchmark.instruction_type: seen` (already set in `robotwin_50tasks.yaml`, see [LingBot-VA quick start](../../quick_start_lingbot_va.md)) |
+| `lingbot_vla_v2_joint14` | LingBot-VLA v2 | Absolute 14-D joint qpos, three raw RGB views and the float64 `joint_action.vector` in; the community protocol needs `benchmark.instruction_type: unseen` and FP32 inference (`server.use_bf16: false`). The community client replans once per 50-step chunk, so the shipped configs set `benchmark.return_action_chunk: true` + `skip_intra_chunk_obs: true` and leave `chunk_execute_steps` unset: one request and one camera render per chunk instead of per env step (~6x on long tasks) |
 
 - pi05 + RoboTwin additionally needs `server.dataset_statistics_path` pointing at a stats file derived from the weights' openpi `norm_stats.json`; a ready-made copy ships at `examples/embodied/pi05/eval/assets/pi05_robotwin2_dataset_stats.json`. To regenerate from another openpi-style weights:
 
@@ -68,6 +71,7 @@ Key config fields (see `examples/embodied/<model>/eval/configs/robotwin/adjust_b
 | pi05 | ✅ task success | `adjust_bottle demo_clean`, `action_bridge=pi05_aloha_14d` |
 | xvla | ✅ task success | `adjust_bottle demo_clean`, `action_bridge=ee6d_dual`, `domain_id=6` |
 | LingBot-VA | ✅ task success | 50 tasks × 50 eps with LoongForge-trained 50000-step weights: Easy 2189/2500 (87.6%), Hard 2143/2500 (85.7%) |
+| LingBot-VLA v2 | ✅ reproduces the published numbers | 50 tasks × 100 eps with the official 50000-step SFT weights: `demo_clean` 4675/5000 (93.50%) vs 93.52% published, `demo_randomized` 4640/5000 (92.80%) vs 92.80% published. See [LingBot-VLA v2: correctness and parallel settings](#lingbot-vla-v2-correctness-and-parallel-settings) |
 
 ## Outputs
 
@@ -83,7 +87,9 @@ benchmark client is unchanged. Background: [Parallel evaluation](../parallel_eva
 examples/embodied/pi05/eval/run_robotwin_eval_parallel.sh
 ```
 
-Start from `configs/robotwin/robotwin_pi05_parallel.yaml`. The RoboTwin-specific switches:
+Start from `configs/robotwin/robotwin_pi05_parallel.yaml` (LingBot-VLA v2 has its own
+template and measured settings: [LingBot-VLA v2](#lingbot-vla-v2-correctness-and-parallel-settings)).
+The RoboTwin-specific switches:
 
 | Key | Value in the parallel config | Why |
 |---|---|---|
@@ -159,6 +165,50 @@ The cache is per `task_config`: `demo_clean` and `demo_randomized` have differen
 so they admit different seeds and record different `arm_tag`/`origin_z` values. The file
 name carries only the task (`<task>.pkl`), so scan a randomized run into its **own**
 directory — pointing it at the clean cache overwrites it.
+
+## LingBot-VLA v2: correctness and parallel settings
+
+Template: `examples/embodied/lingbot_vla_v2/eval/configs/robotwin/robotwin_50tasks_parallel.yaml`,
+launched with `run_robotwin_eval_parallel.sh`. Protocol identical to the serial
+`robotwin_50tasks.yaml` (start seed 100000, 100 expert-valid episodes per task,
+`instruction_type: unseen`, official per-task step limits, FP32 + `torch.compile`,
+50-step chunks), so the two paths are directly comparable.
+
+Measured on 8×A800-80GB with **8 CPU cores**, official 50000-step SFT weights:
+
+| | `demo_clean` | `demo_randomized` |
+|---|---|---|
+| parallel path (this template) | **4675/5000 = 93.50%** | **4640/5000 = 92.80%** |
+| serial path, one process per task, online expert check | 4649/5000 = 92.98% | 4649/5000 = 92.98% |
+| community reference implementation, same pod | 4671/5000 = 93.42% | 4639/5000 = 92.78% |
+| published | 93.52% | 92.80% |
+| end to end | 88.9 min (worker 86.9 min) | 104.3 min (worker 101.4 min) |
+| coverage | 5000/5000, `validation.ok`, 0 repair rounds | 5000/5000, `validation.ok`, 1 repair round |
+
+Every per-task gap against both reference runs stays inside the two-sample binomial 99%
+band, and the pooled gaps are within 0.6 pt of all three references (parallel vs published: −0.02 pt clean, 0.00 pt randomized). The seed sets are
+*not* identical across runs and are not expected to be: the official online expert check
+is not reproducible across processes — two runs of the same protocol on the same pod
+differed on about 300 of 5000 seeds, and the offline cache differs from either by the same
+order. For `demo_randomized` 5 cached seeds turned out unstable at consume time; 4 took a
+replacement seed through the official expert pass and 1 was covered by the repair round
+(see [Offline expert check](#offline-expert-check)).
+
+Settings behind those runs:
+
+| Key | Value | Why |
+|---|---|---|
+| `pools.gpu_sim.n_sims_per_server` | 4 | An N sweep (`calibrate.py`, 24 of the 400-step tasks) plateaued around N≈5 on this 8-core host; N=4 trades ~5% throughput for VRAM headroom (sampled peak 55 GB clean / 61 GB randomized per card) |
+| `benchmark.episodes_per_chunk` | 25 | 50×100 episodes over 32 slots: a few units per slot so `lpt_long` can refill freed ones |
+| `benchmark.plan_order` + `long_task_steps` + `long_task_episodes_per_chunk` | `lpt_long`, 1200, 10 | The 1200/1500/1700-step tasks set the makespan; front-loading them with a finer chunk keeps the tail short |
+| `benchmark.sim_cpu_threads` | 1 | 32 sims on 8 cores — the per-process thread pools otherwise oversubscribe the host |
+| `benchmark.offline_expert_check` | scan directory | Removes the per-episode expert rollout and the second `setup_demo`; scan once per `task_config` with `offline_expert_check_scan_shards: 1` so the cached seeds are the ones the online check would admit |
+| `return_action_chunk` / `skip_intra_chunk_obs` | on, `chunk_execute_steps` unset | The community client replans once per 50-step chunk; with these on the client owns the chunk, so the cameras are rendered once per chunk instead of once per env step. The `take_action` sequence is unchanged — `take_action` is a no-op once `eval_success` or `step_lim` is reached |
+| `server.batching` | off | One request per 50 env steps: the batcher never fills, and inference is 3–4% of an episode |
+
+`N` is CPU-bound on a small host. On a machine with many more cores, raise `N` (and
+`episodes_per_chunk` with it) and re-measure with
+`orchestrator/calibration/calibrate.py`; see [Parallel evaluation](../parallel_eval.md).
 
 ## FastWAM: batching is the lever, N is not
 
