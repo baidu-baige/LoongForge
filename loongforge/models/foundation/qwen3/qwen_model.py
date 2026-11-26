@@ -274,7 +274,9 @@ class Qwen3Model(BaseGPTModel):
                         "chunkpipe_chunk_idx_in_group is not set. "
                         "Please ensure the scheduler is properly configured for chunkpipe."
                     )
-                chunk_offset = self.config.chunkpipe_chunk_idx_in_group * self.config.chunksize
+                # Start token index of this chunk = prefix-sum offset. Uniform mode:
+                # cu_chunks[idx] == idx * chunksize.
+                chunk_offset = self.config.cu_chunks[self.config.chunkpipe_chunk_idx_in_group]
             rotary_pos_emb = self.rotary_pos_emb(
                 rotary_seq_len,
                 offset=chunk_offset,
