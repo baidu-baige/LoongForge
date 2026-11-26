@@ -1,13 +1,15 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""The nine basic L1 visibility rules (Lane A).
+"""The ten basic L1 visibility rules (Lane A).
 
 The signatures follow ``docs/design/mot_layer_interfaces.zh-CN.md`` §3.3.
 
 Every rule declares which labels it reads; **if a label is absent the rule
 degrades to ``ALWAYS_VISIBLE``** rather than raising, which is what lets one
-visibility expression be reused across models.
+visibility expression be reused across models. ``label_edge`` is the single
+exception and says why in its own docstring: a two-sided selector has no
+meaningful degraded form.
 
 Three implementation conventions; every property of L1 hangs off them:
 
@@ -25,6 +27,8 @@ Three implementation conventions; every property of L1 hangs off them:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import torch
 from torch import Tensor
 
@@ -32,7 +36,7 @@ from ..layout import LabelView
 from .combine import Visibility, from_predicate
 
 __all__ = [
-    "same_stream", "stream_edge", "chunk_causal", "frame_causal",
+    "same_stream", "stream_edge", "label_edge", "chunk_causal", "frame_causal",
     "prefix_only", "noise_gate", "same_sample", "history", "block_coupling",
 ]
 
@@ -66,6 +70,25 @@ def _stream_code(view: LabelView, name: str, *, rule: str) -> int:
             f"existing streams are {list(names)}"
         )
     return names.index(name)
+
+
+def _in_values(labels: Tensor, values: tuple[int, ...]) -> Tensor:
+    """Elementwise test for membership of ``labels`` in a fixed value set.
+
+    The reduction is over the **value set**, not over [Q, K]: ``values`` is
+    known at construction time, so this unrolls to ``len(values)`` broadcast
+    comparisons and an ``or``, which keeps the ``mask_mod`` path alive
+    (convention 1 in the module docstring).
+
+    Args:
+        labels: Label slice shaped [L, 1] (query side) or [1, L] (key side).
+        values: Accepted label values.
+
+    Returns:
+        A bool tensor shaped like ``labels``.
+    """
+    probe = torch.as_tensor(values, dtype=labels.dtype, device=labels.device)
+    return (labels == probe.reshape(-1, *([1] * labels.ndim))).any(0)
 
 
 def same_stream() -> Visibility:
@@ -114,6 +137,61 @@ def stream_edge(src: str, dst: str) -> Visibility:
         src_code = _stream_code(k, src, rule="stream_edge")
         dst_code = _stream_code(q, dst, rule="stream_edge")
         return (q.get("stream_id") == dst_code) & (k.get("stream_id") == src_code)
+    return rule
+
+
+def label_edge(label: str, src: Sequence[int],
+               dst: Sequence[int]) -> Visibility:
+    """Reads ``label``. Keys labelled ``src`` are visible to queries ``dst``.
+
+    The generalization of ``stream_edge``, which is this rule specialized to
+    ``label="stream"`` with single-element value sets. It is the only rule that
+    selects on the **query** side alone: ``prefix_only`` / ``noise_gate`` /
+    ``history`` test keys only, and ``same_stream`` / ``frame_causal`` /
+    ``chunk_causal`` are relational. Without it, "two groups of rows inside one
+    stream obey different intra-stream rules" cannot be written down — which is
+    exactly what InternW0-Delta's condition rows and noisy-future rows need
+    (``frame_attention.py:27-31`` versus ``:35``).
+
+    **A missing label raises instead of degrading to all True.** The other rules
+    can degrade because they express a restriction, so losing them only widens
+    the mask by one term. This rule is a selector: a visibility written as a
+    disjunction of seven ``label_edge`` terms would degrade to a fully visible
+    mask without any error. The narrow form of that failure has already
+    happened once with ``noise_level`` never being attached (``layout.py:255``).
+
+    Args:
+        label: Label both sides are tested against.
+        src: Label values whose keys become visible.
+        dst: Label values whose queries get to see them.
+
+    Returns:
+        The directed label-edge visibility.
+
+    Raises:
+        ValueError: If either value set is empty, which would make the term
+            dead rather than merely narrow.
+    """
+    src_values = tuple(int(value) for value in src)
+    dst_values = tuple(int(value) for value in dst)
+    if not src_values or not dst_values:
+        raise ValueError(
+            f"visibility.rules.label_edge({label!r}): src and dst must be "
+            f"non-empty; got src={list(src_values)} dst={list(dst_values)}"
+        )
+    expr = f"label_edge({label!r}, {list(src_values)}, {list(dst_values)})"
+
+    @from_predicate(expr)
+    def rule(q: LabelView, k: LabelView) -> Tensor:
+        if not q.has(label):
+            raise KeyError(
+                f"visibility.rules.label_edge: layout has no label {label!r}; "
+                f"existing labels are {sorted(q.layout.labels)}. Unlike the "
+                f"other rules this one does not degrade to all True, because "
+                f"a selector that degrades opens the mask silently"
+            )
+        return (_in_values(q.get(label), dst_values)
+                & _in_values(k.get(label), src_values))
 
     return rule
 

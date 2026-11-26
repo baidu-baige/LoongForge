@@ -277,14 +277,19 @@ class WanDiTStream(nn.Module):
 
         Args:
             x: Raw stream input for ``_embed``.
-            timestep: ``[B]`` timesteps; required iff ``needs_timestep``.
+            timestep: ``[B]`` timesteps; required iff ``needs_timestep``. A
+                stream declaring ``token_timestep`` also accepts the
+                per-frame form its ``_expand_timestep`` documents.
             conditions: Condition bus; required if the stream declares
                 cross-attention or channel-concat conditions.
 
         Returns:
             A ``StreamState`` with hidden tokens, optional modulation, and
             ``extras`` holding ``cross_kv`` and, when applicable,
-            ``timestep_embedding``.
+            ``t_embed``. Without ``token_timestep`` the modulation is
+            ``[B, slots, W]`` and ``t_embed`` is ``[B, W]``; with it they
+            gain a token axis and become ``[B, L, slots, W]`` and
+            ``[B, L, W]``.
 
         Raises:
             ValueError: If the entry output width differs from
@@ -299,7 +304,10 @@ class WanDiTStream(nn.Module):
                 f"{tokens.shape[-1]} but "
                 f"residual_width={self.spec.residual_width}"
             )
-        extras: dict[str, Any] = {"cross_kv": self._embed_context(conditions)}
+        context, context_key_valid = self._embed_context(conditions)
+        extras: dict[str, Any] = {"cross_kv": context}
+        if context_key_valid:
+            extras["cross_kv_mask"] = context_key_valid
         modulation: Tensor | None = None
         if self.time_embedding is None:
             if timestep is not None:
@@ -317,10 +325,13 @@ class WanDiTStream(nn.Module):
                 )
             assert self.spec.timestep_embed_width is not None
             assert self.time_projection is not None
-            timestep_embedding = self.time_embedding(sinusoidal_embedding(
-                self.spec.timestep_embed_width, timestep.reshape(-1)))
-            extras["timestep_embedding"] = timestep_embedding
-            modulation = self.time_projection(timestep_embedding).unflatten(
+            values = self._expand_timestep(timestep)
+            t_embed = self.time_embedding(sinusoidal_embedding(
+                self.spec.timestep_embed_width, values.reshape(-1)))
+            if self.spec.token_timestep is not None:
+                t_embed = t_embed.unflatten(0, tuple(values.shape))
+            extras["t_embed"] = t_embed
+            modulation = self.time_projection(t_embed).unflatten(
                 -1, (self.spec.modulation_slots.width, self.spec.residual_width))
         return StreamState(stream=self.spec.name, hidden=tokens,
                            modulation=modulation, extras=extras)
@@ -341,7 +352,8 @@ class WanDiTStream(nn.Module):
             state.hidden, attn_out,
             gate_msa=slots["gate_msa"], shift_mlp=slots["shift_mlp"],
             scale_mlp=slots["scale_mlp"], gate_mlp=slots["gate_mlp"],
-            context=state.extras.get("cross_kv", {}))
+            context=state.extras.get("cross_kv", {}),
+            context_key_valid=state.extras.get("cross_kv_mask"))
         return state.replace_hidden(hidden)
 
     def finalize(self, state: StreamState) -> StreamState:
@@ -360,10 +372,40 @@ class WanDiTStream(nn.Module):
 
     # ---- internals ----
 
-    def _embed_context(self, bus: ConditionBus | None) -> dict[str, Tensor]:
+    def _expand_timestep(self, timestep: Tensor) -> Tensor:
+        """Return the timestep values the modulation is built from.
+
+        The base behaviour is the per-sample one: ``[B]`` passes through
+        untouched. Per-token modulation needs a token axis to broadcast
+        along, which only a concrete stream geometry can supply, so the
+        stream implementation that has one overrides this.
+
+        Args:
+            timestep: The timestep as ``prepare`` received it.
+
+        Returns:
+            The values to embed, of any shape; ``prepare`` restores that
+            shape after the flattened sinusoidal embedding.
+
+        Raises:
+            ValueError: If the spec declares ``token_timestep`` but this
+                implementation only supports the per-sample form.
+        """
+        if self.spec.token_timestep is None:
+            return timestep
+        raise ValueError(
+            f"stream {self.spec.name!r} declares token_timestep but its "
+            f"implementation {type(self).__name__} supports only per-sample "
+            "timestep modulation; per-token modulation needs an axis to "
+            "broadcast the timestep along"
+        )
+
+    def _embed_context(
+            self, bus: ConditionBus | None
+    ) -> tuple[dict[str, Tensor], dict[str, Tensor]]:
         """Fetch each cross-attn condition by slot name and project it once.
 
-        An empty slot set returns an empty dict without touching the bus.
+        An empty slot set returns two empty dicts without touching the bus.
 
         ``APPEND_TO_SLOT`` conditions are concatenated onto the tail of the
         host slot along the token axis (``torch.cat(..., dim=1)``) **before**
@@ -376,18 +418,27 @@ class WanDiTStream(nn.Module):
         (declaration order), not from dictionary order or bus insertion
         order.
 
+        The key padding masks are concatenated in that same order, so they
+        cannot drift out of step with the context. A slot whose pieces all
+        carry ``key_valid=None`` is **left out** of the mask dict rather than
+        given a mask of all True: the maskless attention call is the one the
+        existing code makes, and that is what keeps the no-padding case
+        bit-identical.
+
         Args:
             bus: Condition bus, or None.
 
         Returns:
-            Slot name to ``[B, Lc, residual_width]`` projected condition.
+            A pair: slot name to ``[B, Lc, residual_width]`` projected
+            condition, and slot name to ``[B, Lc]`` bool key padding mask
+            holding only the slots that have one.
 
         Raises:
             ValueError: If the stream declares cross-attention slots but no
                 bus was passed to ``prepare``.
         """
         if not self.spec.cross_kv_slots:
-            return {}
+            return {}, {}
         if bus is None:
             raise ValueError(
                 f"stream {self.spec.name!r} declares cross_kv_slots "
@@ -395,25 +446,44 @@ class WanDiTStream(nn.Module):
                 "condition bus"
             )
         out: dict[str, Tensor] = {}
+        masks: dict[str, Tensor] = {}
         for slot in self.spec.cross_kv_slots:
-            parts = [bus.require(slot).value]
-            for extra in self.world.appended_to(slot, self.spec.name):
-                parts.append(bus.require(extra).value)
-            raw = parts[0] if len(parts) == 1 else torch.cat(parts, dim=1)
+            pieces = [bus.require(slot)]
+            pieces.extend(bus.require(extra) for extra
+                          in self.world.appended_to(slot, self.spec.name))
+            values = [piece.value for piece in pieces]
+            raw = values[0] if len(values) == 1 else torch.cat(values, dim=1)
             out[slot] = self.context_embedding[slot](raw)
-        return out
+            if any(piece.key_valid is not None for piece in pieces):
+                masks[slot] = torch.cat(
+                    [piece.key_valid if piece.key_valid is not None
+                     else piece.value.new_ones(piece.value.shape[:2],
+                                               dtype=torch.bool)
+                     for piece in pieces], dim=1)
+        return out, masks
 
     def _modulation(self, block: WanDiTBlock,
                     state: StreamState) -> dict[str, Tensor]:
         """Return this layer's modulation slots, each broadcastable over L.
 
         Each slot is ``[B, 1, W]``, or ``[1, 1, W]`` when the stream has no
-        timestep modulation.
+        timestep modulation, or ``[B, L, W]`` when the spec declares
+        ``token_timestep``.
 
         ``unpack`` uses ``unbind``, which **removes** the slot axis, so the
-        broadcast axis has to be added back. Skipping that step multiplies
-        the residual by a ``[B, W]`` tensor as if it were ``[B, L]``, and the
-        shapes happen to be valid.
+        broadcast axis has to be added back in the per-sample case. Skipping
+        that step multiplies the residual by a ``[B, W]`` tensor as if it
+        were ``[B, L]``, and the shapes happen to be valid. In the per-token
+        case the axis is already there and adding another one would be the
+        mirror-image defect.
+
+        Which case applies is read from the spec, never from
+        ``packed.ndim``. The pattern being replaced is
+        ``has_seq = len(t_mod.shape) == 4`` (``fastwam/wan/dit.py:439``),
+        which silently takes the wrong branch as soon as a shape changes.
+
+        The slot axis itself is pinned to ``-2`` and so is the same in both
+        cases: the slots sit immediately left of the width in every layout.
 
         ``state.modulation is None`` (a condition-only stream) falls back to
         zeros, so the formula degrades to "per-layer learnable modulation
@@ -430,9 +500,12 @@ class WanDiTStream(nn.Module):
         packed = state.modulation
         if packed is None:
             packed = block.modulation.new_zeros((1, slots.width, 1))
-        combined = block.combine_modulation(packed)
+        unpacked = slots.unpack(block.combine_modulation(packed),
+                                slot_axis=-2)
+        if self.spec.token_timestep is not None:
+            return unpacked
         return {name: tensor.unsqueeze(1)
-                for name, tensor in slots.unpack(combined, slot_axis=1).items()}
+                for name, tensor in unpacked.items()}
 
 
 def _pad_tokens(tokens: Tensor, total: int) -> Tensor:
@@ -571,6 +644,74 @@ class WanVideoStream(WanDiTStream):
                                  for slot in self._concat_slots], dim=1)
         tokens = self.patch_embedding(x).flatten(2).transpose(1, 2)
         return _pad_tokens(tokens, self.geometry.padded_seq_len)
+
+    def _expand_timestep(self, timestep: Tensor) -> Tensor:
+        """Broadcast the timestep over the frame axis, pinning a clean prefix.
+
+        Only runs when the spec declares ``token_timestep``; without it the
+        base per-sample path is kept, so VPP2 is untouched.
+
+        Two input forms are accepted, matching the two existing call sites:
+          - ``[B]``, one sampled timestep per sample, which every noised
+            frame shares (fastwam ``wan/dit.py:762-779``, InternW0-Delta
+            ``wan_video_dit.py:820-823``);
+          - ``[B, F - clean_prefix]``, one timestep per noised frame, which
+            an L3 ``BroadcastSpec(axes=("frame",))`` produces
+            (InternW0-Delta ``wan_video_dit.py:824-825``).
+        The clean prefix is **never** part of the input: its value is not
+        sampled but fixed at 0, so accepting it would let a caller pass a
+        value that is then discarded.
+
+        Padding rows added by ``align_to`` get timestep 0. Those positions
+        are masked out of attention and cut off before the head, so the
+        value is unobservable; 0 is used because it is the one value already
+        meaningful in this tensor.
+
+        Args:
+            timestep: ``[B]`` or ``[B, F - clean_prefix]`` timesteps.
+
+        Returns:
+            ``[B, padded_seq_len]`` per-token timesteps.
+
+        Raises:
+            ValueError: If ``timestep`` is neither of the two accepted
+                shapes, or if ``clean_prefix`` is not smaller than the latent
+                frame count.
+        """
+        scope = self.spec.token_timestep
+        if scope is None:
+            return timestep
+        frames = self.geometry.patch_grid[0]
+        noised = frames - scope.clean_prefix
+        if noised <= 0:
+            raise ValueError(
+                f"stream {self.spec.name!r}: token_timestep.clean_prefix="
+                f"{scope.clean_prefix} leaves no noised frame out of the "
+                f"{frames} latent frames of geometry.patch_grid"
+            )
+        batch = timestep.shape[0]
+        if timestep.ndim == 1:
+            per_frame = timestep[:, None].expand(batch, noised)
+        elif timestep.ndim == 2 and timestep.shape[1] == noised:
+            per_frame = timestep
+        else:
+            raise ValueError(
+                f"stream {self.spec.name!r} declares token_timestep, so its "
+                f"timestep must be [B] or [B, {noised}] (the noised frames, "
+                f"i.e. patch_grid[0]={frames} minus clean_prefix="
+                f"{scope.clean_prefix}), got {tuple(timestep.shape)}"
+            )
+        if scope.clean_prefix:
+            per_frame = torch.cat(
+                [per_frame.new_zeros((batch, scope.clean_prefix)), per_frame],
+                dim=1)
+        tokens = per_frame[:, :, None].expand(
+            batch, frames, self.geometry.tokens_per_frame).reshape(batch, -1)
+        missing = self.geometry.padded_seq_len - tokens.shape[1]
+        if missing:
+            tokens = torch.cat([tokens, tokens.new_zeros((batch, missing))],
+                               dim=1)
+        return tokens
 
 
 class ActionStream(WanDiTStream):

@@ -1,13 +1,18 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Truth tables of the nine primitive L1 visibility rules (Lane A).
+"""Truth tables of the ten primitive L1 visibility rules (Lane A).
 
 Two things must hold for every rule: the truth table when its labels are
 present, and **degrading to all True rather than raising when a label is
 missing** (the default semantics of interfaces §3.2). The second one is what
 lets a single visibility expression be reused across models with different
 label sets.
+
+``label_edge`` is the one rule exempt from the second: it is a selector rather
+than a restriction, so degrading it would open a mask instead of widening one
+term of it. The two cases at the bottom of this module are what hold that
+exception in place.
 """
 
 from __future__ import annotations
@@ -17,8 +22,8 @@ import torch
 
 from loongforge.embodied.model.arch.layout import SegmentRange, TokenLayout
 from loongforge.embodied.model.arch.visibility.rules import (
-    block_coupling, chunk_causal, frame_causal, history, noise_gate,
-    prefix_only, same_sample, same_stream, stream_edge)
+    block_coupling, chunk_causal, frame_causal, history, label_edge,
+    noise_gate, prefix_only, same_sample, same_stream, stream_edge)
 
 
 def layout_with(**labels: torch.Tensor) -> TokenLayout:
@@ -208,8 +213,59 @@ def test_block_coupling_only_touches_same_block():
         block_coupling("partial")
 
 
+def test_label_edge_selects_on_the_query_side():
+    """``label_edge`` is the only rule that picks out query rows by a label.
+
+    Every other rule either tests keys alone (``prefix_only``, ``noise_gate``,
+    ``history``) or is relational (``same_stream``, ``frame_causal``,
+    ``chunk_causal``), so none of them can say "these rows obey one rule and
+    those rows another" inside a single stream. Written as a label here:
+    rows labelled 1 or 2 read columns labelled 0, and rows labelled 0 read
+    nothing at all.
+
+    Both value sets are sets rather than single values on purpose, since the
+    grouping a selector needs is usually coarser than the label -- the phase
+    label's three condition codes are one group to every rule that reads them.
+    """
+    layout = layout_with(phase=long_(0, 0, 1, 1, 2, 2))
+    out = label_edge("phase", src=(0,), dst=(1, 2)).evaluate(layout)
+    assert out[0].tolist() == [False] * 6
+    assert out[2].tolist() == [True, True, False, False, False, False]
+    assert out[5].tolist() == [True, True, False, False, False, False]
+
+
+def test_label_edge_raises_on_a_missing_label():
+    """The one rule that refuses to degrade, and the reason it refuses.
+
+    A restriction that vanishes widens the mask by one term; a selector that
+    vanishes removes the only thing confining a disjunct to its rows, so a
+    visibility written as several ``label_edge`` terms would come out fully
+    open with nothing raised. That failure has already happened in the narrow
+    form once, with ``noise_level`` never being attached
+    (``layout.py:255``), which is why it is a hard error here rather than a
+    documented caveat.
+    """
+    with pytest.raises(KeyError, match="layout has no label 'phase'"):
+        label_edge("phase", src=(0,), dst=(1,)).evaluate(bare())
+
+
+def test_label_edge_rejects_an_empty_value_set():
+    """An empty side is rejected at construction, not silently matched.
+
+    Either side empty makes the term constantly False, which under ``|`` is a
+    disjunct that was meant to grant visibility and grants none. The check is
+    at construction so the stack points at the declaration rather than at a
+    mask that came out one rectangle short.
+    """
+    with pytest.raises(ValueError, match="src and dst must be non-empty"):
+        label_edge("phase", src=(), dst=(1,))
+    with pytest.raises(ValueError, match="src and dst must be non-empty"):
+        label_edge("phase", src=(0,), dst=())
+
+
 # A missing label degrades the rule to all True (it does not raise). This is
-# what lets one visibility expression be reused across models.
+# what lets one visibility expression be reused across models. ``label_edge``
+# is absent on purpose; the two cases above cover it instead.
 DEGRADING = [
     ("same_stream", same_stream()),
     ("stream_edge", stream_edge("video", "action")),

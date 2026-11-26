@@ -19,6 +19,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from enum import Enum
 
+import torch
 from torch import Tensor
 
 from ..spec.core import Spec
@@ -62,18 +63,45 @@ class Condition:
             feed several streams or just one. An empty set is rejected
             because a condition with no target is dead configuration, which
             in the current code can only be found by reading the code.
+        key_valid: ``[B, Lc]`` bool, True where the token is real. For a
+            CROSS_ATTENTION or APPEND_TO_SLOT condition this is the key
+            padding mask of that slot; None means every token is real, which
+            keeps the attention call maskless.
+
+            It rides on the condition rather than on a separate channel
+            because it is derived from the same batch entry as ``value`` and
+            has to stay the same length: an independent channel can only
+            reconcile the two lengths at runtime. Note this is still the
+            per-sample channel of the structural/per-sample split: nothing
+            about it reaches ``ConditionSpec``, which stays pure topology.
     """
 
     name: str
     kind: InjectionKind
     value: Tensor
     targets: frozenset[str]
+    key_valid: Tensor | None = None
 
     def __post_init__(self) -> None:
         if not self.targets:
             raise ValueError(
                 f"Condition({self.name!r}).targets must not be empty: a "
                 "condition with no injection target is dead configuration"
+            )
+        if self.key_valid is None:
+            return
+        if self.key_valid.dtype is not torch.bool:
+            raise ValueError(
+                f"Condition({self.name!r}).key_valid must be bool, got "
+                f"{self.key_valid.dtype}; a float mask would be read as an "
+                "additive bias by one backend and as a keep-flag by another"
+            )
+        want = tuple(self.value.shape[:2])
+        if tuple(self.key_valid.shape) != want:
+            raise ValueError(
+                f"Condition({self.name!r}).key_valid has shape "
+                f"{tuple(self.key_valid.shape)}, expected [B, Lc]={list(want)} "
+                "to match value; a shorter mask would silently broadcast"
             )
 
     def goes_to(self, stream: str) -> bool:
@@ -206,8 +234,21 @@ class ConditionSpec:
             through the same projector. None means this condition enters no
             weight shape, as for ADD_TO_MODULATION which is a plain add.
             Topology and shape, not YAML-visible.
-        encoder: Spec of the module producing the value. None means the
-            batch supplies the value directly.
+        encoder: Spec of the **trainable** projection producing the value,
+            built inside ``WorldModel`` and owning the third parameter
+            namespace (``model.condition_encoders``). None means the batch
+            supplies the value directly. Do not confuse it with
+            ``source_encoder`` below: this one is trained and lives in the
+            core, that one is frozen and lives in the shell.
+        source_encoder: Spec of the **frozen** tower that fills
+            ``source_key`` -- the Wan CLIP image encoder for ``clip_image``.
+            None means the batch already holds the raw input. It is declared
+            next to the key it feeds so that the two cannot be mismatched,
+            and it stays a ``Spec`` rather than a built module because the
+            spec layer must remain allocation free: the shell builds it,
+            injecting the weight path its own config carries. The two
+            encoders compose when both are present:
+            ``value = encoder(source_encoder(raw))``.
         source_key: Batch key holding the raw input. It always names the raw
             source regardless of ``encoder``: when ``encoder`` is not None,
             ``value = encoder(batch[source_key])``.
@@ -228,6 +269,7 @@ class ConditionSpec:
     targets: tuple[str, ...]
     width: int | None = None
     encoder: Spec | None = None
+    source_encoder: Spec | None = None
     source_key: str | None = None
     source_width: int | None = None
     append_to: str | None = None
@@ -294,16 +336,21 @@ class ConditionSpec:
                 f"[0, 1), got {self.dropout_prob}"
             )
 
-    def materialize(self, value: Tensor) -> Condition:
+    def materialize(self, value: Tensor,
+                    key_valid: Tensor | None = None) -> Condition:
         """Wrap an already computed tensor into a ``Condition``.
 
         This is the only path from declaration to instance.
 
         Args:
             value: The condition tensor for this forward pass.
+            key_valid: Optional ``[B, Lc]`` bool key padding mask, True where
+                the token is real. Only meaningful for the two
+                cross-attention kinds; None keeps the attention maskless.
 
         Returns:
             A ``Condition`` carrying this spec's name, kind and targets.
         """
         return Condition(name=self.name, kind=self.kind, value=value,
-                         targets=frozenset(self.targets))
+                         targets=frozenset(self.targets),
+                         key_valid=key_valid)

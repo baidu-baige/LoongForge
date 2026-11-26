@@ -125,8 +125,13 @@ def test_joint_group_is_one_to_one_over_both_streams(model_spec):
 
 @pytest.fixture
 def layout(model_spec):
-    """The concatenated token layout for the spec under test."""
-    return TokenLayout.from_geometry(model_spec.geometry, model_spec.streams)
+    """The concatenated token layout for the spec under test.
+
+    ``build_layout`` rather than ``from_geometry``: a provider that declares
+    ``token_labels`` needs those labels present, and ``label_edge`` raises
+    instead of degrading when one is missing.
+    """
+    return model_spec.build_layout()
 
 
 def test_visibility_keys_are_stream_names(model_spec):

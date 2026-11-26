@@ -71,6 +71,7 @@ A modular, scalable, and highly efficient training framework for language, multi
    :caption: Developer Guide
 
    advance/support_new_model
+   advance/parity_alignment_guide
 
 .. toctree::
    :maxdepth: 1

@@ -1,7 +1,7 @@
 # Copyright 2026 The LoongForge Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-"""The gate: ``--model-name`` → YAML → typed config → ``ArchWorldModel``.
+"""The gate: ``--model-name`` → YAML → typed config → arch model.
 
 Everything the other ``test_arch_*`` files check lives inside the ``arch``
 package. This file checks the four seams that connect it to the trainer, each of
@@ -20,15 +20,22 @@ which fails silently rather than loudly when it breaks:
 
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 import torch
 from omegaconf import OmegaConf
 
 from loongforge.embodied.model.arch.builder import WorldModel
-from loongforge.embodied.model.arch.layout import TokenLayout
-from loongforge.embodied.model.arch.modeling_arch import ArchWorldModel
+from loongforge.embodied.model.arch.factory import (ArchModelConfig,
+                                                    DualStreamWanBase,
+                                                    DualStreamWanConfig,
+                                                    InternW0DeltaArchModel,
+                                                    Vpp2ArchModel, Vpp2Config)
+from loongforge.embodied.model.arch.spec.core import Spec
 from loongforge.embodied.model.arch.spec.world import WorldModelSpec
 from loongforge.embodied.model.arch.streams.engine import JointAttentionEngine
+from loongforge.embodied.model.arch.towers import build_wan_clip, build_wan_vae
 from loongforge.embodied.model.registry import MODEL_REGISTRY
 from loongforge.embodied.train.config_map import get_config_path, get_model_schema
 
@@ -109,10 +116,32 @@ def test_geometry_frame_count_matches_the_dataloader(model_name):
 # ---- 3. the registries ----
 
 
+ARCH_SUBCLASSES = {"vpp2": Vpp2ArchModel,
+                   "internw0_delta": InternW0DeltaArchModel}
+
+
 @pytest.mark.parametrize("model_name", ARCH_MODELS)
-def test_gate_routes_both_arch_names_to_one_shell(model_name):
-    """Both arch models are the same shell; what differs is the spec it holds."""
-    assert MODEL_REGISTRY[model_name] is ArchWorldModel
+def test_registry_key_resolves_to_its_subclass(model_name):
+    """Each arch model owns its registry key, and the key picks that class.
+
+    The two subclasses differ only in ``config_cls`` and ``transfer``, which is
+    exactly what a wrong row here would silently swap: the model would build
+    and train, then load a checkpoint through the other model's rename table.
+    """
+    assert MODEL_REGISTRY[model_name] is ARCH_SUBCLASSES[model_name]
+
+
+@pytest.mark.parametrize("model_name", ARCH_MODELS)
+def test_every_arch_subclass_has_a_transfer(model_name):
+    """A registered arch model can warm-start, i.e. ``transfer`` is not None.
+
+    ``load_pretrained`` raises ``NotImplementedError`` when the attribute is
+    missing, and the failure arrives at warm-start time on a real checkpoint —
+    long after the class was registered and the config was written.
+    """
+    cls = ARCH_SUBCLASSES[model_name]
+    assert cls.transfer is not None
+    assert cls.config_cls is not DualStreamWanBase.config_cls
 
 
 def test_gate_does_not_take_over_fastwam():
@@ -164,7 +193,7 @@ class StubVAE(torch.nn.Module):
     """Stand-in for the Wan VAE: pixels in, a latent grid of the right shape out.
 
     The real encoder allocates its mean/std buffers on CUDA at construction
-    time, which is why ``ArchWorldModel`` takes both encoders by injection.
+    time, which is why the arch shell takes both encoders by injection.
     """
 
     def __init__(self, spec: WorldModelSpec) -> None:
@@ -191,26 +220,23 @@ class StubImageEncoder(torch.nn.Module):
 
 
 @pytest.fixture
-def shell() -> ArchWorldModel:
+def shell() -> Vpp2ArchModel:
     """A vpp2 shell at test width, wired to stub encoders.
 
     The spec comes from the real provider (so the condition table, visibility
     and loss terms are the production ones) with the widths and geometry shrunk
     — the shell's job is tensor plumbing, which is width-independent.
     """
-    from loongforge.embodied.model.arch.model_configuration_arch import Vpp2Config
-
     spec = tiny_spec("vpp2")
     core = WorldModel(spec, engine=JointAttentionEngine(backend="dense"),
-                      layout=TokenLayout.from_geometry(spec.geometry,
-                                                       spec.streams))
-    return ArchWorldModel(
+                      layout=spec.build_layout())
+    return Vpp2ArchModel(
         Vpp2Config(dtype="float32"), core,
         vae=StubVAE(spec),
         image_encoder=StubImageEncoder(spec.condition("clip_image").width))
 
 
-def pixel_batch(shell: ArchWorldModel) -> dict:
+def pixel_batch(shell: Vpp2ArchModel) -> dict:
     """A FastWAM-style sample dict: pixels, actions, cached text, proprio.
 
     This is exactly what ``FastWAMPreparedBatch.to_sample()`` produces, which is
@@ -283,10 +309,163 @@ def test_i2v_block_is_four_mask_channels_plus_clean_leading_frames(shell):
 
 
 def test_shell_rejects_a_config_of_the_wrong_type():
-    """``from_pretrained`` takes a ``WorldModelConfig``, and says so.
+    """``from_pretrained`` takes the subclass's own ``config_cls``, and says so.
 
     The gate hands over whatever ``MODEL_SCHEMA`` built, so a wrong schema row
     shows up here; the alternative is an ``AttributeError`` on ``build_spec``.
     """
-    with pytest.raises(TypeError, match="WorldModelConfig"):
-        ArchWorldModel.from_pretrained(object())
+    with pytest.raises(TypeError, match="Vpp2Config"):
+        Vpp2ArchModel.from_pretrained(object())
+
+
+# ---- 5. the family extension points ----
+
+
+def test_validate_spec_rejects_a_backend_the_engine_does_not_implement():
+    """Backend capability is answered by the engine the family actually runs.
+
+    ``flash`` used to sit in a whitelist next to the spec that no engine
+    consulted, so a config naming it passed spec validation and then raised in
+    the engine constructor. The check now names the engine and its list.
+    """
+    spec = dataclasses.replace(tiny_spec("vpp2"), attention_backend="flash")
+    with pytest.raises(ValueError, match="JointAttentionEngine"):
+        Vpp2ArchModel.validate_spec(spec)
+
+
+def test_validate_spec_needs_a_family_base_to_bind_an_engine():
+    """A model class that skipped the family layer has no engine to ask.
+
+    The abstract base deliberately binds none: which engine runs the streams
+    *is* the topology, so a model inheriting it directly has not said what it
+    is yet.
+    """
+    class Orphan(DualStreamWanBase):
+        engine_cls = None
+
+    with pytest.raises(NotImplementedError, match="engine_cls"):
+        Orphan.validate_spec(tiny_spec("vpp2"))
+
+
+@pytest.mark.parametrize("model_name", ARCH_MODELS)
+def test_every_provider_declares_the_frozen_towers_it_needs(model_name):
+    """A tower is declared next to the key it fills, not inferred by name.
+
+    ``build_towers`` reads these two fields, so a provider that forgets one
+    would build a shell with ``vae=None`` and fail at the first batch.
+    """
+    spec = tiny_spec(model_name)
+    video = next(s for s in spec.streams if s.name == "video")
+    assert video.source_encoder is not None
+    assert video.source_encoder.impl is build_wan_vae
+    clip = next((c for c in spec.conditions if c.name == "clip_image"), None)
+    if clip is not None:
+        assert clip.source_encoder.impl is build_wan_clip
+
+
+def test_the_shared_config_carries_no_weight_path():
+    """Where the frozen towers come from is a family question, not a shared one.
+
+    A VLM-as-a-stream family has no frozen tower at all, so a weight path on
+    the shared config would be a field it must leave filled in with a Wan repo
+    id it never reads.
+    """
+    shared = {f.name for f in dataclasses.fields(ArchModelConfig)}
+    assert "model_id" not in shared
+    assert "compile_vae_encode" not in shared
+    assert "model_id" in {f.name for f in
+                          dataclasses.fields(DualStreamWanConfig)}
+
+
+@pytest.mark.parametrize("model_name", ARCH_MODELS)
+def test_provider_kwargs_stops_at_the_family_fields(model_name):
+    """Only a *model* config's own fields are provider arguments.
+
+    The exclusion set is the union over every dataclass ancestor rather than
+    the shared base alone: with a family config in between, hardcoding the
+    base would start forwarding ``model_id`` to a provider whose signature has
+    no such parameter.
+    """
+    cfg = load_config(model_name)
+    kwargs = cfg.provider_kwargs()
+    assert "model_id" not in kwargs
+    assert "compile_vae_encode" not in kwargs
+    own = {f.name for f in dataclasses.fields(type(cfg))} - {
+        f.name for f in dataclasses.fields(DualStreamWanConfig)}
+    assert set(kwargs) <= own
+
+
+def replace_video_stream(spec: WorldModelSpec, **changes) -> WorldModelSpec:
+    """Rewrite the ``video`` stream in place, inside its attention group.
+
+    ``WorldModelSpec.streams`` is a property derived from ``groups``, so a
+    stream cannot be swapped by ``dataclasses.replace(spec, streams=...)``.
+
+    Args:
+        spec: A built spec.
+        changes: Field overrides applied to the ``video`` ``StreamSpec``.
+
+    Returns:
+        The same spec with its video stream replaced.
+    """
+    groups = tuple(
+        dataclasses.replace(group, members=tuple(
+            dataclasses.replace(s, **changes) if s.name == "video" else s
+            for s in group.members))
+        for group in spec.groups)
+    return dataclasses.replace(spec, groups=groups)
+
+
+def stub_towers(spec: WorldModelSpec, seen: dict) -> WorldModelSpec:
+    """Swap both ``source_encoder`` specs for stubs that record their path.
+
+    The real builders import the dreamzero VAE and allocate on CUDA, and the
+    ``Spec`` holds a direct function reference, so the substitution has to
+    happen in the spec rather than by patching the module.
+
+    Args:
+        spec: A built spec.
+        seen: Dict the stubs write their received path into.
+
+    Returns:
+        The same spec with both towers stubbed.
+    """
+    def fake_vae(*, spec, path):
+        seen["vae"] = path
+        return StubVAE(spec)
+
+    def fake_clip(*, path):
+        seen["clip"] = path
+        return StubImageEncoder(1280)
+
+    conditions = tuple(dataclasses.replace(c, source_encoder=Spec(fake_clip))
+                       if c.name == "clip_image" else c
+                       for c in spec.conditions)
+    return dataclasses.replace(
+        replace_video_stream(spec, source_encoder=Spec(fake_vae)),
+        conditions=conditions)
+
+
+def test_build_towers_injects_the_weight_path_the_family_config_carries():
+    """The spec says *which* tower; the family config says *where from*.
+
+    Keeping the path out of the spec is what lets the spec layer stay
+    allocation free, so this is the seam where the two meet.
+    """
+    seen: dict = {}
+    spec = stub_towers(tiny_spec("vpp2"), seen)
+    towers = Vpp2ArchModel.build_towers(Vpp2Config(model_id="/weights"), spec)
+    assert seen == {"vae": "/weights", "clip": "/weights"}
+    assert isinstance(towers["vae"], StubVAE)
+    assert isinstance(towers["image_encoder"], StubImageEncoder)
+
+
+def test_build_towers_refuses_a_video_stream_with_no_tower():
+    """A family that reads pixels cannot reach latents without a VAE.
+
+    Failing in ``build_towers`` names the missing declaration; the alternative
+    is ``vae=None`` and an ``AttributeError`` on the first batch.
+    """
+    spec = replace_video_stream(tiny_spec("vpp2"), source_encoder=None)
+    with pytest.raises(ValueError, match="source_encoder"):
+        Vpp2ArchModel.build_towers(Vpp2Config(), spec)

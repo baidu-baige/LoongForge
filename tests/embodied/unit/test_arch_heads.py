@@ -71,7 +71,7 @@ def run_heads(spec: WorldModelSpec):
     """Run the engine, then the heads.
 
     The timestep a head consumes is the source stream's
-    ``extras['timestep_embedding']``, that is the embedding rather than the scalar.
+    ``extras['t_embed']``, that is the embedding rather than the scalar.
     """
     modules = build_streams(spec)
     layout, out = run_engine(spec, modules, fake_bus(spec))
@@ -81,7 +81,7 @@ def run_heads(spec: WorldModelSpec):
         if head.name not in heads:
             continue
         timestep_embedding = (
-            out.require(head.source_stream).extras["timestep_embedding"]
+            out.require(head.source_stream).extras["t_embed"]
             if head.needs_timestep_embedding else None)
         results[head.name] = heads[head.name](
             head.source.resolve(out), timestep_embedding=timestep_embedding)

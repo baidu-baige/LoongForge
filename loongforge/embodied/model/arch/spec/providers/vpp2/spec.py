@@ -27,9 +27,10 @@ from ....streams.blocks import ActionStream, WanVideoStream
 from ....streams.conditions import ConditionSpec, InjectionKind
 from ....streams.encoders import linear_token_encoder
 from ....streams.engine import AttentionGroup
+from ....towers import build_wan_clip
 from ....visibility.combine import Visibility
-from ....visibility.presets import get_preset
-from ....visibility.rules import same_stream, stream_edge
+from ....visibility.phases import CONDITION, Phase, phase_labels
+from ....visibility.rules import label_edge, same_stream
 from ...core import Spec, register_provider
 from ...overrides import reject_config, resolve_geometry, resolve_scalars
 from ...world import WorldModelSpec
@@ -60,7 +61,7 @@ are fastwam's, and VPP2 differs from them on every entry.
 """
 
 
-def _vpp2_visibility(video_prefix_frames: int) -> dict[str, Visibility]:
+def _vpp2_visibility() -> dict[str, Visibility]:
     """Build VPP2's L1 visibility.
 
     Keys are **stream names**; each value is the rule on that stream's query
@@ -78,35 +79,38 @@ def _vpp2_visibility(video_prefix_frames: int) -> dict[str, Visibility]:
     ``same_stream()``. That is also the structural reason inference can run
     the action head alone.
 
-    Three differences from the §4.3 example, all to be ruled on before the
-    equivalence tests. This function follows the example and records the
-    differences here rather than silently picking a side:
+    ``:905`` is a **prefix** of the first N frames, not a sliding window. The
+    first version of this provider wrote ``noise_gated_history(window=N)``,
+    which degrades to ``frame_causal(N)`` -- a window keyed on each action
+    token's own frame label -- and measured 24/784 cells too strict. The phase
+    label states the distinction directly: the leading N frames are the
+    condition, and ``label_edge`` lets the action rows select them without
+    naming a token count.
+
+    Two differences from the §4.3 example remain, recorded rather than
+    silently resolved:
 
       1. the example has ``chunk_causal()``; the current code at ``:894`` is
          all True. Adding that rule would hide the action stream's own future
          chunks;
-      2. the example's comment says "the most recent N frames", while
-         ``:905`` takes the **first** N frames (a prefix). A sliding window
-         corresponds to ``frame_causal(N)``, a prefix to ``prefix_only(n)``;
-      3. today's clean condition is two methods returning ``[B]`` bools
+      2. today's clean condition is two methods returning ``[B]`` bools
          (``:908-921`` / ``:923-936``), which INV-1 forbids from entering
-         ``structural``. ``noise_gate`` lifts it into a rule over per-token
-         labels, and that is the subject of the 12/04 gate.
+         ``structural``. Per-sample gating belongs on ``key_valid``; a
+         ``noise_gate`` rule over per-token noise labels is the structural
+         half, and that is the subject of the 12/04 gate.
 
-    Args:
-        video_prefix_frames: Number of leading video frames the action
-            stream may read.
+    The frame count itself is no longer an argument: it reaches the mask
+    through ``token_labels=phase_labels(condition_frames=...)``, so the
+    expression holds for any configuration (§2.2.1 measured the same
+    expression bit-exact across three).
 
     Returns:
         ``{"video": ..., "action": ...}`` visibility rules.
     """
-    noise_gated_history = get_preset("noise_gated_history")
     return {
         "video": same_stream(),
-        "action": same_stream() | (
-            stream_edge("video", "action")
-            & noise_gated_history(window=video_prefix_frames)
-        ),
+        "action": (same_stream()
+                   | label_edge("phase", CONDITION, (Phase.ACTION,))),
     }
 
 
@@ -389,7 +393,8 @@ def _vpp2(config: Any = None, *,
         ConditionSpec(name="clip_image",
                       kind=InjectionKind.CROSS_ATTENTION,
                       targets=("video",), width=1280,
-                      source_key="clip_fea"),
+                      source_key="clip_fea",
+                      source_encoder=Spec(build_wan_clip)),
         # Text feeds both streams (``text_embedding`` at ``:522`` on the video
         # side, same name at ``action_dit.py:405`` on the action side).
         # Width 4096 = ``video_dit_config.text_dim`` (``vpp2.py:386``).
@@ -438,7 +443,12 @@ def _vpp2(config: Any = None, *,
         diffusion=diffusion,
         heads=heads,
         conditions=conditions,
-        visibility=_vpp2_visibility(video_prefix_frames),
+        visibility=_vpp2_visibility(),
+        # ``video_prefix_frames`` enters the mask as the phase label rather
+        # than as a token count inside a rule: ``:905``'s prefix is "the
+        # condition frames", and naming it that way is what makes the
+        # expression configuration-independent.
+        token_labels=phase_labels(condition_frames=video_prefix_frames),
         # Today a dense ``[S, S]`` bool mask is fed straight to the attention
         # kernel (``flash_attention(..., ctx_mask=)`` at ``mot.py:144-157``),
         # so the default backend is recorded as ``dense``. Switching to
