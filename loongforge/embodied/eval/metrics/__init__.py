@@ -3,6 +3,11 @@
 
 """Utilities for the LoongForge VLA evaluation module."""
 
+from .libero_plus import (
+    load_task_classification,
+    summarize_libero_plus,
+    write_libero_plus_summary_csv,
+)
 from .report import collect_resource_snapshot, write_eval_report
 from .repro_compare import compare_results, write_repro_comparison
 from .results import (
@@ -30,12 +35,15 @@ __all__ = [
     "completed_episode_keys",
     "is_infra_failure",
     "load_jsonl",
+    "load_task_classification",
     "record_episode_idx",
     "record_task_id",
+    "summarize_libero_plus",
     "summarize_records",
     "summarize_suites",
     "validate_episode_floor",
     "write_eval_report",
+    "write_libero_plus_summary_csv",
     "write_repro_comparison",
     "write_suite_summary_csv",
     "write_summary_csv",

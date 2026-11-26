@@ -91,6 +91,22 @@ def test_pi05_payload_builder_defaults_and_state_none():
     assert pb.action_dim == 7
 
 
+def test_pi05_payload_builder_empty_cameras_pads_blank_slots():
+    """``empty_cameras`` reserves extra image slots whose mask is False.
+
+    The official ``lerobot/pi05_libero`` config declares ``empty_cameras: 1``
+    (2 real cameras + 1 masked pad, matching openpi's ``right_wrist`` zeros with
+    ``image_mask=False``). It requests the slot via ``image_mask``; the model
+    fills missing slots with zeros.
+    """
+    adapter = LiberoAdapter("libero_object")
+    canonical = adapter.obs_to_canonical(_synthetic_env_obs(), _synthetic_context())
+    pb = build_payload_builder("pi05", yaml_model={"empty_cameras": 1})
+    kwargs = pb.build(canonical, {"benchmark_name": "libero"})
+    assert len(kwargs["images"]) == 2
+    assert kwargs["image_mask"] == [True, True, False]
+
+
 def test_xvla_payload_builder_ee6d_shape_and_layout():
     """XVLA ee6d PayloadBuilder emits [pos(3), rot6d(6), gripper(1)] padded to 20D.
 

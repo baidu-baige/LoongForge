@@ -1049,7 +1049,7 @@ class PI05Policy(nn.Module):
     def predict_action(
         self, images, instructions, state=None, dataset_stats=None, *,
         image_normalize_mode="identity", normalization_mode="q99",
-        seeds: Optional[Sequence[int]] = None,
+        seeds: Optional[Sequence[int]] = None, image_mask=None,
     ) -> np.ndarray:
         """Inference: Euler ODE denoising, returns ndarray (B, action_horizon, max_action_dim)."""
         from loongforge.embodied.data.datasets.pi05.transforms.pi05_transform import StateDiscretizationTransform
@@ -1064,16 +1064,22 @@ class PI05Policy(nn.Module):
         image_transform = ImageTransform(apply_to=[], image_size=self._image_size, normalize_mode=image_normalize_mode)
         # Use the number of views provided by the eval client so LIBERO (2) and
         # RoboTwin (3) both work without hard-coding a single camera count.
+        # ``image_mask`` may request more slots than provided: the official
+        # pi05_libero checkpoint expects 3 slots (base + wrist + 1 masked pad),
+        # and openpi pads the extra slot with a zero image whose mask is False.
         num_images = max(len(images[0]), 1)
+        if image_mask is not None:
+            num_images = max(num_images, len(image_mask))
 
         images_list, img_masks = [], []
         for v in range(num_images):
+            valid = True if not image_mask or v >= len(image_mask) else bool(image_mask[v])
             view = []
             mask_vals = []
             for im_list in images:
                 if v < len(im_list):
                     view.append(im_list[v])
-                    mask_vals.append(True)
+                    mask_vals.append(valid)
                 else:
                     view.append(torch.zeros(3, self._image_size, self._image_size))
                     mask_vals.append(False)

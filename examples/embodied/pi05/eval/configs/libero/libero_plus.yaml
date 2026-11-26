@@ -1,0 +1,119 @@
+# pi0.5 LIBERO-Plus parallel-evaluation template (4 perturbation suites).
+#
+# LIBERO-Plus is a drop-in replacement for the `libero` package (same import
+# name, same task interface), so the standard LIBERO runner needs no changes:
+# install LIBERO-Plus into the *benchmark* environment, unpack its assets into
+# <LIBERO-plus>/libero/libero/assets, point env.libero_config_path at a LIBERO
+# config that resolves to that checkout, and run this file.
+#
+# Parallel mode: one inference service per GPU (`servers[].gpus`), N CPU-sim
+# workers per GPU (`pools.cpu_sim.n_sims_per_server`), and a global queue that
+# feeds all suites. The coordinator pins each worker's EGL renderer to its slot
+# GPU and groups `benchmark.tasks_per_unit` tasks per process, which matters a
+# lot here because the official protocol is one episode per task.
+#
+# Fill /path/to/... below, then:
+#   BENCHMARK_PYTHON=/path/to/libero_plus/bin/python \
+#     bash examples/embodied/pi05/eval/run_libero_plus_eval.sh
+#
+# Output: each unit writes results.jsonl / summary.csv under
+# run.output_dir/worker_<i>/; the coordinator merges them and, because
+# benchmark.variant=plus, also writes libero_plus_summary.csv with the official
+# breakdown (7 perturbation categories + Total).
+#
+# Reference run (8 GPUs, 10,030 episodes): N=16, batching=8, tasks_per_unit=5
+#   python -m loongforge.embodied.eval.orchestrator.calibration.calibrate \
+#       --config <this file> --n 8,16,24 --gpus 0,1,2,3,4,5,6,7 --out /tmp/calib
+
+benchmark:
+  name: libero
+  variant: plus            # enables libero_plus_summary.csv; standard LIBERO omits it
+  # All four suites run in one coordinated plan (not a sequential `sweep`).
+  suites: [libero_spatial, libero_object, libero_goal, libero_10]  # 2402 / 2518 / 2591 / 2519 tasks
+  max_tasks: 0             # 0 = every task in each suite
+  episodes_per_task: 1     # LIBERO-Plus protocol: one initial state per task
+  episodes_per_chunk: 1    # ~one episode per unit; grouped by tasks_per_unit below
+  tasks_per_unit: 5        # several tasks share one process -> amortise torch/robosuite import
+  plan_order: lpt
+  max_steps: -1            # <=0 uses the suite default (220 / 280 / 300 / 520)
+  num_steps_wait: 10
+  continuous_gripper: true
+  prefer_controller_ee: false  # required by state_encoding: libero_ee8
+  # task_classification_path: /path/to/LIBERO-plus/libero/libero/benchmark/task_classification.json
+  # task_ids: [0, 1, 2]    # optional 0-based subset, e.g. one perturbation category
+
+model:
+  backend: loongforge
+  model_type: pi05
+  name: loongforge-pi05-libero-plus
+  action_dim: 7
+  state_dim: 8
+  action_horizon: 10
+  max_action_dim: 32
+  max_state_dim: 32
+  compile_model: false
+  # Must match openpi's LiberoInputs preprocessing:
+  #   images -> resize_with_pad + [-1,1] (siglip), 3 slots (2 real + 1 masked pad)
+  #   state/actions -> QUANTILES (q01 -> -1, q99 -> +1)
+  eval_image_normalize_mode: siglip
+  eval_normalization_mode: q99
+  state_encoding: libero_ee8
+  empty_cameras: 1
+
+server:
+  host: 127.0.0.1
+  # The coordinator assigns each service `LOONGFORGE_COORD_PORT_BASE + stride*i`
+  # and overrides these; kept here for standalone `loongforge_server` runs.
+  port: 12093
+  health_port: 12094
+  python: /path/to/loongforge/bin/python
+  log: /path/to/LoongForge/outputs/eval/libero_plus/policy_server.log
+  start_timeout_sec: 1800
+  ckpt_path: /path/to/pi05_libero
+  # Use the checkpoint's OWN norm stats (openpi:
+  # gs://openpi-assets/checkpoints/pi05_libero/assets/physical-intelligence/libero/norm_stats.json,
+  # keys state/actions -> observation.state/action). Dataset-derived stats have
+  # different q01/q99 and collapse success (measured: 1/5 vs 5/5).
+  dataset_statistics_path: /path/to/pi05_libero_norm_stats.json
+  loongforge_root: /path/to/LoongForge
+  tokenizer_path: /path/to/paligemma-3b-pt-224
+  use_bf16: false
+  chunk_execute_steps: 10
+  # Server-side batching used by the reference runs. Set enabled: false (or drop
+  # this block) for per-request latency isolation instead of throughput.
+  batching:
+    max_batch_size: 8
+    max_wait_ms: 5
+
+# One inference service per GPU. Shorten the list to use fewer cards.
+servers:
+  - gpus: [0, 1, 2, 3, 4, 5, 6, 7]
+
+# LIBERO is a CPU-sim family: use pools.cpu_sim (gpu_sim is ignored).
+pools:
+  cpu_sim:
+    # reference machine plateaued around N~48
+    n_sims_per_server: 16
+
+env:
+  eval_root: /path/to/LoongForge/loongforge/embodied/eval
+  # Keep LIBERO-Plus separate from stock LIBERO's ~/.libero so both can coexist.
+  libero_config_path: /path/to/libero_plus_config
+  mujoco_gl: egl
+  pyopengl_platform: egl
+  ld_library_path: /path/to/nvidia_lib
+
+run:
+  output_dir: /path/to/LoongForge/outputs/eval/libero_plus
+  seed: 7
+  save_trace: false
+  save_replay: false
+  timestamped_output: false
+  worker_local_files: true
+  resume: true
+  unit_timeout_sec: 7200
+
+timeouts:
+  policy_call_ms: 600000
+  per_step_sec: 600
+  per_episode_sec: 900

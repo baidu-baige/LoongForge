@@ -107,6 +107,11 @@ def plan_libero(config: Dict[str, Any], total_workers: int) -> List[Shard]:
     if explicit_chunk > 0:
         chunk = max(1, explicit_chunk)
     overrides = benchmark.get("suite_overrides") or {}
+    # Optional: run several tasks in one worker process. LIBERO's official
+    # protocol is one episode per task, so without this every episode pays a
+    # fresh torch/robosuite import (dominant on a slow shared filesystem).
+    # Default 1 keeps the original one-task-per-shard plan.
+    tasks_per_unit = max(1, int(benchmark.get("tasks_per_unit") or 1))
     shards: List[Shard] = []
     for suite, tasks in per_suite:
         # In per_task mode the env is seeded once per process and reused, so the
@@ -118,22 +123,26 @@ def plan_libero(config: Dict[str, Any], total_workers: int) -> List[Shard]:
         # normal episode-level chunking is safe even under per_task.
         if suite_mode == "per_task" and not _scene_snapshot_dir(config):
             suite_chunk = max(1, episodes_per_task)
+            group_size = 1
         else:
             suite_chunk = chunk
-        for task in tasks:
+            group_size = tasks_per_unit
+        for start in range(0, len(tasks), group_size):
+            group = tasks[start:start + group_size]
             for offset, count in _ranges(0, episodes_per_task, suite_chunk):
                 patch = {
                     "suite": suite,
-                    "task_ids": [task],
+                    "task_ids": group,
                     "episode_offset": offset,
                     "episodes_per_task": count,
                 }
                 patch.update(overrides.get(suite) or {})
+                task_label = f"{group[0]}" if len(group) == 1 else f"{group[0]}-{group[-1]}"
                 shards.append(
                     {
-                        "id": f"{suite}/task={task}/eps={offset}-{offset + count - 1}",
+                        "id": f"{suite}/task={task_label}/eps={offset}-{offset + count - 1}",
                         "overrides": {"benchmark": patch},
-                        "expected": count,
+                        "expected": count * len(group),
                         "_schedule_group": suite,
                         "_estimated_cost": int(
                             patch.get("max_steps")
