@@ -3,3 +3,5 @@ __pycache__/
 hand_assets/
 examples/output/
 third_party/
+# The repository-level *.npz rule would drop the bundled example inputs.
+!examples/**/*.npz
