@@ -24,7 +24,7 @@ class _Policy:
         self.single_calls = 0
         self._cached = cached or set()
 
-    def predict_action_batch(self, payloads):
+    def predict_action_batch(self, payloads, generations=None):
         self.batches.append(len(payloads))
         return [{"actions": [[payload["i"]]], "inference_latency_ms": 1.0} for payload in payloads]
 
@@ -282,4 +282,59 @@ def test_reset_during_inference_drops_the_stale_chunk() -> None:
     worker.join(timeout=5)
 
     assert len(done["responses"]) == 1
+    assert policy.has_cached_action({"episode_id": "episode-0"}) is False
+
+
+def test_batch_write_back_honors_arrival_generation() -> None:
+    """A chunk whose request predated a reset must not be cached (sequential path).
+
+    ``generations`` carries the cache generation captured at submit time. After a
+    reset bumps the episode's generation, a write-back guarded by the *arrival*
+    generation must be dropped instead of re-reading the already-bumped value.
+    """
+    model = _BatchModel()
+    policy = _batch_policy(model)
+    policy.reset("episode-0")  # generation becomes 1
+    # A request submitted before that reset carried generation 0.
+    policy.predict_action_batch([_policy_payload(0)], generations=[0])
+
+    assert policy.has_cached_action({"episode_id": "episode-0"}) is False
+
+
+def test_batch_write_back_honors_arrival_generation_batched() -> None:
+    """Same guard through the real batched path, per-episode."""
+    model = _BatchModel()
+    policy = _batch_policy(model)
+    policy.reset("episode-0")  # generation 1 for episode-0 only
+    policy.predict_action_batch(
+        [_policy_payload(0), _policy_payload(1)], generations=[0, 0]
+    )
+
+    assert policy.has_cached_action({"episode_id": "episode-0"}) is False
+    assert policy.has_cached_action({"episode_id": "episode-1"}) is True
+
+
+def test_batcher_drops_stale_write_back_past_reset() -> None:
+    """A request queued before a reset must not cache a chunk after the reset.
+
+    The reset lands while the request is still in the batcher's wait window, so a
+    generation read at batch-assembly time would already see the bump. The batcher
+    must instead use the generation it captured at submit time.
+    """
+    model = _BatchModel()
+    policy = _batch_policy(model)
+    batcher = AsyncBatcher(policy, max_batch_size=8, max_wait_ms=200)
+
+    async def scenario():
+        await batcher.start()
+        task = asyncio.create_task(batcher.submit(_policy_payload(0)))
+        # Yield so submit enqueues (and captures generation 0) while the batch loop
+        # is still inside its wait window; the reset below precedes assembly.
+        await asyncio.sleep(0.02)
+        policy.reset("episode-0")  # generation 0 -> 1
+        await task
+        await batcher.stop()
+        return policy
+
+    policy = _run(scenario())
     assert policy.has_cached_action({"episode_id": "episode-0"}) is False

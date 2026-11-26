@@ -137,6 +137,10 @@ class GenericPredictActionPolicy:
         """Unlocked body of :meth:`predict_action` (caller holds ``_infer_lock``)."""
         disable_action_cache = bool(kwargs.pop("disable_action_cache", False))
         return_action_chunk = bool(kwargs.pop("return_action_chunk", False))
+        # Optional generation captured at submit time by the server-side batcher.
+        # When absent (direct call, or a policy with no ``capture_cache_generation``)
+        # the write-back guard falls back to the generation read below.
+        arrival_generation = kwargs.pop("_cache_generation", None)
         # When the client owns the chunk it will not come back until the chunk is
         # exhausted. Caching server-side in that case would replay the *old*
         # chunk on the next request instead of running inference.
@@ -180,10 +184,11 @@ class GenericPredictActionPolicy:
         )
         inference_latency_ms = (time.perf_counter() - start_time) * 1000.0
         if use_cache:
+            write_generation = arrival_generation if arrival_generation is not None else generation
             with self._cache_lock:
                 # A reset that landed while this inference was in flight must not
                 # see the old episode's chunk resurrected here.
-                if self._cache_generation.get(episode_id, 0) == generation:
+                if self._cache_generation.get(episode_id, 0) == write_generation:
                     self._chunk_cache[episode_id] = (0, chunk)
         return {
             "actions": chunk if return_action_chunk else chunk[0:1],
@@ -204,45 +209,78 @@ class GenericPredictActionPolicy:
             entry = self._chunk_cache.get(str(payload.get("episode_id", "default")))
         return entry is not None and entry[0] + 1 < entry[1].shape[0]
 
-    def predict_action_batch(self, payloads: list) -> list:
+    def capture_cache_generation(self, payload: Dict[str, Any]) -> int:
+        """Return the cache generation for a payload's episode.
+
+        Called by ``AsyncBatcher.submit`` on the event loop, so it is strictly
+        ordered against ``reset`` (which is also routed inline on the event loop).
+        The write-back guard must compare against this value, not a generation
+        re-read after the batch is assembled, otherwise a chunk whose request
+        predated a reset would be written back and replayed.
+        """
+        with self._cache_lock:
+            return self._cache_generation.get(str(payload.get("episode_id", "default")), 0)
+
+    def predict_action_batch(self, payloads: list, generations: Optional[list] = None) -> list:
         """Process several payloads in one model call when supported.
 
         Batch rows use the same fixed noise seed as the batch=1 path, so a
         request's result does not depend on whether it shared a batch. If the
         model has no batch contract (or any payload is not batch-compatible),
         fall back to the sequential path.
+
+        ``generations`` are the cache generations captured at submit time (one
+        per payload); they drive the write-back guard so a chunk whose request
+        predated a reset is never cached.
         """
         if not self.supports_batching or len(payloads) <= 1:
-            return [self.predict_action(**payload) for payload in payloads]
+            if generations is None:
+                generations = [None] * len(payloads)
+            return [
+                self.predict_action(**payload, _cache_generation=gen)
+                for payload, gen in zip(payloads, generations)
+            ]
         try:
-            return self._predict_action_batch(payloads)
+            return self._predict_action_batch(payloads, generations)
         except Exception:
             logger.warning(
                 "Batched inference failed; falling back to sequential requests.",
                 exc_info=True,
             )
-            return [self.predict_action(**payload) for payload in payloads]
+            if generations is None:
+                generations = [None] * len(payloads)
+            return [
+                self.predict_action(**payload, _cache_generation=gen)
+                for payload, gen in zip(payloads, generations)
+            ]
 
-    def _predict_action_batch(self, payloads: list) -> list:
+    def _predict_action_batch(self, payloads: list, generations: Optional[list] = None) -> list:
         modes = {
             (bool(payload.get("disable_action_cache")), bool(payload.get("return_action_chunk")))
             for payload in payloads
         }
         if len(modes) != 1:
             raise ValueError("cannot batch payloads with different cache modes")
-        # No fixed seed by default:每一行各自采样（与官方 openpi 客户端一致）。
-        # 设置 ``metadata.noise_seed`` 时才退化为可复现模式（所有行共用该种子）。
+        if generations is None:
+            # Legacy call path: no arrival-time generation, so read it here (the
+            # race is only closed when the batcher threads ``capture_cache_generation``).
+            generations = []
+            for payload in payloads:
+                with self._cache_lock:
+                    generations.append(
+                        self._cache_generation.get(str(payload.get("episode_id", "default")), 0)
+                    )
+        elif len(generations) != len(payloads):
+            raise ValueError("generations length must match payloads length")
+        # No fixed seed by default: each row samples its own noise (matching the
+        # official openpi client). Only when ``metadata.noise_seed`` is set do we
+        # fall back to a reproducible mode (all rows share that seed).
         base_seed = self._metadata.get("noise_seed")
 
         images = []
         instructions = []
         states = []
-        generations = []
         for payload in payloads:
-            with self._cache_lock:
-                generations.append(
-                    self._cache_generation.get(str(payload.get("episode_id", "default")), 0)
-                )
             payload_images = payload.get("images")
             payload_instructions = payload.get("instructions")
             if not isinstance(payload_images, (list, tuple)) or not payload_images:
@@ -268,7 +306,10 @@ class GenericPredictActionPolicy:
                 None if raw_state is None else np.asarray(raw_state, dtype=np.float32).reshape(-1)
             )
         if any(state is None for state in states) or len({state.shape for state in states}) != 1:
-            return [self.predict_action(**payload) for payload in payloads]
+            return [
+                self.predict_action(**payload, _cache_generation=gen)
+                for payload, gen in zip(payloads, generations)
+            ]
         state_batch = np.stack(states, axis=0)
 
         start = time.perf_counter()
