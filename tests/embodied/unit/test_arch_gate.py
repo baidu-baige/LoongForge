@@ -155,20 +155,24 @@ def test_gate_does_not_take_over_fastwam():
     assert MODEL_REGISTRY["fastwam"] is FastWAMPolicy
 
 
-@pytest.mark.parametrize("model_name", ARCH_MODELS)
-def test_arch_models_reuse_the_fastwam_preprocessor(model_name):
-    """Preprocessor lookup is by ``model_type``, and these two share FastWAM's.
+def test_arch_models_take_their_data_packages_preprocessor():
+    """Preprocessor lookup is by ``model_type``; this pins whose each model gets.
 
-    They consume the same pixel-space batch and read the same four config
-    attributes, so a separate collator would be a copy of this one.
+    internw0_delta consumes FastWAM's pixel-space batch and reads the same four
+    config attributes, so a separate collator would be a copy of FastWAM's.
+    vpp2 runs master's data package since #371, collator included.
     """
     import loongforge.embodied.data.datasets.fastwam.transforms  # noqa: F401
+    import loongforge.embodied.data.datasets.vpp2.transforms  # noqa: F401
     from loongforge.embodied.data.datasets.fastwam.transforms.fastwam_collator \
         import FastWAMPreprocessor
     from loongforge.embodied.data.datasets.transforms.collator import (
         _PREPROCESSOR_REGISTRY)
+    from loongforge.embodied.data.datasets.vpp2.transforms.vpp2_collator \
+        import VPP2Preprocessor
 
-    assert _PREPROCESSOR_REGISTRY[model_name] is FastWAMPreprocessor
+    assert _PREPROCESSOR_REGISTRY["internw0_delta"] is FastWAMPreprocessor
+    assert _PREPROCESSOR_REGISTRY["vpp2"] is VPP2Preprocessor
 
 
 @pytest.mark.parametrize("model_name", ARCH_MODELS)
@@ -398,7 +402,7 @@ def test_provider_kwargs_stops_at_the_family_fields(model_name):
 def replace_video_stream(spec: WorldModelSpec, **changes) -> WorldModelSpec:
     """Rewrite the ``video`` stream in place, inside its attention group.
 
-    ``WorldModelSpec.streams`` is a property derived from ``groups``, so a
+    ``WorldModelSpec.streams`` is a property derived from ``attention_groups``, so a
     stream cannot be swapped by ``dataclasses.replace(spec, streams=...)``.
 
     Args:
@@ -409,11 +413,11 @@ def replace_video_stream(spec: WorldModelSpec, **changes) -> WorldModelSpec:
         The same spec with its video stream replaced.
     """
     groups = tuple(
-        dataclasses.replace(group, members=tuple(
+        dataclasses.replace(group, streams=tuple(
             dataclasses.replace(s, **changes) if s.name == "video" else s
-            for s in group.members))
-        for group in spec.groups)
-    return dataclasses.replace(spec, groups=groups)
+            for s in group.streams))
+        for group in spec.attention_groups)
+    return dataclasses.replace(spec, attention_groups=groups)
 
 
 def stub_towers(spec: WorldModelSpec, seen: dict) -> WorldModelSpec:

@@ -271,7 +271,7 @@ def _run_new(sides: Sides, text_valid: torch.Tensor) -> tuple[Any, ...]:
                                  encoders=model.condition_encoders)
     bus.conditions["text"] = replace(bus.conditions["text"],
                                      key_valid=text_valid)
-    group = spec.groups[0]
+    group = spec.attention_groups[0]
     timesteps = {video_spec.name: sides.video_timestep,
                  action_spec.name: sides.action_timestep}
     inputs = {stream.name: sides.batch[stream.batch_key]
@@ -499,7 +499,7 @@ def test_every_joint_layer_matches_and_the_first_bad_one_is_named(run, sides):
     come through the shared attention anyway.
     """
     video, _ = sides.spec.streams
-    layers = range(sides.spec.groups[0].num_layers)
+    layers = range(sides.spec.attention_groups[0].num_layers)
     assert set(run.legacy_layers) == set(layers)
     bad = [index for index in layers
            if not torch.equal(run.legacy_layers[index],
@@ -624,10 +624,10 @@ def test_the_visibility_matrix_matches_the_legacy_builder(visible_frames):
     to match at three frames and not at one is exactly the regression worth
     catching.
     """
-    spec = tiny_spec("vpp2", visible_video_frames=visible_frames)
+    spec = tiny_spec("vpp2", video_prefix_frames=visible_frames)
     assert condition_frames(spec) == visible_frames
     assert_same_mask(structural_mask(spec), legacy_structural(spec),
-                     f"visibility at visible_video_frames={visible_frames}")
+                     f"visibility at video_prefix_frames={visible_frames}")
 
 
 def test_the_matrix_fed_to_mot_is_the_one_compared_above(sides):

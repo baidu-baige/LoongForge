@@ -211,7 +211,7 @@ def probe_keys(spec: WorldModelSpec) -> None:
               f"append_to={condition.append_to}")
     for head in spec.heads:
         print(f"head {head.name}: output_width={head.output_width} "
-              f"needs_timestep={head.needs_timestep}")
+              f"needs_timestep_embedding={head.needs_timestep_embedding}")
     for stream in spec.streams:
         print(f"stream {stream.name}: residual_width="
               f"{stream.residual_width} ffn_width={stream.ffn_width} "

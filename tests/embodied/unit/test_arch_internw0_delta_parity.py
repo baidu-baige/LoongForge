@@ -352,7 +352,7 @@ def _run_new(sides: Sides, text_valid: torch.Tensor) -> tuple[Any, ...]:
     the layers some head declared.
     """
     spec, model = sides.spec, sides.model
-    group = spec.groups[0]
+    group = spec.attention_groups[0]
     inputs = {stream.name: sides.batch[stream.batch_key]
               for stream in spec.streams}
     bus = materialize_conditions(spec.conditions, sides.batch, training=False,
@@ -401,7 +401,7 @@ def _run_legacy(sides: Sides, text_valid: torch.Tensor) -> tuple[Any, ...]:
     """
     spec, legacy = sides.spec, sides.legacy
     video_stream, action_stream = spec.streams
-    group = spec.groups[0]
+    group = spec.attention_groups[0]
     context, mask = _legacy_context(sides, text_valid)
     video_pre = legacy.video.pre_dit(
         x=sides.batch[video_stream.batch_key],
@@ -607,7 +607,7 @@ def test_every_joint_layer_matches_in_both_streams(run, sides):
     Both streams are walked, unlike the VPP2 harness: ``capture_layers`` takes
     a name per stream, so there is no reason to settle for one.
     """
-    layers = range(sides.spec.groups[0].num_layers)
+    layers = range(sides.spec.attention_groups[0].num_layers)
     for stream in sides.spec.streams:
         captured = run.captured[stream.name]
         assert set(captured) == set(layers)

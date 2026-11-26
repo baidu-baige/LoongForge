@@ -45,12 +45,16 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-from loongforge.embodied.model.dreamzero import export_dreamzero
-from loongforge.embodied.model.export import (Capabilities, ConfigSchema,
+# The exporters this file checks are not in this tree; skip, naming the module,
+# rather than fail the collection of every other arch test file.
+pytest.importorskip("loongforge.embodied.model.export",
+                    reason="the PhyAI bundle exporters are not in this tree")
+from loongforge.embodied.model.dreamzero import export_dreamzero  # noqa: E402
+from loongforge.embodied.model.export import (Capabilities, ConfigSchema,  # noqa: E402
                                               ExportReport, NativeManifest,
                                               write_bundle)
-from loongforge.embodied.model.export.report import ExportError
-from loongforge.embodied.model.pi05 import export_pi05
+from loongforge.embodied.model.export.report import ExportError  # noqa: E402
+from loongforge.embodied.model.pi05 import export_pi05  # noqa: E402
 
 
 def _phyai_root() -> pathlib.Path:
