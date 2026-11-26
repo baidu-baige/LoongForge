@@ -269,6 +269,32 @@ def _run_maniskill_once(config: Dict[str, Any], config_path: str = "") -> Dict[s
         server.stop()
 
 
+def _run_robodojo_once(config: Dict[str, Any], config_path: str = "") -> Dict[str, Any]:
+    """Run _run_robodojo_once."""
+    from loongforge.embodied.eval.orchestrator.runners import robodojo_runner
+
+    args = robodojo_runner.build_argparser().parse_args([])
+    args = robodojo_runner._apply_config(args, config)
+    model = config.get("model") or {}
+    server_cfg = config.get("server") or {}
+    random_init = bool(server_cfg.get("random_init", model.get("random_init", False)))
+    if not args.policy_ckpt_path and not random_init:
+        raise ValueError("policy checkpoint must be set by server.ckpt_path in YAML unless server.random_init is true")
+    if not args.task_name:
+        raise ValueError("task name must be set by benchmark.task_name in YAML")
+
+    server = ManagedServer(_server_args(config, config_path))
+    try:
+        server.start()
+        result = robodojo_runner.run_evaluation(args)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        if result["returncode"] != 0:
+            raise SystemExit(result["returncode"])
+        return result
+    finally:
+        server.stop()
+
+
 def _run_once(config: Dict[str, Any], config_path: str = "") -> Dict[str, Any]:
     """Run _run_once."""
     family = _benchmark_family(config)
@@ -282,6 +308,8 @@ def _run_once(config: Dict[str, Any], config_path: str = "") -> Dict[str, Any]:
         return _run_robotwin_once(config, config_path)
     if family == "maniskill":
         return _run_maniskill_once(config, config_path)
+    if family == "robodojo":
+        return _run_robodojo_once(config, config_path)
     raise AssertionError(f"unreachable benchmark family: {family}")
 
 

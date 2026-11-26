@@ -32,7 +32,18 @@ The ``simpler_env_widowx`` embodiment (SimplerEnv Bridge) uses a **single**
 exterior view and an 8D state whose index 6 is a dead ``pad`` channel and whose
 index 7 is a 1D gripper openness in ``[0, 1]``; set ``state_encoding:
 simpler_widowx`` plus ``action_encoding: simpler_abs_euler`` in the YAML for that
-path. Do **not** set ``action_horizon`` there: YAML ``model:`` keys are also
+path. The ``robodojo_arx_x5`` embodiment (RoboDojo dual-arm ARX X5, official
+XPolicyLab ``GR00T_N17`` adapter) sends the three env-native views
+``[head, left_wrist, right_wrist]`` (= ``front`` / ``left_wrist`` / ``right_wrist``)
+and the raw 14D joint state ``[left 6 joints, left gripper, right 6 joints,
+right gripper]`` as float32 (``state_encoding: robodojo_joint14``); the decoded
+16-step chunk is absolute joints in the same order. The GR00T build vendored by the
+official RoboDojo adapter always letterboxes every view to a square (black bars,
+centered) before the shortest-edge resize / 95% center crop, whereas the released
+``processor_config.json`` says ``letter_box_transform: false`` and the model-side
+eval pipeline follows that; ``letterbox_pad: true`` applies the same padding
+client-side so non-square RoboDojo views (640x480) reach the model as the official
+adapter feeds them. Do **not** set ``action_horizon`` there: YAML ``model:`` keys are also
 merged into ``GrootN1d7Config``, whose ``action_horizon`` is the DiT
 flow-matching sequence length (40 in the released checkpoints), and shortening it
 changes every DiT output. The decoded chunk length comes from the embodiment's
@@ -139,6 +150,32 @@ def _encode_simpler_google(state_raw: Dict[str, Any]) -> Optional[np.ndarray]:
     )
 
 
+def _encode_robodojo_joint14(state_raw: Dict[str, Any]) -> Optional[np.ndarray]:
+    """RoboDojo 14D raw joint state, as the official adapter's ``_pack_arm_state`` (float32)."""
+    joint = state_raw.get("joint")
+    if joint is None:
+        return None
+    joint = np.asarray(joint, dtype=np.float32).reshape(-1)
+    if joint.size != 14:
+        raise ValueError(f"robodojo_joint14 state expects 14D, got {joint.size}D")
+    return joint
+
+
+def letterbox_pad(image: np.ndarray) -> np.ndarray:
+    """Pad to a square with centered black bars (official GR00T ``LetterBoxPad``)."""
+    import cv2
+
+    image = np.asarray(image)
+    h, w = image.shape[:2]
+    if h == w:
+        return image
+    side = max(h, w)
+    pad_h, pad_w = side - h, side - w
+    return cv2.copyMakeBorder(
+        image, pad_h // 2, pad_h - pad_h // 2, pad_w // 2, pad_w - pad_w // 2, cv2.BORDER_CONSTANT, value=0
+    )
+
+
 @register_payload_builder("gr00tn1d7")
 class GrootN1d7PayloadBuilder(PayloadBuilder):
     """GR00T-N1.7 client-side payload assembly."""
@@ -151,6 +188,7 @@ class GrootN1d7PayloadBuilder(PayloadBuilder):
     #                              [pos(3), euler(3), pad=0, gripper_openness]
     #   ``simpler_google``       — SimplerEnv Google/Fractal 8D raw state
     #                              [pos(3), quat_xyzw(4), gripper_closedness]
+    #   ``robodojo_joint14``     — RoboDojo ARX X5 14D raw joints [left 6 + grip, right 6 + grip]
     #   ``""``                   — no state kwarg emitted
     state_encoding: str = "libero_ee_axis_angle"
     action_encoding: str = "axis_angle"  # x,y,z + axis-angle(3) + gripper
@@ -159,6 +197,8 @@ class GrootN1d7PayloadBuilder(PayloadBuilder):
     # own action_horizon (40) is the DiT sequence length, not the decoded length.
     # simpler_env_widowx uses delta_indices=range(8) — override in YAML.
     action_horizon: int = 16
+    # Letterbox every view to a square before sending (RoboDojo; see module docstring).
+    letterbox_pad: bool = False
 
     def _encode_state(self, canonical: Dict[str, Any]) -> Optional[np.ndarray]:
         """Encode ``canonical.state_raw`` per ``self.state_encoding``."""
@@ -179,6 +219,8 @@ class GrootN1d7PayloadBuilder(PayloadBuilder):
             # SimplerEnv Google/Fractal: raw-quaternion 8D state, read straight
             # from the Google agent's ``eef_pos`` (see _encode_simpler_google).
             return _encode_simpler_google(state_raw)
+        if self.state_encoding == "robodojo_joint14":
+            return _encode_robodojo_joint14(state_raw)
         raise ValueError(f"Unsupported Gr00tN1d7 state_encoding: {self.state_encoding!r}")
 
     def build(self, canonical: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:
@@ -189,7 +231,7 @@ class GrootN1d7PayloadBuilder(PayloadBuilder):
                 "Gr00tN1d7 state_encoding="
                 f"{self.state_encoding!r} could not be built: canonical state_raw is "
                 "missing the fields it needs (LIBERO: eef_pos/eef_quat; SimplerEnv "
-                "Bridge: base_pose/tcp_pose or eef_pos; SimplerEnv Google: eef_pos). "
+                "Bridge: base_pose/tcp_pose or eef_pos; SimplerEnv Google: eef_pos; RoboDojo: joint). "
                 "Sending a zero proprio would "
                 "silently degrade the policy, so this is a hard failure."
             )
@@ -207,6 +249,8 @@ class GrootN1d7PayloadBuilder(PayloadBuilder):
                 cv2.resize(np.asarray(img), size) if img is not None else img
                 for img in images
             ]
+        if self.letterbox_pad:
+            images = [letterbox_pad(img) if img is not None else img for img in images]
         return {
             "images": images,
             "instructions": [str(canonical["instruction"])],

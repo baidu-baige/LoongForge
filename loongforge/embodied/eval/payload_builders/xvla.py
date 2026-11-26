@@ -5,8 +5,8 @@
 
 X-VLA is a multi-embodiment model that requires:
 
-- Per-benchmark ``domain_id`` (LIBERO=3, RoboTwin=6, CALVIN=2, SimplerEnv=4)
-- Encoded proprio state (``ee6d`` for LIBERO/RoboTwin, no state for others)
+- Per-benchmark ``domain_id`` (LIBERO=3, RoboTwin=6, CALVIN=2, SimplerEnv=4, RoboDojo=0)
+- Encoded proprio state (``ee6d`` for LIBERO/RoboTwin, ``ee6d_robodojo`` for RoboDojo, no state for others)
 - Image list ordered ``[primary(+wrist|left|right)]``
 
 The single class collects every X-VLA-specific transform previously scattered
@@ -68,6 +68,31 @@ def build_ee6d_dual_proprio(
             np.asarray([right_grip], dtype=np.float32),
         ]
     ).astype(np.float32)
+
+
+def build_robodojo_proprio(state_raw: Dict[str, Any]) -> np.ndarray:
+    """20D dual-arm proprio of the official RoboDojo X_VLA adapter (``build_xvla_proprio``).
+
+    Per arm: measured xyz, wxyz quaternion -> interleaved 6-D rotation, and the measured gripper
+    joint as-is (unlike RoboTwin, no ``1 - 2 * gripper`` and no closed-loop pose backfill).
+    """
+    from scipy.spatial.transform import Rotation
+
+    def rot6d(quat_wxyz: np.ndarray) -> np.ndarray:
+        quat = np.asarray(quat_wxyz, dtype=np.float32).copy()
+        norm = np.linalg.norm(quat)
+        if norm < 1e-8:
+            quat, norm = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32), 1.0
+        quat = quat / max(norm, 1e-8)
+        xyzw = np.concatenate([quat[1:], quat[:1]])
+        return Rotation.from_quat(xyzw).as_matrix()[:, :2].reshape(6).astype(np.float32)
+
+    parts = []
+    for side in ("left", "right"):
+        pose = np.asarray(state_raw[f"{side}_ee_pose"], dtype=np.float32).reshape(-1)
+        grip = np.asarray(state_raw[f"{side}_gripper"], dtype=np.float32).reshape(-1)[-1]
+        parts += [pose[:3], rot6d(pose[3:7]), np.asarray([grip], dtype=np.float32)]
+    return np.concatenate(parts).astype(np.float32)
 
 
 def _quat_to_rot6d(quat: np.ndarray) -> np.ndarray:
@@ -196,6 +221,7 @@ DEFAULT_DOMAIN_ID_MAP = {
     "calvin": 2,
     "simplerenv": 0,
     "maniskill": 5,
+    "robodojo": 0,
 }
 
 
@@ -211,6 +237,7 @@ class XVLAPayloadBuilder(PayloadBuilder):
     #   ``ee6d_calvin``   — CALVIN (tcp_pos + euler→rot6d_interleaved + grip)
     #   ``ee6d_widowx``   — SimplerEnv WidowX (stateful, closed-loop backfill)
     #   ``ee6d_dual``     — RoboTwin dual-arm (stateful, closed-loop endpose backfill)
+    #   ``ee6d_robodojo`` — RoboDojo dual-arm (measured ee pose + raw gripper joint)
     #   ``passthrough``   — send ``canonical["model_state"]`` as-is (ManiSkill qpos)
     #   ``""``            — no state kwarg emitted
     state_encoding: str = "ee6d"
@@ -219,6 +246,7 @@ class XVLAPayloadBuilder(PayloadBuilder):
     action_horizon: int = 30
     state_dim: int = 20
     domain_id: int = -1  # -1 → auto from DOMAIN_ID_MAP[ctx.benchmark_name]
+    max_image_views: int = 0  # >0 → send only the first N packed views (RoboDojo: head only)
 
     # Non-annotated attributes: internal (not YAML-overridable).
     unnorm_key = ""
@@ -315,6 +343,9 @@ class XVLAPayloadBuilder(PayloadBuilder):
                 return None
             return build_ee6d_dual_proprio(endpose, self._robotwin_last_ee)
 
+        if self.state_encoding == "ee6d_robodojo":
+            return build_robodojo_proprio(state_raw)
+
         if self.state_encoding in self._STATEFUL_ENCODINGS:
             if self._state_buffer is None:
                 self._state_buffer = self._initial_stateful_proprio(canonical, state_raw)
@@ -329,6 +360,8 @@ class XVLAPayloadBuilder(PayloadBuilder):
     def build(self, canonical: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:
         """Return the kwargs consumed by ``XVLA.predict_action``."""
         images: List[np.ndarray] = _pack_images(canonical["images"])
+        if int(self.max_image_views) > 0:
+            images = images[: int(self.max_image_views)]
         state = self._encode_state(canonical)
         kwargs: Dict[str, Any] = {
             "images": images,

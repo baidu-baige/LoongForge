@@ -1,0 +1,85 @@
+# Copyright 2026 The LoongForge Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+# FastWAM on RoboDojo (Isaac Sim 5.1, dual-arm ARX X5) -- one task, one seed tag.
+# put_bottles_into_dustbin, native episode count. Change benchmark.task_name for other tasks;
+# set benchmark.eval_num to cap the episode count.
+#
+# Checkpoint: the RoboDojo-released FastWAM SFT (HF dataset RoboDojo-Benchmark/RoboDojo,
+# ckpt/RoboDojo/FastWAM/RoboDojo-sim-arx_x5-joint-<seed>/checkpoints/weights/step_020000.pt and
+# the run's dataset_stats.json). Base components resolve against DIFFSYNTH_MODEL_BASE_PATH as in
+# the official adapter (redirect_common_files: true): DiffSynth-Studio/Wan-Series-Converted-
+# Safetensors/{models_t5_umt5-xxl-enc-bf16,Wan2.2_VAE}.safetensors and
+# Wan-AI/Wan2.1-T2V-1.3B/google/umt5-xxl/; the video DiT comes from the checkpoint. Export
+# DIFFSYNTH_MODEL_BASE_PATH (and DIFFSYNTH_SKIP_DOWNLOAD=true) before launching the orchestrator;
+# the policy server inherits it.
+#
+# bridge=fastwam_joint14 mirrors the official RoboDojo FastWAM adapter (it reuses FastWAM's
+# RoboTwin deploy_policy with task robotwin_uncond_3cam_384_1e-4): three cameras INTER_AREA-
+# resized to 320x240, then packed to the 384x320 T layout; the raw 14-D joint state, z-score
+# normalized; the 32-step chunk truncated to 24 actions (replan_steps) executed as absolute joint
+# control; is_episode_end() checked only at chunk ends. The official adapter passes the eval seed
+# as the sampling seed of every call: keep model.noise_seed equal to benchmark.seed.
+# Fill /path/to/... below. Do not commit machine-specific absolute paths.
+
+benchmark:
+  name: robodojo
+  task_name: put_bottles_into_dustbin
+  seed: 0              # result tag (RoboDojo uses it for the training-seed column)
+  env_cfg_type: arx_x5
+  action_bridge: fastwam_joint14
+  first_chunk_len: 24  # = official replan_steps; every chunk runs to the end
+  chunk_len: 24
+
+model:
+  backend: loongforge
+  model_type: fastwam
+  name: loongforge-fastwam-robodojo
+  dtype: bfloat16      # official mixed_precision: bf16
+  variant: uncond
+  load_text_encoder: true
+  skip_dit_load_from_pretrain: true
+  action_dit_pretrained_path: null
+  redirect_common_files: true
+  mot_checkpoint_mixed_attn: false
+  action_dim: 14
+  action_horizon: 32
+  proprio_dim: 14
+  action_infer_mode: first_frame
+  num_inference_steps: 10
+  sigma_shift: 5.0     # official null -> scheduler infer_shift 5.0
+  num_video_frames: 9
+  camera_layout: robotwin_t
+  norm_mode: z-score
+  noise_seed: 0        # = benchmark.seed (official: seed=<eval seed>, rand_device cpu)
+  model_id: Wan-AI/Wan2.2-TI2V-5B
+  tokenizer_model_id: Wan-AI/Wan2.1-T2V-1.3B
+
+server:
+  host: 127.0.0.1
+  port: 62131
+  health_port: 62132
+  python: /path/to/loongforge/bin/python
+  start_timeout_sec: 1800
+  random_init: false
+  ckpt_path: /path/to/fastwam_robodojo_seed0/checkpoints/weights/step_020000.pt
+  dataset_statistics_path: /path/to/fastwam_robodojo_seed0/dataset_stats.json
+  tokenizer_path: /path/to/diffsynth_base/Wan-AI/Wan2.1-T2V-1.3B/google/umt5-xxl
+  use_bf16: true
+  chunk_execute_steps: 0   # 0 -> 24 for the robotwin_t layout (official replan_steps)
+
+env:
+  eval_root: /path/to/LoongForge/loongforge/embodied/eval
+  loongforge_root: /path/to/LoongForge
+  robodojo_root: /path/to/RoboDojo          # with Assets/ downloaded (scripts/init_assets.sh)
+  robodojo_python: /path/to/robodojo/bin/python   # Isaac Sim 5.1 + IsaacLab + curobo env
+  sim_env: {}          # extra env vars for the sim client (e.g. VK_ICD_FILENAMES)
+
+run:
+  output_dir: /path/to/reports/fastwam/robodojo/put_bottles_into_dustbin_seed0
+  cuda_visible_devices: "0"   # GPU of the sim client; the policy server inherits CUDA_VISIBLE_DEVICES
+  timestamped_output: false
+
+timeouts:
+  per_task_sec: 0             # whole official client run for this task; 0 = no limit
+  policy_call_sec: 900

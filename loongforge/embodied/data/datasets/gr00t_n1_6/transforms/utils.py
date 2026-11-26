@@ -455,6 +455,10 @@ EMBODIMENT_TAG_TO_PROJECTOR_INDEX = {
     "oxe_google": 0,
     "oxe_widowx": 1,
     "new_embodiment": 10,
+    # RoboDojo ARX X5 (dual arm), following the official GR00T_N17 RoboDojo fine-tune: it
+    # trains under the NEW_EMBODIMENT tag (new_embodiment projector), but its modality layout
+    # differs from LoongForge's own new_embodiment entry (SO100 single arm).
+    "robodojo_arx_x5": 10,
 }
 
 """SO100 modality metadata configuration"""
@@ -649,12 +653,43 @@ OXE_WIDOWX_MODALITY_CONFIG = {
     "language": ModalityConfig(delta_indices=[0], modality_keys=["annotation.human.action.task_description"]),
 }
 
+"""RoboDojo ARX X5 modality metadata configuration"""
+# Same layout as the official XPolicyLab/policy/GR00T_N17/configs/arx_x5_config.py (there is
+# no official N1.6 RoboDojo plugin). Raw state / action = [left 6 joints + gripper, right 6
+# joints + gripper]; both groups are relative to the current state, 16 steps.
+ROBODOJO_ARX_X5_MODALITY_META = {
+    "state": {
+        "left_arm": {"start": 0, "end": 7},
+        "right_arm": {"start": 7, "end": 14},
+    },
+    "action": {
+        "left_arm": {"start": 0, "end": 7},
+        "right_arm": {"start": 7, "end": 14},
+    },
+}
+
+"""RoboDojo ARX X5 modality configuration"""
+ROBODOJO_ARX_X5_MODALITY_CONFIG = {
+    "video": ModalityConfig(delta_indices=[0], modality_keys=["front", "left_wrist", "right_wrist"]),
+    "state": ModalityConfig(delta_indices=[0], modality_keys=["left_arm", "right_arm"]),
+    "action": ModalityConfig(
+        delta_indices=list(range(16)),
+        modality_keys=["left_arm", "right_arm"],
+        action_configs=[
+            ActionConfig(rep=ActionRepresentation.RELATIVE, type=ActionType.NON_EEF, format=ActionFormat.DEFAULT),
+            ActionConfig(rep=ActionRepresentation.RELATIVE, type=ActionType.NON_EEF, format=ActionFormat.DEFAULT),
+        ],
+    ),
+    "language": ModalityConfig(delta_indices=[0], modality_keys=["annotation.human.task_description"]),
+}
+
 """Modality configurations mapping"""
 MODALITY_CONFIGS = {
     "new_embodiment": SO100_MODALITY_CONFIG,
     "libero_panda": LIBERO_PANDA_MODALITY_CONFIG,
     "behavior_r1_pro": BEHAVIOR_R1_PRO_MODALITY_CONFIG,
     "oxe_widowx": OXE_WIDOWX_MODALITY_CONFIG,
+    "robodojo_arx_x5": ROBODOJO_ARX_X5_MODALITY_CONFIG,
 }
 
 """Embodiment statistics configurations"""
@@ -668,6 +703,10 @@ EMBODIMENT_STAT_CONFIGS = {
     "oxe_widowx": {
         "modality_meta": OXE_WIDOWX_MODALITY_META,
         "modality_config": OXE_WIDOWX_MODALITY_CONFIG,
+    },
+    "robodojo_arx_x5": {
+        "modality_meta": ROBODOJO_ARX_X5_MODALITY_META,
+        "modality_config": ROBODOJO_ARX_X5_MODALITY_CONFIG,
     },
 }
 

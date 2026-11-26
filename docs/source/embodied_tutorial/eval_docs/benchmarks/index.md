@@ -6,6 +6,7 @@ Per-benchmark reproduction guides (env setup, run, verification):
 - [CALVIN](calvin.md)
 - [SimplerEnv (WidowX)](simplerenv.md)
 - [RoboTwin](robotwin.md)
+- [RoboDojo](robodojo.md)
 - [ManiSkill](maniskill.md)
 
 ```{toctree}
@@ -15,5 +16,6 @@ libero
 calvin
 simplerenv
 robotwin
+robodojo
 maniskill
 ```

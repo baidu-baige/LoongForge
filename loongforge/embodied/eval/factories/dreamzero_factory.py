@@ -85,6 +85,15 @@ class DreamZeroEvalConfig(DreamZeroConfig):
     max_state_dim: int = 64
     max_action_dim: int = 32
     dit_action_state_hidden_size: int = 1024
+    # "libero" (default) or "robodojo_agibot" (DreamZero-AgiBot through the official
+    # RoboDojo XPolicyLab adapter protocol, see dreamzero_robodojo.py).
+    eval_protocol: str = "libero"
+    # robodojo_agibot: env steps executed per chunk (official deploy.yml action_horizon) and
+    # frames sent per inference (video_history).
+    eval_action_horizon: int = 24
+    eval_video_history: int = 4
+    # robodojo_agibot: the official adapter keeps the action-head session across episodes.
+    reset_session_on_new_episode: bool = False
 
 
 class _Q99Stats:
@@ -345,6 +354,11 @@ class DreamZeroModelFactory:
             device=resolved_device,
         )
 
+        if model_cfg.eval_protocol == "robodojo_agibot":
+            return cls._build_robodojo(model_cfg, server_args, infer_model, ckpt_path, tokenizer_path)
+        if model_cfg.eval_protocol != "libero":
+            raise ValueError(f"Unsupported DreamZero eval_protocol: {model_cfg.eval_protocol!r}")
+
         state_stats, action_stats = _load_q99_stats(
             server_args.dataset_statistics_path, "libero_sim"
         )
@@ -369,6 +383,35 @@ class DreamZeroModelFactory:
             "action_horizon": model_cfg.action_horizon,
             "embodiment_tag": "libero_sim",
             "embodiment_id": LIBERO_SIM_EMBODIMENT_ID,
+            "dataset_statistics_path": server_args.dataset_statistics_path,
+            "tokenizer_path": tokenizer_path,
+        }
+        return PredictActionModelSpec(model=eval_model, metadata=metadata)
+
+    @staticmethod
+    def _build_robodojo(model_cfg, server_args, infer_model, ckpt_path, tokenizer_path) -> PredictActionModelSpec:
+        """DreamZero-AgiBot under the official RoboDojo adapter protocol (14-D joints out)."""
+        from loongforge.embodied.eval.factories.dreamzero_robodojo import AgibotQ99, DreamZeroRoboDojoEvalModel
+
+        eval_model = DreamZeroRoboDojoEvalModel(
+            infer_model=infer_model,
+            stats=AgibotQ99.from_metadata(server_args.dataset_statistics_path, "agibot"),
+            negative_prompt=_DREAMZERO_NEGATIVE_PROMPT,
+            action_horizon=model_cfg.eval_action_horizon,
+            video_history=model_cfg.eval_video_history,
+            max_state_dim=model_cfg.max_state_dim,
+            reset_session_on_new_episode=model_cfg.reset_session_on_new_episode,
+        )
+        metadata: Dict[str, Any] = {
+            "framework": "loongforge",
+            "model_type": "dreamzero",
+            "ckpt_path": ckpt_path if not server_args.random_init else "random_init://dreamzero",
+            "random_init": bool(server_args.random_init),
+            "loongforge_root": server_args.loongforge_root,
+            "action_dim": 14,
+            "action_horizon": model_cfg.eval_action_horizon,
+            "embodiment_tag": "agibot",
+            "embodiment_id": DREAMZERO_RUNTIME_EMBODIMENT_ID,
             "dataset_statistics_path": server_args.dataset_statistics_path,
             "tokenizer_path": tokenizer_path,
         }

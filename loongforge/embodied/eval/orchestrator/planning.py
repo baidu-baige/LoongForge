@@ -34,7 +34,7 @@ def benchmark_family(config: Dict[str, Any]) -> str:
     name = str(benchmark.get("name") or "").lower()
     if name == "libero" or name.startswith("libero_"):
         return "libero"
-    if name in {"calvin", "simplerenv", "robotwin", "maniskill"}:
+    if name in {"calvin", "simplerenv", "robotwin", "maniskill", "robodojo"}:
         return name
     raise ValueError(f"Unsupported benchmark.name: {benchmark.get('name')!r}")
 

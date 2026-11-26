@@ -54,16 +54,23 @@ To run several sim workers per GPU behind a global queue, add `servers:` and `po
 
 ## Supported Matrix
 
-| | LIBERO | CALVIN | SimplerEnv (WidowX) | RoboTwin | ManiSkill |
-|---|---|---|---|---|---|
-| **pi05** | ✅ task success ([lerobot/pi05_libero_finetuned_v044](https://huggingface.co/lerobot/pi05_libero_finetuned_v044)) | connectivity only | connectivity only | ✅ task success ([motus-robotics/pi0.5_robotwin2](https://huggingface.co/motus-robotics/pi0.5_robotwin2)) | connectivity only |
-| **xvla** | ✅ task success ([2toINF/X-VLA-LIBERO](https://huggingface.co/2toINF/X-VLA-LIBERO)) | connectivity only | ✅ task success ([2toINF/X-VLA-WidowX](https://huggingface.co/2toINF/X-VLA-WidowX)) | ✅ task success ([2toINF/X-VLA-RoboTwin2](https://huggingface.co/2toINF/X-VLA-RoboTwin2)) | connectivity only |
-| **GR00T-N1.6** | ✅ task success ([0xAnkitSingh/GR00T-N1.6-LIBERO](https://huggingface.co/0xAnkitSingh/GR00T-N1.6-LIBERO)) | — | ✅ task success ([nvidia/GR00T-N1.6-bridge](https://huggingface.co/nvidia/GR00T-N1.6-bridge)) | — | — |
+| | LIBERO | CALVIN | SimplerEnv (WidowX) | RoboTwin | RoboDojo | ManiSkill |
+|---|---|---|---|---|---|---|
+| **pi05** | ✅ task success ([lerobot/pi05_libero_finetuned_v044](https://huggingface.co/lerobot/pi05_libero_finetuned_v044)) | connectivity only | connectivity only | ✅ task success ([motus-robotics/pi0.5_robotwin2](https://huggingface.co/motus-robotics/pi0.5_robotwin2)) | ✅ task success ([RoboDojo-Benchmark/RoboDojo](https://huggingface.co/datasets/RoboDojo-Benchmark/RoboDojo) `ckpt/RoboDojo/Pi_05`) | connectivity only |
+| **xvla** | ✅ task success ([2toINF/X-VLA-LIBERO](https://huggingface.co/2toINF/X-VLA-LIBERO)) | connectivity only | ✅ task success ([2toINF/X-VLA-WidowX](https://huggingface.co/2toINF/X-VLA-WidowX)) | ✅ task success ([2toINF/X-VLA-RoboTwin2](https://huggingface.co/2toINF/X-VLA-RoboTwin2)) | ✅ task success (`ckpt/RoboDojo/X_VLA`) | connectivity only |
+| **GR00T-N1.6** | ✅ task success ([0xAnkitSingh/GR00T-N1.6-LIBERO](https://huggingface.co/0xAnkitSingh/GR00T-N1.6-LIBERO)) | — | ✅ task success ([nvidia/GR00T-N1.6-bridge](https://huggingface.co/nvidia/GR00T-N1.6-bridge)) | — | smoke run only — no official RoboDojo checkpoint | — |
+| **GR00T-N1.7** | | | | | ✅ task success (`ckpt/RoboDojo/GR00T_N17`) | |
+| **FastWAM** | | | | | ✅ task success (`ckpt/RoboDojo/FastWAM`) | |
+| **LingBot-VA** | | | | | per-episode agreement with the official run (`ckpt/RoboDojo/Lingbot_VA` scores ~0 on RoboDojo) | |
+| **Spatial_Forcing** | | | | | ✅ task success (`ckpt/RoboDojo/Spatial_Forcing`) | |
+| **DreamZero-AgiBot** | | | | | smoke run only — no official RoboDojo checkpoint | |
 
 - **Task success**: at least one episode passed the benchmark's official success criterion.
-- **Weights**: parentheses show the Hugging Face weight (`org/name`) that achieved the run.
+- **Weights**: parentheses show the Hugging Face weight (`org/name`) that achieved the run. RoboDojo
+  checkpoint directories are inside [RoboDojo-Benchmark/RoboDojo](https://huggingface.co/datasets/RoboDojo-Benchmark/RoboDojo).
 - **Connectivity only**: the pipeline runs with `random_init: true` and no score — either no domain weights are released, or the benchmark assets block a full run (e.g. xvla CALVIN: the weights are public, but the official online rollout needs the original-format validation dataset).
 - **—**: not supported yet — coming soon.
+- **Empty**: the model runs on that benchmark but has no published result here.
 - **Detailed results**: see the per-benchmark [benchmark pages](eval_docs/benchmarks/index.md).
 
 ## Model Interface

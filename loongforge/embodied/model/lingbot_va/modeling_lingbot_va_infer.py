@@ -127,6 +127,16 @@ class LingBotVAInferenceConfig:
     checkpoint_path: Optional[str] = None
     wan_pretrained_path: Optional[str] = None
     max_sequence_length: int = 512
+    # Device of the frozen VAE / text encoder; ``None`` means ``device``. Upstream's
+    # robotwin30_train config offloads both to ``"cpu"`` (``enable_offload=True``).
+    frozen_modules_device: Optional[str] = None
+
+    # Reproduce upstream ``wan_va_server`` arithmetic where this port differs only in
+    # numerics: the scheduler step size is taken in fp32, ``(a + 1) / 2`` of the action
+    # de-normalization runs in the model dtype, and the chunk fed back into the KV cache
+    # makes upstream's round trip through env scale. Off by default, so existing benchmark
+    # numbers are unchanged.
+    upstream_numerics: bool = False
 
     device: str = "cuda"
     dtype: str = "bfloat16"
@@ -197,6 +207,24 @@ class LingBotVAInferenceConfig:
         return max(1, self.action_per_frame // 4)
 
 
+class _Fp32StepScheduler(LingBotVAFlowMatchScheduler):
+    """``upstream_numerics``: take the Euler step size in fp32, as upstream ``wan_va_server`` does.
+
+    The shared scheduler casts both sigmas to the sample dtype first; upstream applies a 0-dim
+    fp32 CPU step size to the sample. Only the step differs, so the schedule itself is inherited.
+    """
+
+    def step(self, model_output: torch.Tensor, timestep: torch.Tensor, sample: torch.Tensor) -> torch.Tensor:
+        """Run one denoising step with the sigma difference taken in fp32."""
+        if not torch.is_tensor(timestep):
+            timestep = torch.tensor(timestep)
+        timesteps = self.timesteps.to(timestep.device)
+        index = int(torch.argmin((timesteps - timestep.reshape(-1)[0]).abs()))
+        sigma = self.sigmas[index]
+        sigma_next = self.sigmas[index + 1] if index + 1 < len(self.sigmas) else torch.zeros_like(sigma)
+        return sample + model_output * (sigma_next - sigma)
+
+
 class LingBotVAPredictActionModel(nn.Module):
     """Closed-loop LingBot-VA inference behind the shared ``predict_action`` contract.
 
@@ -253,7 +281,8 @@ class LingBotVAPredictActionModel(nn.Module):
         The video and action streams denoise on deliberately different schedules, so
         each gets its own instance built through this helper.
         """
-        return LingBotVAFlowMatchScheduler(
+        scheduler_cls = _Fp32StepScheduler if self.config.upstream_numerics else LingBotVAFlowMatchScheduler
+        return scheduler_cls(
             num_train_timesteps=self.config.num_train_timesteps,
             shift=shift,
             sigma_min=self.config.sigma_min,
@@ -288,10 +317,11 @@ class LingBotVAPredictActionModel(nn.Module):
                 "wan_pretrained_path must be set to load the frozen VAE / text encoder "
                 "(they are not part of the transformer checkpoint)"
             )
+        frozen_device = self.config.frozen_modules_device or self.config.device
         self._frozen = {
-            "vae": wan_codec.load_vae(path, self.dtype, self.config.device, subfolder="vae"),
+            "vae": wan_codec.load_vae(path, self.dtype, frozen_device, subfolder="vae"),
             "text_encoder": wan_codec.load_text_encoder(
-                path, self.dtype, self.config.device, subfolder="text_encoder"
+                path, self.dtype, frozen_device, subfolder="text_encoder"
             ),
             "tokenizer": wan_codec.load_tokenizer(path, subfolder="tokenizer"),
         }
@@ -676,7 +706,6 @@ class LingBotVAPredictActionModel(nn.Module):
         """
         cfg = self.config
         used = list(cfg.used_action_channel_ids)
-        out = actions.float()
         if not len(cfg.norm_q01) or not len(cfg.norm_q99):
             raise ValueError(
                 "norm_q01 / norm_q99 are empty: the model would return actions still in the "
@@ -684,9 +713,26 @@ class LingBotVAPredictActionModel(nn.Module):
                 "env's action scale. Set them from the dataset's quantile statistics "
                 "(upstream keeps them in the task config as norm_stat)."
             )
-        q01 = torch.as_tensor(cfg.norm_q01, dtype=torch.float32, device=out.device)[used]
-        q99 = torch.as_tensor(cfg.norm_q99, dtype=torch.float32, device=out.device)[used]
-        return (((out + 1.0) / 2.0) * (q99 - q01 + 1e-6) + q01).cpu().numpy()
+        # Upstream computes ``(a + 1) / 2`` in the model dtype before meeting the fp32 stats.
+        half = ((actions + 1.0) / 2.0).float() if cfg.upstream_numerics else (actions.float() + 1.0) / 2.0
+        q01 = torch.as_tensor(cfg.norm_q01, dtype=torch.float32, device=half.device)[used]
+        q99 = torch.as_tensor(cfg.norm_q99, dtype=torch.float32, device=half.device)[used]
+        return (half * (q99 - q01 + 1e-6) + q01).cpu().numpy()
+
+    def _upstream_feedback(self, actions: torch.Tensor) -> torch.Tensor:
+        """Round-trip a normalized chunk through env scale, as upstream's feedback does.
+
+        Upstream's client sends the de-normalized chunk back and the server re-normalizes it
+        in fp32 before casting to the model dtype; unused channels are zeroed afterwards.
+        """
+        cfg = self.config
+        q01 = torch.as_tensor(cfg.norm_q01, dtype=torch.float32, device=actions.device)
+        q99 = torch.as_tensor(cfg.norm_q99, dtype=torch.float32, device=actions.device)
+        q01, q99 = q01.view(1, -1, 1, 1, 1), q99.view(1, -1, 1, 1, 1)
+        env_scale = ((actions + 1.0) / 2.0).float() * (q99 - q01 + 1e-6) + q01
+        fed = ((env_scale - q01) / (q99 - q01 + 1e-6) * 2.0 - 1.0).to(actions.dtype)
+        fed[:, ~self._action_mask] = 0
+        return fed
 
     def _chunk_to_steps(self, actions: torch.Tensor, drop_first_frame: bool) -> np.ndarray:
         """Flatten a chunk ``[1, action_dim, F, action_per_frame, 1]`` to ``[n_steps, n_used]``.
@@ -709,7 +755,9 @@ class LingBotVAPredictActionModel(nn.Module):
         """
         steps = self._chunk_to_steps(actions, drop_first_frame)
         state.action_queue = deque(steps)
-        state.executed_actions = actions
+        state.executed_actions = (
+            self._upstream_feedback(actions) if self.config.upstream_numerics else actions
+        )
         state.begin_chunk()
 
     # ── the eval entry point ─────────────────────────────────────────

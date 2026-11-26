@@ -1,6 +1,6 @@
 # 离线评测
 
-LoongForge 在 `loongforge/embodied/eval` 下提供了离线评测模块，通过 WebSocket / msgpack-numpy RPC 将基准测试客户端和模型策略服务器作为两个独立进程连接。目前支持 LoongForge **pi0.5** 和 **X-VLA** 作为策略后端，覆盖五个基准测试：**LIBERO**、**CALVIN**、**SimplerEnv**、**RoboTwin (2.0)** 和 **ManiSkill**。用户侧只需要一个 YAML 配置文件和一个启动脚本，无需修改 Python 入口代码。本指南涵盖支持范围、运行方法、各基准测试的配置方式，以及如何扩展新模型。
+LoongForge 在 `loongforge/embodied/eval` 下提供了离线评测模块，通过 WebSocket / msgpack-numpy RPC 将基准测试客户端和模型策略服务器作为两个独立进程连接。目前支持 LoongForge **pi0.5** 和 **X-VLA** 作为策略后端，覆盖五个基准测试：**LIBERO**、**CALVIN**、**SimplerEnv**、**RoboTwin (2.0)** 和 **ManiSkill**；**RoboDojo** 另有八个模型的接入（见 *4.6 章节*）。用户侧只需要一个 YAML 配置文件和一个启动脚本，无需修改 Python 入口代码。本指南涵盖支持范围、运行方法、各基准测试的配置方式，以及如何扩展新模型。
 
 ---
 
@@ -141,7 +141,7 @@ timeouts:
 
 | 字段 | 含义 |
 |---|---|
-| `benchmark.name` | 选择运行器：`libero`、`calvin`、`simplerenv`、`robotwin`、`maniskill`。 |
+| `benchmark.name` | 选择运行器：`libero`、`calvin`、`simplerenv`、`robotwin`、`maniskill`、`robodojo`。 |
 | `model.backend` | `loongforge` 启动真实模型服务器。`mock` 启动仅协议服务器用于连通性检查。 |
 | `model.*` | 与各 `ModelConfig` dataclass 匹配的模型结构字段（`action_dim`、`action_horizon`、`compile_model` 等）。 |
 | `server.ckpt_path` | 包含 `model.safetensors` 的目录，或权重文件本身。 |
@@ -328,6 +328,35 @@ ManiSkill 是基于 SAPIEN 的 GPU 友好操作套件。pi0.5 和 X-VLA 目前�
 本体感知说明：对于 Panda 机器人，当 `qpos` 为 9D（7 臂 + 2 手指）时，适配器输出 8D `model_state` = 7 关节 + 两个手指关节的均值（与 RLinf / openpi ManiSkill 布局一致）。结构化 `state` 仍保留完整 `qpos`。仅打包 `base_camera` 视角。
 
 > **注意：这不同于 RLinf PutOnPlate。** RLinf 的 pi0.5 ManiSkill SFT 训练在 `PutOnPlateInScene25Main-v3`（WidowX Bridge real2sim）上，而非标准 `PickCube-v1` + Panda。LoongForge 不提供该环境；PickCube YAML 仅用于验证 ManiSkill 运行器和 RPC 通路。
+
+### 4.6 RoboDojo
+
+RoboDojo 是基于 Isaac Sim 5.1 的双臂 ARX X5（`arx_x5`）基准：42 个任务 + 12 个 `_random` 布局变体，共 54 个配置。LoongForge 原样调用 RoboDojo 官方 Isaac Sim 客户端，通过 XPolicyLab 插件接入，成功与否仍由官方奖励模块判定。
+
+参考权重在 [RoboDojo-Benchmark/RoboDojo](https://huggingface.co/datasets/RoboDojo-Benchmark/RoboDojo) 的 `ckpt/RoboDojo/<policy>/` 下。各模型的 `action_bridge`：
+
+| `action_bridge` | 模型 | 动作空间 |
+|---|---|---|
+| `lingbot_va_joint30` | LingBot-VA | 30 维动作里的 14 个关节通道 |
+| `pi05_joint14` | pi0.5 | 14 维关节（增量，按动作块起始状态转绝对） |
+| `pi05_sf_joint14` | Spatial_Forcing | 14 维关节（绝对） |
+| `xvla_ee20` | X-VLA | 20 维末端位姿 |
+| `fastwam_joint14` | FastWAM | 14 维关节（绝对），每块执行 24 步 |
+| `gr00t_n17_joint14` / `gr00t_n16_joint14` | GR00T-N1.7 / N1.6 | 14 维关节，16 步动作块 |
+| `dreamzero_joint14` | DreamZero-AgiBot | 14 维关节，24 步动作块 |
+
+需要两个互不替代的 Python：`env.robodojo_python` 是跑 `scripts/eval_policy.sh` 的 Isaac Sim 环境（RoboDojo 固定 `websockets 12`）；`env.policy_python` 跑承载 LoongForge bridge 的 XPolicyLab 策略服务器（需要 `websockets>=14`）。
+
+```bash
+examples/embodied/lingbot_va/eval/run_robodojo_eval.sh    # CONFIG=... 选择配置
+# 其余模型的示例配置：examples/embodied/{pi05,xvla,fastwam,gr00t_n1_7,gr00t_n1_6,dreamzero}/eval/configs/robodojo/
+```
+
+RoboDojo 按 `--policy_name` 到自己的 `XPolicyLab/policy/<名字>/` 下找插件包，所以运行器会在每轮评测自动生成这个包（episode 循环、`Model` 入口、`deploy.yml`），不需要手动往 RoboDojo 检出里放文件；不是 LoongForge 生成的同名包会被原样保留并让本轮失败。
+
+一个 Isaac Sim 进程跑多个环境：置 `benchmark.eval_batch: true` 与 `benchmark.num_envs: <k>`。运行器会把插件按 `LoongForgeBatch` 这个名字生成、`deploy.yml` 里写 `eval_batch: true`（RoboDojo 在仿真进程里从这里读），并在运行目录写一份只改两行的 `eval_policy.sh` 副本——官方脚本从仿真配置取 `num_envs` 且会丢掉多余参数，传不进去。限制来自显存：ARX X5 场景下每个 Isaac Sim 进程约 10 GB，96 GB 卡上大致是 2 进程 × 10 环境。
+
+全量对齐（54 配置 × seed 0，2100 episode，与官方同布局运行对比，括号为差值的 95% CI）：Spatial_Forcing 9.29% vs 9.38%（−0.10 pp ±1.76）、pi0.5 8.43% vs 9.19%（−0.76 pp ±1.71）、X-VLA 7.05% vs 6.95%、FastWAM 1.43% vs 1.33%（+0.10 pp ±0.71）、GR00T-N1.7 0.76% vs 1.00%（−0.24 pp ±0.57）、LingBot-VA 0/2100 vs 1/2100（逐 episode 成功标记 2099/2100 一致）。GR00T-N1.6 与 DreamZero 没有官方 RoboDojo 策略可比（既无权重也无插件），只做冒烟与对官方同族源码的逐项单测。更多细节见 [RoboDojo 基准页](https://github.com/baidu-baige/LoongForge/blob/master/docs/source/embodied_tutorial/eval_docs/benchmarks/robodojo.md)。
 
 ---
 
