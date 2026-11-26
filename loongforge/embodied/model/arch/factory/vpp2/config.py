@@ -18,9 +18,10 @@ class Vpp2Config(DualStreamWanConfig):
     """``--model-name vpp2``.
 
     Attributes:
-        visible_video_frames: How many leading video frames the action stream
+        video_prefix_frames: How many leading video frames the action stream
             may attend to. Shapes a visibility rule, hence a provider argument
-            and not a section key.
+            and not a section key. The name matches the provider signature
+            because ``provider_kwargs()`` forwards field names verbatim.
         inference_steps: Denoising steps for the action stream at eval time.
         proprio_dim: Width of the raw proprioception vector, i.e. the input
             width of the token encoder whose output is appended to the text
@@ -28,6 +29,6 @@ class Vpp2Config(DualStreamWanConfig):
     """
 
     model_type: str = "vpp2"
-    visible_video_frames: Optional[int] = None
+    video_prefix_frames: Optional[int] = None
     inference_steps: Optional[int] = None
     proprio_dim: Optional[int] = None
