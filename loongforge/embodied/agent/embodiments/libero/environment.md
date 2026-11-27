@@ -1,0 +1,6 @@
+- Robot: a Franka Panda arm with a parallel gripper, mounted on the far side of a table.
+- World frame (metres): +z points up and the table surface is near z = 0.90. The robot base is at x = -0.66, y = 0; +x points from the robot toward the agentview camera.
+- agentview: a fixed camera facing the robot. In its image the robot is at the top, +x points toward the bottom of the image and +y toward the right.
+- wrist: a camera on the gripper, looking along the fingers.
+- Images are upright. Pixels are [row, col] in the shown image; row 0 is the top.
+- The episode ends by itself as soon as the task is done.
