@@ -1,0 +1,13 @@
+{
+  "episode": "pick_place__2026-04-14-04-29-46-000000",
+  "frames": 183,
+  "fps": 30.0,
+  "width": 640,
+  "height": 480,
+  "coordinate_frame": "egoverse_world",
+  "units": "meters",
+  "quaternion_order": "wxyz",
+  "hand_reference_sha256": "63ba410808b00db7c92b4ad1888c5a6c4167ae95673d4030de560d29ce5651d8",
+  "source_start_frame": 0,
+  "source_end_frame_exclusive": 183
+}

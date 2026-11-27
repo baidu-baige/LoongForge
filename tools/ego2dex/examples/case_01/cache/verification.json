@@ -1,0 +1,13 @@
+{
+  "position_mean_mm": [0.010196525293401535, 0.026885315973341112],
+  "position_max_m": 0.0001226690038862309,
+  "position_failed_frames": 0,
+  "orientation_mean_deg": [4.564251969307367, 12.47998215038284],
+  "max_joint_step_rad": 0.09999052078528203,
+  "max_velocity_rad_s": 2.999715623558461,
+  "self_collision_frames": 0,
+  "cross_arm_collision_frames": 0,
+  "midpoint_collision_intervals": 0,
+  "joint_limit_violation_frames": 0,
+  "accepted": true
+}
