@@ -126,9 +126,7 @@ def drop_heads(spec: WorldModelSpec, names: Sequence[str]) -> WorldModelSpec:
     return replace(
         spec,
         heads=tuple(head for head in spec.heads if head.name not in dropped),
-        diffusion=replace(spec.diffusion, losses=tuple(
-            loss for loss in spec.diffusion.losses
-            if loss.head not in dropped)),
+        losses=tuple(loss for loss in spec.losses if loss.head not in dropped),
     )
 
 

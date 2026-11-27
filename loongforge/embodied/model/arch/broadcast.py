@@ -20,7 +20,7 @@ from dataclasses import dataclass
 
 from torch import Tensor
 
-from ..layout import TokenLayout
+from .layout import TokenLayout
 
 __all__ = ["BroadcastSpec", "DEFAULT_PER_SAMPLE"]
 

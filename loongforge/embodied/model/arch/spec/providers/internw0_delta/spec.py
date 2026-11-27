@@ -12,15 +12,16 @@ distillation losses, and the ``flex`` attention backend.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 
-from ....diffusion.loss import CosineDistance, LossSpec, WeightRamp
 from ....diffusion.schedule import RectifiedFlow
 from ....diffusion.spec import DiffusionSpec
 from ....diffusion.stepping import EulerSampler, UniformSteps
 from ....diffusion.timesteps import TimestepSampler, UniformShift
 from ....geometry import GeometrySpec
 from ....heads.flow import build_flow_head
+from ....losses import CosineDistance, LossSpec, WeightRamp
 from ....heads.hidden_ref import HiddenStateRef
 from ....heads.spec import HeadSpec
 from ....streams.blocks import ActionStream, WanVideoStream
@@ -32,7 +33,8 @@ from ....visibility.combine import Visibility
 from ....visibility.phases import (CONDITION, REAL_VIDEO, Phase, phase_labels)
 from ....visibility.rules import frame_causal, label_edge, same_stream
 from ...core import Spec, register_provider
-from ...overrides import reject_config, resolve_diffusion, resolve_geometry, resolve_scalars
+from ...overrides import (StreamShift, reject_config, resolve_diffusion,
+                          resolve_geometry, resolve_scalars)
 from ...world import WorldModelSpec
 from ..dual_stream_wan import STREAM_SCALAR_KEYS, _dual_stream_wan_streams
 
@@ -152,6 +154,14 @@ def _internw0_delta_visibility() -> dict[str, Visibility]:
     }
 
 
+@dataclass(frozen=True)
+class _InternW0DeltaDiffusion:
+    """YAML-overridable diffusion parameters for InternW0-Delta (``diffusion.<stream>.shift``)."""
+
+    video: StreamShift = StreamShift(shift=6.0)
+    action: StreamShift = StreamShift(shift=1.0)
+
+
 @register_provider("internw0_delta")
 def _internw0_delta(config: Any = None, *,
                     geometry: Mapping[str, Any] | None = None,
@@ -268,39 +278,12 @@ def _internw0_delta(config: Any = None, *,
     # YAML may set the two shifts as ``diffusion.<stream>.shift``; any other
     # key raises (§1.15).
     diffusion_values = resolve_diffusion(
-        "internw0_delta", {"video": {"shift": 6.0}, "action": {"shift": 1.0}}, diffusion)
+        "internw0_delta", _InternW0DeltaDiffusion(), diffusion)
     diffusion = DiffusionSpec(
         timesteps={
-            "video": TimestepSampler(UniformShift(shift=diffusion_values["video"]["shift"])),
-            "action": TimestepSampler(UniformShift(shift=diffusion_values["action"]["shift"])),
+            "video": TimestepSampler(UniformShift(shift=diffusion_values.video.shift)),
+            "action": TimestepSampler(UniformShift(shift=diffusion_values.action.shift)),
         },
-        # Five terms with weights 0.5, 1.0, 0.5, 0.1, and a 0.1 track
-        # weight after warmup. The names below are the loss table keys.
-        # This is why ``losses`` is a **tuple** rather than two fields
-        # named video and action.
-        losses=(
-            LossSpec(name="video_flow", head="video_flow", weight=0.5),
-            LossSpec(name="action_flow", head="action_flow", weight=1.0),
-            LossSpec(name="future_delta", head="future_delta", weight=0.5),
-            # ``1 - cos`` rather than MSE: this
-            # self-distillation term aligns direction, not magnitude, so
-            # swapping in MSE changes the training problem.
-            LossSpec(name="semantic_future", head="semantic_future",
-                     objective=CosineDistance(), weight=0.1),
-            # The 0.1 on track is an **upper bound**, not a constant weight:
-            # ``weight = loss_weight * min(1.0, step / warmup_steps)`` in the
-            # legacy track-alignment implementation, with
-            # ``warmup_steps: 2000`` from the distillation configuration.
-            # ``WeightRamp`` supplies the schedule. The model does not count
-            # steps itself, so the trainer passes the step in from
-            # ``batch["global_step"]``.
-            # Note that ``LossSpec.weight_at`` **ignores** ``weight`` when a
-            # ramp is present, so the final value goes in ``end_value`` rather
-            # than in ``weight``.
-            LossSpec(name="track_align", head="track_align",
-                     ramp=WeightRamp(start_step=0, end_step=2000,
-                                     start_value=0.0, end_value=0.1)),
-        ),
         schedule=RectifiedFlow(),
         sampling_gate=UniformSteps(num_steps=inference_steps,
                           skip=frozenset({"video"})),
@@ -309,6 +292,21 @@ def _internw0_delta(config: Any = None, *,
         # The training path still has to attach the corresponding labels to
         # individual tokens.
         noise_levels=(0.0, 1.0),
+    )
+
+    # Five terms with weights 0.5, 1.0, 0.5, 0.1, and a 0.1 track weight after
+    # warmup. Kept on WorldModelSpec.losses rather than DiffusionSpec: the
+    # self-distillation CosineDistance and the track WeightRamp are not
+    # diffusion objectives.
+    losses = (
+        LossSpec(name="video_flow", head="video_flow", weight=0.5),
+        LossSpec(name="action_flow", head="action_flow", weight=1.0),
+        LossSpec(name="future_delta", head="future_delta", weight=0.5),
+        LossSpec(name="semantic_future", head="semantic_future",
+                 objective=CosineDistance(), weight=0.1),
+        LossSpec(name="track_align", head="track_align",
+                 ramp=WeightRamp(start_step=0, end_step=2000,
+                                 start_value=0.0, end_value=0.1)),
     )
 
     # Five output heads are declared below. The first two predict flow,
@@ -392,6 +390,7 @@ def _internw0_delta(config: Any = None, *,
         attention_groups=(group,),
         diffusion=diffusion,
         heads=heads,
+        losses=losses,
         # One text cross-attention slot per layer, consumed by both streams.
         # Unlike vpp2, this provider does not use CLIP conditioning.
         # Both streams use text context width 4096, which is the input width

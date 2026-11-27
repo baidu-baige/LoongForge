@@ -20,7 +20,7 @@ from typing import Literal, Protocol
 import torch
 from torch import Tensor
 
-from .broadcast import DEFAULT_PER_SAMPLE, BroadcastSpec
+from ..broadcast import DEFAULT_PER_SAMPLE, BroadcastSpec
 
 __all__ = [
     "TimestepDistribution", "UniformShift", "LogitNormal", "BetaDist",
@@ -54,7 +54,7 @@ class UniformShift:
         shift: Reparameterisation strength; must be positive.
     """
 
-    shift: float = 1.0   # [YAML] diffusion.<stream>.shift, resolved by the provider (resolve_diffusion)
+    shift: float = 1.0          # [YAML]
 
     def __post_init__(self) -> None:
         if self.shift <= 0:
@@ -98,8 +98,8 @@ class LogitNormal:
         std: Standard deviation of the underlying normal; must be positive.
     """
 
-    mean: float = 0.0    # [YAML] diffusion.<stream>.mean, read by the provider
-    std: float = 1.0     # [YAML] diffusion.<stream>.std, read by the provider
+    mean: float = 0.0           # [YAML]
+    std: float = 1.0            # [YAML]
 
     def __post_init__(self) -> None:
         if self.std <= 0:
@@ -143,8 +143,8 @@ class BetaDist:
             existing scheduler.
     """
 
-    alpha: float = 1.0   # [YAML] diffusion.<stream>.alpha, read by the provider
-    beta: float = 1.0    # [YAML] diffusion.<stream>.beta, read by the provider
+    alpha: float = 1.0          # [YAML]
+    beta: float = 1.0           # [YAML]
     eps: float = 1e-6           # denominator floor; same as scheduler's ``eps``
 
     def __post_init__(self) -> None:
@@ -198,7 +198,7 @@ class Constant:
         value: The constant timestep; must lie in [0, 1].
     """
 
-    value: float = 0.0          # not a YAML knob: a constant timestep is the provider's choice (R5)
+    value: float = 0.0          # [YAML]
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.value <= 1.0:

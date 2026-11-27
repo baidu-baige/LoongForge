@@ -23,9 +23,9 @@ from __future__ import annotations
 import pytest
 import torch
 
-from loongforge.embodied.model.arch.diffusion.broadcast import BroadcastSpec
-from loongforge.embodied.model.arch.diffusion.loss import (
-    BatchPadding, CosineDistance, LossSpec, MeanSquaredError, TokenMeanSquaredError)
+from loongforge.embodied.model.arch.broadcast import BroadcastSpec
+from loongforge.embodied.model.arch.losses import (
+    CosineDistance, LossMaskSpec, LossSpec, MeanSquaredError, TokenMeanSquaredError)
 from loongforge.embodied.model.arch.diffusion.schedule import (
     ConstantSigma, RectifiedFlow)
 from loongforge.embodied.model.arch.diffusion.stepping import (
@@ -479,7 +479,7 @@ def test_video_frame_padding_folds_like_fastwam():
     padded only when all of them are (``mot/fastwam.py:487-499``)."""
     pad = torch.tensor([[False] * 5 + [True] * 4,
                         [False] * 3 + [True] * 6])
-    folded = BatchPadding("image_is_pad", unit="video_frame").padded(
+    folded = LossMaskSpec("image_is_pad", unit="video_frame").padded(
         {"image_is_pad": pad}, _video(3), stream="video", temporal_stride=4)
     tail = pad[:, 1:].view(2, -1, 4).all(dim=2)
     assert torch.equal(folded, torch.cat([pad[:, :1], tail], dim=1))
@@ -489,14 +489,14 @@ def test_video_frame_padding_folds_like_fastwam():
 def test_kept_steps_count_although_padded():
     pad = torch.tensor([[False, True, True, True]])
     keep = torch.tensor([[False, False, True, False]])
-    padded = BatchPadding("action_is_pad", keep_key="action_terminal_mask").padded(
+    padded = LossMaskSpec("action_is_pad", keep_key="action_terminal_mask").padded(
         {"action_is_pad": pad, "action_terminal_mask": keep}, torch.zeros(1, 4, 6),
         stream="action", temporal_stride=4)
     assert padded.tolist() == [[False, True, False, True]]
 
 
 def test_a_batch_without_the_pad_key_has_no_padding():
-    padding = BatchPadding("action_is_pad", keep_key="action_terminal_mask")
+    padding = LossMaskSpec("action_is_pad", keep_key="action_terminal_mask")
     raw = torch.zeros(2, 4, 6)
     assert padding.padded({}, raw, stream="action", temporal_stride=4) is None
     with pytest.raises(ValueError, match="'action_terminal_mask' but not 'action_is_pad'"):
@@ -512,7 +512,7 @@ def test_a_batch_without_the_pad_key_has_no_padding():
 ])
 def test_batch_padding_declarations_are_validated(kwargs, match):
     with pytest.raises(ValueError, match=match):
-        BatchPadding(**kwargs)
+        LossMaskSpec(**kwargs)
 
 
 @pytest.mark.parametrize("unit, raw, mask, match", [
@@ -523,4 +523,4 @@ def test_batch_padding_declarations_are_validated(kwargs, match):
 ])
 def test_padding_masks_must_match_the_raw_tensor(unit, raw, mask, match):
     with pytest.raises(ValueError, match=match):
-        BatchPadding("pad", unit=unit).padded({"pad": mask}, raw, stream="s", temporal_stride=4)
+        LossMaskSpec("pad", unit=unit).padded({"pad": mask}, raw, stream="s", temporal_stride=4)

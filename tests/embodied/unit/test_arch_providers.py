@@ -249,7 +249,7 @@ def test_captures_are_derived_from_the_head_table(model_spec):
 def test_each_loss_names_an_existing_head(model_spec):
     """Every loss term names a head that exists, so losses cannot dangle."""
     heads = {head.name for head in model_spec.heads}
-    for loss in model_spec.diffusion.losses:
+    for loss in model_spec.losses:
         assert loss.name in heads, (loss.name, sorted(heads))
 
 
@@ -421,18 +421,19 @@ def test_fastwam_declares_the_losses_master_trains():
     """``mot/fastwam.py:464-635``: per-frame video and per-token action MSE over
     the units that are not padding, each weighted by its scheduler's bsmntw;
     the action scheduler's shift is 1.0 (``modeling_configuration_fastwam.py:113-115``)."""
-    from loongforge.embodied.model.arch.diffusion.loss import (
-        BatchPadding, Bsmntw, TokenMeanSquaredError)
+    from loongforge.embodied.model.arch.diffusion.weights import Bsmntw
+    from loongforge.embodied.model.arch.losses import (
+        LossMaskSpec, TokenMeanSquaredError)
 
-    diffusion = get_provider("fastwam")().diffusion
-    losses = {loss.head: loss for loss in diffusion.losses}
+    spec = get_provider("fastwam")()
+    losses = {loss.head: loss for loss in spec.losses}
     assert losses["video_flow"].objective == TokenMeanSquaredError(axis=2)
     assert losses["action_flow"].objective == TokenMeanSquaredError()
     assert all(isinstance(loss.weight_of, Bsmntw) for loss in losses.values())
-    assert diffusion.sampler_for("action").distribution.shift == 1.0
-    assert dict(diffusion.batch_padding) == {
-        "video": BatchPadding("image_is_pad", unit="video_frame"),
-        "action": BatchPadding("action_is_pad")}
+    assert spec.diffusion.sampler_for("action").distribution.shift == 1.0
+    assert dict(spec.loss_masks) == {
+        "video": LossMaskSpec("image_is_pad", unit="video_frame"),
+        "action": LossMaskSpec("action_is_pad")}
 
 
 @pytest.mark.parametrize("model_type", ["vpp2", "fastwam", "internw0_delta"])

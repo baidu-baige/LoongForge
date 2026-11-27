@@ -653,18 +653,21 @@ class ArchModelBase(nn.Module, ABC):
         return sample
 
     def _mask_keys(self) -> tuple[str, ...]:
-        """Batch keys of the masks the spec reads, in declaration order.
-
-        ``DiffusionSpec.batch_padding`` names the per-sample padding of a
-        stream. An absent mask means nothing is padded, so the key is passed
-        on only when the sample has it.
-
-        Returns:
-            The mask keys, each once.
-        """
-        keys = [key for padding in self.spec.diffusion.batch_padding.values()
-                for key in padding.batch_keys]
+        """Batch keys of the boolean masks the spec reads, in declaration order."""
+        keys: list[str] = []
+        for mask_spec in self.spec.loss_masks.values():
+            keys.extend(mask_spec.batch_keys)
+        for loss in self.spec.losses:
+            if loss.loss_mask is not None:
+                keys.extend(loss.loss_mask.batch_keys)
+            if loss.gate is not None:
+                keys.extend(loss.gate.batch_keys)
         return tuple(dict.fromkeys(keys))
+
+    def _target_keys(self) -> tuple[str, ...]:
+        """Batch keys of explicit ``LossSpec.target_key`` targets."""
+        return tuple(dict.fromkeys(
+            loss.target_key for loss in self.spec.losses if loss.target_key is not None))
 
     @staticmethod
     def _require(sample: Mapping[str, Any], key: str) -> Tensor:

@@ -18,12 +18,20 @@ provider hands to ``resolve_diffusion``.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import fields
-from typing import Any
+from dataclasses import dataclass, fields, is_dataclass, replace
+from typing import Any, TypeVar
 
 from ..geometry import GeometrySpec
 
 _DIFFUSION_KINDS = (float, int, bool)
+_DiffusionT = TypeVar("_DiffusionT")
+
+
+@dataclass(frozen=True)
+class StreamShift:
+    """Per-stream YAML diffusion overrides for a ``UniformShift`` sampler."""
+
+    shift: float = 1.0
 
 
 def resolve_scalars(model_type: str, defaults: dict[str, int],
@@ -167,69 +175,92 @@ def _coerce(kind: type, value: Any, *, key: str) -> Any:
     return float(value) if kind is float else value
 
 
-def resolve_diffusion(model_type: str, defaults: Mapping[str, Mapping[str, Any]],
-                      overrides: Mapping[str, Any] | None) -> dict[str, dict[str, Any]]:
-    """Apply the YAML ``diffusion:`` section over a provider's defaults, raising on any key not consumed.
+def resolve_diffusion(model_type: str, defaults: _DiffusionT,
+                      overrides: Mapping[str, Any] | None) -> _DiffusionT:
+    """Apply the YAML ``diffusion:`` section over a provider's typed defaults.
 
-    The provider lists every number YAML may set as ``{stream: {key: default}}``
-    and calls this before it builds its samplers, so a value reaches its object
-    in the one construction and the object's ``__post_init__`` checks it there.
-    The table is the whitelist of legal keys and their types, as ``legal_keys``
-    is for ``resolve_scalars``: a stream or key outside it would be configured
-    but have no effect, which is the failure the strictness rules exist for.
-    Binding each returned value to the intended field belongs to the provider
-    and its tests.
+    ``defaults`` is a nested frozen dataclass whose top-level fields name the
+    streams that accept YAML overrides and whose inner dataclass fields list
+    the legal scalar keys and their default values (for example
+    ``StreamShift(shift=5.0)``). Reflection via ``dataclasses.fields`` is the
+    whitelist of legal streams, keys and types — matching ``resolve_geometry``
+    — and the returned object has the same strong type as ``defaults`` so
+    providers read attributes (``values.video.shift``) rather than dict keys.
 
     Args:
         model_type: Provider key, used in the error messages.
-        defaults: ``{stream: {key: default}}``; the type of each default
-            (float, int or bool) is the type of its key.
+        defaults: Nested dataclass instance whose attributes are per-stream
+            dataclass instances with ``float``, ``int`` or ``bool`` fields.
         overrides: The YAML ``diffusion:`` section, ``{stream: {key: value}}``,
             or ``None`` when YAML has none.
 
     Returns:
-        A new ``{stream: {key: value}}`` with every key of ``defaults``: YAML's
-        value where it gives one, as a float for a float key, else the default.
+        A new instance of ``type(defaults)`` with YAML overrides applied (float
+        fields accept an int and are coerced to ``float``).
 
     Raises:
-        TypeError: A default is not a float, int or bool, ``overrides`` or one
-            of its stream blocks is not a mapping, or a YAML value has the
-            wrong type; stream-block and value errors start with the YAML path.
-        ValueError: YAML names a stream the table has no keys for (including an
-            empty block), or keys the table does not list for its stream; the
-            message starts with the YAML path and lists the sorted legal keys.
+        TypeError: ``defaults`` or one of its stream entries is not a dataclass
+            instance, a default field is not ``float``/``int``/``bool``,
+            ``overrides`` or a stream block is not a mapping, or a YAML value
+            has the wrong type.
+        ValueError: YAML names a stream not declared on ``defaults`` (or an
+            empty stream schema), or keys not declared on that stream's
+            dataclass.
     """
-    resolved = {str(stream): dict(keys) for stream, keys in defaults.items()}
-    for stream, keys in resolved.items():
-        for key, default in keys.items():
-            if type(default) not in _DIFFUSION_KINDS:
+    if not is_dataclass(defaults) or isinstance(defaults, type):
+        raise TypeError(
+            f"provider({model_type!r}) defaults for resolve_diffusion must be a "
+            f"dataclass instance, got {type(defaults).__name__}")
+    stream_schemas: dict[str, tuple[Any, dict[str, type]]] = {}
+    for stream_field in fields(defaults):
+        stream = stream_field.name
+        stream_default = getattr(defaults, stream)
+        if not is_dataclass(stream_default) or isinstance(stream_default, type):
+            raise TypeError(
+                f"provider({model_type!r}) default for diffusion.{stream} must be a "
+                f"dataclass instance, got {type(stream_default).__name__}")
+        key_kinds: dict[str, type] = {}
+        for key_field in fields(stream_default):
+            val = getattr(stream_default, key_field.name)
+            if type(val) not in _DIFFUSION_KINDS:
                 raise TypeError(
-                    f"provider({model_type!r}) default for diffusion.{stream}.{key}: a diffusion "
-                    f"key is float, int or bool, got {type(default).__name__}")
+                    f"provider({model_type!r}) default for diffusion.{stream}.{key_field.name}: "
+                    f"a diffusion key is float, int or bool, got {type(val).__name__}")
+            key_kinds[key_field.name] = type(val)
+        stream_schemas[stream] = (stream_default, key_kinds)
     if overrides is None:
-        return resolved
+        return defaults
     if not isinstance(overrides, Mapping):
         raise TypeError(f"diffusion must be a mapping, got {type(overrides).__name__}")
     listed = ", ".join(
-        f"{stream} ({sorted(keys)})" for stream, keys in sorted(resolved.items()) if keys) or "none"
+        f"{stream} ({sorted(kinds)})"
+        for stream, (_, kinds) in sorted(stream_schemas.items()) if kinds
+    ) or "none"
+    stream_updates: dict[str, Any] = {}
     for stream, block in overrides.items():
         if not isinstance(block, Mapping):
             raise TypeError(f"diffusion.{stream} must be a mapping, got {type(block).__name__}")
-        keys = resolved.get(str(stream))
-        if not keys:
+        entry = stream_schemas.get(str(stream))
+        if entry is None or not entry[1]:
             path = f"diffusion.{stream}.{next(iter(block))}" if block else f"diffusion.{stream}"
             raise ValueError(
                 f"{path}: stream {stream!r} has no diffusion keys in "
                 f"{model_type}; the streams with diffusion keys are: {listed}")
         if not block:
             continue
-        stray = sorted(set(block) - set(keys))
+        stream_default, kinds = entry
+        stray = sorted(set(block) - set(kinds))
         if stray:
             head = (f"diffusion.{stream}.{stray[0]} is not a diffusion key"
                     if len(stray) == 1 else f"diffusion.{stream} got unknown keys {stray}")
             raise ValueError(
                 f"{head} of stream {stream!r}; legal diffusion keys are "
-                f"{sorted(keys)}. Stream sizes go under streams.{stream}")
-        for key, value in block.items():
-            keys[key] = _coerce(type(keys[key]), value, key=f"diffusion.{stream}.{key}")
-    return resolved
+                f"{sorted(kinds)}. Stream sizes go under streams.{stream}")
+        coerced = {
+            key: _coerce(kinds[key], value, key=f"diffusion.{stream}.{key}")
+            for key, value in block.items()
+        }
+        stream_updates[str(stream)] = replace(stream_default, **coerced)
+    if not stream_updates:
+        return defaults
+    return replace(defaults, **stream_updates)

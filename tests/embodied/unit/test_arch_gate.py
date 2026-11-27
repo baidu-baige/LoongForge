@@ -37,10 +37,10 @@ from loongforge.embodied.model.arch.factory import (ArchModelConfig,
                                                     DualStreamWanConfig,
                                                     InternW0DeltaArchModel,
                                                     Vpp2ArchModel, Vpp2Config)
-from loongforge.embodied.model.arch.diffusion.loss import WeightRamp
+from loongforge.embodied.model.arch.losses import WeightRamp
 from loongforge.embodied.model.arch.diffusion.timesteps import UniformShift
 from loongforge.embodied.model.arch.spec.core import Spec
-from loongforge.embodied.model.arch.spec.overrides import resolve_diffusion
+from loongforge.embodied.model.arch.spec.overrides import StreamShift, resolve_diffusion
 from loongforge.embodied.model.arch.spec.world import WorldModelSpec
 from loongforge.embodied.model.arch.streams.engine import JointAttentionEngine
 from loongforge.embodied.model.arch.towers import build_wan_clip, build_wan_vae
@@ -279,7 +279,7 @@ def test_shell_turns_a_pixel_batch_into_a_scalar_loss(shell):
     loss, metrics = shell(pixel_batch(shell))
     assert loss.ndim == 0
     assert torch.isfinite(loss)
-    for term in shell.spec.diffusion.losses:
+    for term in shell.spec.losses:
         assert metrics[f"loss_{term.name}"].ndim == 0
 
 
@@ -299,7 +299,7 @@ def test_shell_fills_one_batch_key_per_stream_and_condition(shell):
 
 
 def test_shell_passes_the_declared_masks_through(shell):
-    """Mask keys come off the spec (``DiffusionSpec.batch_padding``), arrive as
+    """Mask keys come off the spec (``WorldModelSpec.loss_masks``), arrive as
     bool, and stay absent when the sample has none."""
     horizon = shell.spec.geometry.action_horizon
     sample = pixel_batch(shell)
@@ -513,9 +513,9 @@ def test_trainer_iteration_drives_the_loss_weight_ramp():
     """
     spec = tiny_spec("vpp2")
     ramp = WeightRamp(start_step=0, end_step=10, start_value=0.0, end_value=1.0)
-    spec = replace(spec, diffusion=replace(spec.diffusion, losses=tuple(
+    spec = replace(spec, losses=tuple(
         replace(loss, ramp=ramp) if loss.head == "action_flow" else loss
-        for loss in spec.diffusion.losses)))
+        for loss in spec.losses))
     shell = make_shell(spec)
     kwargs = FinetuneTrainer._select_forward_kwargs(SimpleNamespace(model=shell), iteration=5)
     assert kwargs == {"iteration": 5}
@@ -578,11 +578,12 @@ def test_yaml_shift_reaches_the_sampler_and_the_bsmntw_weight():
     left behind. An int in YAML lands as a float.
     """
     base = load_config("vpp2").build_spec().diffusion
-    moved = load_config_with("vpp2", "diffusion.action.shift=3").build_spec().diffusion
+    moved_spec = load_config_with("vpp2", "diffusion.action.shift=3").build_spec()
+    moved = moved_spec.diffusion
     sampler = moved.sampler_for("action")
     assert sampler.distribution == UniformShift(shift=3.0)
     assert type(sampler.distribution.shift) is float
-    (loss,) = [loss for loss in moved.losses if loss.head == "action_flow"]
+    (loss,) = [loss for loss in moved_spec.losses if loss.head == "action_flow"]
     t = torch.tensor([500.0])
     before = loss.weight_of(t, sampler=base.sampler_for("action"), num_train_timesteps=1000)
     after = loss.weight_of(t, sampler=sampler, num_train_timesteps=1000)
@@ -624,27 +625,62 @@ class _CappedShift:
         return (self.shift * u / (1.0 + (self.shift - 1.0) * u)).clamp(max=self.t_max)
 
 
+@dataclass(frozen=True)
+class _ToyVideoDiffusion:
+    t_max: float = 0.95
+    shift: float = 2.0
+
+
+@dataclass(frozen=True)
+class _ToyActionDiffusion:
+    num_steps: int = 10
+    shift: float = 5.0
+
+
+@dataclass(frozen=True)
+class _ToyDiffusion:
+    video: _ToyVideoDiffusion = _ToyVideoDiffusion()
+    action: _ToyActionDiffusion = _ToyActionDiffusion()
+
+
 def test_a_model_owned_distribution_gets_its_keys_without_common_code():
-    """A new distribution needs no marker: its provider lists the keys for ``resolve_diffusion``.
+    """A new distribution needs no marker: its provider hands a typed dataclass to ``resolve_diffusion``.
 
     YAML overrides the provider's value before the one construction, and the
-    provider's table is left as it was.
+    provider's defaults dataclass is frozen and unchanged.
     """
-    defaults = {"video": {"shift": 2.0, "t_max": 0.95}}
+    @dataclass(frozen=True)
+    class _SingleStreamDiffusion:
+        video: _ToyVideoDiffusion = _ToyVideoDiffusion()
+
+    defaults = _SingleStreamDiffusion()
     values = resolve_diffusion("toy", defaults, {"video": {"t_max": 0.9}})
-    assert _CappedShift(**values["video"]) == _CappedShift(shift=2.0, t_max=0.9)
-    assert defaults == {"video": {"shift": 2.0, "t_max": 0.95}}
+    assert isinstance(values, _SingleStreamDiffusion)
+    assert _CappedShift(shift=values.video.shift, t_max=values.video.t_max) == _CappedShift(shift=2.0, t_max=0.9)
+    assert defaults == _SingleStreamDiffusion()
     assert resolve_diffusion("toy", defaults, None) == defaults
 
 
 def test_a_key_type_follows_its_default():
     """The default's type is the key's type: an int key refuses a float, a float key takes an int."""
-    defaults = {"action": {"num_steps": 10, "shift": 5.0}}
+    defaults = _ToyDiffusion()
     with pytest.raises(TypeError, match=re.escape("diffusion.action.num_steps must be int, got float 4.0")):
         resolve_diffusion("toy", defaults, {"action": {"num_steps": 4.0}})
-    assert resolve_diffusion("toy", defaults, {"action": {"shift": 3}})["action"]["shift"] == 3.0
+    resolved = resolve_diffusion("toy", defaults, {"action": {"shift": 3}})
+    assert resolved.action.shift == 3.0 and isinstance(resolved.action.shift, float)
+
+    @dataclass(frozen=True)
+    class _BadStream:
+        other: object = None
+
+    @dataclass(frozen=True)
+    class _BadDiffusion:
+        action: _BadStream = _BadStream()
+
     with pytest.raises(TypeError, match=re.escape("default for diffusion.action.other: a diffusion key is float")):
-        resolve_diffusion("toy", {"action": {"other": None}}, None)
+        resolve_diffusion("toy", _BadDiffusion(), None)
+    with pytest.raises(TypeError, match="defaults for resolve_diffusion must be a dataclass instance"):
+        resolve_diffusion("toy", {"action": {"shift": 5.0}}, None)  # type: ignore[arg-type]
 
 
 def test_diffusion_blocks_reject_unknown_empty_streams_and_non_mappings():
@@ -655,7 +691,7 @@ def test_diffusion_blocks_reject_unknown_empty_streams_and_non_mappings():
     cannot pass silently. ``None`` and lists are rejected as non-mappings, and
     unknown or legal key lists are sorted deterministically.
     """
-    defaults = {"video": {"t_max": 0.95, "shift": 2.0}, "action": {"shift": 5.0}}
+    defaults = _ToyDiffusion()
     assert resolve_diffusion("toy", defaults, {"action": {}}) == defaults
     assert load_config_with("vpp2", "diffusion.action={}").build_spec().diffusion.sampler_for(
         "action").distribution == UniformShift(shift=5.0)
@@ -672,3 +708,4 @@ def test_diffusion_blocks_reject_unknown_empty_streams_and_non_mappings():
             "diffusion.video got unknown keys ['alpha', 'zeta'] of stream 'video'; "
             "legal diffusion keys are ['shift', 't_max']")):
         resolve_diffusion("toy", defaults, {"video": {"zeta": 1.0, "alpha": 2.0}})
+    assert StreamShift(shift=3.0).shift == 3.0

@@ -11,7 +11,7 @@ Layer           Module                     Lane
 L0 geometry     ``geometry`` / ``layout``  A
 L1 visibility   ``visibility/``            A
 L2 streams      ``streams/``               B
-L3 supervision  ``diffusion/``             C
+L3 supervision  ``losses`` / ``diffusion/``  C
 L4 heads        ``heads/``                 C
 config layer    ``spec/``                  -
 assembly        ``builder``                -
@@ -33,7 +33,17 @@ Three hard invariants:
 
 from __future__ import annotations
 
+from .broadcast import DEFAULT_PER_SAMPLE, BroadcastSpec
 from .geometry import GeometrySpec
 from .layout import LabelView, SegmentRange, TokenLayout
+from .losses import (BatchGate, LossMaskSpec, CosineDistance, LossGate,
+                     LossObjective, LossSpec, MeanSquaredError, Reducer,
+                     TimestepWeight, TokenMeanSquaredError, UniformWeight,
+                     WeightRamp)
 
-__all__ = ["GeometrySpec", "TokenLayout", "SegmentRange", "LabelView"]
+__all__ = [
+    "BroadcastSpec", "DEFAULT_PER_SAMPLE", "GeometrySpec", "TokenLayout", "SegmentRange", "LabelView",
+    "BatchGate", "LossMaskSpec", "CosineDistance", "LossGate",
+    "LossObjective", "LossSpec", "MeanSquaredError", "Reducer",
+    "TimestepWeight", "TokenMeanSquaredError", "UniformWeight", "WeightRamp",
+]

@@ -177,10 +177,8 @@ def drop_heads(spec: WorldModelSpec, names: Iterable[str]) -> WorldModelSpec:
         A copy with those heads and their loss terms gone.
     """
     dropped = frozenset(names)
-    diffusion = spec.diffusion
     return replace(
         spec,
         heads=tuple(head for head in spec.heads if head.name not in dropped),
-        diffusion=replace(diffusion, losses=tuple(
-            loss for loss in diffusion.losses if loss.head not in dropped)),
+        losses=tuple(loss for loss in spec.losses if loss.head not in dropped),
     )

@@ -13,14 +13,16 @@ line number at each use.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 
-from ....diffusion.loss import BatchPadding, Bsmntw, LossSpec, TokenMeanSquaredError
 from ....diffusion.schedule import RectifiedFlow
 from ....diffusion.spec import DiffusionSpec
 from ....diffusion.stepping import EulerSampler, UniformSteps
 from ....diffusion.timesteps import Constant, RngPolicy, TimestepSampler, UniformShift
+from ....diffusion.weights import Bsmntw
 from ....heads.flow import build_flow_head
+from ....losses import LossMaskSpec, LossSpec, TokenMeanSquaredError
 from ....heads.hidden_ref import HiddenStateRef
 from ....heads.spec import HeadSpec
 from ....streams.blocks import ActionStream, WanVideoStream
@@ -32,7 +34,8 @@ from ....visibility.combine import Visibility
 from ....visibility.phases import CONDITION, Phase, phase_labels
 from ....visibility.rules import label_edge, same_stream
 from ...core import Spec, register_provider
-from ...overrides import reject_config, resolve_diffusion, resolve_geometry, resolve_scalars
+from ...overrides import (StreamShift, reject_config, resolve_diffusion,
+                          resolve_geometry, resolve_scalars)
 from ...world import WorldModelSpec
 from ..dual_stream_wan import STREAM_SCALAR_KEYS, _dual_stream_wan_streams
 
@@ -112,6 +115,13 @@ def _vpp2_visibility() -> dict[str, Visibility]:
         "action": (same_stream()
                    | label_edge("phase", CONDITION, (Phase.ACTION,))),
     }
+
+
+@dataclass(frozen=True)
+class _Vpp2Diffusion:
+    """YAML-overridable diffusion parameters for VPP2 (``diffusion.action.shift``)."""
+
+    action: StreamShift = StreamShift(shift=5.0)
 
 
 @register_provider("vpp2")
@@ -255,7 +265,7 @@ def _vpp2(config: Any = None, *,
     # YAML may set the action shift as ``diffusion.action.shift``; any other
     # key raises (§1.15). The video timestep is the constant below, so the
     # table has no ``video`` entry.
-    diffusion_values = resolve_diffusion("vpp2", {"action": {"shift": 5.0}}, diffusion)
+    diffusion_values = resolve_diffusion("vpp2", _Vpp2Diffusion(), diffusion)
     diffusion = DiffusionSpec(
         timesteps={
             # video: ``train_sampling_strategy: pure_noise``
@@ -280,18 +290,8 @@ def _vpp2(config: Any = None, *,
             # another field on DiffusionSpec; add it when some model actually
             # runs the video stream at inference. YAML sets this shift as
             # ``diffusion.action.shift`` (the table above).
-            "action": TimestepSampler(UniformShift(shift=diffusion_values["action"]["shift"]), rng=master_rng),
+            "action": TimestepSampler(UniformShift(shift=diffusion_values.action.shift), rng=master_rng),
         },
-        # ``lambda_video`` and ``lambda_action`` are both 1.0
-        # (``train_action.yaml:217-218``)
-        # The action term is master ``_training_loss_action_only``: per-token MSE,
-        # mean over valid tokens, bsmntw weight on the shifted grid. The video
-        # term stays unweighted: bsmntw is exactly 0 at the pure-noise sigma=1.
-        losses=(
-            LossSpec(name="video_flow", head="video_flow"),
-            LossSpec(name="action_flow", head="action_flow",
-                     objective=TokenMeanSquaredError(), weight_of=Bsmntw()),
-        ),
         # Wan's 1000-step training timestep (master ``num_train_timesteps``).
         schedule=RectifiedFlow(num_train_timesteps=1000),
         # ``skip={"video"}`` is the ``HeadSpec(inference=False)`` of the §4.4
@@ -316,9 +316,19 @@ def _vpp2(config: Any = None, *,
         # 86a017bb). Master also checks that the terminal mask lies inside the
         # padding; that check reads values and would sync the host, so it stays
         # with the dataset. A batch without either key has no padding.
-        batch_padding={"action": BatchPadding("action_is_pad",
-                                              keep_key="action_terminal_mask")},
     )
+    # ``lambda_video`` and ``lambda_action`` are both 1.0
+    # (``train_action.yaml:217-218``). The action term is master
+    # ``_training_loss_action_only``: per-token MSE, mean over valid tokens,
+    # bsmntw weight on the shifted grid. The video term stays unweighted:
+    # bsmntw is exactly 0 at the pure-noise sigma=1.
+    losses = (
+        LossSpec(name="video_flow", head="video_flow"),
+        LossSpec(name="action_flow", head="action_flow",
+                 objective=TokenMeanSquaredError(), weight_of=Bsmntw()),
+    )
+    loss_masks = {"action": LossMaskSpec("action_is_pad",
+                                         keep_key="action_terminal_mask")}
 
     # 4. L0. The geometry is defined before the head table because the
     #    ``video_flow`` head takes its ``output_width`` from
@@ -471,6 +481,8 @@ def _vpp2(config: Any = None, *,
         attention_groups=(group,),
         diffusion=diffusion,
         heads=heads,
+        losses=losses,
+        loss_masks=loss_masks,
         conditions=conditions,
         visibility=_vpp2_visibility(),
         # ``video_prefix_frames`` enters the mask as the phase label rather

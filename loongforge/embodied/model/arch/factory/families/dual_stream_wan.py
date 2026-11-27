@@ -179,6 +179,12 @@ class DualStreamWanBase(ArchModelBase):
             if mask is not None:
                 out[key] = mask.to(device=latents.device, dtype=torch.bool,
                                    non_blocking=True)
+        for key in self._target_keys():
+            target = sample.get(key)
+            if target is not None:
+                dtype = self._dtype if target.is_floating_point() else target.dtype
+                out[key] = target.to(device=latents.device, dtype=dtype,
+                                     non_blocking=True)
         return out
 
     @torch.no_grad()

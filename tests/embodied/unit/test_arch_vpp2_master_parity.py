@@ -16,7 +16,7 @@ L0-L2.
 There is no VPP2 recipe here: master's action stage trains the action term
 only, which the generic path expresses as the ``video_flow`` term switched off
 (YAML ``heads.video_flow.enabled: false``); the padding comes from the
-provider's ``DiffusionSpec.batch_padding``. Freezing the video stream is not
+provider's ``WorldModelSpec.loss_masks``. Freezing the video stream is not
 an L3 matter and is not compared.
 
 The live parity tests need the sibling ``LoongForge_master_vpp2`` checkout and
@@ -40,7 +40,7 @@ import torch
 from torch.nn import functional as F
 
 from loongforge.embodied.model.arch.builder import WorldModel
-from loongforge.embodied.model.arch.diffusion.loss import Bsmntw
+from loongforge.embodied.model.arch.diffusion.weights import Bsmntw
 from loongforge.embodied.model.arch.diffusion.timesteps import TimestepSampler, UniformShift
 from loongforge.embodied.model.arch.spec.core import get_provider
 import loongforge.embodied.model.arch.spec.providers  # noqa: F401 -- register providers
@@ -90,8 +90,8 @@ def _tiny_spec(action_shift: float, horizon: int = HORIZON):
         action_video_freq_ratio=2 if horizon % 2 == 0 else 1, action_dim=ACTION_DIM),
         diffusion={"action": {"shift": action_shift}})
     losses = tuple(replace(loss, enabled=False) if loss.head == "video_flow" else loss
-                   for loss in spec.diffusion.losses)
-    return replace(spec, diffusion=replace(spec.diffusion, losses=losses))
+                   for loss in spec.losses)
+    return replace(spec, losses=losses)
 
 
 def _tiny_model(action_shift: float, horizon: int = HORIZON) -> WorldModel:

@@ -28,7 +28,7 @@ import torch
 from torch.nn import functional as F
 
 from loongforge.embodied.model.arch.builder import WorldModel
-from loongforge.embodied.model.arch.diffusion.loss import Bsmntw
+from loongforge.embodied.model.arch.diffusion.weights import Bsmntw
 from loongforge.embodied.model.arch.diffusion.timesteps import TimestepSampler, UniformShift
 from loongforge.embodied.model.arch.streams.engine import JointAttentionEngine
 from loongforge.embodied.model.fastwam.action.schedulers import WanContinuousFlowMatchScheduler

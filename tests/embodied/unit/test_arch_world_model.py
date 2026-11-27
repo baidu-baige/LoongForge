@@ -34,8 +34,9 @@ import torch
 
 from loongforge.embodied.model.arch.builder import (
     STEP_HOOK_EVENTS, DiffusionDraw, DiffusionRuntime, WorldModel)
-from loongforge.embodied.model.arch.diffusion.broadcast import BroadcastSpec
-from loongforge.embodied.model.arch.diffusion.loss import BatchPadding, Bsmntw, LossSpec, WeightRamp
+from loongforge.embodied.model.arch.broadcast import BroadcastSpec
+from loongforge.embodied.model.arch.diffusion.weights import Bsmntw
+from loongforge.embodied.model.arch.losses import LossMaskSpec, LossSpec, WeightRamp
 from loongforge.embodied.model.arch.diffusion.timesteps import RngPolicy, TimestepSampler
 from loongforge.embodied.model.arch.spec.world import WorldModelSpec
 from loongforge.embodied.model.arch.streams.conditions import InjectionKind
@@ -103,8 +104,7 @@ def fake_batch(spec: WorldModelSpec, **extra) -> dict:
 
 def with_losses(spec: WorldModelSpec, *losses: LossSpec) -> WorldModelSpec:
     """Swap the loss table, keep the rest; ``replace`` re-runs V1-V9."""
-    return replace(spec,
-                   diffusion=replace(spec.diffusion, losses=tuple(losses)))
+    return replace(spec, losses=tuple(losses))
 
 
 # ---- 1. it runs ----
@@ -119,12 +119,12 @@ def test_forward_returns_a_scalar_loss_and_one_metric_per_term(spec):
     loss, metrics = world(spec)(fake_batch(spec))
     assert loss.ndim == 0
     assert torch.isfinite(loss)
-    for term in spec.diffusion.losses:
+    for term in spec.losses:
         assert metrics[f"loss_{term.name}"].ndim == 0
         assert metrics[f"{term.name}/weight"] == term.weight
     assert torch.equal(metrics["loss"], loss.detach())
     # The trainer averages over ranks only the keys that contain "loss" (T23).
-    weights = {f"{term.name}/weight" for term in spec.diffusion.losses}
+    weights = {f"{term.name}/weight" for term in spec.losses}
     assert all("loss" in key for key in set(metrics) - weights)
 
 
@@ -135,7 +135,7 @@ def test_metrics_hold_tensors_not_python_floats(spec):
     is responsible for calling ``.item()``.
     """
     _, metrics = world(spec)(fake_batch(spec))
-    for term in spec.diffusion.losses:
+    for term in spec.losses:
         value = metrics[f"loss_{term.name}"]
         assert isinstance(value, torch.Tensor)
         assert not value.requires_grad
@@ -390,7 +390,7 @@ def test_loss_target_error_lists_both_candidate_keys():
     """
     spec = tiny_spec("fastwam")
     model = world(spec)
-    loss = spec.diffusion.losses[0]
+    loss = spec.losses[0]
     head = spec.head(str(loss.head))
     empty = DiffusionRuntime(timesteps={}, noised={}, noise={}, targets={})
     with pytest.raises(KeyError) as info:
@@ -514,13 +514,11 @@ def test_timestep_weight_on_a_stream_without_timesteps_is_rejected():
     timesteps = {name: sampler for name, sampler in base.diffusion.timesteps.items()
                  if name != "action"}
     losses = tuple(replace(loss, weight_of=Bsmntw()) if loss.head == "action_flow" else loss
-                   for loss in base.diffusion.losses)
-    padding = {name: value for name, value in base.diffusion.batch_padding.items()
-               if name != "action"}
+                   for loss in base.losses)
     with pytest.raises(ValueError, match="draws none"):
         replace(base, attention_groups=(replace(group, streams=streams),),
-                diffusion=replace(base.diffusion, timesteps=timesteps, losses=losses,
-                                  batch_padding=padding))
+                diffusion=replace(base.diffusion, timesteps=timesteps),
+                losses=losses)
 
 
 # ---- step hook: read-only observation of steps 1, 3, 6 and 7 ----
@@ -641,8 +639,8 @@ def test_video_frame_padding_drops_the_clean_prefix_column():
     frame 2 (pixel frames 5-8) is padding only when all of its frames are.
     """
     base = tiny_spec("fastwam")
-    padding = {"video": BatchPadding("image_is_pad", unit="video_frame")}
-    spec = replace(base, diffusion=replace(base.diffusion, batch_padding=padding))
+    masks = {"video": LossMaskSpec("image_is_pad", unit="video_frame")}
+    spec = replace(base, loss_masks=masks)
     model = world(spec)
     assert (spec.geometry.num_frames, spec.geometry.latent_grid[0]) == (13, 4)
     pad = torch.zeros(BATCH, spec.geometry.num_frames, dtype=torch.bool)
@@ -652,8 +650,8 @@ def test_video_frame_padding_drops_the_clean_prefix_column():
     assert runtime.loss_valid["video"].tolist() == [[True, True, True], [True, True, False]]
 
 
-def test_padding_on_a_stream_without_a_timestep_is_rejected():
+def test_loss_mask_on_an_unknown_stream_is_rejected():
     base = tiny_spec("vpp2")
-    with pytest.raises(ValueError, match="draw no timestep"):
-        replace(base.diffusion, batch_padding={"text": BatchPadding("context_mask")})
+    with pytest.raises(ValueError, match="loss_masks names unknown streams"):
+        replace(base, loss_masks={"text": LossMaskSpec("context_mask")})
 

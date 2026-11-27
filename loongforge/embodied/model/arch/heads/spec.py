@@ -39,8 +39,7 @@ class HeadSpec:
     # ModulationSlots.__post_init__), so "this head does not modulate" is
     # expressed by needs_timestep_embedding=False, not by handing over an empty table
     needs_timestep_embedding: bool = False        # Whether the head modulates on timestep
-    weight: float = 1.0                 # must stay 1.0 (L4/V8): the coefficient is LossSpec.weight,
-                                        # which YAML heads.<name>.weight writes
+    weight: float = 1.0                 # must stay 1.0 (L4/V8); use LossSpec.weight
 
     def __post_init__(self) -> None:
         if self.output_width <= 0:
