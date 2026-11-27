@@ -14,7 +14,7 @@ checks six things:
   3. ``WeightRamp`` reads ``global_step`` out of the batch, not from a counter
      the model keeps itself;
   4. weights live only on ``LossSpec``: a ``HeadSpec.weight`` other than 1.0
-     raises;
+     is rejected when the spec is built;
   5. raw tensors are keyed by ``StreamSpec.batch_key``, and a missing key names
      that key in the error message;
   6. three paths that **raise on purpose** (per-axis noising, stream-side loss,
@@ -32,10 +32,12 @@ from dataclasses import replace
 import pytest
 import torch
 
-from loongforge.embodied.model.arch.builder import DiffusionRuntime, WorldModel
-from loongforge.embodied.model.arch.diffusion.broadcast import BroadcastSpec
-from loongforge.embodied.model.arch.diffusion.loss import LossSpec, WeightRamp
-from loongforge.embodied.model.arch.diffusion.timesteps import TimestepSampler
+from loongforge.embodied.model.arch.builder import (
+    STEP_HOOK_EVENTS, DiffusionDraw, DiffusionRuntime, WorldModel)
+from loongforge.embodied.model.arch.broadcast import BroadcastSpec
+from loongforge.embodied.model.arch.diffusion.weights import Bsmntw
+from loongforge.embodied.model.arch.losses import LossMaskSpec, LossSpec, WeightRamp
+from loongforge.embodied.model.arch.diffusion.timesteps import RngPolicy, TimestepSampler
 from loongforge.embodied.model.arch.spec.world import WorldModelSpec
 from loongforge.embodied.model.arch.streams.conditions import InjectionKind
 from loongforge.embodied.model.arch.streams.engine import JointAttentionEngine
@@ -102,8 +104,7 @@ def fake_batch(spec: WorldModelSpec, **extra) -> dict:
 
 def with_losses(spec: WorldModelSpec, *losses: LossSpec) -> WorldModelSpec:
     """Swap the loss table, keep the rest; ``replace`` re-runs V1-V9."""
-    return replace(spec,
-                   diffusion=replace(spec.diffusion, losses=tuple(losses)))
+    return replace(spec, losses=tuple(losses))
 
 
 # ---- 1. it runs ----
@@ -118,10 +119,13 @@ def test_forward_returns_a_scalar_loss_and_one_metric_per_term(spec):
     loss, metrics = world(spec)(fake_batch(spec))
     assert loss.ndim == 0
     assert torch.isfinite(loss)
-    for term in spec.diffusion.losses:
-        assert metrics[term.name].ndim == 0
+    for term in spec.losses:
+        assert metrics[f"loss_{term.name}"].ndim == 0
         assert metrics[f"{term.name}/weight"] == term.weight
     assert torch.equal(metrics["loss"], loss.detach())
+    # The trainer averages over ranks only the keys that contain "loss" (T23).
+    weights = {f"{term.name}/weight" for term in spec.losses}
+    assert all("loss" in key for key in set(metrics) - weights)
 
 
 def test_metrics_hold_tensors_not_python_floats(spec):
@@ -131,8 +135,8 @@ def test_metrics_hold_tensors_not_python_floats(spec):
     is responsible for calling ``.item()``.
     """
     _, metrics = world(spec)(fake_batch(spec))
-    for term in spec.diffusion.losses:
-        value = metrics[term.name]
+    for term in spec.losses:
+        value = metrics[f"loss_{term.name}"]
         assert isinstance(value, torch.Tensor)
         assert not value.requires_grad
 
@@ -185,8 +189,7 @@ def test_head_outputs_have_the_shape_of_the_raw_tensor(spec):
     """
     model = world(spec)
     batch = fake_batch(spec)
-    timesteps = model.sample_timesteps(batch)
-    runtime = model.add_noise(batch, timesteps)
+    runtime = model.add_noise(batch, model.draw(batch))
     for head in spec.heads:
         assert head.source_stream in runtime.targets
     loss, _ = model(batch)
@@ -194,10 +197,11 @@ def test_head_outputs_have_the_shape_of_the_raw_tensor(spec):
 
 
 def test_timestep_dtype_follows_the_raw_tensor(spec):
-    """The timestep dtype follows the raw tensor's, here bfloat16, shape ``[B]``.
+    """Sigma and the training t follow the raw tensor's dtype (bf16), ``[B]``.
 
-    Otherwise ``(1-t) * x_0`` would silently promote a bf16 tensor to fp32.
-    Only streams with ``needs_timestep`` get a timestep at all.
+    Otherwise ``(1-t) * x_0`` would silently promote a bf16 tensor to fp32
+    (``RngPolicy.sigma_dtype="like_sample"``, the default). Only streams with
+    ``needs_timestep`` get a timestep at all.
     """
     model = world(spec)
     batch = fake_batch(spec)
@@ -205,12 +209,35 @@ def test_timestep_dtype_follows_the_raw_tensor(spec):
                    if isinstance(value, torch.Tensor)
                    and value.is_floating_point() else value)
              for key, value in batch.items()}
-    timesteps = model.sample_timesteps(batch)
-    assert set(timesteps) == {name for name in spec.stream_names
-                              if spec.stream(name).needs_timestep}
-    for value in timesteps.values():
+    draw = model.draw(batch)
+    expected = {name for name in spec.stream_names if spec.stream(name).needs_timestep}
+    assert set(draw.sigma) == set(draw.model_timesteps) == set(draw.noise) == expected
+    for value in (*draw.sigma.values(), *draw.model_timesteps.values()):
         assert value.dtype == torch.bfloat16
         assert value.shape == (BATCH,)
+
+
+def test_float32_sigma_runs_a_bf16_forward_without_promoting_x_t(spec):
+    """``sigma_dtype="float32"`` keeps sigma and t in float32 through a bf16 step.
+
+    x_t stays bf16, and the time embedding takes the float32 t the way master's
+    ``pre_dit`` does: cast to the weights' dtype.
+    """
+    timesteps = {name: replace(sampler, rng=RngPolicy(sigma_dtype="float32"))
+                 for name, sampler in spec.diffusion.timesteps.items()}
+    spec = replace(spec, diffusion=replace(spec.diffusion, timesteps=timesteps))
+    model = world(spec).to(torch.bfloat16)
+    batch = {key: (value.to(torch.bfloat16)
+                   if isinstance(value, torch.Tensor) and value.is_floating_point() else value)
+             for key, value in fake_batch(spec).items()}
+    seen = {}
+    model.register_step_hook(lambda m, event, value: seen.setdefault(event, value))
+    loss, _ = model(batch)
+    assert torch.isfinite(loss)
+    draw, runtime = seen["draw"], seen["runtime"]
+    for name in draw.sigma:
+        assert draw.sigma[name].dtype == draw.model_timesteps[name].dtype == torch.float32
+        assert runtime.noised[name].dtype == torch.bfloat16
 
 
 # ---- 2 / 3. loss weights and the metric key set ----
@@ -228,12 +255,12 @@ def test_disabled_loss_keeps_its_metric_key_at_weight_zero():
         LossSpec(name="video_flow", head="video_flow", enabled=False),
         LossSpec(name="action_flow", head="action_flow"))
     loss, metrics = world(spec)(fake_batch(spec))
-    assert "video_flow" in metrics
+    assert "loss_video_flow" in metrics
     assert metrics["video_flow/weight"] == 0.0
     assert metrics["action_flow/weight"] == 1.0
     # The disabled term still enters the sum, at weight 0, so the total equals
     # the remaining term.
-    assert torch.allclose(loss, metrics["action_flow"])
+    assert torch.allclose(loss, metrics["loss_action_flow"])
 
 
 def test_weight_ramp_reads_the_global_step_from_the_batch():
@@ -256,8 +283,21 @@ def test_weight_ramp_reads_the_global_step_from_the_batch():
         assert metrics["video_flow/weight"] == pytest.approx(want)
     # No ``global_step`` means step 0, not an error: the evaluation path goes
     # through this same forward.
+    model.eval()
     _, metrics = model(batch)
     assert metrics["video_flow/weight"] == pytest.approx(0.0)
+
+
+def test_training_a_ramped_loss_without_a_step_is_rejected():
+    """Without ``global_step`` the ramp would stay at step 0, silently (v2 §1.9)."""
+    ramp = WeightRamp(start_step=0, end_step=10, start_value=0.0, end_value=1.0)
+    spec = with_losses(
+        tiny_spec("fastwam"),
+        LossSpec(name="video_flow", head="video_flow", ramp=ramp),
+        LossSpec(name="action_flow", head="action_flow"))
+    model = world(spec)
+    with pytest.raises(ValueError, match="no global_step"):
+        model(fake_batch(spec))
 
 
 def test_weight_written_on_the_head_is_rejected():
@@ -266,14 +306,14 @@ def test_weight_written_on_the_head_is_rejected():
 
     The providers already follow this ruling (all five weights live on
     ``LossSpec``). This test turns "somebody moved it back onto ``HeadSpec``"
-    into a failure instead of a silent reweighting.
+    into a failure when the spec is built, before any step runs, instead of a
+    silent reweighting.
     """
     base = tiny_spec("fastwam")
     heads = tuple(replace(head, weight=0.5) if head.name == "video_flow"
                   else head for head in base.heads)
-    spec = replace(base, heads=heads)
-    with pytest.raises(ValueError, match="weight ownership must be fixed in one place"):
-        world(spec)(fake_batch(spec))
+    with pytest.raises(ValueError, match="HeadSpec.weight must stay 1.0"):
+        replace(base, heads=heads)
 
 
 # ---- 5. the batch keys of the raw tensors ----
@@ -350,7 +390,7 @@ def test_loss_target_error_lists_both_candidate_keys():
     """
     spec = tiny_spec("fastwam")
     model = world(spec)
-    loss = spec.diffusion.losses[0]
+    loss = spec.losses[0]
     head = spec.head(str(loss.head))
     empty = DiffusionRuntime(timesteps={}, noised={}, noise={}, targets={})
     with pytest.raises(KeyError) as info:
@@ -370,3 +410,248 @@ def test_internw0_delta_track_head_raises_at_build_time():
     """
     with pytest.raises(NotImplementedError, match="track_align"):
         world(tiny_spec("internw0_delta"))
+
+
+# ---- step 1: one draw, in the declared order ----
+
+
+def _replay(model: WorldModel, batch: dict, draws: tuple[str, str]) -> dict:
+    """Draw by hand, stream by stream in the declared key order."""
+    out = {}
+    for name, sampler in model.spec.diffusion.timesteps.items():
+        raw = batch[model.spec.stream(name).batch_key]
+        for kind in draws:
+            out[name, kind] = (torch.randn_like(raw) if kind == "noise" else
+                               sampler.sample(raw.shape[0], device=raw.device, dtype=torch.float32))
+    return out
+
+
+@pytest.mark.parametrize("order", ["noise_first", "t_first"])
+def test_draw_follows_the_declared_order(order):
+    """Streams in ``DiffusionSpec.timesteps`` key order, ``RngPolicy.order`` within.
+
+    Either order leaves the generator in the same state (same draws, other
+    sequence), so the values are compared, and the opposite order must miss.
+    """
+    spec = tiny_spec("vpp2")
+    rng = RngPolicy(order=order)
+    spec = replace(spec, diffusion=replace(spec.diffusion, timesteps={
+        name: replace(sampler, rng=rng) for name, sampler in spec.diffusion.timesteps.items()}))
+    model = world(spec)
+    batch = fake_batch(spec)
+    torch.manual_seed(3)
+    draw = model.draw(batch)
+    torch.manual_seed(3)
+    manual = _replay(model, batch, rng.draws)
+    torch.manual_seed(3)
+    swapped = _replay(model, batch, rng.draws[::-1])
+    steps = spec.diffusion.schedule.num_train_timesteps
+    for name in spec.diffusion.timesteps:
+        sigma, t = rng.quantize(manual[name, "timestep"], num_train_timesteps=steps,
+                                sample_dtype=batch[name].dtype)
+        assert torch.equal(draw.noise[name], manual[name, "noise"])
+        assert torch.equal(draw.sigma[name], sigma)
+        assert torch.equal(draw.model_timesteps[name], t)
+    assert not torch.equal(draw.noise["action"], swapped["action", "noise"])
+
+
+def test_add_noise_consumes_the_draw_and_draws_nothing(spec):
+    model = world(spec)
+    batch = fake_batch(spec)
+    draw = model.draw(batch)
+    state = torch.get_rng_state()
+    runtime = model.add_noise(batch, draw)
+    assert torch.equal(torch.get_rng_state(), state)
+    for name in draw.noise:
+        assert runtime.noise[name] is draw.noise[name]
+        assert runtime.timesteps[name] is draw.sigma[name]
+        assert runtime.model_timesteps[name] is draw.model_timesteps[name]
+
+
+def test_engine_receives_the_training_timestep_not_sigma():
+    """The time embeddings read ``sigma * num_train_timesteps`` (Wan: 0..1000)."""
+    spec = tiny_spec("vpp2")
+    model = world(spec)
+    seen = {}
+    for name, block in model.blocks.items():
+        def prepare(x, *, timestep=None, _name=name, _prepare=block.prepare, **kwargs):
+            seen[_name] = timestep
+            return _prepare(x, timestep=timestep, **kwargs)
+        block.prepare = prepare
+    batch = fake_batch(spec)
+    torch.manual_seed(1)
+    draw = model.draw(batch)
+    torch.manual_seed(1)
+    model(batch)
+    for name in spec.diffusion.timesteps:
+        assert torch.equal(seen[name], draw.model_timesteps[name])
+    assert bool((seen["video"] == 1000).all())
+
+
+def test_overriding_the_removed_sample_timesteps_is_rejected():
+    """forward no longer calls it, so an override would silently be dead code."""
+    with pytest.raises(TypeError, match="replaced by draw"):
+        class Legacy(WorldModel):  # noqa: F841 -- definition itself must fail
+            def sample_timesteps(self, batch):
+                return {}
+
+
+def test_bsmntw_on_a_constant_timestep_stream_is_rejected():
+    """At sigma=1 the bsmntw weight is exactly 0: a dead loss term (v2 T24)."""
+    with pytest.raises(ValueError, match="exactly 0"):
+        with_losses(tiny_spec("vpp2"),
+                    LossSpec(name="video_flow", head="video_flow", weight_of=Bsmntw()),
+                    LossSpec(name="action_flow", head="action_flow"))
+
+
+def test_timestep_weight_on_a_stream_without_timesteps_is_rejected():
+    """compute_losses only weights a stream that draws a timestep; elsewhere the
+    weight would be skipped without a word."""
+    base = tiny_spec("fastwam")
+    group = base.attention_groups[0]
+    streams = tuple(replace(stream, needs_timestep=False, timestep_embed_width=None)
+                    if stream.name == "action" else stream for stream in group.streams)
+    timesteps = {name: sampler for name, sampler in base.diffusion.timesteps.items()
+                 if name != "action"}
+    losses = tuple(replace(loss, weight_of=Bsmntw()) if loss.head == "action_flow" else loss
+                   for loss in base.losses)
+    with pytest.raises(ValueError, match="draws none"):
+        replace(base, attention_groups=(replace(group, streams=streams),),
+                diffusion=replace(base.diffusion, timesteps=timesteps),
+                losses=losses)
+
+
+# ---- step hook: read-only observation of steps 1, 3, 6 and 7 ----
+
+
+def test_step_hook_reports_each_stage_once_in_order(spec):
+    model = world(spec)
+    seen = []
+    handle = model.register_step_hook(lambda m, event, value: seen.append((m, event, value)))
+    batch = fake_batch(spec)
+    loss, metrics = model(batch)
+    assert [event for _, event, _ in seen] == list(STEP_HOOK_EVENTS)
+    assert all(m is model for m, _, _ in seen)
+    draw, runtime, outputs, (hook_loss, hook_metrics) = (value for _, _, value in seen)
+    assert isinstance(draw, DiffusionDraw) and isinstance(runtime, DiffusionRuntime)
+    assert all(runtime.noise[name] is draw.noise[name] for name in draw.noise)
+    assert set(outputs) == {head.name for head in spec.heads}
+    assert hook_loss is loss and dict(hook_metrics) == metrics
+    handle.remove()
+    model(batch)
+    assert len(seen) == len(STEP_HOOK_EVENTS)
+
+
+def test_step_hook_is_read_only_and_leaves_the_step_unchanged(spec):
+    """Same seed, same loss and generator state with or without an observer."""
+    model = world(spec)
+    batch = fake_batch(spec)
+    torch.manual_seed(5)
+    expected, _ = model(batch)
+    state = torch.get_rng_state()
+
+    def hook(m, event, value):
+        if event == "outputs":
+            with pytest.raises(TypeError):
+                value["extra"] = None
+        return "ignored"
+
+    model.register_step_hook(hook)
+    torch.manual_seed(5)
+    loss, _ = model(batch)
+    assert torch.equal(loss, expected)
+    assert torch.equal(torch.get_rng_state(), state)
+
+
+# ---- clean prefix frames and batch padding (Lane C v2 §1.3, §1.16, T36, T37) ----
+
+
+def _zero_outputs(runtime: DiffusionRuntime) -> dict:
+    return {"video_flow": torch.zeros_like(runtime.targets["video"]),
+            "action_flow": torch.zeros_like(runtime.targets["action"])}
+
+
+def _video_loss(model: WorldModel, runtime: DiffusionRuntime, outputs: dict) -> torch.Tensor:
+    return model.compute_losses(None, runtime, outputs, step=0)[1]["loss_video_flow"]
+
+
+def test_clean_prefix_frames_go_in_as_x0_and_stay_out_of_the_loss():
+    """fastwam's first latent frame (``TokenTimestep(clean_prefix=1)``): x_t is
+    x_0 there and the plain noising elsewhere, the target is untouched, and the
+    video loss never sees frame 0 (``mot/fastwam.py:529``, ``:597-600``)."""
+    spec = tiny_spec("fastwam")
+    assert spec.stream("video").token_timestep.clean_prefix == 1
+    model = world(spec)
+    batch = fake_batch(spec)
+    runtime = model.add_noise(batch, model.draw(batch))
+    clean, eps = batch["video"], runtime.noise["video"]
+    sigma = runtime.timesteps["video"].to(clean.dtype).view(-1, 1, 1, 1, 1)
+    schedule = spec.diffusion.schedule
+    assert torch.equal(runtime.noised["video"][:, :, :1], clean[:, :, :1])
+    assert torch.equal(runtime.noised["video"][:, :, 1:],
+                       schedule.add_noise(clean, eps, sigma)[:, :, 1:])
+    assert torch.equal(runtime.targets["video"], schedule.target(clean, eps, sigma))
+    outputs = _zero_outputs(runtime)
+    base = _video_loss(model, runtime, outputs)
+    outputs["video_flow"][:, :, :1] = 1e3
+    assert torch.equal(_video_loss(model, runtime, outputs), base)
+    outputs["video_flow"][:, :, 1:] = 1.0
+    assert not torch.equal(_video_loss(model, runtime, outputs), base)
+
+
+def test_clean_prefix_needs_the_raw_video_shape():
+    spec = tiny_spec("fastwam")
+    model = world(spec)
+    batch = fake_batch(spec)
+    batch["video"] = batch["video"][:, :, :1]
+    with pytest.raises(ValueError, match="keeps its first 1 latent frames clean"):
+        model.add_noise(batch, model.draw(batch))
+
+
+def test_padded_action_steps_drop_out_except_the_kept_ones():
+    """vpp2 counts ``~(action_is_pad & ~action_terminal_mask)`` (master
+    ``_training_loss_action_only``); a batch without the keys masks nothing."""
+    spec = tiny_spec("vpp2")
+    model = world(spec)
+    pad = torch.tensor([[False, False, True, True], [False, True, True, True]])
+    keep = torch.tensor([[False, False, True, False], [False] * 4])
+    batch = fake_batch(spec, action_is_pad=pad, action_terminal_mask=keep)
+    runtime = model.add_noise(batch, model.draw(batch))
+    assert torch.equal(runtime.loss_valid["action"], ~(pad & ~keep))
+    plain = fake_batch(spec)
+    assert model.add_noise(plain, model.draw(plain)).loss_valid == {}
+
+
+def test_all_padded_action_steps_give_a_zero_action_loss():
+    """A sample with no valid step contributes 0, not NaN (v2 T21)."""
+    spec = tiny_spec("vpp2")
+    pad = torch.ones(BATCH, spec.geometry.action_horizon, dtype=torch.bool)
+    _, metrics = world(spec)(fake_batch(spec, action_is_pad=pad))
+    assert metrics["loss_action_flow"].item() == 0.0
+
+
+def test_video_frame_padding_drops_the_clean_prefix_column():
+    """``image_is_pad`` folds onto latent frames, then the clean first frame's
+    column goes, as fastwam's video loss does (``mot/fastwam.py:487-499``).
+
+    13 pixel frames make 4 latent frames: the first alone, then 4 pixel frames
+    each. Padding pixel frames 7-12 pads only latent frame 3, since latent
+    frame 2 (pixel frames 5-8) is padding only when all of its frames are.
+    """
+    base = tiny_spec("fastwam")
+    masks = {"video": LossMaskSpec("image_is_pad", unit="video_frame")}
+    spec = replace(base, loss_masks=masks)
+    model = world(spec)
+    assert (spec.geometry.num_frames, spec.geometry.latent_grid[0]) == (13, 4)
+    pad = torch.zeros(BATCH, spec.geometry.num_frames, dtype=torch.bool)
+    pad[1, 7:] = True
+    batch = fake_batch(spec, image_is_pad=pad)
+    runtime = model.add_noise(batch, model.draw(batch))
+    assert runtime.loss_valid["video"].tolist() == [[True, True, True], [True, True, False]]
+
+
+def test_loss_mask_on_an_unknown_stream_is_rejected():
+    base = tiny_spec("vpp2")
+    with pytest.raises(ValueError, match="loss_masks names unknown streams"):
+        replace(base, loss_masks={"text": LossMaskSpec("context_mask")})
+

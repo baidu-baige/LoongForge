@@ -11,14 +11,16 @@ values, so this provider overrides no stream scalar at all.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 
-from ....diffusion.loss import LossSpec
 from ....diffusion.schedule import RectifiedFlow
 from ....diffusion.spec import DiffusionSpec
 from ....diffusion.stepping import EulerSampler, UniformSteps
 from ....diffusion.timesteps import TimestepSampler, UniformShift
+from ....diffusion.weights import Bsmntw
 from ....heads.flow import build_flow_head
+from ....losses import LossMaskSpec, LossSpec, TokenMeanSquaredError
 from ....heads.hidden_ref import HiddenStateRef
 from ....heads.spec import HeadSpec
 from ....streams.blocks import ActionStream, WanVideoStream
@@ -30,7 +32,8 @@ from ....visibility.combine import Visibility
 from ....visibility.presets import get_preset
 from ....visibility.rules import prefix_only, same_stream, stream_edge
 from ...core import Spec, register_provider
-from ...overrides import reject_config, resolve_geometry, resolve_scalars
+from ...overrides import (StreamShift, reject_config, resolve_diffusion,
+                          resolve_geometry, resolve_scalars)
 from ...world import WorldModelSpec
 from ..dual_stream_wan import STREAM_SCALAR_KEYS, _dual_stream_wan_streams
 
@@ -102,14 +105,21 @@ def _fastwam_visibility(tokens_per_frame: int) -> dict[str, Visibility]:
     }
 
 
+@dataclass(frozen=True)
+class _FastWamDiffusion:
+    """YAML-overridable diffusion parameters for FastWAM (``diffusion.<stream>.shift``)."""
+
+    video: StreamShift = StreamShift(shift=5.0)
+    action: StreamShift = StreamShift(shift=1.0)
+
+
 @register_provider("fastwam")
 def _fastwam(config: Any = None, *,
              geometry: Mapping[str, Any] | None = None,
-             video_shift: float = 5.0,
-             action_shift: float = 5.0,
              inference_steps: int = 20,
              action_width: int = 7,
              proprio_dim: int | None = 8,
+             diffusion: Mapping[str, Any] | None = None,
              **stream_scalars: Any) -> WorldModelSpec:
     """Build the fastwam spec; ``--model-name fastwam``.
 
@@ -119,12 +129,13 @@ def _fastwam(config: Any = None, *,
     than contract changes:
 
     1. **The video timestep is not a constant.** fastwam really samples t for
-       both streams (``video_scheduler`` and ``action_scheduler`` carry the
-       **same numbers** at ``modeling_configuration_fastwam.py:98-103``:
-       ``train_shift: 5.0`` / ``infer_shift: 5.0``), so both get
-       ``UniformShift(5.0)`` rather than vpp2's ``Constant(1.0)``.
-       **Design doc §2's fastwam row says video 3.0 / action 1.0, which
-       contradicts the code**; the code wins and the mismatch is recorded.
+       both streams, so both get ``UniformShift`` rather than vpp2's
+       ``Constant(1.0)``: video ``train_shift: 5.0`` and action
+       ``train_shift: 1.0`` (``modeling_configuration_fastwam.py:108-115``;
+       the action value follows FastWAM's ``configs/model/fastwam.yaml``,
+       per the comment at ``:111-112``). Design doc §2's fastwam row says
+       video 3.0, which contradicts the code; the code wins and the mismatch
+       is recorded.
     2. **``seperated_timestep: True``** (``:82``). Its actual shape in code is
        ``token_timesteps = ones(B, F, tokens_per_frame) * t.view(B,1,1)``
        followed by ``token_timesteps[:, 0, :] = 0``
@@ -153,13 +164,14 @@ def _fastwam(config: Any = None, *,
     Args:
         config: Positional config object, rejected (see ``reject_config``).
         geometry: The YAML ``geometry:`` section, merged over the defaults.
-        video_shift: ``shift`` of the video stream's ``UniformShift``.
-        action_shift: ``shift`` of the action stream's ``UniformShift``.
         inference_steps: Euler steps at inference.
         action_width: Packed action dimension; entry width of the action
             stream and output width of the ``action_flow`` head.
         proprio_dim: Raw proprioception width, or ``None`` to drop the
             proprioception condition entirely.
+        diffusion: The YAML ``diffusion:`` section, resolved over this
+            provider's defaults before the samplers are built
+            (``resolve_diffusion``); ``None`` when YAML has none.
         **stream_scalars: Per-stream width and depth overrides.
 
     Returns:
@@ -210,17 +222,18 @@ def _fastwam(config: Any = None, *,
         action_dim=action_width,
     ), geometry)
 
+    # YAML may set the two shifts as ``diffusion.<stream>.shift``; any other
+    # key raises (§1.15).
+    diffusion_values = resolve_diffusion("fastwam", _FastWamDiffusion(), diffusion)
     diffusion = DiffusionSpec(
         timesteps={
-            "video": TimestepSampler(UniformShift(shift=video_shift)),
-            "action": TimestepSampler(UniformShift(shift=action_shift)),
+            "video": TimestepSampler(UniformShift(shift=diffusion_values.video.shift)),
+            "action": TimestepSampler(UniformShift(shift=diffusion_values.action.shift)),
         },
-        # ``lambda_video`` and ``lambda_action`` are both 1.0 (``:104-106``)
-        losses=(
-            LossSpec(name="video_flow", head="video_flow"),
-            LossSpec(name="action_flow", head="action_flow"),
-        ),
-        schedule=RectifiedFlow(),
+        # Both master schedulers use the 1000-step training timestep
+        # (``video/action_num_train_timesteps``, ``mot/fastwam.py:53-56``), and
+        # ``pre_dit`` receives ``sigma * 1000`` (``action/schedulers.py:51-58``).
+        schedule=RectifiedFlow(num_train_timesteps=1000),
         # Inference runs the action stream only: ``infer_action``
         # (``mot/fastwam.py:982``) calls ``mot.prefill_video_cache``
         # (``:1081``) once, then each step calls only
@@ -231,7 +244,27 @@ def _fastwam(config: Any = None, *,
         # Two levels = first latent frame clean, the rest noisy
         # (``wan/dit.py:645``).
         noise_levels=(0.0, 1.0),
+        # ``action_is_pad`` masks action steps (``:613-621``); ``image_is_pad``
+        # has one column per pixel frame and folds onto latent frames
+        # (``:464-506``). A batch without them has no padding (``:366``, ``:378``).
     )
+    # ``lambda_video`` and ``lambda_action`` are both 1.0 (``:116-118``).
+    # Both terms are master ``training_loss`` (``mot/fastwam.py:508-635``):
+    # per-frame video MSE (``.mean(dim=(1, 3, 4))``, ``:476``) and per-token
+    # action MSE (``:613-621``), each averaged over the units that are not
+    # padding, weighted by the shifted-grid bsmntw of its own scheduler
+    # (``:608``, ``:625``), then the batch mean. The clean first frame is
+    # sliced off the video term by L3 (``TokenTimestep``).
+    losses = (
+        LossSpec(name="video_flow", head="video_flow",
+                 objective=TokenMeanSquaredError(axis=2), weight_of=Bsmntw()),
+        LossSpec(name="action_flow", head="action_flow",
+                 objective=TokenMeanSquaredError(), weight_of=Bsmntw()),
+    )
+    loss_masks = {
+        "video": LossMaskSpec("image_is_pad", unit="video_frame"),
+        "action": LossMaskSpec("action_is_pad"),
+    }
 
     heads = (
         # 48 is the Wan2.2 VAE latent channel count, sourced from
@@ -263,6 +296,8 @@ def _fastwam(config: Any = None, *,
         attention_groups=(group,),
         diffusion=diffusion,
         heads=heads,
+        losses=losses,
+        loss_masks=loss_masks,
         # Same shape as vpp2: one text cross-attention slot per layer, fed to
         # both streams.
         # ``width=4096`` is the ``text_dim`` at

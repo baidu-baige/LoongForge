@@ -3,23 +3,35 @@
 
 """Resolution of the [YAML] overrides a provider accepts.
 
-Three helpers, one per strictness rule of
+Four helpers, one per strictness rule of
 ``docs/design/mot_spec_config.zh-CN.md`` §3.8: stream scalars
-(``resolve_scalars``), the ``geometry:`` section (``resolve_geometry``), and
-the refusal to hand a provider the config object at all (``reject_config``).
+(``resolve_scalars``), the ``geometry:`` section (``resolve_geometry``), the
+``diffusion:`` section (``resolve_diffusion``), and the refusal to hand a
+provider the config object at all (``reject_config``).
 
-None of the three knows any topology, so none of them is family-specific: the
-set of legal scalar keys is a parameter, owned by the topology family that
-declares those scalars.
+None of them knows any topology, so none of them is family-specific: the set
+of legal scalar keys is a parameter, owned by the topology family that
+declares those scalars, and the legal ``diffusion:`` keys are the table the
+provider hands to ``resolve_diffusion``.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import fields
-from typing import Any
+from dataclasses import dataclass, fields, is_dataclass, replace
+from typing import Any, TypeVar
 
 from ..geometry import GeometrySpec
+
+_DIFFUSION_KINDS = (float, int, bool)
+_DiffusionT = TypeVar("_DiffusionT")
+
+
+@dataclass(frozen=True)
+class StreamShift:
+    """Per-stream YAML diffusion overrides for a ``UniformShift`` sampler."""
+
+    shift: float = 1.0
 
 
 def resolve_scalars(model_type: str, defaults: dict[str, int],
@@ -133,6 +145,122 @@ def reject_config(model_type: str, config: Any) -> None:
             f"provider({model_type!r}) got a config object as a positional "
             "argument. Applying config belongs to build_world_model_spec: it "
             "translates the five YAML sections into keyword arguments "
-            "(geometry= / <stream>_<scalar>= / <stream>_shift= / subclass "
-            "fields), and a provider never sees the config object itself (R5)"
+            "(geometry= / <stream>_<scalar>= / diffusion= / subclass fields), "
+            "and a provider never sees the config object itself (R5)"
         )
+
+
+def _coerce(kind: type, value: Any, *, key: str) -> Any:
+    """Check a YAML value against a diffusion key's kind; float keys accept an int.
+
+    Args:
+        kind: ``float``, ``int`` or ``bool``, the type of the key's default.
+        value: The value YAML gave.
+        key: The full YAML key, used in the error message.
+
+    Returns:
+        ``value``, as a float for a float key.
+
+    Raises:
+        TypeError: The value has the wrong type; ``True`` is not a number here.
+    """
+    if isinstance(value, bool):
+        ok = kind is bool
+    elif isinstance(value, int):
+        ok = kind in (int, float)
+    else:
+        ok = isinstance(value, float) and kind is float
+    if not ok:
+        raise TypeError(f"{key} must be {kind.__name__}, got {type(value).__name__} {value!r}")
+    return float(value) if kind is float else value
+
+
+def resolve_diffusion(model_type: str, defaults: _DiffusionT,
+                      overrides: Mapping[str, Any] | None) -> _DiffusionT:
+    """Apply the YAML ``diffusion:`` section over a provider's typed defaults.
+
+    ``defaults`` is a nested frozen dataclass whose top-level fields name the
+    streams that accept YAML overrides and whose inner dataclass fields list
+    the legal scalar keys and their default values (for example
+    ``StreamShift(shift=5.0)``). Reflection via ``dataclasses.fields`` is the
+    whitelist of legal streams, keys and types — matching ``resolve_geometry``
+    — and the returned object has the same strong type as ``defaults`` so
+    providers read attributes (``values.video.shift``) rather than dict keys.
+
+    Args:
+        model_type: Provider key, used in the error messages.
+        defaults: Nested dataclass instance whose attributes are per-stream
+            dataclass instances with ``float``, ``int`` or ``bool`` fields.
+        overrides: The YAML ``diffusion:`` section, ``{stream: {key: value}}``,
+            or ``None`` when YAML has none.
+
+    Returns:
+        A new instance of ``type(defaults)`` with YAML overrides applied (float
+        fields accept an int and are coerced to ``float``).
+
+    Raises:
+        TypeError: ``defaults`` or one of its stream entries is not a dataclass
+            instance, a default field is not ``float``/``int``/``bool``,
+            ``overrides`` or a stream block is not a mapping, or a YAML value
+            has the wrong type.
+        ValueError: YAML names a stream not declared on ``defaults`` (or an
+            empty stream schema), or keys not declared on that stream's
+            dataclass.
+    """
+    if not is_dataclass(defaults) or isinstance(defaults, type):
+        raise TypeError(
+            f"provider({model_type!r}) defaults for resolve_diffusion must be a "
+            f"dataclass instance, got {type(defaults).__name__}")
+    stream_schemas: dict[str, tuple[Any, dict[str, type]]] = {}
+    for stream_field in fields(defaults):
+        stream = stream_field.name
+        stream_default = getattr(defaults, stream)
+        if not is_dataclass(stream_default) or isinstance(stream_default, type):
+            raise TypeError(
+                f"provider({model_type!r}) default for diffusion.{stream} must be a "
+                f"dataclass instance, got {type(stream_default).__name__}")
+        key_kinds: dict[str, type] = {}
+        for key_field in fields(stream_default):
+            val = getattr(stream_default, key_field.name)
+            if type(val) not in _DIFFUSION_KINDS:
+                raise TypeError(
+                    f"provider({model_type!r}) default for diffusion.{stream}.{key_field.name}: "
+                    f"a diffusion key is float, int or bool, got {type(val).__name__}")
+            key_kinds[key_field.name] = type(val)
+        stream_schemas[stream] = (stream_default, key_kinds)
+    if overrides is None:
+        return defaults
+    if not isinstance(overrides, Mapping):
+        raise TypeError(f"diffusion must be a mapping, got {type(overrides).__name__}")
+    listed = ", ".join(
+        f"{stream} ({sorted(kinds)})"
+        for stream, (_, kinds) in sorted(stream_schemas.items()) if kinds
+    ) or "none"
+    stream_updates: dict[str, Any] = {}
+    for stream, block in overrides.items():
+        if not isinstance(block, Mapping):
+            raise TypeError(f"diffusion.{stream} must be a mapping, got {type(block).__name__}")
+        entry = stream_schemas.get(str(stream))
+        if entry is None or not entry[1]:
+            path = f"diffusion.{stream}.{next(iter(block))}" if block else f"diffusion.{stream}"
+            raise ValueError(
+                f"{path}: stream {stream!r} has no diffusion keys in "
+                f"{model_type}; the streams with diffusion keys are: {listed}")
+        if not block:
+            continue
+        stream_default, kinds = entry
+        stray = sorted(set(block) - set(kinds))
+        if stray:
+            head = (f"diffusion.{stream}.{stray[0]} is not a diffusion key"
+                    if len(stray) == 1 else f"diffusion.{stream} got unknown keys {stray}")
+            raise ValueError(
+                f"{head} of stream {stream!r}; legal diffusion keys are "
+                f"{sorted(kinds)}. Stream sizes go under streams.{stream}")
+        coerced = {
+            key: _coerce(kinds[key], value, key=f"diffusion.{stream}.{key}")
+            for key, value in block.items()
+        }
+        stream_updates[str(stream)] = replace(stream_default, **coerced)
+    if not stream_updates:
+        return defaults
+    return replace(defaults, **stream_updates)

@@ -4,7 +4,7 @@
 """The gate: ``--model-name`` → YAML → typed config → arch model.
 
 Everything the other ``test_arch_*`` files check lives inside the ``arch``
-package. This file checks the four seams that connect it to the trainer, each of
+package. This file checks the five seams that connect it to the trainer, each of
 which fails silently rather than loudly when it breaks:
 
 1. ``MODEL_SCHEMA`` rows resolve to YAML files that exist and merge cleanly into
@@ -16,11 +16,16 @@ which fails silently rather than loudly when it breaks:
    steal ``fastwam`` from ``FastWAMPolicy``.
 4. The shell really converts a pixel batch into ``(loss, metrics)`` — with stub
    encoders, because the real VAE allocates its normalisation buffers on CUDA.
+5. Each ``diffusion:`` key is one the provider lists for ``resolve_diffusion``
+   before it builds the object; any other key raises when the spec is built.
 """
 
 from __future__ import annotations
 
 import dataclasses
+import re
+from dataclasses import dataclass, replace
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -32,12 +37,16 @@ from loongforge.embodied.model.arch.factory import (ArchModelConfig,
                                                     DualStreamWanConfig,
                                                     InternW0DeltaArchModel,
                                                     Vpp2ArchModel, Vpp2Config)
+from loongforge.embodied.model.arch.losses import WeightRamp
+from loongforge.embodied.model.arch.diffusion.timesteps import UniformShift
 from loongforge.embodied.model.arch.spec.core import Spec
+from loongforge.embodied.model.arch.spec.overrides import StreamShift, resolve_diffusion
 from loongforge.embodied.model.arch.spec.world import WorldModelSpec
 from loongforge.embodied.model.arch.streams.engine import JointAttentionEngine
 from loongforge.embodied.model.arch.towers import build_wan_clip, build_wan_vae
 from loongforge.embodied.model.registry import MODEL_REGISTRY
 from loongforge.embodied.train.config_map import get_config_path, get_model_schema
+from loongforge.embodied.train.trainers.supervised.finetune_trainer import FinetuneTrainer
 
 from test_arch_blocks import BATCH, CONTEXT_LEN, tiny_spec
 
@@ -155,20 +164,24 @@ def test_gate_does_not_take_over_fastwam():
     assert MODEL_REGISTRY["fastwam"] is FastWAMPolicy
 
 
-@pytest.mark.parametrize("model_name", ARCH_MODELS)
-def test_arch_models_reuse_the_fastwam_preprocessor(model_name):
-    """Preprocessor lookup is by ``model_type``, and these two share FastWAM's.
+def test_arch_models_take_their_data_packages_preprocessor():
+    """Preprocessor lookup is by ``model_type``; this pins whose each model gets.
 
-    They consume the same pixel-space batch and read the same four config
-    attributes, so a separate collator would be a copy of this one.
+    internw0_delta consumes FastWAM's pixel-space batch and reads the same four
+    config attributes, so a separate collator would be a copy of FastWAM's.
+    vpp2 runs master's data package since #371, collator included.
     """
     import loongforge.embodied.data.datasets.fastwam.transforms  # noqa: F401
+    import loongforge.embodied.data.datasets.vpp2.transforms  # noqa: F401
     from loongforge.embodied.data.datasets.fastwam.transforms.fastwam_collator \
         import FastWAMPreprocessor
     from loongforge.embodied.data.datasets.transforms.collator import (
         _PREPROCESSOR_REGISTRY)
+    from loongforge.embodied.data.datasets.vpp2.transforms.vpp2_collator \
+        import VPP2Preprocessor
 
-    assert _PREPROCESSOR_REGISTRY[model_name] is FastWAMPreprocessor
+    assert _PREPROCESSOR_REGISTRY["internw0_delta"] is FastWAMPreprocessor
+    assert _PREPROCESSOR_REGISTRY["vpp2"] is VPP2Preprocessor
 
 
 @pytest.mark.parametrize("model_name", ARCH_MODELS)
@@ -219,6 +232,18 @@ class StubImageEncoder(torch.nn.Module):
         return torch.randn(frames.shape[0], CONTEXT_LEN, self.width)
 
 
+def make_shell(spec: WorldModelSpec) -> Vpp2ArchModel:
+    """A shell around ``spec``, wired to stub encoders."""
+    from loongforge.embodied.model.arch.factory import Vpp2Config
+
+    core = WorldModel(spec, engine=JointAttentionEngine(backend="dense"),
+                      layout=spec.build_layout())
+    return Vpp2ArchModel(
+        Vpp2Config(dtype="float32"), core,
+        vae=StubVAE(spec),
+        image_encoder=StubImageEncoder(spec.condition("clip_image").width))
+
+
 @pytest.fixture
 def shell() -> Vpp2ArchModel:
     """A vpp2 shell at test width, wired to stub encoders.
@@ -227,13 +252,7 @@ def shell() -> Vpp2ArchModel:
     and loss terms are the production ones) with the widths and geometry shrunk
     — the shell's job is tensor plumbing, which is width-independent.
     """
-    spec = tiny_spec("vpp2")
-    core = WorldModel(spec, engine=JointAttentionEngine(backend="dense"),
-                      layout=spec.build_layout())
-    return Vpp2ArchModel(
-        Vpp2Config(dtype="float32"), core,
-        vae=StubVAE(spec),
-        image_encoder=StubImageEncoder(spec.condition("clip_image").width))
+    return make_shell(tiny_spec("vpp2"))
 
 
 def pixel_batch(shell: Vpp2ArchModel) -> dict:
@@ -260,8 +279,8 @@ def test_shell_turns_a_pixel_batch_into_a_scalar_loss(shell):
     loss, metrics = shell(pixel_batch(shell))
     assert loss.ndim == 0
     assert torch.isfinite(loss)
-    for term in shell.spec.diffusion.losses:
-        assert metrics[term.name].ndim == 0
+    for term in shell.spec.losses:
+        assert metrics[f"loss_{term.name}"].ndim == 0
 
 
 def test_shell_fills_one_batch_key_per_stream_and_condition(shell):
@@ -277,6 +296,18 @@ def test_shell_fills_one_batch_key_per_stream_and_condition(shell):
     for cond in shell.spec.conditions:
         if cond.enabled:
             assert cond.source_key in encoded
+
+
+def test_shell_passes_the_declared_masks_through(shell):
+    """Mask keys come off the spec (``WorldModelSpec.loss_masks``), arrive as
+    bool, and stay absent when the sample has none."""
+    horizon = shell.spec.geometry.action_horizon
+    sample = pixel_batch(shell)
+    assert "action_is_pad" not in shell.encode_batch(sample)
+    sample["action_is_pad"] = torch.zeros(BATCH, horizon, dtype=torch.uint8)
+    encoded = shell.encode_batch(sample)
+    assert encoded["action_is_pad"].dtype is torch.bool
+    assert "action_terminal_mask" not in encoded
 
 
 def test_shell_checks_the_latent_grid_against_the_geometry(shell):
@@ -398,7 +429,7 @@ def test_provider_kwargs_stops_at_the_family_fields(model_name):
 def replace_video_stream(spec: WorldModelSpec, **changes) -> WorldModelSpec:
     """Rewrite the ``video`` stream in place, inside its attention group.
 
-    ``WorldModelSpec.streams`` is a property derived from ``groups``, so a
+    ``WorldModelSpec.streams`` is a property derived from ``attention_groups``, so a
     stream cannot be swapped by ``dataclasses.replace(spec, streams=...)``.
 
     Args:
@@ -409,11 +440,11 @@ def replace_video_stream(spec: WorldModelSpec, **changes) -> WorldModelSpec:
         The same spec with its video stream replaced.
     """
     groups = tuple(
-        dataclasses.replace(group, members=tuple(
+        dataclasses.replace(group, streams=tuple(
             dataclasses.replace(s, **changes) if s.name == "video" else s
-            for s in group.members))
-        for group in spec.groups)
-    return dataclasses.replace(spec, groups=groups)
+            for s in group.streams))
+        for group in spec.attention_groups)
+    return dataclasses.replace(spec, attention_groups=groups)
 
 
 def stub_towers(spec: WorldModelSpec, seen: dict) -> WorldModelSpec:
@@ -469,3 +500,212 @@ def test_build_towers_refuses_a_video_stream_with_no_tower():
     spec = replace_video_stream(tiny_spec("vpp2"), source_encoder=None)
     with pytest.raises(ValueError, match="source_encoder"):
         Vpp2ArchModel.build_towers(Vpp2Config(), spec)
+
+
+def test_trainer_iteration_drives_the_loss_weight_ramp():
+    """The trainer's ``iteration`` is the core's ``global_step``.
+
+    ``_select_forward_kwargs`` passes ``iteration`` only to a forward that
+    names it, and nothing else writes ``global_step`` into the batch. Without
+    it every ``WeightRamp`` would stay at its start value: internw0_delta's
+    ``track_align`` (0.0 -> 0.1) and any YAML ``warmup_steps`` would never
+    train, so a training forward without it raises.
+    """
+    spec = tiny_spec("vpp2")
+    ramp = WeightRamp(start_step=0, end_step=10, start_value=0.0, end_value=1.0)
+    spec = replace(spec, losses=tuple(
+        replace(loss, ramp=ramp) if loss.head == "action_flow" else loss
+        for loss in spec.losses))
+    shell = make_shell(spec)
+    kwargs = FinetuneTrainer._select_forward_kwargs(SimpleNamespace(model=shell), iteration=5)
+    assert kwargs == {"iteration": 5}
+    _, metrics = shell(pixel_batch(shell), **kwargs)
+    assert metrics["action_flow/weight"] == 0.5
+    _, metrics = shell(pixel_batch(shell), iteration=10)
+    assert metrics["action_flow/weight"] == 1.0
+    with pytest.raises(ValueError, match="no global_step"):
+        shell(pixel_batch(shell))
+
+
+def test_batch_global_step_must_agree_with_the_trainer_iteration(shell):
+    """Two step counters that disagree raise instead of one winning silently."""
+    batch = {**pixel_batch(shell), "global_step": 3}
+    shell(batch, iteration=3)
+    with pytest.raises(ValueError, match="disagrees"):
+        shell(batch, iteration=4)
+
+
+# ---- 5. the diffusion: section lands on fields the provider declared ----
+
+
+def load_config_with(model_name: str, *dotlist: str, drop: tuple[str, ...] = ()):
+    """``load_config`` plus command-line overrides, as ``train/parser.py`` merges them.
+
+    Args:
+        model_name: A ``MODEL_SCHEMA`` key.
+        *dotlist: ``key=value`` overrides under ``model:``, as on the command line.
+        drop: ``model:`` sections emptied before merging, to build without them.
+
+    Returns:
+        The materialised model config instance.
+    """
+    schema = get_model_schema(model_name)
+    section = OmegaConf.load(get_config_path(model_name)).get("model", {})
+    for name in drop:
+        section[name] = {}
+    merged = OmegaConf.merge(OmegaConf.structured(schema.model_config_cls), section,
+                             OmegaConf.from_dotlist(list(dotlist)))
+    return OmegaConf.to_object(merged)
+
+
+@pytest.mark.parametrize("model_name", ARCH_MODELS)
+def test_shipped_diffusion_section_restates_the_provider_values(model_name):
+    """Writing the section after the provider changes nothing by itself.
+
+    Built with and without its ``diffusion:`` section, each model gets equal
+    samplers: the shipped YAML only restates the provider's numbers.
+    """
+    with_section = load_config_with(model_name).build_spec().diffusion
+    without = load_config_with(model_name, drop=("diffusion",)).build_spec().diffusion
+    assert dict(with_section.timesteps) == dict(without.timesteps)
+
+
+def test_yaml_shift_reaches_the_sampler_and_the_bsmntw_weight():
+    """``diffusion.action.shift`` moves the sampler, and bsmntw follows it.
+
+    Bsmntw normalizes on the shifted training grid and reads the shift off the
+    sampler when it is called, so no constant computed from the old shift is
+    left behind. An int in YAML lands as a float.
+    """
+    base = load_config("vpp2").build_spec().diffusion
+    moved_spec = load_config_with("vpp2", "diffusion.action.shift=3").build_spec()
+    moved = moved_spec.diffusion
+    sampler = moved.sampler_for("action")
+    assert sampler.distribution == UniformShift(shift=3.0)
+    assert type(sampler.distribution.shift) is float
+    (loss,) = [loss for loss in moved_spec.losses if loss.head == "action_flow"]
+    t = torch.tensor([500.0])
+    before = loss.weight_of(t, sampler=base.sampler_for("action"), num_train_timesteps=1000)
+    after = loss.weight_of(t, sampler=sampler, num_train_timesteps=1000)
+    assert not torch.equal(before, after)
+
+
+@pytest.mark.parametrize("override, error, message", [
+    ("diffusion.video.shift=3.0", ValueError, "diffusion.video.shift: stream 'video' has no diffusion keys"),
+    ("diffusion.action.num_layers=2", ValueError,
+     "diffusion.action.num_layers is not a diffusion key of stream 'action'"),
+    ("diffusion.action.weight=0.5", ValueError,
+     "diffusion.action.weight is not a diffusion key of stream 'action'"),
+    ("diffusion.proprio.shift=1.0", ValueError, "diffusion.proprio.shift: stream 'proprio' has no diffusion keys"),
+    ("diffusion.action.shift=true", TypeError, "diffusion.action.shift must be float, got bool"),
+    ("diffusion.action.shift=0", ValueError,
+     "UniformShift.shift must be positive, got 0.0"),
+    ("streams.action.shift=3.0", ValueError, "does not consume ['action_shift']"),
+])
+def test_a_diffusion_key_that_lands_nowhere_fails_at_build(override, error, message):
+    """Wrong section, wrong stream, wrong type or out of range: each one raises.
+
+    The two sections used to be flattened into one keyword table, so
+    ``streams.action.shift`` silently moved the action timesteps and a stream
+    size written under ``diffusion:`` silently changed the stream.
+    """
+    with pytest.raises(error, match=re.escape(message)):
+        load_config_with("vpp2", override).build_spec()
+
+
+@dataclass(frozen=True)
+class _CappedShift:
+    """Stand-in for a distribution a model writes in its own directory."""
+
+    shift: float = 3.0
+    t_max: float = 0.95
+
+    def sample(self, shape, *, device, dtype):
+        u = torch.rand(shape, device=device, dtype=dtype)
+        return (self.shift * u / (1.0 + (self.shift - 1.0) * u)).clamp(max=self.t_max)
+
+
+@dataclass(frozen=True)
+class _ToyVideoDiffusion:
+    t_max: float = 0.95
+    shift: float = 2.0
+
+
+@dataclass(frozen=True)
+class _ToyActionDiffusion:
+    num_steps: int = 10
+    shift: float = 5.0
+
+
+@dataclass(frozen=True)
+class _ToyDiffusion:
+    video: _ToyVideoDiffusion = _ToyVideoDiffusion()
+    action: _ToyActionDiffusion = _ToyActionDiffusion()
+
+
+def test_a_model_owned_distribution_gets_its_keys_without_common_code():
+    """A new distribution needs no marker: its provider hands a typed dataclass to ``resolve_diffusion``.
+
+    YAML overrides the provider's value before the one construction, and the
+    provider's defaults dataclass is frozen and unchanged.
+    """
+    @dataclass(frozen=True)
+    class _SingleStreamDiffusion:
+        video: _ToyVideoDiffusion = _ToyVideoDiffusion()
+
+    defaults = _SingleStreamDiffusion()
+    values = resolve_diffusion("toy", defaults, {"video": {"t_max": 0.9}})
+    assert isinstance(values, _SingleStreamDiffusion)
+    assert _CappedShift(shift=values.video.shift, t_max=values.video.t_max) == _CappedShift(shift=2.0, t_max=0.9)
+    assert defaults == _SingleStreamDiffusion()
+    assert resolve_diffusion("toy", defaults, None) == defaults
+
+
+def test_a_key_type_follows_its_default():
+    """The default's type is the key's type: an int key refuses a float, a float key takes an int."""
+    defaults = _ToyDiffusion()
+    with pytest.raises(TypeError, match=re.escape("diffusion.action.num_steps must be int, got float 4.0")):
+        resolve_diffusion("toy", defaults, {"action": {"num_steps": 4.0}})
+    resolved = resolve_diffusion("toy", defaults, {"action": {"shift": 3}})
+    assert resolved.action.shift == 3.0 and isinstance(resolved.action.shift, float)
+
+    @dataclass(frozen=True)
+    class _BadStream:
+        other: object = None
+
+    @dataclass(frozen=True)
+    class _BadDiffusion:
+        action: _BadStream = _BadStream()
+
+    with pytest.raises(TypeError, match=re.escape("default for diffusion.action.other: a diffusion key is float")):
+        resolve_diffusion("toy", _BadDiffusion(), None)
+    with pytest.raises(TypeError, match="defaults for resolve_diffusion must be a dataclass instance"):
+        resolve_diffusion("toy", {"action": {"shift": 5.0}}, None)  # type: ignore[arg-type]
+
+
+def test_diffusion_blocks_reject_unknown_empty_streams_and_non_mappings():
+    """Stream-block shape and empty-block rules match ``streams:`` and ``heads:``.
+
+    An empty block on a valid stream keeps its defaults, whereas an empty block
+    on an unknown or key-free stream still raises so ``diffusion: {actoin: {}}``
+    cannot pass silently. ``None`` and lists are rejected as non-mappings, and
+    unknown or legal key lists are sorted deterministically.
+    """
+    defaults = _ToyDiffusion()
+    assert resolve_diffusion("toy", defaults, {"action": {}}) == defaults
+    assert load_config_with("vpp2", "diffusion.action={}").build_spec().diffusion.sampler_for(
+        "action").distribution == UniformShift(shift=5.0)
+    with pytest.raises(ValueError, match=re.escape("diffusion.actoin: stream 'actoin' has no diffusion keys")):
+        resolve_diffusion("toy", defaults, {"actoin": {}})
+    with pytest.raises(ValueError, match=re.escape("diffusion.video: stream 'video' has no diffusion keys")):
+        load_config_with("vpp2", "diffusion.video={}").build_spec()
+    for bad in (None, [1.0], True):
+        with pytest.raises(TypeError, match=re.escape(f"diffusion.action must be a mapping, got {type(bad).__name__}")):
+            resolve_diffusion("toy", defaults, {"action": bad})
+    with pytest.raises(TypeError, match=re.escape("diffusion must be a mapping, got list")):
+        resolve_diffusion("toy", defaults, ["action"])  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match=re.escape(
+            "diffusion.video got unknown keys ['alpha', 'zeta'] of stream 'video'; "
+            "legal diffusion keys are ['shift', 't_max']")):
+        resolve_diffusion("toy", defaults, {"video": {"zeta": 1.0, "alpha": 2.0}})
+    assert StreamShift(shift=3.0).shift == 3.0

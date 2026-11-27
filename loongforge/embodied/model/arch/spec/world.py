@@ -28,11 +28,11 @@ from typing import Any
 
 from torch import Tensor
 
-from ..diffusion.loss import LossSpec, WeightRamp
 from ..diffusion.spec import DiffusionSpec
 from ..geometry import GeometrySpec
 from ..heads.spec import HeadSpec
 from ..layout import TokenLayout
+from ..losses import LossMaskSpec, LossSpec, UniformWeight, WeightRamp
 from ..streams.conditions import ConditionSpec, InjectionKind
 from ..streams.engine import AttentionGroup
 from ..streams.spec import StreamSpec
@@ -84,12 +84,16 @@ class WorldModelSpec:
     model_type: str
     geometry: GeometrySpec
     attention_groups: tuple[AttentionGroup, ...]
-    diffusion: DiffusionSpec
+    diffusion: DiffusionSpec | None = None
     heads: tuple[HeadSpec, ...] = ()
+    losses: tuple[LossSpec, ...] = ()
     conditions: tuple[ConditionSpec, ...] = ()
     visibility: Mapping[str, Visibility] = field(default_factory=dict)
     # Keyed by **stream name**; value is that stream's query-side visibility.
     # Missing key => fully bidirectional (structural=None).
+    loss_masks: Mapping[str, LossMaskSpec] = field(default_factory=dict)
+    # Keyed by stream name; excludes dataset-padded steps/frames from loss
+    # reduction without changing static tensor shapes.
     token_labels: LabelProducer | None = None
     attention_backend: str = "dense"    # [YAML] resolved backend, not "auto"
     attention_block_size: int | None = None
@@ -99,7 +103,21 @@ class WorldModelSpec:
         self._validate_stream_layer()
         self._validate_diffusion_layer()
         self._validate_head_layer()
+        self._validate_loss_layer()
         self._validate_visibility_layer()
+        known_streams = set(self.stream_names)
+        unknown_masks = sorted(set(self.loss_masks) - known_streams)
+        if unknown_masks:
+            raise ValueError(
+                f"loss_masks names unknown streams {unknown_masks}; "
+                f"streams are {sorted(known_streams)}")
+        for stream, mask_spec in self.loss_masks.items():
+            if not isinstance(mask_spec, LossMaskSpec):
+                raise TypeError(
+                    f"loss_masks[{stream!r}] must be a LossMaskSpec, "
+                    f"got {type(mask_spec).__name__}")
+        object.__setattr__(self, "loss_masks",
+                           MappingProxyType(dict(self.loss_masks)))
         object.__setattr__(self, "visibility",
                            MappingProxyType(dict(self.visibility)))
 
@@ -176,6 +194,17 @@ class WorldModelSpec:
             f"model {self.model_type!r} has no output head {name!r}; "
             f"it has {[h.name for h in self.heads]}"
         )
+
+    def losses_of(self, *, stream: str | None = None,
+                  head: str | None = None) -> tuple[LossSpec, ...]:
+        """Filter ``losses`` by source stream or head; neither returns all."""
+        if stream is not None and head is not None:
+            raise ValueError("losses_of: stream and head must not both be given")
+        if stream is None and head is None:
+            return self.losses
+        return tuple(loss for loss in self.losses
+                     if (loss.stream == stream if stream is not None
+                         else loss.head == head))
 
     def condition(self, name: str) -> ConditionSpec:
         """Look up one condition declaration by name.
@@ -524,35 +553,58 @@ class WorldModelSpec:
                 )
 
     def _validate_diffusion_layer(self) -> None:
-        """L3: timestep wiring and loss sources.
-
-        V5: the timestep configuration matches each stream's
-        ``needs_timestep`` one-to-one. It replaces the existing behaviour of
-        treating a missing timestep in a stream as 0, which turns one
-        forgotten config line into silent noise-free training that looks fine
-        numerically.
-
-        V6: every loss term's source (a stream or a head) exists.
-
-        Raises:
-            ValueError: V5 fails inside ``DiffusionSpec.validate_against``, or
-                a ``LossSpec.head`` names a head this model does not have.
-        """
+        """L3: timestep wiring matches ``StreamSpec.needs_timestep`` (V5)."""
+        if self.diffusion is None:
+            needs = sorted(spec.name for spec in self.streams if spec.needs_timestep)
+            if needs:
+                raise ValueError(
+                    f"streams {needs} declare needs_timestep=True, but "
+                    "WorldModelSpec.diffusion is None (L3/V5)")
+            return
         self.diffusion.validate_against(self.streams)
+
+    def _validate_loss_layer(self) -> None:
+        """L3: loss terms are non-empty, unique, and bound to valid sources (V6)."""
+        if not self.losses:
+            raise ValueError(
+                "WorldModelSpec.losses must not be empty: a model with no loss "
+                "cannot train (L3/V6)"
+            )
+        names = [loss.name for loss in self.losses]
+        if len(set(names)) != len(names):
+            raise ValueError(f"WorldModelSpec.losses has duplicate names: {names} (L3/V6)")
+        known_streams = {spec.name for spec in self.streams}
         head_names = {spec.name for spec in self.heads}
-        for loss in self.diffusion.losses:
+        sources = {spec.name: spec.source_stream for spec in self.heads}
+        timesteps = self.diffusion.timesteps if self.diffusion is not None else {}
+        for loss in self.losses:
+            if loss.stream is not None and loss.stream not in known_streams:
+                raise ValueError(
+                    f"LossSpec({loss.name!r}).stream={loss.stream!r} is not a "
+                    f"stream of this model; this model's streams are "
+                    f"{sorted(known_streams)} (L3/V6)"
+                )
             if loss.head is not None and loss.head not in head_names:
                 raise ValueError(
                     f"LossSpec({loss.name!r}).head={loss.head!r} is not a "
                     f"head of this model; its heads are "
                     f"{sorted(head_names)} (L3/V6)"
                 )
+            stream = loss.stream if loss.stream is not None else sources[loss.head]
+            if stream in timesteps and self.diffusion is not None:
+                loss.weight_of.check(self.diffusion.sampler_for(stream), loss=loss.name)
+            elif not isinstance(loss.weight_of, UniformWeight):
+                raise ValueError(
+                    f"LossSpec({loss.name!r}).weight_of={type(loss.weight_of).__name__} "
+                    f"weights by the source stream's timestep, but stream {stream!r} "
+                    "draws none; use UniformWeight (L3/V6)")
 
     def _validate_head_layer(self) -> None:
         """L4: head names are unique and every head's source is reachable.
 
-        Three checks: unique head names, the source stream exists, and when a
-        head reads an intermediate layer, that joint layer id is one the
+        Four checks: unique head names, ``HeadSpec.weight`` is 1.0 (the
+        coefficient lives on ``LossSpec``), the source stream exists, and when
+        a head reads an intermediate layer, that joint layer id is one the
         stream actually participates in.
 
         The last one is the easiest to get wrong today: intermediate layers
@@ -562,8 +614,9 @@ class WorldModelSpec:
         ``captures()`` are necessarily satisfiable.
 
         Raises:
-            ValueError: Duplicate head names, an unknown ``source_stream``, or
-                a capture layer the stream does not participate in.
+            ValueError: Duplicate head names, a ``HeadSpec.weight`` other than
+                1.0, an unknown ``source_stream``, or a capture layer the
+                stream does not participate in.
         """
         names = [spec.name for spec in self.heads]
         duplicates = sorted({name for name in names if names.count(name) > 1})
@@ -573,6 +626,14 @@ class WorldModelSpec:
             )
         known = set(self.stream_names)
         for spec in self.heads:
+            if spec.weight != 1.0:
+                raise ValueError(
+                    f"HeadSpec({spec.name!r}).weight={spec.weight}: loss "
+                    "coefficients live on LossSpec (YAML heads."
+                    f"{spec.name}.weight writes LossSpec.weight), so "
+                    "HeadSpec.weight must stay 1.0; a weight in two places "
+                    "with only one taking effect is a silent reweighting (L4/V8)"
+                )
             if spec.source_stream not in known:
                 raise ValueError(
                     f"HeadSpec({spec.name!r}).source points at stream "
@@ -659,8 +720,8 @@ _HEAD_KNOBS: frozenset[str] = frozenset({"weight", "warmup_steps", "enabled"})
 
 All three land on the ``LossSpec`` that consumes the head, never on the
 ``HeadSpec``: weight ownership is defined in exactly one place, and a head that
-also carried a weight would let two numbers disagree silently (``WorldModel``
-has a matching check that a weight has a single owner).
+also carried a weight would let two numbers disagree silently
+(``_validate_head_layer`` rejects a ``HeadSpec.weight`` other than 1.0).
 """
 
 
@@ -696,8 +757,11 @@ def _flatten_per_stream(section: str, body: dict[str, Any],
                         into: dict[str, Any]) -> None:
     """Flatten a ``<stream>: {<key>: value}`` section into provider kwargs.
 
-    The provider signature is flat (``video_num_layers=``, ``action_shift=``),
-    while the YAML is nested per stream. Flattening here rather than giving the
+    The provider signature is flat (``video_num_layers=``), while the YAML is
+    nested per stream. Only ``streams:`` goes through here; ``diffusion:``
+    reaches the provider whole, as ``diffusion=`` (``resolve_diffusion``),
+    because its keys belong to the objects the provider builds, not to the
+    provider's signature. Flattening ``streams:`` rather than giving the
     providers a nested parameter keeps one invariant worth having: a typo in a
     YAML key becomes an unexpected keyword argument at the provider call, which
     names both the model and the key.
@@ -786,7 +850,7 @@ def _apply_heads(spec: WorldModelSpec,
 
     Returns:
         ``spec`` when the section is empty, otherwise a copy whose
-        ``diffusion.losses`` carries the new weights.
+        ``losses`` carries the new weights.
 
     Raises:
         ValueError: A head name matches no loss term. The message lists the
@@ -795,7 +859,7 @@ def _apply_heads(spec: WorldModelSpec,
     """
     if not heads:
         return spec
-    known = {loss.head: loss.name for loss in spec.diffusion.losses
+    known = {loss.head: loss.name for loss in spec.losses
              if loss.head is not None}
     stray = sorted(set(heads) - set(known))
     if stray:
@@ -806,9 +870,9 @@ def _apply_heads(spec: WorldModelSpec,
     losses = tuple(
         _reweight(loss, _plain(heads[loss.head]))
         if loss.head in heads else loss
-        for loss in spec.diffusion.losses
+        for loss in spec.losses
     )
-    return replace(spec, diffusion=replace(spec.diffusion, losses=losses))
+    return replace(spec, losses=losses)
 
 
 def _apply_backend(spec: WorldModelSpec, backend: str | None,
@@ -863,15 +927,18 @@ def build_world_model_spec(config: Any) -> WorldModelSpec:
        config whose ``model_type`` is this key. No YAML line says "this is
        VPP2" beyond that one field.
     2. Translate the config sections into **keyword arguments**: ``geometry:``
-       stays a mapping, ``streams:`` and ``diffusion:`` are flattened to
-       ``<stream>_<key>``, and the per-model subclass fields are passed by
-       name. The config object itself never reaches a provider (rule R5): a
-       provider that could read it would be free to pull topology out of YAML.
+       stays a mapping, ``streams:`` is flattened to ``<stream>_<key>``,
+       ``diffusion:`` stays a mapping and is passed as ``diffusion=``, which
+       the provider resolves over its own defaults before it builds its
+       samplers (``resolve_diffusion``, where a key outside the provider's
+       table raises), and the per-model subclass fields are passed by name. The config
+       object itself never reaches a provider (rule R5): a provider that
+       could read it would be free to pull topology out of YAML.
     3. Call the provider. Everything structural — stream count, visibility,
        condition table, loss terms — is Python code there, so steps 1–2 can
        only move numbers, never shapes of the graph.
-    4. Apply the two overrides that are safe afterwards: loss weights and the
-       attention backend. Geometry is deliberately *not* here; it has to reach
+    4. Apply the overrides that are safe after the provider: the loss
+       weights and the attention backend. Geometry is deliberately *not* here; it has to reach
        the provider as an argument because visibility and the flow heads are
        derived from it (see ``_resolve_geometry``).
 
@@ -906,11 +973,12 @@ def build_world_model_spec(config: Any) -> WorldModelSpec:
         kwargs["geometry"] = geometry
     _flatten_per_stream("streams", _plain(getattr(config, "streams", None)),
                         kwargs)
-    _flatten_per_stream("diffusion",
-                        _plain(getattr(config, "diffusion", None)), kwargs)
     extras = getattr(config, "provider_kwargs", None)
     if callable(extras):
         kwargs.update(extras())
+    diffusion = _plain(getattr(config, "diffusion", None))
+    if diffusion:
+        kwargs["diffusion"] = diffusion
 
     spec = provider(**kwargs)
     if not isinstance(spec, WorldModelSpec):

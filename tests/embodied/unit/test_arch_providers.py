@@ -13,6 +13,7 @@ against what capability negotiation concludes.
 
 from __future__ import annotations
 
+import re
 from dataclasses import replace
 
 import pytest
@@ -248,7 +249,7 @@ def test_captures_are_derived_from_the_head_table(model_spec):
 def test_each_loss_names_an_existing_head(model_spec):
     """Every loss term names a head that exists, so losses cannot dangle."""
     heads = {head.name for head in model_spec.heads}
-    for loss in model_spec.diffusion.losses:
+    for loss in model_spec.losses:
         assert loss.name in heads, (loss.name, sorted(heads))
 
 
@@ -375,6 +376,71 @@ def test_timestep_embed_width_is_declared_exactly_when_consumed(model_spec):
     for stream in model_spec.streams:
         assert stream.needs_timestep is True, stream.name
         assert stream.timestep_embed_width == 256, stream.name
+
+
+@pytest.mark.parametrize("model_type", ["vpp2", "fastwam"])
+def test_wan_providers_feed_the_1000_step_training_timestep(model_type):
+    """Master's Wan schedulers hand ``sigma * 1000`` to the time embeddings."""
+    assert get_provider(model_type)().diffusion.schedule.num_train_timesteps == 1000
+
+
+@pytest.mark.parametrize("model_type, shifts", [
+    ("vpp2", {"action": 5.0}),
+    ("fastwam", {"video": 5.0, "action": 1.0}),
+    ("internw0_delta", {"video": 6.0, "action": 1.0}),
+])
+def test_each_provider_takes_these_diffusion_keys(model_type, shifts):
+    """The ``diffusion:`` keys a provider accepts, with its defaults.
+
+    Each listed shift lands on its stream's sampler; every other stream takes
+    no key, vpp2's constant video timestep included.
+    """
+    provider = get_provider(model_type)
+    timesteps = provider().diffusion.timesteps
+    assert {name: timesteps[name].distribution.shift for name in shifts} == shifts
+    moved = provider(diffusion={name: {"shift": 2.5} for name in shifts}).diffusion.timesteps
+    assert {name: moved[name].distribution.shift for name in shifts} == dict.fromkeys(shifts, 2.5)
+    for name in set(timesteps) - set(shifts):
+        with pytest.raises(ValueError, match=re.escape(f"stream {name!r} has no diffusion keys")):
+            provider(diffusion={name: {"shift": 2.5}})
+
+
+@pytest.mark.parametrize("model_type", provider_names())
+def test_every_provider_rejects_a_diffusion_key_it_does_not_list(model_type):
+    """Each provider resolves ``diffusion=`` itself, as it does ``streams:``.
+
+    Nothing after the provider checks the section, so a provider that took
+    ``diffusion=`` without calling ``resolve_diffusion`` would drop every key
+    silently.
+    """
+    with pytest.raises(ValueError, match=re.escape("diffusion.action.not_a_key is not a diffusion key")):
+        get_provider(model_type)(diffusion={"action": {"not_a_key": 1.0}})
+
+
+def test_fastwam_declares_the_losses_master_trains():
+    """``mot/fastwam.py:464-635``: per-frame video and per-token action MSE over
+    the units that are not padding, each weighted by its scheduler's bsmntw;
+    the action scheduler's shift is 1.0 (``modeling_configuration_fastwam.py:113-115``)."""
+    from loongforge.embodied.model.arch.diffusion.weights import Bsmntw
+    from loongforge.embodied.model.arch.losses import (
+        LossMaskSpec, TokenMeanSquaredError)
+
+    spec = get_provider("fastwam")()
+    losses = {loss.head: loss for loss in spec.losses}
+    assert losses["video_flow"].objective == TokenMeanSquaredError(axis=2)
+    assert losses["action_flow"].objective == TokenMeanSquaredError()
+    assert all(isinstance(loss.weight_of, Bsmntw) for loss in losses.values())
+    assert spec.diffusion.sampler_for("action").distribution.shift == 1.0
+    assert dict(spec.loss_masks) == {
+        "video": LossMaskSpec("image_is_pad", unit="video_frame"),
+        "action": LossMaskSpec("action_is_pad")}
+
+
+@pytest.mark.parametrize("model_type", ["vpp2", "fastwam", "internw0_delta"])
+def test_shift_is_not_a_provider_argument(model_type):
+    """A shift reaches the sampler only through ``diffusion:``, never as ``<stream>_shift``."""
+    with pytest.raises(ValueError, match=re.escape("does not consume ['action_shift']")):
+        get_provider(model_type)(action_shift=3.0)
 
 
 def test_disabled_condition_still_counts_toward_entry_channels():

@@ -363,7 +363,7 @@ def _run_new(sides: Sides, text_valid: torch.Tensor) -> tuple[Any, ...]:
     the layers some head declared.
     """
     spec, model = sides.spec, sides.model
-    group = spec.groups[0]
+    group = spec.attention_groups[0]
     inputs = {stream.name: sides.batch[stream.batch_key]
               for stream in spec.streams}
     bus = materialize_conditions(spec.conditions, sides.batch, training=False,
@@ -648,7 +648,7 @@ def test_every_joint_layer_matches_in_both_streams(run, sides):
     rides on the previous one's, and the last layer is the worst case the
     exit comparison below sees.
     """
-    layers = range(sides.spec.groups[0].num_layers)
+    layers = range(sides.spec.attention_groups[0].num_layers)
     for stream in sides.spec.streams:
         captured = run.captured[stream.name]
         assert set(captured) == set(layers)

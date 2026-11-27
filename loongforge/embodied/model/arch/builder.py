@@ -19,15 +19,18 @@ lanes, not at a missing algorithm.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from collections import OrderedDict
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Any
 
 import torch
 from torch import Tensor, nn
+from torch.utils.hooks import RemovableHandle
 
-from .diffusion.loss import LossSpec
 from .diffusion.spec import DiffusionSpec
+from .losses import LossSpec
 from .heads.spec import HeadSpec
 from .layout import LabelView, TokenLayout
 from .spec.core import build
@@ -38,7 +41,8 @@ from .streams.spec import StreamSpec
 from .visibility.combine import Visibility, from_predicate
 from .visibility.mask import AttentionPlan
 
-__all__ = ["DiffusionRuntime", "WorldModel", "join_stream_visibility",
+__all__ = ["DiffusionDraw", "DiffusionRuntime", "STEP_HOOK_EVENTS", "StepHook",
+           "WorldModel", "join_stream_visibility",
            "materialize_conditions", "query_in_stream"]
 
 
@@ -194,16 +198,28 @@ class DiffusionRuntime:
     picking the wrong one becomes an AttributeError.
 
     Attributes:
-        timesteps: Stream name to [B, *axes], the raw t in [0, 1].
+        timesteps: Stream name to [B, *axes], the noising coefficient sigma
+            in [0, 1] (dtype per ``RngPolicy.sigma_dtype``).
         noised: Stream name to x_t.
         noise: Stream name to epsilon, needed to compute the target.
         targets: Stream name to the regression target.
+        model_timesteps: Stream name to the training timestep
+            ``sigma * num_train_timesteps`` after the ``RngPolicy`` cast. The
+            engine hands it to the time embeddings and ``LossSpec.weight_of``
+            reads it (Lane C v2 ``NoisedStream.t``).
+        loss_valid: Stream name to a bool [B, T] of positions that count in
+            that stream's flow losses (True counts), over the units left after
+            the clean prefix frames. ``add_noise`` fills it from
+            ``WorldModelSpec.loss_masks``; a stream without an entry counts
+            everything.
     """
 
     timesteps: dict[str, Tensor]
     noised: dict[str, Tensor]
     noise: dict[str, Tensor]
     targets: dict[str, Tensor]
+    model_timesteps: dict[str, Tensor] = field(default_factory=dict)
+    loss_valid: dict[str, Tensor] = field(default_factory=dict)
 
     def require(self, stream: str) -> tuple[Tensor, Tensor, Tensor]:
         """Return (x_t, target, timestep) for one stream.
@@ -219,6 +235,32 @@ class DiffusionRuntime:
                 f"DiffusionRuntime has no stream {stream!r}; present: "
                 f"{sorted(self.noised)}"
             ) from None
+
+
+@dataclass(frozen=True)
+class DiffusionDraw:
+    """Every random number of one training step, drawn before any noising.
+
+    Produced by ``WorldModel.draw`` and consumed by ``WorldModel.add_noise``,
+    which draws nothing itself. Keeping the draws in one object is what makes
+    their order a declaration (``TimestepSampler.rng``) instead of a side
+    effect of which method happens to call ``torch.rand`` first.
+
+    Attributes:
+        noise: Stream name to epsilon, shaped like the stream's raw tensor.
+        sigma: Stream name to [B, *axes] noising coefficients in [0, 1].
+        model_timesteps: Stream name to the training timesteps
+            ``sigma * num_train_timesteps`` (see ``RngPolicy.quantize``).
+    """
+
+    noise: dict[str, Tensor]
+    sigma: dict[str, Tensor]
+    model_timesteps: dict[str, Tensor]
+
+
+# What ``WorldModel.register_step_hook`` reports, in the order of one forward.
+STEP_HOOK_EVENTS = ("draw", "runtime", "outputs", "losses")
+StepHook = Callable[["WorldModel", str, Any], None]
 
 
 class WorldModel(nn.Module):
@@ -245,6 +287,8 @@ class WorldModel(nn.Module):
         self.spec = spec
         self.engine = engine
         self.layout = layout
+        # OrderedDict, not dict: RemovableHandle keeps a weak reference to it.
+        self._step_hooks: OrderedDict[int, StepHook] = OrderedDict()
 
         # 1. Build the stream blocks. All parameters live here; the engine
         #    holds none.
@@ -323,9 +367,11 @@ class WorldModel(nn.Module):
         """Interface **I4**: ``(loss, metrics)``. This signature does not move.
 
         The seven steps:
-          1. sample the timestep (per stream, ``DiffusionSpec.sampler_for``);
+          1. draw every random number of the step -> ``DiffusionDraw`` (per
+             stream, in the order ``TimestepSampler.rng`` declares);
           2. fill the ``ConditionBus`` (materialize each ``ConditionSpec``);
-          3. add noise and compute regression targets -> ``DiffusionRuntime``;
+          3. add noise and compute regression targets -> ``DiffusionRuntime``
+             (deterministic: consumes the draw);
           4. pick the raw tensor each stream feeds the engine (tokenization
              happens inside ``prepare``);
           5. run the engine group by group (``StreamEngine.run``);
@@ -333,8 +379,8 @@ class WorldModel(nn.Module):
              states);
           7. compute each loss per ``LossSpec`` and sum them weighted.
 
-        Step 3 must come after step 1 and before step 5: the noise needs t, and
-        the engine consumes x_t. Step 6 must come after step 5: the heads
+        Step 3 must come after step 1 and before step 5: the noise needs the
+        draw, and the engine consumes x_t. Step 6 must come after step 5: the heads
         consume the engine's output. Those two are the non-reorderable
         constraints from interfaces §7.
 
@@ -342,19 +388,24 @@ class WorldModel(nn.Module):
         being counted inside this class: weight ramping (``WeightRamp``) needs
         the **optimizer step**, which only the trainer knows. A local counter
         would diverge under gradient accumulation and on resume from a
-        checkpoint.
+        checkpoint. Training a model whose losses ramp needs the step, so a
+        training batch without it raises there (``_global_step``).
 
         Args:
             batch: Raw batch; stream inputs, condition sources, and
                 ``global_step`` are all read from it.
 
+        Steps 1, 3, 6 and 7 are reported to ``register_step_hook`` observers.
+
         Returns:
             A tuple of the total loss and a metrics dict.
         """
-        step = int(batch.get("global_step", 0))
-        timesteps = self.sample_timesteps(batch)                    # 1
+        step = self._global_step(batch)
+        draw = self.draw(batch)                                     # 1
+        self._notify_step("draw", draw)
         conditions = self.build_conditions(batch)                   # 2
-        runtime = self.add_noise(batch, timesteps)                  # 3
+        runtime = self.add_noise(batch, draw)                       # 3
+        self._notify_step("runtime", runtime)
         inputs = self.stream_inputs(runtime)                        # 4
         merged = EngineOutput(states={}, captured={})               # 5
         for group in self.spec.attention_groups:
@@ -362,7 +413,60 @@ class WorldModel(nn.Module):
             merged.states.update(partial.states)
             merged.captured.update(partial.captured)
         outputs = self._run_heads(merged)                           # 6
-        return self.compute_losses(merged, runtime, outputs, step=step)  # 7
+        self._notify_step("outputs", MappingProxyType(outputs))
+        loss, metrics = self.compute_losses(
+            merged, runtime, outputs, step=step, batch=batch)       # 7
+        self._notify_step("losses", (loss, MappingProxyType(metrics)))
+        return loss, metrics
+
+    def register_step_hook(self, hook: StepHook) -> RemovableHandle:
+        """Observe the L3/L4 intermediates of every training step. Read-only.
+
+        ``hook(model, event, value)`` runs once per ``forward`` for each event
+        in ``STEP_HOOK_EVENTS``: ``"draw"`` after step 1 (``DiffusionDraw``),
+        ``"runtime"`` after step 3 (``DiffusionRuntime``), ``"outputs"`` after
+        step 6 (head name -> prediction) and ``"losses"`` after step 7
+        (``(loss, metrics)``). The calls sit in ``forward``, outside activation
+        checkpointing, so recomputation in backward never repeats them -- unlike
+        a forward hook on a module inside a checkpointed layer.
+
+        The hook observes and must not mutate: its return value is ignored and
+        the two mappings are read-only views. An experiment that has to replace
+        an intermediate (replaying noise, say) overrides ``draw`` or
+        ``add_noise`` in a test subclass, where the substitution is visible,
+        instead of hiding it in a hook. Hooks are not saved in the state dict.
+
+        Args:
+            hook: Called as ``hook(model, event, value)``.
+
+        Returns:
+            A handle whose ``remove()`` unregisters the hook.
+        """
+        handle = RemovableHandle(self._step_hooks)
+        self._step_hooks[handle.id] = hook
+        return handle
+
+    def _global_step(self, batch: Mapping[str, Any]) -> int:
+        """The batch's ``global_step``; 0 when it has none.
+
+        A training forward of a model whose losses ramp with the step raises
+        instead (Lane C v2 §1.9): its ramps would stay at their step-0 values
+        and nothing would report it. Evaluation keeps the 0.
+        """
+        if "global_step" in batch:
+            return int(batch["global_step"])
+        ramped = [loss.name for loss in self.spec.losses
+                  if loss.enabled and loss.ramp is not None and not loss.ramp.is_constant]
+        if self.training and ramped:
+            raise ValueError(
+                f"losses {ramped} ramp with the training step, but the batch has no "
+                "global_step: pass the trainer's iteration to ArchWorldModelBase.forward "
+                "or put global_step in the batch")
+        return 0
+
+    def _notify_step(self, event: str, value: Any) -> None:
+        for hook in tuple(self._step_hooks.values()):
+            hook(self, event, value)
 
     def _raw_tensor(self, batch: Mapping[str, Any],
                     stream: StreamSpec) -> Tensor:
@@ -384,40 +488,65 @@ class WorldModel(nn.Module):
         return batch[key]
 
     # ---- The six extension points (model_matrix §4.5.4). Subclasses override
-    # ---- these, never forward ----
+    # ---- these, never forward. Step 1 is ``draw`` (it replaced
+    # ---- ``sample_timesteps``, see ``__init_subclass__``) ----
 
-    def sample_timesteps(self, batch: Mapping[str, Any]
-                         ) -> dict[str, Tensor]:
-        """Extension point 1, step 1. Samples per stream per ``DiffusionSpec``.
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        if "sample_timesteps" in vars(cls):
+            # forward no longer calls it, so an override would be dead code
+            # while the step drew its random numbers in a different order.
+            raise TypeError(
+                f"{cls.__name__} overrides WorldModel.sample_timesteps, which was "
+                "replaced by draw(): noise and timesteps are drawn together in the "
+                "order TimestepSampler.rng declares, and add_noise(batch, draw) "
+                "draws nothing. Declare the order and t dtype on the provider "
+                "(RngPolicy, RectifiedFlow.num_train_timesteps) instead")
 
-        Only streams with ``needs_timestep=True`` are sampled. V5 already
-        guarantees that this set of streams matches the key set of
-        ``diffusion.timesteps`` exactly, so nothing here can be missed or
-        extra.
+    def draw(self, batch: Mapping[str, Any]) -> DiffusionDraw:
+        """Extension point 1, step 1. Every random draw of the training step.
+
+        Streams are drawn in the key order of ``DiffusionSpec.timesteps``
+        (V5 makes that exactly the streams with ``needs_timestep=True``);
+        within a stream ``TimestepSampler.rng.order`` decides whether epsilon
+        or the timestep comes first. ``add_noise`` draws nothing, so this is
+        the one place the step's random numbers come from, and their order is
+        a provider declaration that a test can pin.
+
+        Epsilon has the raw tensor's shape and dtype. The timestep is drawn in
+        float32 and turned into ``(sigma, t)`` by ``RngPolicy.quantize``:
+        under ``like_sample`` both follow the raw tensor's dtype, so
+        ``add_noise``'s ``(1-sigma)*x_0 + sigma*eps`` does not silently
+        promote a bf16 x_t to fp32. Such a promotion turns into an implicit
+        cast at the engine entry: memory doubles while the numbers still look
+        fine.
 
         Axis lengths come from the **layout labels**
         (``labels_of(axis).max() + 1``) rather than being recomputed from the
         geometry: the labels are I2's only source of axis facts, and computing
         it twice would diverge on padding.
-
-        The dtype follows the stream's raw tensor when that is floating point,
-        so that ``add_noise``'s ``(1-t)*x_0 + t*eps`` does not silently promote
-        a bf16 x_t to fp32. Such a promotion turns into an implicit cast at the
-        engine entry: memory doubles while the numbers still look fine.
         """
-        out: dict[str, Tensor] = {}
-        for stream in self.spec.streams:
-            if not stream.needs_timestep:
-                continue
-            raw = self._raw_tensor(batch, stream)
-            timestep_sampler = self.spec.diffusion.sampler_for(stream.name)
+        if self.spec.diffusion is None:
+            return DiffusionDraw(noise={}, sigma={}, model_timesteps={})
+        steps = self.spec.diffusion.schedule.num_train_timesteps
+        noise: dict[str, Tensor] = {}
+        sigma: dict[str, Tensor] = {}
+        model_timesteps: dict[str, Tensor] = {}
+        for name, timestep_sampler in self.spec.diffusion.timesteps.items():
+            raw = self._raw_tensor(batch, self.spec.stream(name))
+            dtype = raw.dtype if raw.is_floating_point() else torch.float32
             axis_sizes = tuple(int(self.layout.labels_of(axis).max()) + 1
                                for axis in timestep_sampler.broadcast.axes)
-            out[stream.name] = timestep_sampler.sample(
-                int(raw.shape[0]), device=raw.device,
-                dtype=raw.dtype if raw.is_floating_point() else torch.float32,
-                axis_sizes=axis_sizes)
-        return out
+            for kind in timestep_sampler.rng.draws:
+                if kind == "noise":
+                    noise[name] = torch.randn_like(raw)
+                    continue
+                drawn = timestep_sampler.sample(
+                    int(raw.shape[0]), device=raw.device, dtype=torch.float32,
+                    axis_sizes=axis_sizes)
+                sigma[name], model_timesteps[name] = timestep_sampler.rng.quantize(
+                    drawn, num_train_timesteps=steps, sample_dtype=dtype)
+        return DiffusionDraw(noise=noise, sigma=sigma, model_timesteps=model_timesteps)
 
     def build_conditions(self, batch: Mapping[str, Any]) -> ConditionBus:
         """Extension point 2, step 2. Materializes each ``ConditionSpec``."""
@@ -426,53 +555,141 @@ class WorldModel(nn.Module):
                                       encoders=self.condition_encoders)
 
     def add_noise(self, batch: Mapping[str, Any],
-                  timesteps: Mapping[str, Tensor]) -> DiffusionRuntime:
+                  draw: DiffusionDraw) -> DiffusionRuntime:
         """Extension point 3, step 3. Defaults to ``DiffusionSpec.schedule``.
 
-        ``t`` is reshaped to ``[B, 1, ...]`` here and deliberately does **not**
+        Deterministic: epsilon and sigma come from ``draw``, so an override can
+        reshape or mask them but never changes the step's random numbers.
+
+        ``sigma`` is reshaped to ``[B, 1, ...]`` here and deliberately does **not**
         go through ``BroadcastSpec.expand``: expand produces the token-shaped
         ``[B, total, 1]``, whereas noising happens on the **raw tensor**
         (video ``[B, C, F, H, W]``, action ``[B, T, D]``), and the axes do not
         line up. Token-shaped broadcasting only becomes meaningful after L2's
         ``prepare``. A per-frame timestep therefore raises explicitly here
         instead of being broadcast into a shape that happens to multiply.
+
+        Two declarations shape the result beyond the schedule:
+          - a stream whose ``StreamSpec.token_timestep`` pins a clean prefix
+            gets those latent frames back as x_0 after noising (fastwam
+            ``mot/fastwam.py:529``); L2 gives them timestep 0 from the same
+            declaration. Epsilon is still drawn for every frame, so the random
+            numbers consumed do not change;
+          - ``WorldModelSpec.loss_masks`` becomes ``loss_valid``: the units
+            that are not padding (or are kept), minus the clean prefix.
         """
+        if self.spec.diffusion is None:
+            noised = {spec.name: self._raw_tensor(batch, spec) for spec in self.spec.streams}
+            loss_valid: dict[str, Tensor] = {}
+            for name, clean in noised.items():
+                valid = self._loss_valid(batch, name, clean, prefix=0)
+                if valid is not None:
+                    loss_valid[name] = valid
+            return DiffusionRuntime(timesteps={}, noised=noised, noise={},
+                                    targets={}, model_timesteps={},
+                                    loss_valid=loss_valid)
         schedule = self.spec.diffusion.schedule
-        noised: dict[str, Tensor] = {}
-        noise: dict[str, Tensor] = {}
+        noised = {}
         targets: dict[str, Tensor] = {}
-        for stream in self.spec.streams:
-            if stream.name not in timesteps:
-                continue
-            timestep_sampler = self.spec.diffusion.sampler_for(stream.name)
+        loss_valid = {}
+        for name, timestep_sampler in self.spec.diffusion.timesteps.items():
             if not timestep_sampler.broadcast.is_per_sample:
                 raise NotImplementedError(
-                    f"stream {stream.name!r} samples its timestep per axis "
+                    f"stream {name!r} samples its timestep per axis "
                     f"{timestep_sampler.broadcast.axes}, while the default add_noise "
                     "only spreads [B] into [B, 1, ...]. Per-axis noising "
                     "first needs the map `label axis -> which dim of the raw "
                     "tensor` (it is per-modality); until then, override this "
                     "method"
                 )
-            t = timesteps[stream.name]
-            if t.ndim != 1:
+            sigma = draw.sigma[name]
+            if sigma.ndim != 1:
                 raise ValueError(
-                    f"stream {stream.name!r} per-sample timestep should be "
-                    f"[B], got {tuple(t.shape)}"
+                    f"stream {name!r} per-sample timestep should be "
+                    f"[B], got {tuple(sigma.shape)}"
                 )
-            clean = self._raw_tensor(batch, stream)
-            if t.shape[0] != clean.shape[0]:
+            clean = self._raw_tensor(batch, self.spec.stream(name))
+            if sigma.shape[0] != clean.shape[0]:
                 raise ValueError(
-                    f"stream {stream.name!r} timestep batch is {t.shape[0]}, "
+                    f"stream {name!r} timestep batch is {sigma.shape[0]}, "
                     f"while the raw tensor batch is {clean.shape[0]}"
                 )
-            shaped = t.view(-1, *([1] * (clean.ndim - 1)))
-            eps = torch.randn_like(clean)
-            noised[stream.name] = schedule.add_noise(clean, eps, shaped)
-            noise[stream.name] = eps
-            targets[stream.name] = schedule.target(clean, eps, shaped)
-        return DiffusionRuntime(timesteps=dict(timesteps), noised=noised,
-                                noise=noise, targets=targets)
+            shaped = sigma.to(dtype=clean.dtype).view(-1, *([1] * (clean.ndim - 1)))
+            eps = draw.noise[name]
+            x_t = schedule.add_noise(clean, eps, shaped)
+            prefix = self._clean_prefix(name, clean)
+            if prefix:
+                x_t = torch.cat([clean[:, :, :prefix], x_t[:, :, prefix:]], dim=2)
+            noised[name] = x_t
+            targets[name] = schedule.target(clean, eps, shaped)
+            valid = self._loss_valid(batch, name, clean, prefix)
+            if valid is not None:
+                loss_valid[name] = valid
+        for spec in self.spec.streams:
+            if spec.name not in noised and spec.name in self.spec.loss_masks:
+                clean = self._raw_tensor(batch, spec)
+                valid = self._loss_valid(batch, spec.name, clean, prefix=0)
+                if valid is not None:
+                    loss_valid[spec.name] = valid
+        return DiffusionRuntime(timesteps=dict(draw.sigma), noised=noised,
+                                noise=dict(draw.noise), targets=targets,
+                                model_timesteps=dict(draw.model_timesteps),
+                                loss_valid=loss_valid)
+
+    def _clean_prefix(self, stream: str, raw: Tensor) -> int:
+        """Leading latent frames of ``stream`` that are clean conditioning.
+
+        Read from ``StreamSpec.token_timestep``, the declaration L2 uses to pin
+        their timestep to 0, so the count has one source. Frames are axis 2 of
+        the raw video ``[B, C, F, H, W]``.
+
+        Args:
+            stream: Stream name.
+            raw: A raw-shaped tensor of that stream (x_0 or its target).
+
+        Returns:
+            The clean prefix length; 0 when the stream declares none.
+
+        Raises:
+            ValueError: The raw tensor is not ``[B, C, F, H, W]`` with
+                ``F = geometry.latent_grid[0]``, or the prefix leaves no
+                noised frame.
+        """
+        scope = self.spec.stream(stream).token_timestep
+        if scope is None or not scope.clean_prefix:
+            return 0
+        frames = self.spec.geometry.latent_grid[0]
+        if raw.ndim != 5 or raw.shape[2] != frames or scope.clean_prefix >= frames:
+            raise ValueError(
+                f"stream {stream!r} keeps its first {scope.clean_prefix} latent "
+                "frames clean (StreamSpec.token_timestep), which needs a raw "
+                f"video [B, C, F, H, W] with F = geometry.latent_grid[0] = {frames} "
+                f"> {scope.clean_prefix}; got {tuple(raw.shape)}")
+        return scope.clean_prefix
+
+    def _loss_valid(self, batch: Mapping[str, Any], stream: str, raw: Tensor,
+                    prefix: int) -> Tensor | None:
+        """``WorldModelSpec.loss_masks`` of ``stream`` as a ``loss_valid`` mask.
+
+        Args:
+            batch: The training batch.
+            stream: Stream name.
+            raw: The stream's raw tensor.
+            prefix: Its clean prefix length. Those columns are dropped: the
+                losses slice the prefix frames off before reducing.
+
+        Returns:
+            bool ``[B, units - prefix]``, True where the unit counts; None
+            when the stream declares no padding or the batch carries none.
+        """
+        loss_mask = self.spec.loss_masks.get(stream)
+        if loss_mask is None:
+            return None
+        padded = loss_mask.padded(batch, raw, stream=stream,
+                                temporal_stride=self.spec.geometry.vae_temporal_stride)
+        if padded is None:
+            return None
+        return ~padded[:, prefix:]
 
     def stream_inputs(self, runtime: DiffusionRuntime) -> dict[str, Tensor]:
         """Extension point 4, step 4. Picks the **raw tensor** each stream feeds.
@@ -523,7 +740,7 @@ class WorldModel(nn.Module):
             group, {name: inputs[name] for name in group.stream_names},
             {name: self.blocks[name] for name in group.stream_names},
             self.plans[index], self.layout, conditions=conditions,
-            timesteps={name: runtime.timesteps.get(name)
+            timesteps={name: runtime.model_timesteps.get(name)
                        for name in group.stream_names},
             captures=captures)
 
@@ -568,56 +785,105 @@ class WorldModel(nn.Module):
         return out
 
     def _loss_target(self, loss: LossSpec, head: HeadSpec,
-                     runtime: DiffusionRuntime) -> Tensor:
-        """The regression target of one loss. Two candidate keys, in fixed order.
-
-        1. ``runtime.targets[head name]`` -- a model that overrode
-           ``add_noise`` placed a target for one specific head (distillation
-           and alignment heads such as future_delta and semantic_future take
-           this path);
-        2. ``runtime.targets[source stream of the head]`` -- the normal flow
-           matching case, where the target is that stream's velocity.
-
-        If neither exists this raises, listing both candidate keys. Degrading a
-        missing target to a zero tensor would produce a loss that is
-        identically 0, which on a dashboard reads as "this term converged
-        beautifully".
-        """
+                     runtime: DiffusionRuntime,
+                     batch: Mapping[str, Any] | None = None) -> tuple[Tensor, bool]:
+        """Resolve ``(target, from_stream_flow)`` for ``loss`` in fixed order:
+        1. ``batch[loss.target_key]`` when ``target_key`` is declared;
+        2. ``runtime.targets[loss.head]`` for subclass-injected head targets;
+        3. ``runtime.targets[head.source_stream]`` for flow targets."""
+        if loss.target_key is not None:
+            if batch is None or loss.target_key not in batch:
+                present = sorted(batch) if batch is not None else []
+                raise KeyError(
+                    f"LossSpec({loss.name!r}) reads its target from "
+                    f"batch[{loss.target_key!r}], but batch only has {present}")
+            return batch[loss.target_key], False
         if loss.head in runtime.targets:
-            return runtime.targets[loss.head]
+            return runtime.targets[loss.head], False
         if head.source_stream in runtime.targets:
-            return runtime.targets[head.source_stream]
+            return runtime.targets[head.source_stream], True
         raise KeyError(
             f"LossSpec({loss.name!r}) has no regression target: "
             f"runtime.targets holds neither the head name {loss.head!r} nor "
             f"the source stream {head.source_stream!r}; present: "
-            f"{sorted(runtime.targets)}. Targets of distillation and "
-            "alignment heads must be put there by a subclass that overrides "
-            "add_noise"
+            f"{sorted(runtime.targets)}. Declare target_key on LossSpec or "
+            "write runtime.targets in add_noise"
         )
+
+    def _gate_mask(self, loss: LossSpec, batch: Mapping[str, Any] | None,
+                   runtime: DiffusionRuntime, prediction: Tensor) -> Tensor | None:
+        """Evaluate ``loss.gate`` into a bool ``[B]`` mask on ``prediction.device``."""
+        if loss.gate is None:
+            return None
+        active = loss.gate(batch or {}, timesteps=runtime.model_timesteps)
+        if active is None:
+            return torch.ones(prediction.shape[0], device=prediction.device, dtype=torch.bool)
+        if active.ndim != 1 or active.shape[0] != prediction.shape[0]:
+            raise ValueError(
+                f"LossSpec({loss.name!r}).gate returned shape {tuple(active.shape)}, "
+                f"expected [B={prediction.shape[0]}]")
+        return active.to(device=prediction.device, dtype=torch.bool)
+
+    def _loss_value(self, loss: LossSpec, runtime: DiffusionRuntime,
+                    outputs: Mapping[str, Tensor], *,
+                    batch: Mapping[str, Any] | None = None,
+                    active: Tensor | None = None) -> Tensor:
+        """One head loss term before ``LossSpec.weight_at``."""
+        head = self.spec.head(str(loss.head))
+        stream = head.source_stream
+        prediction = outputs[head.name]
+        target, is_stream_target = self._loss_target(loss, head, runtime, batch)
+        target = target.to(device=prediction.device)
+        valid = None
+        if loss.loss_mask is not None:
+            if batch is not None:
+                padded = loss.loss_mask.padded(
+                    batch, target, stream=loss.name,
+                    temporal_stride=self.spec.geometry.vae_temporal_stride)
+                if padded is not None:
+                    valid = ~padded
+        elif is_stream_target:
+            prefix = self._clean_prefix(stream, target)
+            if prefix:
+                prediction, target = prediction[:, :, prefix:], target[:, :, prefix:]
+            valid = runtime.loss_valid.get(stream)
+        elif loss.target_key is not None and stream not in (
+                self.spec.diffusion.timesteps if self.spec.diffusion is not None else ()):
+            valid = runtime.loss_valid.get(stream)
+        weight = None
+        if self.spec.diffusion is not None and stream in self.spec.diffusion.timesteps:
+            weight = loss.weight_of(
+                runtime.model_timesteps[stream], sampler=self.spec.diffusion.sampler_for(stream),
+                num_train_timesteps=self.spec.diffusion.schedule.num_train_timesteps)
+        if loss.reducer is not None:
+            unreduced_fn = getattr(loss.objective, "unreduced", None)
+            error = (unreduced_fn(prediction, target) if callable(unreduced_fn)
+                     else loss.objective(prediction, target, valid=valid))
+            reduced = loss.reducer(error, weight=weight, valid=valid,
+                                   active=active, layout=self.layout)
+            if active is not None:
+                reduced = reduced + 0.0 * prediction.reshape(-1)[:1].sum().float()
+            return reduced
+        per_sample = loss.objective(prediction, target, valid=valid)
+        if weight is not None:
+            per_sample = per_sample * weight.to(
+                device=per_sample.device, dtype=per_sample.dtype).reshape(-1)
+        if active is None:
+            return per_sample.mean()
+        counted = active.to(dtype=per_sample.dtype)
+        gated = (per_sample * counted).sum() / counted.sum().clamp(min=1.0)
+        return gated + 0.0 * prediction.reshape(-1)[:1].sum().float()
 
     def compute_losses(self, output: EngineOutput,
                        runtime: DiffusionRuntime,
                        outputs: Mapping[str, Tensor], *,
-                       step: int) -> tuple[Tensor, dict[str, Any]]:
-        """Extension point 6, step 7. Weighted sum over ``LossSpec.weight_at``.
-
-        Three deliberate behaviours:
-          - a loss with ``enabled=False`` **stays in the sum** with weight 0.0,
-            so the key set of ``metrics`` does not change with configuration
-            and downstream dashboards do not break;
-          - metrics store a detached **tensor**, not a Python float: calling
-            ``float()`` forces a device-to-host sync every step, and
-            formatting belongs to the trainer (I4′);
-          - weights are read from ``LossSpec`` only, and a ``HeadSpec.weight``
-            other than 1.0 raises -- the same 0.5 written on two objects with
-            only one of them taking effect is the hardest class of config
-            defect to track down.
-        """
+                       step: int,
+                       batch: Mapping[str, Any] | None = None) -> tuple[Tensor, dict[str, Any]]:
+        """Extension point 6, step 7. Weighted sum over ``WorldModelSpec.losses``."""
         del output              # Heads already ran in step 6; only outputs used
         terms: list[Tensor] = []
         metrics: dict[str, Any] = {}
-        for loss in self.spec.diffusion.losses:
+        for loss in self.spec.losses:
             if loss.stream is not None:
                 raise NotImplementedError(
                     f"LossSpec({loss.name!r}) is computed on stream "
@@ -627,32 +893,22 @@ class WorldModel(nn.Module):
                     "the target is raw shaped, and an inverse patchify is "
                     "missing in between"
                 )
-            if not loss.broadcast.is_per_sample:
+            if not loss.broadcast.is_per_sample and loss.reducer is None:
                 raise NotImplementedError(
                     f"LossSpec({loss.name!r}).broadcast="
-                    f"{loss.broadcast.axes} asks for per-axis weighting, "
-                    "while per-sample [B] must first be spread to token "
-                    "shape along the label axis; that path waits on Lane C's "
-                    "per-frame weighting delivery"
+                    f"{loss.broadcast.axes} asks for per-axis weighting "
+                    "without a Reducer; supply LossSpec.reducer to weight "
+                    "per-frame or per-token errors before reduction"
                 )
             head = self.spec.head(str(loss.head))
-            if head.weight != 1.0:
-                raise ValueError(
-                    f"HeadSpec({head.name!r}).weight={head.weight} is not "
-                    f"1.0, while the loss weight is read only from "
-                    f"LossSpec({loss.name!r}).weight. Writing a weight in "
-                    "two places with only one taking effect means weight "
-                    "ownership must be fixed in one place"
-                )
-            per_sample = loss.objective(outputs[head.name],
-                                        self._loss_target(loss, head, runtime))
-            value = per_sample.mean()
+            active = self._gate_mask(loss, batch, runtime, outputs[head.name])
+            value = self._loss_value(loss, runtime, outputs, batch=batch, active=active)
             weight = loss.weight_at(step)
             terms.append(weight * value)
-            metrics[loss.name] = value.detach()
+            metrics[f"loss_{loss.name}"] = value.detach()
             metrics[f"{loss.name}/weight"] = weight
-        # DiffusionSpec.__post_init__ guarantees losses is non-empty, so stack
-        # never gets an empty list
+            if active is not None:
+                metrics[f"loss_{loss.name}_active"] = active.float().mean().detach()
         total = torch.stack(terms).sum()
         metrics["loss"] = total.detach()
         return total, metrics
@@ -661,18 +917,14 @@ class WorldModel(nn.Module):
 
     @torch.no_grad()
     def sample(self, batch: Mapping[str, Any]) -> dict[str, Tensor]:
-        """Target three-step inference orchestration.
-
-        The intended flow is: 1. build the initial ``Trajectory``; 2. iterate
-        per ``SteppingGate``; 3. run the output heads. The orchestration is
-        not implemented yet.
-
-        **Differing per-stream step counts land in step 2**:
-        ``Trajectory.active_streams(gate)`` decides who moves on a given step.
-        Fast-WAM dropping the video stream at inference time is
-        ``UniformSteps(skip={"video"})``, not a second code path.
-        """
-        diffusion: DiffusionSpec = self.spec.diffusion
+        """Target three-step inference orchestration."""
+        diffusion: DiffusionSpec | None = self.spec.diffusion
+        if diffusion is None:
+            raise NotImplementedError(
+                f"model {self.spec.model_type!r} has no DiffusionSpec "
+                "(a non-diffusion model); the single-step inference path "
+                "belongs to the assembly layer and is not implemented yet"
+            )
         if not diffusion.is_iterative:
             raise NotImplementedError(
                 f"model {self.spec.model_type!r} has a DiffusionSpec with no "

@@ -13,14 +13,16 @@ line number at each use.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 
-from ....diffusion.loss import LossSpec
 from ....diffusion.schedule import RectifiedFlow
 from ....diffusion.spec import DiffusionSpec
 from ....diffusion.stepping import EulerSampler, UniformSteps
-from ....diffusion.timesteps import Constant, TimestepSampler, UniformShift
+from ....diffusion.timesteps import Constant, RngPolicy, TimestepSampler, UniformShift
+from ....diffusion.weights import Bsmntw
 from ....heads.flow import build_flow_head
+from ....losses import LossMaskSpec, LossSpec, TokenMeanSquaredError
 from ....heads.hidden_ref import HiddenStateRef
 from ....heads.spec import HeadSpec
 from ....streams.blocks import ActionStream, WanVideoStream
@@ -32,7 +34,8 @@ from ....visibility.combine import Visibility
 from ....visibility.phases import CONDITION, Phase, phase_labels
 from ....visibility.rules import label_edge, same_stream
 from ...core import Spec, register_provider
-from ...overrides import reject_config, resolve_geometry, resolve_scalars
+from ...overrides import (StreamShift, reject_config, resolve_diffusion,
+                          resolve_geometry, resolve_scalars)
 from ...world import WorldModelSpec
 from ..dual_stream_wan import STREAM_SCALAR_KEYS, _dual_stream_wan_streams
 
@@ -114,14 +117,21 @@ def _vpp2_visibility() -> dict[str, Visibility]:
     }
 
 
+@dataclass(frozen=True)
+class _Vpp2Diffusion:
+    """YAML-overridable diffusion parameters for VPP2 (``diffusion.action.shift``)."""
+
+    action: StreamShift = StreamShift(shift=5.0)
+
+
 @register_provider("vpp2")
 def _vpp2(config: Any = None, *,
           geometry: Mapping[str, Any] | None = None,
           video_prefix_frames: int = 3,
-          action_shift: float = 5.0,
           inference_steps: int = 10,
           action_width: int = 7,
           proprio_dim: int = 8,
+          diffusion: Mapping[str, Any] | None = None,
           **stream_scalars: Any) -> WorldModelSpec:
     """Build the VPP2 spec; this is what ``--model-name vpp2`` resolves to.
 
@@ -174,11 +184,13 @@ def _vpp2(config: Any = None, *,
         geometry: The YAML ``geometry:`` section, merged over the provider's
             defaults before anything is derived from the geometry.
         video_prefix_frames: Leading video frames the action stream reads.
-        action_shift: ``shift`` of the action stream's ``UniformShift``.
         inference_steps: Euler steps at inference.
         action_width: Packed action dimension, both the action stream's entry
             width and the ``action_flow`` head's output width.
         proprio_dim: Raw proprioception width before the token encoder.
+        diffusion: The YAML ``diffusion:`` section, resolved over this
+            provider's defaults before the samplers are built
+            (``resolve_diffusion``); ``None`` when YAML has none.
         **stream_scalars: Per-stream width and depth overrides, validated
             against ``STREAM_SCALAR_KEYS``.
 
@@ -244,7 +256,16 @@ def _vpp2(config: Any = None, *,
                            num_layers=video.num_layers)
 
     # 3. L3. The two streams use different timestep distributions, which is
-    #    why ``timesteps`` is indexed by stream name.
+    #    why ``timesteps`` is indexed by stream name. The key order is the draw
+    #    order: master ``LiberoActionModel.training_loss`` draws video noise,
+    #    the (constant) video t, action noise, then the action t
+    #    (``libero_action_model.py:578-610``), and casts each t to the sample
+    #    dtype before noising (``scheduler.py:sample_training_t``).
+    master_rng = RngPolicy(order="noise_first", sigma_dtype="like_sample")
+    # YAML may set the action shift as ``diffusion.action.shift``; any other
+    # key raises (§1.15). The video timestep is the constant below, so the
+    # table has no ``video`` entry.
+    diffusion_values = resolve_diffusion("vpp2", _Vpp2Diffusion(), diffusion)
     diffusion = DiffusionSpec(
         timesteps={
             # video: ``train_sampling_strategy: pure_noise``
@@ -258,7 +279,7 @@ def _vpp2(config: Any = None, *,
             # section **takes no part in sampling** under pure_noise, so no
             # ``BetaDist`` is declared here; declaring one would add a knob
             # that appears to be in effect but is not.
-            "video": TimestepSampler(Constant(value=1.0)),
+            "video": TimestepSampler(Constant(value=1.0), rng=master_rng),
             # action: ``train_shift: 5.0`` (``train_action.yaml:211``), and
             # ``infer_shift`` in the same section is also 5.0, so training and
             # inference agree and one distribution slot suffices.
@@ -267,16 +288,12 @@ def _vpp2(config: Any = None, *,
             # (``skip={"video"}``), so that 3.0 has nowhere to land. Expressing
             # "two distributions for one stream, train vs infer" would need
             # another field on DiffusionSpec; add it when some model actually
-            # runs the video stream at inference.
-            "action": TimestepSampler(UniformShift(shift=action_shift)),
+            # runs the video stream at inference. YAML sets this shift as
+            # ``diffusion.action.shift`` (the table above).
+            "action": TimestepSampler(UniformShift(shift=diffusion_values.action.shift), rng=master_rng),
         },
-        # ``lambda_video`` and ``lambda_action`` are both 1.0
-        # (``train_action.yaml:217-218``)
-        losses=(
-            LossSpec(name="video_flow", head="video_flow"),
-            LossSpec(name="action_flow", head="action_flow"),
-        ),
-        schedule=RectifiedFlow(),
+        # Wan's 1000-step training timestep (master ``num_train_timesteps``).
+        schedule=RectifiedFlow(num_train_timesteps=1000),
         # ``skip={"video"}`` is the ``HeadSpec(inference=False)`` of the §4.4
         # example: "drop the video stream at inference" is a stepping policy,
         # not a property of a head.
@@ -289,7 +306,29 @@ def _vpp2(config: Any = None, *,
         # what makes the ``noise_gate`` rule usable, which the second rule in
         # ``_vpp2_visibility`` below depends on.
         noise_levels=(0.0, 1.0),
+        # Padded action steps do not count, except the tail padding of a
+        # terminal segment, which master's VPP2 video-event dataset flags in
+        # ``action_terminal_mask`` when ``supervise_terminal_action_padding``
+        # is on (``data/datasets/vpp2/video_event_dataset.py``,
+        # ``_terminal_action_mask``). The action loss then counts
+        # ``~(action_is_pad & ~action_terminal_mask)``
+        # (``model/vpp2/modules/libero_action_model.py:143-151`` on master
+        # 86a017bb). Master also checks that the terminal mask lies inside the
+        # padding; that check reads values and would sync the host, so it stays
+        # with the dataset. A batch without either key has no padding.
     )
+    # ``lambda_video`` and ``lambda_action`` are both 1.0
+    # (``train_action.yaml:217-218``). The action term is master
+    # ``_training_loss_action_only``: per-token MSE, mean over valid tokens,
+    # bsmntw weight on the shifted grid. The video term stays unweighted:
+    # bsmntw is exactly 0 at the pure-noise sigma=1.
+    losses = (
+        LossSpec(name="video_flow", head="video_flow"),
+        LossSpec(name="action_flow", head="action_flow",
+                 objective=TokenMeanSquaredError(), weight_of=Bsmntw()),
+    )
+    loss_masks = {"action": LossMaskSpec("action_is_pad",
+                                         keep_key="action_terminal_mask")}
 
     # 4. L0. The geometry is defined before the head table because the
     #    ``video_flow`` head takes its ``output_width`` from
@@ -442,6 +481,8 @@ def _vpp2(config: Any = None, *,
         attention_groups=(group,),
         diffusion=diffusion,
         heads=heads,
+        losses=losses,
+        loss_masks=loss_masks,
         conditions=conditions,
         visibility=_vpp2_visibility(),
         # ``video_prefix_frames`` enters the mask as the phase label rather

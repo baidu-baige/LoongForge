@@ -170,7 +170,7 @@ def fake_bus(spec: WorldModelSpec, *, skip: str | None = None) -> ConditionBus:
 def run_engine(spec: WorldModelSpec, modules, bus: ConditionBus):
     """Run the engine once. The backend is always dense; backend negotiation is
     an L1 case (covered in the providers file)."""
-    group = spec.groups[0]
+    group = spec.attention_groups[0]
     layout = spec.build_layout()
     plan = AttentionPlan.from_visibility(
         join_stream_visibility(spec.visibility), layout)

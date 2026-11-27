@@ -114,27 +114,36 @@ class DualStreamWanBase(ArchModelBase):
                 else build(clip.source_encoder, path=cfg.model_id)),
         }
 
-    def forward(self, batch: Any) -> Tuple[Tensor, Dict[str, Any]]:
+    def forward(self, batch: Any, iteration: Optional[int] = None
+                ) -> Tuple[Tensor, Dict[str, Any]]:
         """Run one training step. Interface I4: ``(loss, metrics)``.
 
         Args:
             batch: Either a ``FastWAMPreparedBatch`` or a plain dict with the
                 same keys (``video``, ``action``, ``context``, ``proprio``).
+            iteration: Optimizer steps completed before this one, from the
+                trainer; it becomes the core's ``global_step``
+                (``ArchModelBase._sample_at_step``).
 
         Returns:
             The weighted total loss and the per-term metrics dict.
+
+        Raises:
+            ValueError: The sample already carries a different
+                ``global_step``.
         """
-        sample = batch.to_sample() if hasattr(batch, "to_sample") else dict(batch)
-        return self.core(self.encode_batch(sample))
+        return self.core(self.encode_batch(self._sample_at_step(batch, iteration)))
 
     def encode_batch(self, sample: Mapping[str, Any]) -> Dict[str, Any]:
         """Map a pixel-space sample onto the keys the spec declares.
 
-        Two kinds of keys come out: one raw tensor per stream, named by
-        ``StreamSpec.batch_key``, and one per enabled ``ConditionSpec``, named
-        by its ``source_key``. Both lists are read off the spec, so adding a
-        condition to a provider does not require editing this method unless the
-        new condition needs an encoder that does not exist yet.
+        Three kinds of keys come out: one raw tensor per stream, named by
+        ``StreamSpec.batch_key``; one per enabled ``ConditionSpec``, named by
+        its ``source_key``; and the masks the spec declares, passed through
+        as bool when the sample has them (see ``ArchModelBase._mask_keys``).
+        All three lists are read off the spec, so adding a condition to a
+        provider does not require editing this method unless the new
+        condition needs an encoder that does not exist yet.
 
         Args:
             sample: Collated batch in pixel space. ``video`` is
@@ -148,9 +157,11 @@ class DualStreamWanBase(ArchModelBase):
         """
         video = self._require(sample, "video").to(dtype=self._dtype)
         latents = self.encode_video(video)
-        out: Dict[str, Any] = {
-            "global_step": int(sample.get("global_step", 0)),
-        }
+        out: Dict[str, Any] = {}
+        # Passed on only when given: the core decides what a missing step
+        # means (0 in evaluation, an error when training a ramped loss).
+        if "global_step" in sample:
+            out["global_step"] = int(sample["global_step"])
         for stream in self.spec.streams:
             if stream.name == "video":
                 out[stream.batch_key] = latents
@@ -163,6 +174,17 @@ class DualStreamWanBase(ArchModelBase):
                 continue
             out[cond.source_key] = self._condition_value(cond, sample, video,
                                                          latents)
+        for key in self._mask_keys():
+            mask = sample.get(key)
+            if mask is not None:
+                out[key] = mask.to(device=latents.device, dtype=torch.bool,
+                                   non_blocking=True)
+        for key in self._target_keys():
+            target = sample.get(key)
+            if target is not None:
+                dtype = self._dtype if target.is_floating_point() else target.dtype
+                out[key] = target.to(device=latents.device, dtype=dtype,
+                                     non_blocking=True)
         return out
 
     @torch.no_grad()

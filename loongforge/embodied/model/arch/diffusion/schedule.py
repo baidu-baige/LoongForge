@@ -26,8 +26,13 @@ __all__ = ["NoiseSchedule", "ConstantSigma", "RectifiedFlow"]
 class NoiseSchedule(Protocol):
     """t -> (noising coefficients, regression target).
 
-    These three methods are the whole of a forward process.
+    These three methods are the whole of a forward process. The ``t`` they take
+    is the noising coefficient sigma in [0, 1]; ``num_train_timesteps`` is the
+    scale to the training timestep ``sigma * num_train_timesteps`` that the
+    time embeddings and the sigma-dimension loss weights read (Wan: 1000).
     """
+
+    num_train_timesteps: int
 
     def add_noise(self, clean: Tensor, noise: Tensor,
                   t: Tensor) -> Tensor:
@@ -50,12 +55,28 @@ class NoiseSchedule(Protocol):
         ...
 
 
+def _check_num_train_timesteps(owner: str, value: int) -> None:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ValueError(f"{owner}.num_train_timesteps must be a positive int, got {value!r}")
+
+
 @dataclass(frozen=True)
 class RectifiedFlow:
     """Rectified flow. **12 of the 13 models use it**, so it is the default.
 
     ``x_t = (1-t)*clean + t*noise``, with target ``noise - clean``.
+
+    Attributes:
+        num_train_timesteps: Training-timestep scale. 1 keeps the training
+            timestep equal to sigma; the Wan family uses 1000 (master
+            ``WanContinuousFlowMatchScheduler``), so its time embeddings read
+            t in [0, 1000].
     """
+
+    num_train_timesteps: int = 1
+
+    def __post_init__(self) -> None:
+        _check_num_train_timesteps("RectifiedFlow", self.num_train_timesteps)
 
     def add_noise(self, clean: Tensor, noise: Tensor, t: Tensor) -> Tensor:
         return (1.0 - t) * clean + t * noise
@@ -79,9 +100,11 @@ class ConstantSigma:
 
     Attributes:
         sigma_value: Constant noise scale; 0.0 makes ``add_noise`` the identity.
+        num_train_timesteps: Training-timestep scale, as in ``RectifiedFlow``.
     """
 
     sigma_value: float = 0.0
+    num_train_timesteps: int = 1
 
     def __post_init__(self) -> None:
         if self.sigma_value < 0:
@@ -89,6 +112,7 @@ class ConstantSigma:
                 f"ConstantSigma.sigma_value must be non-negative, "
                 f"got {self.sigma_value}"
             )
+        _check_num_train_timesteps("ConstantSigma", self.num_train_timesteps)
 
     def add_noise(self, clean: Tensor, noise: Tensor, t: Tensor) -> Tensor:
         del t
