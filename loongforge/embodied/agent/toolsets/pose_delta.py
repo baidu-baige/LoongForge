@@ -1,6 +1,6 @@
 # Copyright 2026 The LoongForge Authors.
-# Copyright contributors to the PEAR project.
 # SPDX-License-Identifier: Apache-2.0
+# Copyright contributors to the PEAR project.
 #
 # The protocol text, state schema and LIBERO image/instruction conventions are
 # taken from PEAR (https://github.com/mit-han-lab/pear, commit 31fd1cf):

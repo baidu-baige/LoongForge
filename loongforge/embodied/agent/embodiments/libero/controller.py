@@ -1,6 +1,6 @@
 # Copyright 2026 The LoongForge Authors.
-# Copyright contributors to the PEAR project.
 # SPDX-License-Identifier: Apache-2.0
+# Copyright contributors to the PEAR project.
 #
 # Derived from PEAR (https://github.com/mit-han-lab/pear, commit 31fd1cf),
 # pear/envs/libero/controller.py, licensed under the Apache License, Version 2.0.
