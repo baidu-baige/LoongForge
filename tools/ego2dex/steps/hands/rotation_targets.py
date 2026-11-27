@@ -88,3 +88,25 @@ def prepare(cache, reference, destination, policy="stabilize"):
     Path(destination).mkdir(exist_ok=True, parents=True)
     (Path(destination) / "source_rotation_revision.json").write_text(json.dumps(revision, indent=2))
     return revision
+
+
+def acceptance_fields(result):
+    """Rotation policy and both acceptance results of one finished episode.
+
+    The values are stored in the episode's ``*_ik.npz`` as ``acceptance_*``
+    arrays and exported by the LeRobot writer, so a dataset records whether the
+    episode passed against its original rotations or only after repair.
+    """
+    result = Path(result)
+    original = json.loads((result / "original_reference_validation.json").read_text())
+    stable = json.loads((result / "stable_reference_validation.json").read_text())
+    return dict(
+        acceptance_target_profile=np.array(str(stable["target_profile"])),
+        acceptance_original_passed=np.array(bool(original["passed"])),
+        acceptance_stable_passed=np.array(bool(stable["passed"])),
+        acceptance_repaired_frames=np.array(len(stable["source_rotation_changed_frames"]), dtype=np.int64),
+        acceptance_original_tcp_rotation_max_deg=np.array(np.degrees(original["task_tcp_rotation_max_rad"])),
+        acceptance_stable_tcp_rotation_max_deg=np.array(np.degrees(stable["task_tcp_rotation_max_rad"])),
+        acceptance_original_tcp_position_max_mm=np.array(original["task_tcp_position_max_m"] * 1000.0),
+        acceptance_stable_tcp_position_max_mm=np.array(stable["task_tcp_position_max_m"] * 1000.0),
+    )

@@ -86,7 +86,7 @@ def replace_pipeline_outputs(args, root, original_retarget):
     from . import _runner_base
 
     os.environ["EGO2ROBOT_END_EFFECTOR"] = args.end_effector
-    from .rotation_targets import prepare
+    from .rotation_targets import prepare, acceptance_fields
     from .hand_swap import swap_grippers
     from .validate_result import validate
 
@@ -132,6 +132,9 @@ def replace_pipeline_outputs(args, root, original_retarget):
     output = _runner_base.replace_pipeline_outputs(args, root, original_retarget, replacement_fn=replacement)
     for path in output.glob("*_ik.npz"):
         ep = path.name[: -len("_ik.npz")]
+        if args.episodes and ep not in args.episodes:
+            # Left over from an earlier run with another episode selection.
+            continue
         result = output / "_render" / ep
         reference = output / "_references" / ep
         stable = json.loads((result / "stable_reference_validation.json").read_text())
@@ -147,6 +150,7 @@ def replace_pipeline_outputs(args, root, original_retarget):
             physical_from_motor_matrix=motor["physical_from_motor_matrix"],
             physical_from_motor_offset=motor["physical_from_motor_offset"],
             **{k: quality[k] for k in ["ik_ok", "ik_err_pos", "ik_err_rot"]},
+            **acceptance_fields(result),
         )
         np.savez_compressed(path, **metadata)
     return output

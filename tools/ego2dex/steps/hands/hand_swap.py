@@ -176,14 +176,31 @@ def swap_grippers(
         ids = indices(model, side)
         rows[:, ids["arm_qadr"]] = old["qpos"][:, [old_names.index(name) for name in ids["arm_joint_names"]]]
     points = {side: ref[side + "_obs_keypoints"].reshape(n, 21, 3) for side in ["left", "right"]}
-    assert all(np.isfinite(v).all() and abs(v).max() < 1e3 for v in points.values())
+    # A hand can be unobserved (all NaN) in some frames; the loader accepts that.
+    # Those frames are excluded per side below instead of failing the whole episode.
+    observed = {side: np.isfinite(v).all(axis=(1, 2)) for side, v in points.items()}
+    assert all(abs(points[side][observed[side]]).max(initial=0.0) < 1e3 for side in points)
+    assert any(v.any() for v in observed.values()), "no hand is observed in any frame"
     if stage:
         stage("fixed_mount_and_bimanual_fingers")
     valid = {}
     for side in ["left", "right"]:
         z = points[side][:, 9] - points[side][:, 0]
         y = points[side][:, 5] - points[side][:, 13]
-        valid[side] = (np.linalg.norm(z, axis=1) > 1e-7) & (np.linalg.norm(np.cross(y, z), axis=1) > 1e-9)
+        with np.errstate(invalid="ignore"):
+            valid[side] = (
+                observed[side] & (np.linalg.norm(z, axis=1) > 1e-7) & (np.linalg.norm(np.cross(y, z), axis=1) > 1e-9)
+            )
+    # Unobserved frames stay out of every objective through `valid`. Their
+    # keypoints are filled from the neighbouring observed frames so the soft
+    # geometry terms (wrist reference, view envelope) stay finite.
+    for side in ["left", "right"]:
+        gap = ~observed[side]
+        if not gap.any():
+            continue
+        flat, seen = points[side].reshape(n, 63), np.flatnonzero(observed[side])
+        for c in range(63):
+            flat[gap, c] = np.interp(np.flatnonzero(gap), seen, flat[seen, c]) if len(seen) else 0.0
     # The mount is a model property. Fitting it to a video's human wrist puts
     # the palm off the axial couplers and can make it float or intersect link7.
     from .mount_contract import audit_connection

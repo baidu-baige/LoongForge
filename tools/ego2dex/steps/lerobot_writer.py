@@ -443,6 +443,11 @@ def discover_episodes(ik_dir: str, state_dir: str) -> list:
 
 def run(args):
     """Write a LeRobot v3.0 dataset from retargeted IK results + action-alignment state."""
+    global FPS
+    if getattr(args, "fps", None):
+        # The rate of the frames the earlier stages produced; it sets the video
+        # re-encode rate, the timestamps and info.json.
+        FPS = float(args.fps)
     episodes = args.episodes or discover_episodes(args.ik_dir, args.state_dir)
     if not episodes:
         print("ERROR: no episodes found (need matching {ep}_ik.npz in --ik_dir and {ep}.npz in --state_dir)")
@@ -544,6 +549,10 @@ def run(args):
             ik_ok = np.asarray(ik_data["ik_ok"])
             ik_err_pos = np.asarray(ik_data["ik_err_pos"])
             ik_err_rot = np.asarray(ik_data["ik_err_rot"])
+            # Rotation policy and acceptance results written by the hand runners.
+            acceptance = {
+                key[len("acceptance_") :]: ik_data[key].item() for key in ik_data.files if key.startswith("acceptance_")
+            }
         for key, values in (("ik_ok", ik_ok), ("ik_err_pos", ik_err_pos), ("ik_err_rot", ik_err_rot)):
             if values.ndim == 0 or values.shape[0] != n:
                 raise ValueError(f"{ik_path} {key} shape {values.shape} does not match {n} frames")
@@ -606,6 +615,8 @@ def run(args):
             ep_meta[f"{video_prefix}/file_index"] = 0
             ep_meta[f"{video_prefix}/from_timestamp"] = cumulative_time
             ep_meta[f"{video_prefix}/to_timestamp"] = cumulative_time + to_ts
+        for key, value in acceptance.items():
+            ep_meta[f"acceptance/{key}"] = value
 
         # Flatten per-episode stats into stats/<feat>/<stat> columns
         def add_stats(prefix, sd):
@@ -771,6 +782,12 @@ def build_arg_parser():
         nargs="*",
         default=None,
         help="Explicit episode list; defaults to the sorted intersection of ik_dir and state_dir",
+    )
+    ap.add_argument(
+        "--fps",
+        type=float,
+        default=None,
+        help="Frame rate of the retarget output (default: EGO2ROBOT_FPS, or 30)",
     )
     return ap
 

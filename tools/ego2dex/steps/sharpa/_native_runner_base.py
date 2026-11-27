@@ -85,8 +85,11 @@ def run_cached(args):
 
 def replace_pipeline_outputs(args, root, original_retarget, replacement_fn=None):
     """Post-process successful native Panda outputs, then feed the normal writer."""
-    from steps.loader import load_episode, find_invalid_frames
+    from steps.loader import process_episode, find_invalid_frames
 
+    # The same normalized rate as pipeline.run_all, so the cleaned and resampled
+    # frames below are the ones the earlier stages (and the retarget) used.
+    fps = float(max(1, int(round(args.target_fps))))
     output = Path(root) / "06_retarget_sharpa"
     output.mkdir(exist_ok=True)
     episodes = {p.name[: -len("_ik.npz")] for p in Path(original_retarget).glob("*_ik.npz")} | {
@@ -99,7 +102,9 @@ def replace_pipeline_outputs(args, root, original_retarget, replacement_fn=None)
         if args.episodes and ep not in args.episodes:
             continue
         old = np.load(ik)
-        data = load_episode(str(Path(args.input_dir) / ep))
+        data = process_episode(str(Path(args.input_dir) / ep), fps, head_relative=False)
+        if data is None:
+            raise ValueError(f"{ep}: no valid frames left after cleaning")
         n = len(old["qpos"])
         assert data["total_frames"] == n
         reference = output / "_references" / ep
@@ -134,10 +139,10 @@ def replace_pipeline_outputs(args, root, original_retarget, replacement_fn=None)
             valid=find_invalid_frames(data),
             intrinsics=K,
             source_frame_indices=np.arange(n),
-            fps=args.target_fps,
+            fps=fps,
         )
         (reference / "manifest.json").write_text(
-            json.dumps(dict(episode=ep, frames=n, width=W, height=H, fps=args.target_fps), indent=2)
+            json.dumps(dict(episode=ep, frames=n, width=W, height=H, fps=fps), indent=2)
         )
         render = output / "_render" / ep
         report = (replacement_fn or swap_grippers)(

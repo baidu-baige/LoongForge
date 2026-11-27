@@ -36,6 +36,7 @@ from steps import (
     depth_estimate,
     robot_retarget,
     lerobot_writer,
+    validate,
     demo_grid,
 )
 from steps.robot_registry import ROBOT_SPECS
@@ -497,6 +498,20 @@ def run(args):
             tmp_dir=str(dir_lerobot / "_tmp_av1"),
             episodes=args.episodes,
             fps=pipeline_fps,
+        )
+    )
+
+    print("\n" + "=" * 60)
+    print("Validate: LeRobot dataset (video/data alignment and loader)")
+    print("=" * 60)
+    # Exits with status 1 at the first failed check.
+    validate.run(
+        SimpleNamespace(
+            dataset_dir=str(dir_lerobot),
+            expect_episodes=None,
+            expect_frames=None,
+            skip_loader_check=False,
+            depth_dir=None,
         )
     )
 

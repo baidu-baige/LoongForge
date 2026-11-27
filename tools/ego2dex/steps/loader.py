@@ -354,9 +354,13 @@ def resample_to_target_fps(data: dict, target_fps: float = 30.0) -> dict:
 # ============================================================
 
 
-def process_episode(episode_path: str, target_fps: float = 30.0) -> Optional[dict]:
+def process_episode(episode_path: str, target_fps: float = 30.0, head_relative: bool = True) -> Optional[dict]:
     """
     Process one episode through the complete Step 1 pipeline.
+
+    With ``head_relative=False`` the poses stay in the world frame; frame
+    cleaning and FPS resampling are the same, so the frame count matches the
+    ``01_load`` output.
 
     Returns:
         Processed data dict, or None if all episode frames are invalid.
@@ -408,8 +412,9 @@ def process_episode(episode_path: str, target_fps: float = 30.0) -> Optional[dic
         print(f"    FPS OK: {actual_fps:.1f}fps (~{target_fps:.0f}), no resample needed")
 
     # Head-relative transform.
-    data = apply_head_relative_transform(data)
-    print("    Head-relative transform applied")
+    if head_relative:
+        data = apply_head_relative_transform(data)
+        print("    Head-relative transform applied")
 
     return data
 

@@ -121,7 +121,11 @@ python cli.py run-all --robot_type panda --end_effector allegro \
 不设种子时，手臂从初始姿态开始求解。
 
 结果写到 `<output_dir>/06_retarget_<hand>/_render/<ep>/`，数据集写到
-`<output_dir>/07_lerobot/`。用 `--episodes <ep>` 可以只跑指定的 episode。
+`<output_dir>/07_lerobot/`。用 `--episodes <ep>` 可以只跑指定的 episode。数据集的帧率
+跟随 `--target_fps`，写完后 `run-all` 会自动做 `validate` 检查。episodes 表里的
+`acceptance/*` 列记录旋转策略和两个验收结果（如 `acceptance/original_passed`、
+`acceptance/stable_passed`、`acceptance/repaired_frames`），可以看出 episode 是按原始旋转通过，
+还是修复之后才通过。
 
 灵巧手常用的 `run-all` 选项：`--acceptance_profile`（默认 `mild`，可选
 `strict`、`loose_b`）、`--hand_initializer`（默认 `v28-v29`，可选 `v28`、`off`）、

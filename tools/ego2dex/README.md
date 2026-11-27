@@ -137,7 +137,12 @@ are solved again. Without a seed the arm solve starts from the initial pose.
 
 Results are written to `<output_dir>/06_retarget_<hand>/_render/<ep>/` and the
 dataset to `<output_dir>/07_lerobot/`. `--episodes <ep>` restricts a run to
-selected episodes.
+selected episodes. The dataset follows `--target_fps` and `run-all` checks it
+(`validate`) once it is written. The episodes table records the rotation
+policy and both acceptance results in `acceptance/*` columns (for example
+`acceptance/original_passed`, `acceptance/stable_passed`,
+`acceptance/repaired_frames`), so a dataset shows whether an episode passed
+against its original rotations or only after repair.
 
 Useful `run-all` options for the hands: `--acceptance_profile`
 (`mild` default, `strict`, `loose_b`), `--hand_initializer` (`v28-v29`

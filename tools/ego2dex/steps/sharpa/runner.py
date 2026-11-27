@@ -256,7 +256,7 @@ def run_cached(args):
 def replace_pipeline_outputs(args, root, original_retarget):
     from . import _native_runner_base
     from .hand_swap import swap_grippers
-    from steps.hands.rotation_targets import prepare
+    from steps.hands.rotation_targets import prepare, acceptance_fields
 
     if args.robot_type != "panda" or args.end_effector != "sharpa":
         raise ValueError("Native Sharpa currently supports Panda and the Sharpa hand")
@@ -286,6 +286,9 @@ def replace_pipeline_outputs(args, root, original_retarget):
     output = _native_runner_base.replace_pipeline_outputs(args, root, original_retarget, replacement_fn=replacement)
     for path in output.glob("*_ik.npz"):
         episode = path.name[: -len("_ik.npz")]
+        if args.episodes and episode not in args.episodes:
+            # Left over from an earlier run with another episode selection.
+            continue
         result = output / "_render" / episode
         validation = json.loads((result / "independent_validation.json").read_text())
         if not validation["passed"]:
@@ -309,6 +312,7 @@ def replace_pipeline_outputs(args, root, original_retarget):
                 for key in ("timestamp", "timestamps_ns", "source_frame_indices", "camera_K", "obs_head_pose")
             },
             **{key: quality[key] for key in ("ik_ok", "ik_err_pos", "ik_err_rot")},
+            **acceptance_fields(result),
         )
         np.savez_compressed(path, **metadata)
     return output
